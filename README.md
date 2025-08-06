@@ -4,7 +4,7 @@ dq9のRTA用バトルエミュレーター
 
 > [!WARNING]
 > 現在Githubリリースで公開されている版は、最新版ではありません。  
-> ウイルス検知騒ぎの影響により、配布先が変更(Dropbox)され、githubリリースはでの配布はすでに放棄されています。  
+> 配布先が変更(Dropbox)され、githubリリースはでの配布はすでに放棄されています。  
 
 ## how to build
 Please build with [jetBrains clion](https://www.jetbrains.com/ja-jp/clion/) using cmake, ninja, or mingw.  
