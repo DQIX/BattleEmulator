@@ -72,30 +72,30 @@ namespace {
     constexpr int THREAD_COUNT = 4;
 #elif defined(BattleEmulatorLV13)
     constexpr int THREAD_COUNT = 5;
-#elif defined(erusionn_lv21)
+#elif defined(z_lv20)
     constexpr int THREAD_COUNT = 5;
 #endif
     // `InputBuilder` インスタンス作成
     InputBuilder builder;
 
-#if defined(erusionn_lv21)
+#if defined(z_lv20)
     constexpr Player BasePlayers[2] = {
         // プレイヤー1
         {
-            143, 143.0, 220, 220, 155, 155, 114, 114, 138, 88, // 最初のメンバー
-            88, false, false, 0, false, 0, -1,
+            127, 127.0, 179, 179, 94, 94, 82, 82, 92, 70, // 最初のメンバー
+            75, false, false, 0, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             6, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-            false, -1, 0, -1, 0, false, 1, 1, 1, -1, 0, -1, false, 2, false, -1
+            false, -1, 0, -1, 0, false, 1, 1, 1, -1, 0, -1, false, 2, false, -1, -1, 0, false
         }, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 
         // プレイヤー2
         {
-            1680, 1680.0, 160, 160, 170, 170, 125, 125, 0, 255, // 最初のメンバー
+            1098, 1098.0, 100, 100, 154, 154, 96, 96, 0, 255, // 最初のメンバー
             255, false, false, 0, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             0, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-            false, -1, 0, -1, 0, false, 0, 0, 0, -1, 0, -1, false, 2, false, -1
+            false, -1, 0, -1, 0, false, 0, 0, 0, -1, 0, -1, false, 2, false, -1, -1, 0,false
         } // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
     };
 #endif
@@ -536,7 +536,7 @@ namespace {
 #elif defined(BattleEmulatorLV19)
         auto [turnProcessed,genome] =
         ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 1500, gene, numThreads, Dropbug);
-#elif defined(erusionn_lv21)
+#elif defined(z_lv20)
         auto [turnProcessed,genome] =
                 ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 2000, gene, numThreads, Dropbug);
 #endif
@@ -857,7 +857,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 
     //AI Warning: This is code related to debug2
-    uint64_t time1 = 0x1001;
+    uint64_t time1 = 0x0b4b49cd;
 
     int dummy[100];
     lcg::init(time1, false);
@@ -901,13 +901,19 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
     int32_t gene1[350] = {0};
      gene1[counter++] = BattleEmulator::BUFF;
      gene1[counter++] = BattleEmulator::BUFF;
+     gene1[counter++] = BattleEmulator::BUFF;
+     gene1[counter++] = BattleEmulator::SPECIAL_ANTIDOTE;
+     gene1[counter++] = BattleEmulator::BUFF;
+     gene1[counter++] = BattleEmulator::BUFF;
+     gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+     gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+     gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+     gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+     gene1[counter++] = BattleEmulator::SPECIAL_ANTIDOTE;
+     gene1[counter++] = BattleEmulator::DOUBLE_UP;
+     gene1[counter++] = BattleEmulator::BUFF;
      gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
-     gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-     gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-     gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-     gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-     gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-     gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
+     gene1[counter++] = BattleEmulator::MULTITHRUST;
     // gene1[counter++] = BattleEmulator::DEFENCE;
     // gene1[counter++] = BattleEmulator::DEFENCE;
     // gene1[counter++] = BattleEmulator::DEFENCE;

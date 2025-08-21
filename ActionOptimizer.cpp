@@ -114,7 +114,7 @@ std::pair<int, Genome> ActionOptimizer::RunAlgorithmAsync(const Player players[2
 #elif defined(BattleEmulatorLV19)
         futures.push_back(std::async(std::launch::async, RunAlgorithmSingleThread,
                                              std::cref(players), seed, turns, 1500, actions, start, end, Dropbug));
-#elif defined(erusionn_lv21)
+#elif defined(z_lv20)
         futures.push_back(std::async(std::launch::async, RunAlgorithmSingleThread,
                                      std::cref(players), seed, turns, 1500, actions, start, end, Dropbug));
 #endif

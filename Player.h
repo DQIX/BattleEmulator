@@ -56,6 +56,9 @@ struct Player {
     int SpecialAntidoteCount = 2;
     bool acrobaticStar = false;
     int acrobaticStarTurn = 0;
+    int EerieTurn = -1;
+    int EerieLevel = -0;
+    bool inactive = false;
 
     /**
      * @brief プレイヤーが生存しているかを判定する関数

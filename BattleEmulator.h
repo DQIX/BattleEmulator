@@ -111,6 +111,10 @@ public:
     static constexpr int DOUBLE_TROUBLE = 80;// 往復びんた
     static constexpr int ZAMMLE = 81; //ドルクマ
     static constexpr int CRACKLE_ENEMY = 82; //ヒャダルコ
+    static constexpr int EERIE_LIGHT = 83; //あやしいひかり
+    static constexpr int VENOMISSILE = 84; //猛毒弾
+    static constexpr int WICKED_WEB = 85; //猛毒弾
+    static constexpr int WIND_SICKLES = 86; //猛毒弾
 
 
     static void ResetTurnProcessed();
