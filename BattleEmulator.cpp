@@ -392,6 +392,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         if (genePosition != -1) {
             genePosition = counterJ - 1;
         }
+        players[0].rage = false;
         //現在ターンを保存
         (*NowState) &= ~0xFFFFF000;
         (*NowState) |= (static_cast<uint64_t>(counterJ) << 12);
@@ -411,7 +412,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
 #ifdef DEBUG2
         std::cout << "c: " << counterJ << ", " << (*position) << std::endl;
-        if ((*position) == 609) {
+        if ((*position) == 657) {
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -630,9 +631,6 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         }
                     }
 
-                    players[0].EerieTurn--;
-
-
                     //--------end_FUN_02158dfc-------
                     basedamage = callAttackFun(action, position, players, 0, 1, NowState);
                     actions[actionsPosition++] = action;
@@ -736,7 +734,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         //TODO: 順序調べる
 
 
-                        players[0].AtkBuffTurn--;
+                        players[0].EerieTurn--;
                         if (players[0].EerieLevel != 0 && players[0].EerieTurn <= 0) {
                             //0x0215a804 ATK
                             const int probability[4] = {62, 75, 87, 100};
@@ -933,7 +931,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position)++; //0x02157f58 回避
             baseDamage = FUN_021e8458_typeD(position, 6, 24);
             if (!kaihi && !tate) {
-                if (!players[defender].PoisonEnable && lcg::getPercent(position, 100) < 12 && players[defender].TensionLevel != 4) {
+                if (!players[defender].PoisonEnable && players[defender].TensionLevel != 4 && lcg::getPercent(position, 100) < 12) {
                     players[defender].PoisonEnable = true;
                     players[defender].PoisonTurn = 0;
                 }
@@ -1857,6 +1855,7 @@ void BattleEmulator::ProcessRage(int *position, int baseDamage, Player *players)
             if (!players[1].rage) {
                 (*position)++;
                 (*position)++;
+                players[1].rage = true;
             } else {
                 (*position)++;
             }
