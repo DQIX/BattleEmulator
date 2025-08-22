@@ -412,7 +412,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
 #ifdef DEBUG2
         std::cout << "c: " << counterJ << ", " << (*position) << std::endl;
-        if ((*position) == 225) {
+        if ((*position) == 202) {
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -490,24 +490,30 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     //uint8_t state = (*NowState) & 0xf;
                     enemyAction = ProcessEnemyRandomAction2A(position);
 
-                    if (enemyAction == WICKED_WEB && players[0].inactive) {
-                        enemyAction = VENOMISSILE;
-                    }
-                    if (enemyAction == EERIE_LIGHT && players[0].EerieLevel != 0) {
-                        enemyAction = ATTACK_ENEMY;
-                    }
-
-                    if (preAction != 0 && i == 1 && preAction == enemyAction) {
-                        if (enemyAction == EERIE_LIGHT) {
-                            enemyAction = ATTACK_ENEMY;
-                        } else if (enemyAction == VENOMISSILE) {
-                            enemyAction = ATTACK_ENEMY;
-                        } else if (enemyAction == WICKED_WEB) {
-                            enemyAction = VENOMISSILE;
-                        } else if (enemyAction == WIND_SICKLES) {
-                            enemyAction = WICKED_WEB;
+                    do {
+                        if (preAction != 0 && i == 1 && preAction == enemyAction) {
+                            if (enemyAction == EERIE_LIGHT) {
+                                enemyAction = ATTACK_ENEMY;
+                            } else if (enemyAction == VENOMISSILE) {
+                                enemyAction = ATTACK_ENEMY;
+                            } else if (enemyAction == WICKED_WEB) {
+                                enemyAction = VENOMISSILE;
+                            } else if (enemyAction == WIND_SICKLES) {
+                                enemyAction = WICKED_WEB;
+                            }
                         }
-                    }
+
+                        if (enemyAction == WICKED_WEB && players[0].inactive) {
+                            enemyAction = VENOMISSILE;
+                            continue;
+                        }
+                        if (enemyAction == EERIE_LIGHT && players[0].EerieLevel != 0) {
+                            enemyAction = ATTACK_ENEMY;
+                            continue;
+                        }
+                        break;
+                    }while(true);
+
                     if (enemyAction != EERIE_LIGHT && enemyAction != WIND_SICKLES) {
                         (*position)++; // 0x02156874 攻撃先
                     }
@@ -917,7 +923,12 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position)++; //0x02158584 会心
             (*position)++; //0x02157f58 回避
             baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[defender].def);
-            (*position)++; //0x021e54fc
+            if (baseDamage == 0) {
+                baseDamage = lcg::getPercent(position, 2); //0x021e81a0
+            }
+            if (baseDamage != 0) {
+                (*position)++; //不明 0x021e54fc
+            }
             baseDamage = 0;
             players[defender].EerieLevel = true;
             players[defender].EerieTurn = 6;
@@ -939,7 +950,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position)++; //0x02157f58 回避
             baseDamage = FUN_021e8458_typeD(position, 6, 24);
             if (!kaihi && !tate) {
-                if (!players[defender].PoisonEnable && players[defender].TensionLevel != 4 && lcg::getPercent(position, 100) < 12) {
+                if (players[defender].TensionLevel != 4 && lcg::getPercent(position, 100) < 12) { //変更した
                     players[defender].PoisonEnable = true;
                     players[defender].PoisonTurn = 0;
                 }
@@ -971,13 +982,15 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             if (lcg::getPercent(position, 100) < threshold) {
                 baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[defender].def);
                 if (baseDamage == 0) {
-                    (*position)++; //0x021e81a0
+                    baseDamage = lcg::getPercent(position, 2); //0x021e81a0
+                }
+                if (!kaihi && !tate && baseDamage != 0) {
+                    (*position)++; //不明 0x021e54fc
                 }
                 if (players[0].TensionLevel != 4 && !kaihi && !tate) {
                     players[defender].inactive = true;
                     players[defender].TensionLevel = 0;
                 }
-                (*position)++; //0x021e54fc
             }
             baseDamage = 0;
             process7A8(position, baseDamage, players, defender);
@@ -1827,6 +1840,9 @@ int BattleEmulator::CalculateMoreHealBase(Player *players) {
 }
 
 int BattleEmulator::CalculateMidHealBase(Player *players) {
+    if (players[0].HealPower < 100) {
+        return 85;
+    }
     //ｂ
     double tmp1 = (players[0].HealPower - 100) * 0.2392;
     auto tmp2 = static_cast<int>(floor(tmp1));
