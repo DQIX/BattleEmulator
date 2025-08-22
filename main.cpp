@@ -893,27 +893,27 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
     //0x22e2dbaf:
 
     //AI Warning: This is code related to debug2
-    // int32_t gene1[350] = {
-    //     30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
-    //     BattleEmulator::ATTACK_ALLY};
+    int32_t gene1[350] = {
+        30, 53, 30, 30, 62, 62, 62, 50, 62, 33, 30, 34,
+        BattleEmulator::ATTACK_ALLY};
     //gene1[19-1] = BattleEmulator::DEFENCE;
     int counter = 0;
-    int32_t gene1[350] = {0};
-     gene1[counter++] = BattleEmulator::BUFF;
-     gene1[counter++] = BattleEmulator::BUFF;
-     gene1[counter++] = BattleEmulator::BUFF;
-     gene1[counter++] = BattleEmulator::SPECIAL_ANTIDOTE;
-     gene1[counter++] = BattleEmulator::BUFF;
-     gene1[counter++] = BattleEmulator::BUFF;
-     gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-     gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-     gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-     gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-     gene1[counter++] = BattleEmulator::SPECIAL_ANTIDOTE;
-     gene1[counter++] = BattleEmulator::DOUBLE_UP;
-     gene1[counter++] = BattleEmulator::BUFF;
-     gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
-     gene1[counter++] = BattleEmulator::MULTITHRUST;
+    // int32_t gene1[350] = {0};
+    //  gene1[counter++] = BattleEmulator::BUFF;
+    //  gene1[counter++] = BattleEmulator::BUFF;
+    //  gene1[counter++] = BattleEmulator::BUFF;
+    //  gene1[counter++] = BattleEmulator::SPECIAL_ANTIDOTE;
+    //  gene1[counter++] = BattleEmulator::BUFF;
+    //  gene1[counter++] = BattleEmulator::BUFF;
+    //  gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+    //  gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+    //  gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+    //  gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+    //  gene1[counter++] = BattleEmulator::SPECIAL_ANTIDOTE;
+    //  gene1[counter++] = BattleEmulator::DOUBLE_UP;
+    //  gene1[counter++] = BattleEmulator::BUFF;
+    //  gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
+    //  gene1[counter++] = BattleEmulator::MULTITHRUST;
     // gene1[counter++] = BattleEmulator::DEFENCE;
     // gene1[counter++] = BattleEmulator::DEFENCE;
     // gene1[counter++] = BattleEmulator::DEFENCE;
@@ -949,7 +949,7 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 0x050b6067;
+    uint64_t seed = 0x0b4b49cd;
 
     int actions[350] = {
         BattleEmulator::BUFF,

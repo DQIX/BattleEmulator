@@ -59,6 +59,7 @@ struct Player {
     int EerieTurn = -1;
     int EerieLevel = -0;
     bool inactive = false;
+    int rageTurns = 0;
 
     /**
      * @brief プレイヤーが生存しているかを判定する関数

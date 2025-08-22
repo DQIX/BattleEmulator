@@ -412,7 +412,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
 #ifdef DEBUG2
         std::cout << "c: " << counterJ << ", " << (*position) << std::endl;
-        if ((*position) == 657) {
+        if ((*position) == 225) {
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -590,6 +590,14 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     } else {
                         break;
                     }
+
+                    if (players[1].rage) {
+                        players[1].rageTurns--;
+                        if (players[1].rageTurns <= 0) {
+                            players[1].rage = false;
+                        }
+                    }
+
                     //--------end_FUN_021594bc-------
                 }
             } else {
@@ -956,7 +964,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 //0x021587b0みかわし
                 kaihi = true;
             }
-            if (lcg::getPercent(position, 100) < ShieldGuardP) {
+            if (!kaihi && lcg::getPercent(position, 100) < ShieldGuardP) {
                 tate = true;
             }
             int threshold = (players[defender].EerieLevel == 1) ? 75 : 56;
@@ -965,11 +973,12 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 if (baseDamage == 0) {
                     (*position)++; //0x021e81a0
                 }
-                if (players[0].TensionLevel != 4) {
+                if (players[0].TensionLevel != 4 && !kaihi && !tate) {
                     players[defender].inactive = true;
+                    players[defender].TensionLevel = 0;
                 }
+                (*position)++; //0x021e54fc
             }
-            (*position)++; //0x021e54fc
             baseDamage = 0;
             process7A8(position, baseDamage, players, defender);
             resetCombo(NowState);
@@ -1854,8 +1863,8 @@ void BattleEmulator::ProcessRage(int *position, int baseDamage, Player *players)
         if (percent >= 0.5) {
             if (!players[1].rage) {
                 (*position)++;
-                (*position)++;
                 players[1].rage = true;
+                players[1].rageTurns = lcg::intRangeRand(position, 2, 4);
             } else {
                 (*position)++;
             }
