@@ -64,7 +64,7 @@ namespace {
     int foundTurn = 0;
     int foundTurnOffset = 0;
 
-    const char *version = "v8.0.6_vK_v2";
+    const char *version = "v10.0.0_vA_v2";
 
     std::stringstream performanceLogger = std::stringstream();
 
@@ -391,28 +391,44 @@ namespace {
     NOINLINE bool ProcessInputBuilder(const int argc, char *argv[]) {
         // 4番目以降の引数を `push()` に入れる
         for (int i = 4; i < argc; ++i) {
-            if (isMatchStrWithTrim(argv[i], "t") || isMatchStrWithTrim(argv[i], "p")) {
-                builder.push(InputBuilder::TYPE_PSYCHE_UP_ENEMY, InputBuilder::PREFIX_PSYCHE_UP_ENEMY);
+            if (isMatchStrWithTrim(argv[i], "d") || isMatchStrWithTrim(argv[i], "D") || isMatchStrWithTrim(argv[i], "ad") || isMatchStrWithTrim(argv[i], "aD")) {
+                builder.push(InputBuilder::TYPE_PRE_SPECIAL_MEDICINE, InputBuilder::PREFIX_SPECIAL_MEDICINE);
+                builder.push(InputBuilder::TYPE_SPECIAL_ANTIDOTE, InputBuilder::PREFIX_SPECIAL_ANTIDOTE);
+                continue;
+            }
+            if (isMatchStrWithTrim(argv[i], "a")) {
+                builder.push(InputBuilder::TYPE_EERIE_LIGHT, InputBuilder::PREFIX_EERIE_LIGHT);
                 continue;
             }
             if (isMatchStrWithTrim(argv[i], "b") || isMatchStrWithTrim(argv[i], "s") || isMatchStrWithTrim(argv[i], "ab") || isMatchStrWithTrim(argv[i], "as")) {
                 builder.push(InputBuilder::TYPE_BUFF_ALLY, InputBuilder::PREFIX_BUFF_ALLY);
                 continue;
             }
-            if (isMatchStrWithTrim(argv[i], "h") || isMatchStrWithTrim(argv[i], "d") || isMatchStrWithTrim(argv[i], "ah") || isMatchStrWithTrim(argv[i], "ad")) {
+            if (isMatchStrWithTrim(argv[i], "h") || isMatchStrWithTrim(argv[i], "ah")) {
                 builder.push(InputBuilder::TYPE_PRE_SPECIAL_MEDICINE, InputBuilder::PREFIX_SPECIAL_MEDICINE);
                 builder.push(InputBuilder::TYPE_SPECIAL_MEDICINE, InputBuilder::PREFIX_SPECIAL_MEDICINE);
                 continue;
             }
-            if (isMatchStrWithTrim(argv[i], "at") || isMatchStrWithTrim(argv[i], "AP")) {
+            if (isMatchStrWithTrim(argv[i], "at") || isMatchStrWithTrim(argv[i], "ap") || isMatchStrWithTrim(argv[i], "t") || isMatchStrWithTrim(argv[i], "p")) {
                 builder.push(InputBuilder::TYPE_PSYCHE_UP_ALLY, InputBuilder::PREFIX_PSYCHE_UP_ALLY);
                 continue;
             }
-            auto [prefix, damage] = toABCint(argv[i]);
-            if (prefix == 'a' || prefix == InputBuilder::PREFIX_MULTITHRUST) {
-                builder.push(-6, 't'); //攻撃フォローアップ
+            if (isMatchStrWithTrim(argv[i], "y") || isMatchStrWithTrim(argv[i], "Y")) {
+                builder.push(InputBuilder::TYPE_INACTIVE, InputBuilder::PREFIX_INACTIVE);
+                continue;
             }
-            if (prefix == 'h') {
+            if (isMatchStrWithTrim(argv[i], "r") || isMatchStrWithTrim(argv[i], "k")) {
+                builder.push(InputBuilder::TYPE_WEB, InputBuilder::PREFIX_WEB);
+                continue;
+            }
+            auto [prefix, damage] = toABCint(argv[i]);
+            if (prefix == 'a') {
+                builder.push(InputBuilder::TYPE_ATTACK, InputBuilder::PREFIX_ATTACK); //攻撃フォローアップ
+            }
+            if (prefix == InputBuilder::PREFIX_MULTITHRUST) {
+                builder.push(InputBuilder::TYPE_MULTITHRUST, InputBuilder::PREFIX_MULTITHRUST); //攻撃フォローアップ
+            }
+            if (prefix == 'h' || prefix == 'd' ||  prefix == 'D') {
                 builder.push(InputBuilder::TYPE_PRE_SPECIAL_MEDICINE, InputBuilder::PREFIX_SPECIAL_MEDICINE); //攻撃フォローアップ
             }
             builder.push(damage, prefix);
@@ -538,7 +554,7 @@ namespace {
         ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 1500, gene, numThreads, Dropbug);
 #elif defined(z_lv20)
         auto [turnProcessed,genome] =
-                ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 500, gene, numThreads, Dropbug);
+                ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 250, gene, numThreads, Dropbug);
 #endif
 
 #ifdef DEBUG
@@ -647,10 +663,10 @@ namespace {
 
         int totalSeconds = hours * 3600 + minutes * 60 + seconds;
         totalSeconds = totalSeconds - 15;
-        auto time1 = static_cast<uint64_t>(floor((totalSeconds - 8.5) * (1 / 0.12515)));
+        auto time1 = static_cast<uint64_t>(floor((totalSeconds - 6.5) * (1 / 0.12515)));
         time1 = time1 << 16;
 
-        auto time2 = static_cast<uint64_t>(floor((totalSeconds + 8.5) * (1 / 0.125155)));
+        auto time2 = static_cast<uint64_t>(floor((totalSeconds + 6.5) * (1 / 0.125155)));
         time2 = time2 << 16;
         int32_t gene[350] = {0};
 
@@ -857,7 +873,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 
     //AI Warning: This is code related to debug2
-    uint64_t time1 = 0xb686780;
+    uint64_t time1 = 0x100000;
 
     int dummy[100];
     lcg::init(time1, false);
@@ -893,16 +909,34 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
     //0x22e2dbaf:
 
     //AI Warning: This is code related to debug2
-    int32_t gene1[350] = {
-        30, 30, 53, 62, 62, 50, 33, 62, 62, 34,
-        BattleEmulator::ATTACK_ALLY};
+    // int32_t gene1[350] = {
+    //     30, 30, 53, 62, 62, 50, 33, 62, 62, 34,
+    //     BattleEmulator::ATTACK_ALLY};
     //gene1[19-1] = BattleEmulator::DEFENCE;
     int counter = 0;
-    // int32_t gene1[350] = {0};
-    //  gene1[counter++] = BattleEmulator::BUFF;
-    //  gene1[counter++] = BattleEmulator::BUFF;
-    //  gene1[counter++] = BattleEmulator::BUFF;
-    //  gene1[counter++] = BattleEmulator::SPECIAL_ANTIDOTE;
+    int32_t gene1[350] = {0};
+    gene1[counter++] = BattleEmulator::BUFF;
+    gene1[counter++] = BattleEmulator::BUFF;
+    gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
+    gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+    gene1[counter++] = BattleEmulator::BUFF;
+    gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+    gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+    gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
+    gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+    gene1[counter++] = BattleEmulator::MULTITHRUST;
+    gene1[counter++] = BattleEmulator::DOUBLE_UP;
+    gene1[counter++] = BattleEmulator::BUFF;
+    gene1[counter++] = BattleEmulator::MULTITHRUST;
+    gene1[counter++] = BattleEmulator::MULTITHRUST;
+    gene1[counter++] = BattleEmulator::MULTITHRUST;
+    gene1[counter++] = BattleEmulator::MIDHEAL;
+    gene1[counter++] = BattleEmulator::MULTITHRUST;
+    gene1[counter++] = BattleEmulator::MULTITHRUST;
+    gene1[counter++] = BattleEmulator::MULTITHRUST;
+    gene1[counter++] = BattleEmulator::MIDHEAL;
+    gene1[counter++] = BattleEmulator::MIDHEAL;
+    gene1[counter++] = BattleEmulator::MIDHEAL;
     //  gene1[counter++] = BattleEmulator::BUFF;
     //  gene1[counter++] = BattleEmulator::BUFF;
     //  gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
@@ -949,7 +983,7 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 0x0b5308e5;
+    uint64_t seed = 0x0b6a462e;
 
     int actions[350] = {
         BattleEmulator::BUFF,

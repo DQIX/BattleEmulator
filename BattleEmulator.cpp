@@ -412,7 +412,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
 #ifdef DEBUG2
         std::cout << "c: " << counterJ << ", " << (*position) << std::endl;
-        if ((*position) == 202) {
+        if ((*position) == 983) {
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -512,7 +512,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             continue;
                         }
                         break;
-                    }while(true);
+                    } while (true);
 
                     if (enemyAction != EERIE_LIGHT && enemyAction != WIND_SICKLES) {
                         (*position)++; // 0x02156874 攻撃先
@@ -562,22 +562,31 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                                           ahp, tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag);
                     } else if (mode != -1 && mode != -2) {
                         if (
+                            enemyAction == WICKED_WEB ||
+                            enemyAction == VENOMISSILE ||
                             enemyAction == ATTACK_ENEMY ||
-                            enemyAction == PSYCHE_UP ||
-                            enemyAction == CRACKLE_ENEMY ||
-                            enemyAction == ZAMMLE ||
-                            enemyAction == DOUBLE_TROUBLE
+                            enemyAction == WIND_SICKLES ||
+                            enemyAction == EERIE_LIGHT
                         ) {
                             if (damages[exCounter] == -1) {
                                 startTurn = counterJ;
                                 return true;
                             }
-
-                            if (damages[exCounter] == InputBuilder::TYPE_PSYCHE_UP_ENEMY) {
-                                if (enemyAction != PSYCHE_UP) {
-                                    return false;
+                            if (enemyAction == EERIE_LIGHT) {
+                                if (damages[exCounter] == InputBuilder::TYPE_EERIE_LIGHT) {
+                                    exCounter++;
                                 }
-                                exCounter++;
+                            } else if (enemyAction == WICKED_WEB) {
+                                if (damages[exCounter] == InputBuilder::TYPE_WEB) {
+                                    exCounter++;
+                                }
+                                if (damages[exCounter] == InputBuilder::TYPE_INACTIVE) {
+                                    if (players[0].inactive) {
+                                        exCounter++;
+                                    } else {
+                                        return false;
+                                    }
+                                }
                             } else if (damages[exCounter++] != basedamage) {
                                 return false;
                             }
@@ -690,6 +699,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
                                 int currentDamage = damages[exCounter++];
                                 if (currentDamage != InputBuilder::TYPE_SPECIAL_MEDICINE &&
+                                    currentDamage != InputBuilder::TYPE_SPECIAL_ANTIDOTE &&
                                     currentDamage != basedamage &&
                                     currentDamage != (static_cast<int>(players[0].maxHp) - players[0].hp)) {
                                     return false;
@@ -719,6 +729,27 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                                     return false;
                                 }
                                 exCounter++;
+                                if (damages[exCounter] == -1) {
+                                    startTurn = counterJ;
+                                    return true;
+                                }
+                            } else if (damages[exCounter] == InputBuilder::TYPE_PSYCHE_UP_ALLY) {
+                                if (action != PSYCHE_UP_ALLY) {
+                                    return false;
+                                }
+                                exCounter++;
+                                if (damages[exCounter] == -1) {
+                                    startTurn = counterJ;
+                                    return true;
+                                }
+                            } else if (damages[exCounter] == InputBuilder::TYPE_MULTITHRUST) {
+                                if (action != MULTITHRUST) {
+                                    return false;
+                                }
+                                exCounter++;
+                                if (damages[exCounter++] != basedamage) {
+                                    return false;
+                                }
                                 if (damages[exCounter] == -1) {
                                     startTurn = counterJ;
                                     return true;
@@ -950,7 +981,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position)++; //0x02157f58 回避
             baseDamage = FUN_021e8458_typeD(position, 6, 24);
             if (!kaihi && !tate) {
-                if (players[defender].TensionLevel != 4 && lcg::getPercent(position, 100) < 12) { //変更した
+                if (players[defender].TensionLevel != 4 && lcg::getPercent(position, 100) < 12) {
+                    //変更した
                     players[defender].PoisonEnable = true;
                     players[defender].PoisonTurn = 0;
                 }

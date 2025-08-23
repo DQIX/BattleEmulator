@@ -117,7 +117,7 @@ std::pair<int, Genome> ActionOptimizer::RunAlgorithmAsync(const Player players[2
                                      std::cref(players), seed, turns, 1500, actions, start, end, Dropbug));
 #elif defined(z_lv20)
         futures.push_back(std::async(std::launch::async, RunAlgorithmSingleThread,
-                                     std::cref(players), seed, turns, 500, actions, start, end, Dropbug));
+                                     std::cref(players), seed, turns, 1200, actions, start, end, Dropbug));
 #endif
     }
 
