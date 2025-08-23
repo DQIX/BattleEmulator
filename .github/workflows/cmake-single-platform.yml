@@ -47,7 +47,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         # Artifact name
-        name: erusionn_v
+        name: zuo_v
         path: |
           ${{github.workspace}}/build/${{env.BUILD_TYPE}}/zuo_lv20_v2.exe
           ${{github.workspace}}/build/${{env.BUILD_TYPE}}/zuo_lv20_v2.pdb
