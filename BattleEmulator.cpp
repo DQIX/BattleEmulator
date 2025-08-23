@@ -1016,12 +1016,14 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 if (baseDamage == 0) {
                     baseDamage = lcg::getPercent(position, 2); //0x021e81a0
                 }
-                if (!kaihi && !tate && baseDamage != 0) {
-                    (*position)++; //不明 0x021e54fc
-                }
-                if (players[0].TensionLevel != 4 && !kaihi && !tate) {
-                    players[defender].inactive = true;
-                    players[defender].TensionLevel = 0;
+                if (!kaihi && !tate) {
+                    if (baseDamage != 0) {
+                        (*position)++; //不明 0x021e54fc
+                    }
+                    if (players[0].TensionLevel != 4) {
+                        players[defender].inactive = true;
+                        players[defender].TensionLevel = 0;
+                    }
                 }
             }
             baseDamage = 0;
