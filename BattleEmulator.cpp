@@ -1003,20 +1003,22 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position) += 2;
             (*position)++; //0x021ec6f8 不明
             (*position)++; //0x02158584 会心
-            if (lcg::getPercent(position, 100) < mikawasiP) {
-                //0x021587b0みかわし
-                kaihi = true;
-            }
-            if (!kaihi && lcg::getPercent(position, 100) < ShieldGuardP) {
-                tate = true;
+            if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
+                if (lcg::getPercent(position, 100) < mikawasiP) {
+                    //0x021587b0みかわし
+                    kaihi = true;
+                }
+                if (!kaihi && lcg::getPercent(position, 100) < ShieldGuardP) {
+                    tate = true;
+                }
             }
             int threshold = (players[defender].EerieLevel == 1) ? 75 : 56;
             if (lcg::getPercent(position, 100) < threshold) {
                 baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[defender].def);
-                if (baseDamage == 0) {
-                    baseDamage = lcg::getPercent(position, 2); //0x021e81a0
-                }
-                if (!kaihi && !tate) {
+                if (!tate && !kaihi) {
+                    if (baseDamage == 0) {
+                        baseDamage = lcg::getPercent(position, 2); //0x021e81a0
+                    }
                     if (baseDamage != 0) {
                         (*position)++; //不明 0x021e54fc
                     }

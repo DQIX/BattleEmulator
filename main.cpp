@@ -732,6 +732,31 @@ namespace {
         }
     }
 
+
+#if defined(DEBUG4)
+    void testbattleemu() {
+        int *position = new int(1);
+        auto *nowState = new uint64_t(0);
+        int maxElement = 350;
+        auto start = 10000;
+        auto end = 1000000;
+        int gene[350] = {BattleEmulator::ATTACK_ALLY, -1};
+        for (uint64_t seed = start; seed < end; ++seed) {
+            BattleEmulator::resetStartTurn();
+            lcg::init(seed);
+            (*nowState) = 0;
+            (*position) = 1;
+            Player players[2] = {BasePlayers[0], BasePlayers[1]};
+            BattleEmulator::Main(position, 1, gene, players,
+                                                   (std::optional<BattleResult> &) std::nullopt, seed, nullptr, nullptr,
+                                                   -2,
+                                                   nowState);
+        }
+        delete position;
+        delete nowState;
+    }
+#endif
+    
     /**
      * 入力文字列を解析し、先頭のアルファベットが存在する場合はプレフィックスと数値部分を
      * ペアとして返します。文字列が純粋な数値の場合は、プレフィックスなしでその数値を返します。
@@ -857,6 +882,12 @@ int main(int argc, char *argv[]) {
     //std::cin.tie(0)->sync_with_stdio(0);
 
 
+#ifdef DEBUG4
+    testbattleemu();
+    return 0;
+#endif
+    
+
 #ifdef DEBUG2
     //time1 = 0x199114b2;
     //time1 = 0x226d97a6;
@@ -873,7 +904,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 
     //AI Warning: This is code related to debug2
-    uint64_t time1 = 0x100000;
+    uint64_t time1 = 10327;
 
     int dummy[100];
     lcg::init(time1, false);
@@ -915,8 +946,8 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
     //gene1[19-1] = BattleEmulator::DEFENCE;
     int counter = 0;
     int32_t gene1[350] = {0};
-    gene1[counter++] = BattleEmulator::BUFF;
-    gene1[counter++] = BattleEmulator::BUFF;
+    gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    gene1[counter++] = BattleEmulator::ATTACK_ALLY;
     gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
     gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
     gene1[counter++] = BattleEmulator::BUFF;
