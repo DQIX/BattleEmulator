@@ -493,7 +493,7 @@ namespace {
         }
 
         auto [turnProcessed,genome] =
-                ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 3000, gene, numThreads);
+                ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 1000, gene, numThreads);
 
         std::optional<BattleResult> result1;
         result1 = BattleResult();
