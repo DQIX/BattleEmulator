@@ -327,7 +327,9 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             currentGenome.AllyPlayer = CopedPlayers[0];
             currentGenome.EnemyPlayer = CopedPlayers[1];
 
-            que.push(currentGenome);
+            if (AllyPlayerPre.TensionLevel <= CopedPlayers[0].TensionLevel) {
+                que.push(currentGenome);
+            }
         }
 
         if (AllyPlayerPre.AtkBuffLevel == 0 && AllyPlayerPre.BuffLevel == 2 && !Bans.is_action_banned(
@@ -358,7 +360,9 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             currentGenome.AllyPlayer = CopedPlayers[0];
             currentGenome.EnemyPlayer = CopedPlayers[1];
 
-            que.push(currentGenome);
+            if (AllyPlayerPre.TensionLevel <= CopedPlayers[0].TensionLevel) {
+                que.push(currentGenome);
+            }
         }
 
         if (tmpgenomu.EnemyPlayer.hp > 180 && AllyPlayerPre.TensionLevel <= 3 && !Bans.is_action_banned(BattleEmulator::PSYCHE_UP_ALLY, turns)) {
@@ -388,7 +392,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             currentGenome.AllyPlayer = CopedPlayers[0];
             currentGenome.EnemyPlayer = CopedPlayers[1];
 
-            if (AllyPlayerPre.TensionLevel != CopedPlayers[0].TensionLevel) {
+            if (AllyPlayerPre.TensionLevel <= CopedPlayers[0].TensionLevel) {
                 que.push(currentGenome);
             }
         }
@@ -420,7 +424,9 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             currentGenome.AllyPlayer = CopedPlayers[0];
             currentGenome.EnemyPlayer = CopedPlayers[1];
 
-            que.push(currentGenome);
+            if (AllyPlayerPre.TensionLevel <= CopedPlayers[0].TensionLevel) {
+                que.push(currentGenome);
+            }
         }
 
         if (AllyPlayerPre.mp >= 10) {
@@ -452,7 +458,9 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
                 currentGenome.EnemyPlayer = CopedPlayers[1];
 
 
-                que.push(currentGenome);
+                if (AllyPlayerPre.TensionLevel <= CopedPlayers[0].TensionLevel) {
+                    que.push(currentGenome);
+                }
             }
             if (!Bans.is_action_banned(BattleEmulator::MULTITHRUST, turns)) {
                 action = BattleEmulator::MULTITHRUST;
@@ -486,7 +494,9 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
                 currentGenome.EnemyPlayer = CopedPlayers[1];
 
 
-                que.push(currentGenome);
+                if (AllyPlayerPre.TensionLevel <= CopedPlayers[0].TensionLevel) {
+                    que.push(currentGenome);
+                }
             }
         }
 
@@ -517,7 +527,9 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             currentGenome.AllyPlayer = CopedPlayers[0];
             currentGenome.EnemyPlayer = CopedPlayers[1];
 
-            que.push(currentGenome);
+            if (AllyPlayerPre.TensionLevel <= CopedPlayers[0].TensionLevel) {
+                que.push(currentGenome);
+            }
         }
         counter++;
     }

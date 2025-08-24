@@ -683,9 +683,6 @@ namespace {
                                      合計 6Byte
         */
 
-        time1 = 0x10001;
-        time2 = 0x10002;
-
         BruteForceMainLoop(copiedPlayers, time1, time2, gene, damages);
 
         std::cout << std::endl << "found: " << foundSeeds << std::endl;
