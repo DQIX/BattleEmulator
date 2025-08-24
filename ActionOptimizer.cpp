@@ -120,7 +120,8 @@ std::pair<int, Genome> ActionOptimizer::RunAlgorithmAsync(const Player players[2
 Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int turns, int maxGenerations,
                                      int actions[350], int seedOffset) {
     std::mt19937 rng(seed + seedOffset);
-    bool heal = (rng() % 8);
+    auto heal = (rng() % 8);
+    auto noHEAL = (rng() % 7) + turns;
     //auto heal = 0;
     std::unique_ptr<int> position = std::make_unique<int>(1);
     std::unique_ptr<uint64_t> nowState = std::make_unique<uint64_t>(0);
@@ -340,7 +341,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             currentGenome.AllyPlayer = CopedPlayers[0];
             currentGenome.EnemyPlayer = CopedPlayers[1];
 
-            if (!(turns > (startTurn+5) && CopedPlayers[1].hp > preHP)) {
+            if (!(turns > noHEAL && CopedPlayers[1].hp > preHP)) {
                 que.push(currentGenome);
             }
 
@@ -373,7 +374,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             currentGenome.AllyPlayer = CopedPlayers[0];
             currentGenome.EnemyPlayer = CopedPlayers[1];
 
-            if (!(turns > (startTurn+5) && CopedPlayers[1].hp > preHP)) {
+            if (!(turns > noHEAL && CopedPlayers[1].hp > preHP)) {
                 que.push(currentGenome);
             }
         }
@@ -405,7 +406,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             currentGenome.AllyPlayer = CopedPlayers[0];
             currentGenome.EnemyPlayer = CopedPlayers[1];
 
-            if (!(turns > (startTurn+5) && CopedPlayers[1].hp > preHP)) {
+            if (!(turns > noHEAL && CopedPlayers[1].hp > preHP)) {
                 que.push(currentGenome);
             }
         }
@@ -444,7 +445,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
                 currentGenome.fitness += 15;
             }
 
-            if (!(turns > (startTurn+5) && CopedPlayers[1].hp > preHP)) {
+            if (!(turns > noHEAL && CopedPlayers[1].hp > preHP)) {
                 que.push(currentGenome);
             }
         }
@@ -477,7 +478,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             currentGenome.AllyPlayer = CopedPlayers[0];
             currentGenome.EnemyPlayer = CopedPlayers[1];
 
-            if (!(turns > (startTurn+5) && CopedPlayers[1].hp > preHP)) {
+            if (!(turns > noHEAL && CopedPlayers[1].hp > preHP)) {
                 que.push(currentGenome);
             }
         }
@@ -509,7 +510,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             currentGenome.AllyPlayer = CopedPlayers[0];
             currentGenome.EnemyPlayer = CopedPlayers[1];
 
-            if (!(turns > (startTurn+5) && CopedPlayers[1].hp > preHP)) {
+            if (!(turns > noHEAL && CopedPlayers[1].hp > preHP)) {
                 que.push(currentGenome);
             }
         }
@@ -541,7 +542,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             currentGenome.AllyPlayer = CopedPlayers[0];
             currentGenome.EnemyPlayer = CopedPlayers[1];
 
-            if (!(turns > (startTurn+5) && CopedPlayers[1].hp > preHP)) {
+            if (!(turns > noHEAL && CopedPlayers[1].hp > preHP)) {
                 que.push(currentGenome);
             }
         }
