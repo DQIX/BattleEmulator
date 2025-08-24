@@ -555,7 +555,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         }
 
                         if (enemyAction == WAR_CRY) {
-                            if (damages[exCounter] != InputBuilder::TYPE_WAR_CRY) {
+                            if (damages[exCounter] == InputBuilder::TYPE_WAR_CRY) {
                                 exCounter++;
                             }
                             if (damages[exCounter] == InputBuilder::TYPE_INACTIVE) {

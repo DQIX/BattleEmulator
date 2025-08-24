@@ -31,8 +31,6 @@ void InputBuilder::push(int damage, const char prefix) {
         entry.candidates.push_back(BattleEmulator::PSYCHE_UP_ALLY);
     } else if (prefix == PREFIX_MULTITHRUST) {
         entry.candidates.push_back(BattleEmulator::MULTITHRUST);
-    } else if (damage == 0) {
-        entry.candidates.push_back(BattleEmulator::ATTACK_ENEMY);
     } else if (prefix == PREFIX_INACTIVE) {
         entry.candidates.push_back(BattleEmulator::INACTIVE_ALLY);
     } else if (prefix == PREFIX_WAR_CRY) {
