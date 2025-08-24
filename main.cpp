@@ -63,7 +63,7 @@ namespace {
     int foundTurn = 0;
     int foundTurnOffset = 0;
 
-    const char *version = "v4.0.3_vC_aa";
+    const char *version = "v4.0.4_vD_v5";
 
     std::stringstream performanceLogger = std::stringstream();
 
@@ -582,7 +582,7 @@ namespace {
         delete position;
         delete nowState;
 
-        dumpTableMain(bestResult, bestGenome, seed);
+        dumpTableMain(bestResult, bestGenome, seed, turns);
 
 #ifdef DEBUG
         auto turnProcessed = BattleEmulator::getTurnProcessed();
@@ -772,8 +772,8 @@ namespace {
 constexpr Player BasePlayers[2] = {
     // プレイヤー1
     {
-        70, 70.0, 62 + 2, 62 + 2, 69, 69, 44, 44, 31, 24, // 最初のメンバー
-        24, false, false, 0, false, 0, -1,
+        65, 65.0, 61, 61, 66, 66, 40, 40, 29, 22, // 最初のメンバー
+        22, false, false, 0, false, 0, -1,
         // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
         8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
         false, -1, 0, -1, 0, false, 1, 1, 1, -1, 0, -1, false, 2, false, -1, -1, 7, false
@@ -892,7 +892,7 @@ int main(int argc, char *argv[]) {
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 629634391;
+    uint64_t seed = 0x01e68bba;
 
     int actions[350] = {
         BattleEmulator::ATTACK_ALLY,

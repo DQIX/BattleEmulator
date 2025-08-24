@@ -28,12 +28,12 @@ jobs:
       # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
-    - name: Build ybe_v2
+    - name: Build ybe_v5_lv11
       # Build your program with the given configuration
-      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target ybe_v2
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target ybe_v5_lv11
 
-    - name: echo SHA256 ybe_v2
-      run: Get-FileHash -Algorithm SHA256 -Path "${{github.workspace}}/build/${{env.BUILD_TYPE}}/ybe_v2.exe"
+    - name: echo SHA256 ybe_v5_lv11
+      run: Get-FileHash -Algorithm SHA256 -Path "${{github.workspace}}/build/${{env.BUILD_TYPE}}/ybe_v5_lv11.exe"
 
     - name: Copy License file
       run: Copy-Item -Path "${{github.workspace}}/LICENSE" -Destination "${{github.workspace}}/build/${{env.BUILD_TYPE}}/"
@@ -44,6 +44,6 @@ jobs:
         # Artifact name
         name: isilyudaru_v
         path: |
-          ${{github.workspace}}/build/${{env.BUILD_TYPE}}/ybe_v2.exe
-          ${{github.workspace}}/build/${{env.BUILD_TYPE}}/ybe_v2.pdb
+          ${{github.workspace}}/build/${{env.BUILD_TYPE}}/ybe_v5_lv11.exe
+          ${{github.workspace}}/build/${{env.BUILD_TYPE}}/ybe_v5_lv11.pdb
           ${{github.workspace}}/build/${{env.BUILD_TYPE}}/LICENSE
