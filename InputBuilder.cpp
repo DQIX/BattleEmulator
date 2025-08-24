@@ -29,7 +29,7 @@ void InputBuilder::push(int damage, const char prefix) {
         }
     } else if (prefix == PREFIX_PSYCHE_UP_ALLY) {
         entry.candidates.push_back(BattleEmulator::PSYCHE_UP_ALLY);
-    } else if (prefix == PREFIX_MULTITHRUST) {
+    } else if (damage == TYPE_MULTITHRUST) {
         entry.candidates.push_back(BattleEmulator::MULTITHRUST);
     } else if (prefix == PREFIX_INACTIVE) {
         entry.candidates.push_back(BattleEmulator::INACTIVE_ALLY);

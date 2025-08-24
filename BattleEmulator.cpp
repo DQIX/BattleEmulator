@@ -700,7 +700,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                                     startTurn = counterJ;
                                     return true;
                                 }
-                            } else if (action == ATTACK_ALLY || action == MIRACLE_SLASH || action == MULTITHRUST) {
+                            } else if (action == ATTACK_ALLY || action == MIRACLE_SLASH) {
                                 if (damages[exCounter] == -1) {
                                     startTurn = counterJ;
                                     return true;
@@ -709,6 +709,18 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                                 if (damages[exCounter++] != -6) {
                                     return false;
                                 }
+                                if (damages[exCounter++] != basedamage) {
+                                    return false;
+                                }
+                                if (damages[exCounter] == -1) {
+                                    startTurn = counterJ;
+                                    return true;
+                                }
+                            } else if (damages[exCounter] == InputBuilder::TYPE_MULTITHRUST) {
+                                if (action != MULTITHRUST) {
+                                    return false;
+                                }
+                                exCounter++;
                                 if (damages[exCounter++] != basedamage) {
                                     return false;
                                 }
@@ -937,13 +949,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position)++; //関係ない
             (*position)++; //会心
             (*position)++; //回避
-            baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[attacker].def);
-            if (baseDamage == 0) {
-                baseDamage = lcg::getPercent(position, 2); //0x021e81a0
-            }
-            if (baseDamage != 0) {
-                (*position)++; //不明 0x021e54fc
-            }
+            FUN_0207564c(position, players[attacker].defaultATK, players[attacker].def);
             players[attacker].TensionLevel = 0;
             baseDamage = 0;
             break;

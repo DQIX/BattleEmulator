@@ -544,7 +544,7 @@ namespace {
         ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 1500, gene, numThreads, Dropbug);
 #elif defined(erusionn_lv21)
         auto [turnProcessed,genome] =
-                ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 2000, gene, numThreads, Dropbug);
+                ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 350, gene, numThreads, Dropbug);
 #endif
 
 #ifdef DEBUG
@@ -653,10 +653,10 @@ namespace {
 
         int totalSeconds = hours * 3600 + minutes * 60 + seconds;
         totalSeconds = totalSeconds - 15;
-        auto time1 = static_cast<uint64_t>(floor((totalSeconds - 4.5) * (1 / 0.12515)));
+        auto time1 = static_cast<uint64_t>(floor((totalSeconds - 3.5) * (1 / 0.12515)));
         time1 = time1 << 16;
 
-        auto time2 = static_cast<uint64_t>(floor((totalSeconds + 4.5) * (1 / 0.125155)));
+        auto time2 = static_cast<uint64_t>(floor((totalSeconds + 3.5) * (1 / 0.125155)));
         time2 = time2 << 16;
         int32_t gene[350] = {0};
 
@@ -682,6 +682,9 @@ namespace {
         +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
                                      合計 6Byte
         */
+
+        time1 = 0x10001;
+        time2 = 0x10002;
 
         BruteForceMainLoop(copiedPlayers, time1, time2, gene, damages);
 
@@ -832,6 +835,30 @@ namespace {
     }
 }
 
+#if defined(DEBUG4)
+void testbattleemu() {
+    int *position = new int(1);
+    auto *nowState = new uint64_t(0);
+    int maxElement = 350;
+    auto start = 10000;
+    auto end = 10000000;
+    int gene[350] = {BattleEmulator::BUFF, -1};
+    for (uint64_t seed = start; seed < end; ++seed) {
+        BattleEmulator::resetStartTurn();
+        lcg::init(seed);
+        (*nowState) = 0;
+        (*position) = 1;
+        Player players[2] = {BasePlayers[0], BasePlayers[1]};
+        BattleEmulator::Main(position, 1, gene, players,
+                                               (std::optional<BattleResult> &) std::nullopt, seed, nullptr, nullptr,
+                                               -2,
+                                               nowState);
+    }
+    delete position;
+    delete nowState;
+}
+#endif
+
 int main(int argc, char *argv[]) {
     if (argc == 2 && isMatchStrWithTrim(argv[1], "h")) {
         showHeader();
@@ -846,6 +873,11 @@ int main(int argc, char *argv[]) {
     //https://zenn.dev/reputeless/books/standard-cpp-for-competitive-programming/viewer/library-ios-iomanip#3.1-c-%E8%A8%80%E8%AA%9E%E3%81%AE%E5%85%A5%E5%87%BA%E5%8A%9B%E3%82%B9%E3%83%88%E3%83%AA%E3%83%BC%E3%83%A0%E3%81%A8%E3%81%AE%E5%90%8C%E6%9C%9F%E3%82%92%E7%84%A1%E5%8A%B9%E3%81%AB%E3%81%99%E3%82%8B
     //std::cin.tie(0)->sync_with_stdio(0);
 
+
+#ifdef DEBUG4
+    testbattleemu();
+    return 0;
+#endif
 
 #ifdef DEBUG2
     //time1 = 0x199114b2;
@@ -862,7 +894,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 
     //AI Warning: This is code related to debug2
-    uint64_t time1 = 0x0abf7373;
+    uint64_t time1 = 0x10001;
 
     int dummy[100];
     lcg::init(time1, false);
@@ -904,7 +936,7 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
     //gene1[19-1] = BattleEmulator::DEFENCE;
     int counter = 0;
     int32_t gene1[350] = {0};
-    gene1[counter++] = BattleEmulator::BUFF;
+    gene1[counter++] = BattleEmulator::MULTITHRUST;
     gene1[counter++] = BattleEmulator::BUFF;
     gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
     gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
