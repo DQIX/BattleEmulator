@@ -347,7 +347,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
         }
 
-        if (AllyPlayerPre.medicinal_herbs_count == 0 && AllyPlayerPre.mp >= 2 && !Bans.is_action_banned(BattleEmulator::HEAL, turns)) {
+        if (AllyPlayerPre.mp >= 2 && !Bans.is_action_banned(BattleEmulator::HEAL, turns)) {
             action = BattleEmulator::HEAL;
             if (tmpgenomu.Visited >= 1) {
                 currentGenome.fitness = baseFitness; // 固定値に
@@ -379,7 +379,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             }
         }
 
-        if (AllyPlayerPre.mp >= heal && !Bans.is_action_banned(BattleEmulator::CRACK_ALLY, turns)) {
+        if (AllyPlayerPre.mp >= heal && AllyPlayerPre.mp >= 3 && !Bans.is_action_banned(BattleEmulator::CRACK_ALLY, turns)) {
             action = BattleEmulator::CRACK_ALLY;
             if (tmpgenomu.Visited >= 1) {
                 currentGenome.fitness = baseFitness; // 固定値に
@@ -521,7 +521,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
                 currentGenome.fitness = baseFitness; // 固定値に
                 currentGenome.Visited = 0;
             } else {
-                currentGenome.fitness = baseFitness + 15 + static_cast<int>(rng() % 13);
+                currentGenome.fitness = baseFitness + 10 + static_cast<int>(rng() % 13);
             }
             currentGenome.actions[turns - 1] = action;
 

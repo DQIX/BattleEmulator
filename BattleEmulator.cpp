@@ -70,7 +70,7 @@ const char *BattleEmulator::getActionName(int actionId) {
         case BattleEmulator::ATTACK_ENEMY:
             return "Attack";
         case BattleEmulator::MEDICINAL_HERBS:
-            return "Medicinal Herbs";
+            return "!Medicinal Herbs";
         case BattleEmulator::PARALYSIS:
             return "Paralysis";
         case BattleEmulator::CURE_PARALYSIS:
@@ -107,7 +107,7 @@ const char *BattleEmulator::getActionName(int actionId) {
             return "Attack";
         case BattleEmulator::HEAL:
         case HEAL_ENEMY:
-            return "Heal";
+            return "#Heal";
         case BattleEmulator::DEFENCE:
             return "Defence";
 
