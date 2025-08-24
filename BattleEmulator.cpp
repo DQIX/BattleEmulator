@@ -649,6 +649,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
                     if (players[0].inactive) {
                         players[0].inactive = false;
+                        players[0].defence = 1.0;
                         if (action != CURE_PARALYSIS && action != PARALYSIS) {
                             action = INACTIVE_ALLY;
                         }
