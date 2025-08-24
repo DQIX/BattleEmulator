@@ -1073,7 +1073,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             if (preHP[1] > 0) {
                 if (!players[attacker].specialCharge && lcg::getPercent(position, 100) < 1) {
                     players[attacker].specialCharge = true;
-                    players[attacker].specialChargeTurn = 8;
+                    players[attacker].specialChargeTurn = SpecialChargeTurns;
                 }
             }
             //0x021ec6f8が多分の残りの攻撃回数だけ発生する
@@ -1558,7 +1558,7 @@ void BattleEmulator::process7A8(int *position, int baseDamage, Player players[2]
         if (baseDamage_tmp >= proportionTable3[i]) {
             if (percent_tmp < proportionTable2[i]) {
                 players[defender].specialCharge = true;
-                players[defender].specialChargeTurn = 6;
+                players[defender].specialChargeTurn = SpecialChargeTurns;
             }
             break;
         }
