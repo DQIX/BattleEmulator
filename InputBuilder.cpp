@@ -19,14 +19,12 @@ void InputBuilder::push(int damage, const char prefix) {
     InputEntry entry;
     entry.damage = damage;
 
-    if (prefix == PREFIX_PSYCHE_UP_ENEMY) {
-        entry.candidates.push_back(BattleEmulator::PSYCHE_UP);
-    } else if (prefix == PREFIX_BUFF_ALLY) {
+    if (prefix == PREFIX_BUFF_ALLY) {
         entry.candidates.push_back(BattleEmulator::BUFF);
     } else if (prefix == PREFIX_SPECIAL_MEDICINE) {
         if (damage != TYPE_PRE_SPECIAL_MEDICINE) {
             entry.candidates.push_back(BattleEmulator::SPECIAL_MEDICINE);
-        }else {
+        } else {
             entry.candidates.push_back(BattleEmulator::UNKNOWN_ACTION);
         }
     } else if (prefix == PREFIX_PSYCHE_UP_ALLY) {
@@ -35,26 +33,13 @@ void InputBuilder::push(int damage, const char prefix) {
         entry.candidates.push_back(BattleEmulator::MULTITHRUST);
     } else if (damage == 0) {
         entry.candidates.push_back(BattleEmulator::ATTACK_ENEMY);
-    } else
-
-#if defined(BattleEmulatorLV19)
-    if (prefix == 'a') {
-        if (damage > 30 && damage <= 60) {
-            entry.candidates.push_back(BattleEmulator::MIRACLE_SLASH);
-        } else {
-            entry.candidates.push_back(BattleEmulator::ATTACK_ALLY);
-        }
+    } else if (prefix == PREFIX_INACTIVE) {
+        entry.candidates.push_back(BattleEmulator::INACTIVE_ALLY);
+    } else if (prefix == PREFIX_WAR_CRY) {
+        entry.candidates.push_back(BattleEmulator::WAR_CRY);
     } else {
-        entry.candidates.push_back(BattleEmulator::ATTACK_ENEMY);
+        entry.candidates.push_back(BattleEmulator::UNKNOWN_ACTION);
     }
-#elif defined(erusionn_lv21) || defined(BattleEmulatorLV13)
-        if (prefix == 'a') {
-            entry.candidates.push_back(BattleEmulator::ATTACK_ALLY);
-        } else {
-            entry.candidates.push_back(BattleEmulator::UNKNOWN_ACTION);
-        }
-#endif
-
     if (entry.candidates.empty()) {
         std::cerr << "WARNING: A damage value of 0 " << damage << " has no applicable range\n";
     }
@@ -113,7 +98,7 @@ void InputBuilder::generateCombinations(size_t index, ResultStructure current, s
     for (int candidate: entry.candidates) {
         ResultStructure next = current; // 既にAII_damageが追加済み
         if (candidate == BattleEmulator::ATTACK_ENEMY || candidate == BattleEmulator::PSYCHE_UP || candidate ==
-            BattleEmulator::UNKNOWN_ACTION || candidate == BattleEmulator::SWEET_BREATH) {
+            BattleEmulator::UNKNOWN_ACTION || candidate == BattleEmulator::SWEET_BREATH || candidate == BattleEmulator::WAR_CRY) {
             next.Edamage[next.EdamageCounter++] = entry.damage;
         } else {
             next.Aactions[next.AactionsCounter++] = candidate;

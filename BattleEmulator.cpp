@@ -42,7 +42,7 @@ constexpr int baseHP = 79;
 #elif defined(erusionn_lv21)
 constexpr int kaisinnP = 500;
 constexpr int baseHP = 131;
-constexpr double ShieldGuardP = 4.5;
+constexpr double ShieldGuardP = 2.5;
 constexpr double mitoreP = 0.2200;
 constexpr int Ally_Level = 21;
 #endif
@@ -53,7 +53,15 @@ constexpr int multithrust3KaisinnP = DragonSlashKaisinnP / 3;
 constexpr int multithrust4KaisinnP = DragonSlashKaisinnP / 4;
 
 constexpr int determineTurn(const int level) {
-    return (level >= 10 && level <= 24) ? 6 : (level >= 25 && level <= 49) ? 7 : (level >= 50 && level <= 74) ? 8 : (level >= 75 && level <= 99) ? 9 : 0;
+    return (level >= 10 && level <= 24)
+               ? 6
+               : (level >= 25 && level <= 49)
+                     ? 7
+                     : (level >= 50 && level <= 74)
+                           ? 8
+                           : (level >= 75 && level <= 99)
+                                 ? 9
+                                 : 0;
 }
 
 constexpr int SpecialChargeTurns = determineTurn(Ally_Level);
@@ -537,18 +545,26 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 } else if (mode != -1 && mode != -2) {
                     if (
                         enemyAction == ATTACK_ENEMY ||
-                        enemyAction == FIRE_BREATH
+                        enemyAction == FIRE_BREATH ||
+                        enemyAction == CLAW_SLASH ||
+                        enemyAction == WAR_CRY
                     ) {
                         if (damages[exCounter] == -1) {
                             startTurn = counterJ;
                             return true;
                         }
 
-                        if (damages[exCounter] == InputBuilder::TYPE_PSYCHE_UP_ENEMY) {
-                            if (enemyAction != PSYCHE_UP) {
-                                return false;
+                        if (enemyAction == WAR_CRY) {
+                            if (damages[exCounter] != InputBuilder::TYPE_WAR_CRY) {
+                                exCounter++;
                             }
-                            exCounter++;
+                            if (damages[exCounter] == InputBuilder::TYPE_INACTIVE) {
+                                if (players[0].isStunned){
+                                    exCounter++;
+                                } else {
+                                    return false;
+                                }
+                            }
                         } else if (damages[exCounter++] != basedamage) {
                             return false;
                         }
@@ -1071,7 +1087,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             if (baseDamage == 0) {
                 (*position)++; //1a8
             }
-            if (players[attacker].TensionLevel < 3 || (players[attacker].TensionLevel == 3 && lcg::getPercent(position, 2) == 0)) {
+            if (players[attacker].TensionLevel < 3 || (
+                    players[attacker].TensionLevel == 3 && lcg::getPercent(position, 2) == 0)) {
                 //0x02087fb4 テンション
                 players[attacker].TensionLevel++;
             }
@@ -1405,7 +1422,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 
             if (kaisinn) {
                 //0x020759ec
-                if ((Id & 0xffff) == BattleEmulator::MERCURIAL_THRUST || (Id & 0xffff) == BattleEmulator::MIRACLE_SLASH || (Id & 0xffff) == DRAGON_SLASH) {
+                if ((Id & 0xffff) == BattleEmulator::MERCURIAL_THRUST || (Id & 0xffff) == BattleEmulator::MIRACLE_SLASH
+                    || (Id & 0xffff) == DRAGON_SLASH) {
                     tmp1 *= lcg::floatRand(position, 1.5, 2.0);
                 } else {
                     tmp1 = OffensivePower * lcg::floatRand(position, 0.95, 1.05);

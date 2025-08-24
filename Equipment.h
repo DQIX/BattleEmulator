@@ -71,7 +71,7 @@ constexpr Equipment DarkShield("Magic shield", {
                                });
 
 //まほうのよろい
-constexpr Equipment EtherealArmour("Magic shield", {
+constexpr Equipment EtherealArmour("Magic armour", {
                                        {Attribute::Fire, 12},
                                        {Attribute::Ice, 12},
                                        {Attribute::Wind, 12},

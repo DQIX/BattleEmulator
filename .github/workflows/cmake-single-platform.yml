@@ -47,7 +47,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         # Artifact name
-        name: erusionn_v
+        name: anonn_v
         path: |
           ${{github.workspace}}/build/${{env.BUILD_TYPE}}/anonn_lv21_v2.exe
           ${{github.workspace}}/build/${{env.BUILD_TYPE}}/anonn_lv21_v2.pdb

@@ -82,10 +82,10 @@ namespace {
     constexpr Player BasePlayers[2] = {
         // プレイヤー1
         {
-            131, 131.0, 205, 205, 146, 146, 105, 105, 105, 79, // 最初のメンバー
-            79, false, false, 0, false, 0, -1,
+            131, 131.0, 205, 205, 146, 146, 105, 105, 120, 70, // 最初のメンバー
+            70, false, false, 0, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-            8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
+            5, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
             false, -1, 0, -1, 0, false, 1, 1, 1, -1, 0, -1, false, 2, false, -1, false
         }, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 
@@ -387,31 +387,38 @@ namespace {
      * @return 入力が正常に処理され、ビルダーに追加された場合はtrueを返し、
      *         引数の個数が不十分または他のエラーが発生した場合はfalseを返します。
      */
-    NOINLINE bool ProcessInputBuilder(const int argc, char *argv[]) {
+     NOINLINE bool ProcessInputBuilder(const int argc, char *argv[]) {
         // 4番目以降の引数を `push()` に入れる
         for (int i = 4; i < argc; ++i) {
-            if (isMatchStrWithTrim(argv[i], "t") || isMatchStrWithTrim(argv[i], "p")) {
-                builder.push(InputBuilder::TYPE_PSYCHE_UP_ENEMY, InputBuilder::PREFIX_PSYCHE_UP_ENEMY);
-                continue;
-            }
             if (isMatchStrWithTrim(argv[i], "b") || isMatchStrWithTrim(argv[i], "s") || isMatchStrWithTrim(argv[i], "ab") || isMatchStrWithTrim(argv[i], "as")) {
                 builder.push(InputBuilder::TYPE_BUFF_ALLY, InputBuilder::PREFIX_BUFF_ALLY);
                 continue;
             }
-            if (isMatchStrWithTrim(argv[i], "h") || isMatchStrWithTrim(argv[i], "d") || isMatchStrWithTrim(argv[i], "ah") || isMatchStrWithTrim(argv[i], "ad")) {
+            if (isMatchStrWithTrim(argv[i], "d") || isMatchStrWithTrim(argv[i], "D") ||  isMatchStrWithTrim(argv[i], "ad") || isMatchStrWithTrim(argv[i], "aD") || isMatchStrWithTrim(argv[i], "h") || isMatchStrWithTrim(argv[i], "ah")) {
                 builder.push(InputBuilder::TYPE_PRE_SPECIAL_MEDICINE, InputBuilder::PREFIX_SPECIAL_MEDICINE);
                 builder.push(InputBuilder::TYPE_SPECIAL_MEDICINE, InputBuilder::PREFIX_SPECIAL_MEDICINE);
                 continue;
             }
-            if (isMatchStrWithTrim(argv[i], "at") || isMatchStrWithTrim(argv[i], "AP")) {
+            if (isMatchStrWithTrim(argv[i], "at") || isMatchStrWithTrim(argv[i], "ap") || isMatchStrWithTrim(argv[i], "t") || isMatchStrWithTrim(argv[i], "p")) {
                 builder.push(InputBuilder::TYPE_PSYCHE_UP_ALLY, InputBuilder::PREFIX_PSYCHE_UP_ALLY);
                 continue;
             }
-            auto [prefix, damage] = toABCint(argv[i]);
-            if (prefix == 'a' || prefix == InputBuilder::PREFIX_MULTITHRUST) {
-                builder.push(-6, 't'); //攻撃フォローアップ
+            if (isMatchStrWithTrim(argv[i], "y") || isMatchStrWithTrim(argv[i], "Y")) {
+                builder.push(InputBuilder::TYPE_INACTIVE, InputBuilder::PREFIX_INACTIVE);
+                continue;
             }
-            if (prefix == 'h') {
+            if (isMatchStrWithTrim(argv[i], "r") || isMatchStrWithTrim(argv[i], "k")) {
+                builder.push(InputBuilder::TYPE_WAR_CRY, InputBuilder::TYPE_WAR_CRY);
+                continue;
+            }
+            auto [prefix, damage] = toABCint(argv[i]);
+            if (prefix == 'a') {
+                builder.push(InputBuilder::TYPE_ATTACK, InputBuilder::PREFIX_ATTACK); //攻撃フォローアップ
+            }
+            if (prefix == InputBuilder::PREFIX_MULTITHRUST) {
+                builder.push(InputBuilder::TYPE_MULTITHRUST, InputBuilder::PREFIX_MULTITHRUST); //攻撃フォローアップ
+            }
+            if (prefix == 'h' || prefix == 'd' ||  prefix == 'D') {
                 builder.push(InputBuilder::TYPE_PRE_SPECIAL_MEDICINE, InputBuilder::PREFIX_SPECIAL_MEDICINE); //攻撃フォローアップ
             }
             builder.push(damage, prefix);
@@ -646,10 +653,10 @@ namespace {
 
         int totalSeconds = hours * 3600 + minutes * 60 + seconds;
         totalSeconds = totalSeconds - 15;
-        auto time1 = static_cast<uint64_t>(floor((totalSeconds - 8.5) * (1 / 0.12515)));
+        auto time1 = static_cast<uint64_t>(floor((totalSeconds - 4.5) * (1 / 0.12515)));
         time1 = time1 << 16;
 
-        auto time2 = static_cast<uint64_t>(floor((totalSeconds + 8.5) * (1 / 0.125155)));
+        auto time2 = static_cast<uint64_t>(floor((totalSeconds + 4.5) * (1 / 0.125155)));
         time2 = time2 << 16;
         int32_t gene[350] = {0};
 
@@ -949,7 +956,7 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 0x1000;
+    uint64_t seed = 0x0c421b38;
 
     int actions[350] = {
         BattleEmulator::BUFF,
