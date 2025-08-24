@@ -261,7 +261,7 @@ namespace {
 
                 if (eAction[0] != "magic Burst" && eAction[1] != "magic Burst") {
                     if (!initiative && (action == BattleEmulator::TURN_SKIPPED || action == BattleEmulator::PARALYSIS ||
-                                        action == BattleEmulator::SLEEPING)) {
+                                        action == BattleEmulator::SLEEPING || action == BattleEmulator::INACTIVE_ALLY)) {
                         sp = "---------------";
                     }
                     if ((action == BattleEmulator::CURE_SLEEPING || action == BattleEmulator::CURE_PARALYSIS)) {
@@ -904,7 +904,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 
     //AI Warning: This is code related to debug2
-    uint64_t time1 = 10327;
+    uint64_t time1 = 10328;
 
     int dummy[100];
     lcg::init(time1, false);
