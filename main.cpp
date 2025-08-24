@@ -75,8 +75,8 @@ namespace {
     constexpr Player BasePlayers[2] = {
         // プレイヤー1
         {
-            65, 65.0, 61, 61, 61, 61, 40, 40, 29, 22, // 最初のメンバー
-            22, false, false, 0, false, 0, -1,
+            56, 56.0, 57, 57, 50, 50, 33, 33, 22, 19, // 最初のメンバー
+            19, true, false, -1, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
             false, -1, 0, -1, 0, false, 1, 1, 1, -1, 0, -1, false, 2, false, -1
@@ -738,7 +738,7 @@ int main(int argc, char *argv[]) {
 
     //ver: v8.0.1, atk: 51, def: 61, seed: 0x6cc478c, actions: 25, 59, 59, 61, 61, 62, 59, 62, 59, 61, 27, 61, 62, 25, 62, 25, 59, 62, 59, 27, 62, 59, 62, 25, 25, 59, 62, 61, 26, 56, 61,
     //ver: v8.0.1, atk: 61, def: 61, seed: 0x693bdce9, actions: 27, 25, 25, 26, 25, 26, 25, 25, 56, 59, 25, 25, 53, 53,
-    uint64_t time1 = 1765530857;
+    uint64_t time1 = 0x03005d91;
 
     int dummy[100];
     lcg::init(time1, false);
@@ -767,15 +767,19 @@ int main(int argc, char *argv[]) {
 //ver: v8.0.1, atk: 51, def: 61, seed: 0x6cc478c, actions: 25, 62, 61, 61, 25, 61, 61, 62, 61, 27, 62, 25, 62, 25, 62, 25, 62, 25, 25, 62, 25, 25, 62, 25, 26, 25, 25, 25, 27, 25,
 
     //0x2b79118:
-    int32_t gene1[350] = {
-        25, 61, 61, 61, 25, 62, 61, 25, 61, 56, 62, 25, 25, 27, 25, 25, 25,
-BattleEmulator::ATTACK_ALLY
-    };
+//     int32_t gene1[350] = {
+//         25, 61, 61, 61, 25, 62, 61, 25, 61, 56, 62, 25, 25, 27, 25, 25, 25,
+// BattleEmulator::ATTACK_ALLY
+//     };
     //gene1[19-1] = BattleEmulator::DEFENCE;
     int counter = 0;
     //
-    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    int32_t gene1[350] = {};
+    gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    gene1[counter++] = BattleEmulator::MEDICINAL_HERBS;
+    gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    gene1[counter++] = BattleEmulator::ATTACK_ALLY;
     // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
     // gene1[counter++] = BattleEmulator::MEDICINAL_HERBS;
     // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
@@ -838,7 +842,7 @@ BattleEmulator::ATTACK_ALLY
 
 #if defined(DEBUG3)
 
-    uint64_t seed = 1765530857;
+    uint64_t seed = 0x03005d91;
 
     int actions[350] = {BattleEmulator::ATTACK_ALLY, -1,};
     SearchRequest(BasePlayers, seed, actions, THREAD_COUNT);

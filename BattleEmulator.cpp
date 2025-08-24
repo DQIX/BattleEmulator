@@ -290,10 +290,10 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             players[0].specialCharge = false;
             players[0].dirtySpecialCharge = false;
         }
-        players[0].specialChargeTurn--;
-        if (players[0].specialChargeTurn == -1) {
-            players[0].specialCharge = false;
-        }
+        // players[0].specialChargeTurn--;
+        // if (players[0].specialChargeTurn == -1) {
+        //     players[0].specialCharge = false;
+        // }
 
         resetCombo(NowState);
 

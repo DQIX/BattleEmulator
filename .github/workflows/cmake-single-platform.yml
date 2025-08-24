@@ -47,7 +47,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         # Artifact name
-        name: reokornn_v2
+        name: reokornn_lv8_v3
         path: |
           ${{github.workspace}}/build/${{env.BUILD_TYPE}}/kbattle_v2.exe
           ${{github.workspace}}/build/${{env.BUILD_TYPE}}/kbattle_v2.pdb
