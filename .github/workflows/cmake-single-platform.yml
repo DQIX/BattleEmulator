@@ -53,3 +53,4 @@ jobs:
           ${{github.workspace}}/build/${{env.BUILD_TYPE}}/ybe_v5_lv10.exe
           ${{github.workspace}}/build/${{env.BUILD_TYPE}}/ybe_v5_lv10.pdb
           ${{github.workspace}}/build/${{env.BUILD_TYPE}}/LICENSE
+          ${{github.workspace}}/build/${{env.BUILD_TYPE}}/image/**
