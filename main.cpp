@@ -63,7 +63,7 @@ namespace {
     int foundTurn = 0;
     int foundTurnOffset = 0;
 
-    const char *version = "v4.0.4_vD_v5";
+    const char *version = "v4.0.4_vE_v5";
 
     std::stringstream performanceLogger = std::stringstream();
 
@@ -645,10 +645,10 @@ namespace {
 
         int totalSeconds = hours * 3600 + minutes * 60 + seconds;
         totalSeconds = totalSeconds - 15;
-        auto time1 = static_cast<uint64_t>(floor((totalSeconds - 8.5) * (1 / 0.12515)));
+        auto time1 = static_cast<uint64_t>(floor((totalSeconds - 6.5) * (1 / 0.12515)));
         time1 = (time1 & 0xffff) << 16;
 
-        auto time2 = static_cast<uint64_t>(floor((totalSeconds + 8.5) * (1 / 0.125155)));
+        auto time2 = static_cast<uint64_t>(floor((totalSeconds + 6.5) * (1 / 0.125155)));
         time2 = (time2 & 0xffff) << 16;
 
         /*
