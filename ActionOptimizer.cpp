@@ -19,19 +19,6 @@
 
 void ActionOptimizer::updateCompromiseScore(Genome &genome) {
     //敵の行動に応じた減点
-    for (int i = 0; i < 2; ++i) {
-        if (genome.EActions[i] == BattleEmulator::KASAP) {
-            genome.compromiseScore -= 2;
-        }
-    }
-
-    // 味方の状態に応じた減点
-    if (genome.Aactions == BattleEmulator::SLEEPING || genome.Aactions == BattleEmulator::CURE_SLEEPING || genome.
-        Aactions == BattleEmulator::TURN_SKIPPED) {
-        genome.compromiseScore -= 1; // 睡眠
-    } else {
-        genome.compromiseScore = std::min(0, genome.compromiseScore + 1);
-    }
 }
 
 #if defined(MULTITHREADING)
@@ -96,7 +83,7 @@ std::pair<int, Genome> ActionOptimizer::RunAlgorithmAsync(const Player players[2
         int end = (i == numThreads - 1) ? totalIterations : start + chunkSize;
 
         futures.push_back(std::async(std::launch::async, RunAlgorithmSingleThread,
-                                     std::cref(players), seed, turns, 2000, actions, start, end));
+                                     std::cref(players), seed, turns, 1000, actions, start, end));
     }
 
     Genome bestGenome = {};
@@ -121,8 +108,8 @@ std::pair<int, Genome> ActionOptimizer::RunAlgorithmAsync(const Player players[2
 Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int turns, int maxGenerations,
                                      int actions[350], int seedOffset) {
     std::mt19937 rng(seed + seedOffset);
-    bool CrackleEnable = false;
-    bool heal = (rng() % 8) + 3;
+    auto CrackleEnable = false;
+    auto heal = (rng() % 8) + 3;
     std::unique_ptr<int> position = std::make_unique<int>(1);
     std::unique_ptr<uint64_t> nowState = std::make_unique<uint64_t>(0);
     auto counter = 0;
@@ -172,8 +159,8 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
     }
 
     que.push(genome);
-    std::optional<BattleResult> result;
-    result = BattleResult();
+    //std::optional<BattleResult> result;
+    //result = BattleResult();
 
     Genome BaseGenome = {};
     BaseGenome.turn = INT32_MAX - 1;
@@ -199,12 +186,12 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
         *nowState = currentGenome.state;
 
         const auto tmpgenomu = currentGenome;
-        result->clear(); //メモリ新規確保よりこっちのほうが早い
+        //result->clear(); //メモリ新規確保よりこっちのほうが早い
 
         BattleEmulator::Main(position.get(), currentGenome.turn - currentGenome.processed, currentGenome.actions,
                              CopedPlayers,
-                             result, seed,
-                             nullptr, nullptr, -1, nowState.get());
+                             (std::optional<BattleResult> &) std::nullopt, seed,
+                             nullptr, nullptr, -2, nowState.get());
 
         if (currentGenome.Initialized && CopedPlayers[0].hp <= 0) {
             continue;
@@ -222,23 +209,6 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
         if (BaseGenome.turn < currentGenome.turn) {
             continue; //最適解より長い回答は求めてない
-        }
-
-        counter1 = 0;
-        for (int i = result->position - 3; i < result->position; ++i) {
-            if (result->isEnemy[i]) {
-                //Eactions[counter1] = result->actions[i];
-                //Edamage[counter1] = result->damages[i];
-                currentGenome.EActions[counter1++] = result->actions[i];
-            } else {
-                Aactions = result->actions[i];
-                //Adamage = result->damages[i];
-                currentGenome.Aactions = result->actions[i];
-            }
-        }
-
-        if (currentGenome.Visited == 0) {
-            updateCompromiseScore(currentGenome);
         }
         //この時点で副作用が分かる。
 
@@ -334,7 +304,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             currentGenome.EnemyPlayer = CopedPlayers[1];
 
             if (visited == 0 && ehp1 - currentGenome.EnemyPlayer.hp > 40) {
-                currentGenome.fitness += 100;
+                currentGenome.fitness += 1000;
             }
             que.push(currentGenome);
         }

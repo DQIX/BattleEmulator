@@ -28,13 +28,13 @@ struct Genome {
 
     // 比較演算子（優先度付きキュー用、fitnessが高い方が優先）
     bool operator<(const Genome& other) const {
-        return (fitness - compromiseScore) < (other.fitness + other.compromiseScore);
+        return (fitness) < (other.fitness);
         //return fitness< other.fitness;
     }
 
 
     bool operator>(const Genome& other) const {
-        return (fitness - compromiseScore) > (other.fitness + other.compromiseScore);
+        return (fitness) > (other.fitness);
         //return fitness > other.fitness;
 
     }

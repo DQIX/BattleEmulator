@@ -28,22 +28,28 @@ jobs:
       # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
-    - name: Build ybe_v5_lv11
+    - name: Build ybe_v5_lv10
       # Build your program with the given configuration
-      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target ybe_v5_lv11
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target ybe_v5_lv10
 
-    - name: echo SHA256 ybe_v5_lv11
-      run: Get-FileHash -Algorithm SHA256 -Path "${{github.workspace}}/build/${{env.BUILD_TYPE}}/ybe_v5_lv11.exe"
+    - name: echo SHA256 ybe_v5_lv10
+      run: Get-FileHash -Algorithm SHA256 -Path "${{github.workspace}}/build/${{env.BUILD_TYPE}}/ybe_v5_lv10.exe"
 
     - name: Copy License file
       run: Copy-Item -Path "${{github.workspace}}/LICENSE" -Destination "${{github.workspace}}/build/${{env.BUILD_TYPE}}/"
+
+    - name: Copy image folder
+      run: |
+        Copy-Item -Path "${{github.workspace}}/image" `
+                  -Destination "${{github.workspace}}/build/${{env.BUILD_TYPE}}/image" `
+                  -Recurse
 
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v4
       with:
         # Artifact name
-        name: isilyudaru_v
+        name: isilyudaru_lv10_v
         path: |
-          ${{github.workspace}}/build/${{env.BUILD_TYPE}}/ybe_v5_lv11.exe
-          ${{github.workspace}}/build/${{env.BUILD_TYPE}}/ybe_v5_lv11.pdb
+          ${{github.workspace}}/build/${{env.BUILD_TYPE}}/ybe_v5_lv10.exe
+          ${{github.workspace}}/build/${{env.BUILD_TYPE}}/ybe_v5_lv10.pdb
           ${{github.workspace}}/build/${{env.BUILD_TYPE}}/LICENSE

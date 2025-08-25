@@ -55,8 +55,8 @@ set(SOURCES
 )
 
 # マルチスレッド版（multithreading = ON）
-add_executable(ybe_v5_lv11 ${SOURCES})
-target_compile_definitions(ybe_v5_lv11 PRIVATE MULTITHREADING)  # `#define MULTITHREADING` を適用
+add_executable(ybe_v5_lv10 ${SOURCES})
+target_compile_definitions(ybe_v5_lv10 PRIVATE MULTITHREADING)  # `#define MULTITHREADING` を適用
 
 
 string(TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)
@@ -68,9 +68,9 @@ if(MINGW)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections") ##-fno-inline-small-functions
     set(CMAKE_EXE_LINKER_FLAGS "-static -Wl,--gc-sections")
 elseif(MSVC)
-    target_compile_options(ybe_v5_lv11 PRIVATE /W4 /MP)  # `/MP` で並列コンパイル
+    target_compile_options(ybe_v5_lv10 PRIVATE /W4 /MP)  # `/MP` で並列コンパイル
 
-    target_link_options(ybe_v5_lv11 PRIVATE /INCREMENTAL:NO /DEBUG)
+    target_link_options(ybe_v5_lv10 PRIVATE /INCREMENTAL:NO /DEBUG)
 
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi /O2")
     set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")

@@ -493,7 +493,7 @@ namespace {
         }
 
         auto [turnProcessed,genome] =
-                ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 1000, gene, numThreads);
+                ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 2500, gene, numThreads);
 
         std::optional<BattleResult> result1;
         result1 = BattleResult();
@@ -892,12 +892,10 @@ int main(int argc, char *argv[]) {
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 0x01e68bba;
+    uint64_t seed = 139924924;
 
     int actions[350] = {
-        BattleEmulator::ATTACK_ALLY,
-        BattleEmulator::HEAL,
-        -1,
+        25, 25, 26, 25, 22, 25, 25, -1
     };
     Player Player5[2] = {BasePlayers[0], BasePlayers[1]};
     SearchRequest(Player5, seed, actions, 1);
