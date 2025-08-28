@@ -131,6 +131,9 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
         if (currentGenome.turn > startT) {
             continue;
         }
+        if (solutionFound && currentGenome.turn > bestSolution.turn) {
+            continue;
+        }
 
         // 勝利条件チェック
         if (currentGenome.EnemyPlayer.hp <= 0) {
@@ -346,7 +349,7 @@ std::pair<int, Genome> ActionOptimizer::RunAlgorithmAsync(const Player players[2
         int end = (i == numThreads - 1) ? totalIterations : start + chunkSize;
 
         futures.push_back(std::async(std::launch::async, RunAlgorithmSingleThread,
-                                     std::cref(players), seed, turns, 10000000, actions, start, end));
+                                     std::cref(players), seed, turns, 1000000, actions, start, end));
     }
 
     Genome bestGenome = {};
