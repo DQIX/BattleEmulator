@@ -106,7 +106,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
         AStarNode currentNode = openSet.top();
         openSet.pop();
 
-        if (counter % 10000 == 0) {
+        if (counter % 1000000 == 0) {
             std::cout << counter << "," << currentNode.genome.turn << "," << currentNode.hCost << ", " << currentNode.
                     gCost << "," << currentNode.genome.EnemyPlayer.hp << std::endl;
 
@@ -215,27 +215,48 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
                     continue;
                 }
 
-                // A*コスト計算
+                // A*コスト計算（修正版）
                 AStarNode newNode;
                 newNode.genome = newGenome;
-                newNode.gCost = ((newGenome.turn - 1) / 30.0); // 実際のターン数コスト
 
-                // ヒューリスティック: enemyMaxHp / currentEnemyHp
+                // gCostをより細かく計算（深さ優先を促進）
+                newNode.gCost = static_cast<double>(newGenome.turn - 1); // ターン数をそのまま使用
+
+                // より効果的なアクション選択のためのコスト調整
+                double actionCost = 0.0;
+                switch(action) {
+                    case BattleEmulator::ATTACK_ALLY:
+                    case BattleEmulator::DRAGON_SLASH:
+                        actionCost = 0.0; // 攻撃アクションは追加コストなし
+                        break;
+                    case BattleEmulator::HEAL:
+                    case BattleEmulator::MEDICINAL_HERBS:
+                        actionCost = 0.1; // 回復アクションは少しコストを追加
+                        break;
+                    case BattleEmulator::DEFENCE:
+                        actionCost = 0.3; // 防御は高コスト
+                        break;
+                    case BattleEmulator::FLEE_ALLY:
+                        actionCost = 0.1; // 逃走は最高コスト
+                        break;
+                    default:
+                        actionCost = 0.1;
+                        break;
+                }
+                newNode.gCost += actionCost;
+
+                // ヒューリスティック: 敵HPの割合（0-1）
                 if (newGenome.EnemyPlayer.hp > 0) {
-                    newNode.hCost = (newGenome.EnemyPlayer.hp / enemyMaxHp) * 1.0;
-                    //10に近いほど、次hp0になる確率が高い
-                    if (newGenome.AllyPlayer.hp >= 60) {
-                        newNode.hCost += 0.0;
-                    }else if (newGenome.AllyPlayer.hp >= 50) {
-                        newNode.hCost += 0.01;
-                    }else if (newGenome.AllyPlayer.hp >= 40) {
-                        newNode.hCost += 0.02;
-                    }else if (newGenome.AllyPlayer.hp >= 30) {
-                        newNode.hCost += 0.03;
-                    }else if (newGenome.AllyPlayer.hp >= 20) {
-                        newNode.hCost += 0.1;
-                    }else if (newGenome.AllyPlayer.hp >= 10) {
-                        newNode.hCost += 0.2;
+                    newNode.hCost = (newGenome.EnemyPlayer.hp / static_cast<double>(enemyMaxHp)) * 40;
+
+                    // 自分のHPが低い場合のペナルティ（より細かく）
+                    double hpRatio = newGenome.AllyPlayer.hp / MaxHp;
+                    if (hpRatio < 0.2) {
+                        newNode.hCost += 0.5; // 非常に危険
+                    } else if (hpRatio < 0.4) {
+                        newNode.hCost += 0.3; // 危険
+                    } else if (hpRatio < 0.6) {
+                        newNode.hCost += 0.1; // やや危険
                     }
                 } else {
                     newNode.hCost = 0; // 敵が倒れた場合
@@ -243,7 +264,6 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
                 newNode.fCost = newNode.gCost + newNode.hCost;
                 newNode.stateHash = newStateHash;
-
 
                 // openSetに追加
                 openSet.push(newNode);
@@ -326,7 +346,7 @@ std::pair<int, Genome> ActionOptimizer::RunAlgorithmAsync(const Player players[2
         int end = (i == numThreads - 1) ? totalIterations : start + chunkSize;
 
         futures.push_back(std::async(std::launch::async, RunAlgorithmSingleThread,
-                                     std::cref(players), seed, turns, 4000000, actions, start, end));
+                                     std::cref(players), seed, turns, 15000000, actions, start, end));
     }
 
     Genome bestGenome = {};
