@@ -88,7 +88,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
     initialNode.genome = initialGenome;
     initialNode.gCost = 0; // 初期コストは0
     initialNode.hCost = (initialGenome.EnemyPlayer.hp > 0) ?
-                        static_cast<double>(enemyMaxHp) / initialGenome.EnemyPlayer.hp : 0;
+                         initialGenome.EnemyPlayer.hp / static_cast<double>(enemyMaxHp): 0;
     initialNode.fCost = initialNode.gCost + initialNode.hCost;
     initialNode.stateHash = computeStateHash(initialGenome);
 
@@ -105,7 +105,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
         AStarNode currentNode = openSet.top();
         openSet.pop();
 
-        if (counter % 10 == 0) {
+        if (counter % 1000000 == 0) {
             std::cout << counter << "," << initialGenome.turn << "," << currentNode.hCost << ", "<< currentNode.gCost << "," << currentNode.genome.EnemyPlayer.hp << std::endl;
         }
 
@@ -128,7 +128,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
                 bestSolution = currentGenome;
                 solutionFound = true;
             }
-            break;
+            //break;
             continue;
         }
 
@@ -208,7 +208,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             // A*コスト計算
             AStarNode newNode;
             newNode.genome = newGenome;
-            newNode.gCost = (newGenome.turn - 1) / 60.0; // 実際のターン数コスト
+            newNode.gCost = (newGenome.turn - 1) / 30.0; // 実際のターン数コスト
 
             // ヒューリスティック: enemyMaxHp / currentEnemyHp
             if (newGenome.EnemyPlayer.hp > 0) {
@@ -300,7 +300,7 @@ std::pair<int, Genome> ActionOptimizer::RunAlgorithmAsync(const Player players[2
         int end = (i == numThreads - 1) ? totalIterations : start + chunkSize;
 
         futures.push_back(std::async(std::launch::async, RunAlgorithmSingleThread,
-                                     std::cref(players), seed, turns, 10000000, actions, start, end));
+                                     std::cref(players), seed, turns, 2000000, actions, start, end));
     }
 
     Genome bestGenome = {};
