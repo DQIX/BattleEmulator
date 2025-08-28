@@ -20,9 +20,8 @@
 #include "HeapQueue.h"
 
 
-
 // 状態ハッシュ計算（アクション配列ベース）
-uint64_t computeStateHash(const Genome& genome) {
+uint64_t computeStateHash(const Genome &genome) {
     uint64_t hash = 0;
     // Hash actions content
     // 各 int を 64bit に拡張してミックス（順序も反映）
@@ -42,16 +41,15 @@ uint64_t computeStateHash(const Genome& genome) {
 // A*アルゴリズム実装
 Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int turns, int maxGenerations,
                                      int actions[350], int seedOffset) {
-    std::mt19937 rng(seed + seedOffset);
-
     // 敵のmaxHpをキャッシュ（不変値）
-    const int enemyMaxHp = static_cast<int>(players[1].maxHp);
+    const auto enemyMaxHp = players[1].maxHp;
+    const auto MaxHp = static_cast<double>(players[0].maxHp);
 
     std::unique_ptr<int> position = std::make_unique<int>(1);
     std::unique_ptr<uint64_t> nowState = std::make_unique<uint64_t>(0);
 
     // A*用の優先度キューと訪問済みセット
-    HeapQueue openSet(1000000);//578000
+    HeapQueue openSet(578000 * 2); //578000
     std::unordered_set<uint64_t> closedSet;
 
     // 初期ノードの設定
@@ -87,8 +85,9 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
     AStarNode initialNode;
     initialNode.genome = initialGenome;
     initialNode.gCost = 0; // 初期コストは0
-    initialNode.hCost = (initialGenome.EnemyPlayer.hp > 0) ?
-                         initialGenome.EnemyPlayer.hp / static_cast<double>(enemyMaxHp): 0;
+    initialNode.hCost = (initialGenome.EnemyPlayer.hp > 0)
+                            ? initialGenome.EnemyPlayer.hp / static_cast<double>(enemyMaxHp)
+                            : 0;
     initialNode.fCost = initialNode.gCost + initialNode.hCost;
     initialNode.stateHash = computeStateHash(initialGenome);
 
@@ -107,8 +106,17 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
         AStarNode currentNode = openSet.top();
         openSet.pop();
 
-        if (counter % 1000000 == 0) {
-            std::cout << counter << "," << initialGenome.turn << "," << currentNode.hCost << ", "<< currentNode.gCost << "," << currentNode.genome.EnemyPlayer.hp << std::endl;
+        if (counter % 10000 == 0) {
+            std::cout << counter << "," << currentNode.genome.turn << "," << currentNode.hCost << ", " << currentNode.
+                    gCost << "," << currentNode.genome.EnemyPlayer.hp << std::endl;
+
+            for (int i = 0; i < 350; ++i) {
+                if (currentNode.genome.actions[i] == 0 || currentNode.genome.actions[i] == -1) {
+                    break;
+                }
+                std::cout << currentNode.genome.actions[i];
+            }
+            std::cout << std::endl;
         }
 
         // 既に探索済みの状態はスキップ
@@ -173,7 +181,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
         }
 
         // 各アクションを実行して新しいノードを生成
-        for (int action : possibleActions) {
+        for (int action: possibleActions) {
             Genome newGenome = currentGenome;
             newGenome.actions[currentGenome.turn] = action; // 現在ターンにアクションを設定
             newGenome.Initialized = true;
@@ -183,47 +191,63 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             *position = currentGenome.position;
             *nowState = currentGenome.state;
 
-            if ( newGenome.turn - newGenome.processed != 1) {
+            if (newGenome.turn - newGenome.processed != 1) {
                 std::cout << newGenome.turn - newGenome.processed << std::endl;
             }
             // 1ターンだけ部分実行（currentGenome.turn - newGenome.processed = 1ターン分）
             BattleEmulator::Main(position.get(), newGenome.turn - newGenome.processed, newGenome.actions, CopedPlayers,
-                                 (std::optional<BattleResult>&)std::nullopt, seed,
+                                 (std::optional<BattleResult> &) std::nullopt, seed,
                                  nullptr, nullptr, -2, nowState.get());
+            if (CopedPlayers[0].hp > 0) {
+                // 結果を新しいGenomeに反映
+                newGenome.position = *position;
+                newGenome.state = *nowState;
+                newGenome.turn = currentGenome.turn + 1;
+                newGenome.processed = currentGenome.turn; // 現在のターンまで処理済み
+                newGenome.AllyPlayer = CopedPlayers[0];
+                newGenome.EnemyPlayer = CopedPlayers[1];
 
-            // 結果を新しいGenomeに反映
-            newGenome.position = *position;
-            newGenome.state = *nowState;
-            newGenome.turn = currentGenome.turn + 1;
-            newGenome.processed = currentGenome.turn; // 現在のターンまで処理済み
-            newGenome.AllyPlayer = CopedPlayers[0];
-            newGenome.EnemyPlayer = CopedPlayers[1];
+                // 状態ハッシュ計算
+                uint64_t newStateHash = computeStateHash(newGenome);
 
-            // 状態ハッシュ計算
-            uint64_t newStateHash = computeStateHash(newGenome);
+                // 既に探索済みの状態はスキップ
+                if (closedSet.count(newStateHash)) {
+                    continue;
+                }
 
-            // 既に探索済みの状態はスキップ
-            if (closedSet.count(newStateHash)) {
-                continue;
+                // A*コスト計算
+                AStarNode newNode;
+                newNode.genome = newGenome;
+                newNode.gCost = ((newGenome.turn - 1) / 30.0); // 実際のターン数コスト
+
+                // ヒューリスティック: enemyMaxHp / currentEnemyHp
+                if (newGenome.EnemyPlayer.hp > 0) {
+                    newNode.hCost = (newGenome.EnemyPlayer.hp / enemyMaxHp) * 1.0;
+                    //10に近いほど、次hp0になる確率が高い
+                    if (newGenome.AllyPlayer.hp >= 60) {
+                        newNode.hCost += 0.0;
+                    }else if (newGenome.AllyPlayer.hp >= 50) {
+                        newNode.hCost += 0.01;
+                    }else if (newGenome.AllyPlayer.hp >= 40) {
+                        newNode.hCost += 0.02;
+                    }else if (newGenome.AllyPlayer.hp >= 30) {
+                        newNode.hCost += 0.03;
+                    }else if (newGenome.AllyPlayer.hp >= 20) {
+                        newNode.hCost += 0.1;
+                    }else if (newGenome.AllyPlayer.hp >= 10) {
+                        newNode.hCost += 0.2;
+                    }
+                } else {
+                    newNode.hCost = 0; // 敵が倒れた場合
+                }
+
+                newNode.fCost = newNode.gCost + newNode.hCost;
+                newNode.stateHash = newStateHash;
+
+
+                // openSetに追加
+                openSet.push(newNode);
             }
-
-            // A*コスト計算
-            AStarNode newNode;
-            newNode.genome = newGenome;
-            newNode.gCost = (newGenome.turn - 1) / 50.0; // 実際のターン数コスト
-
-            // ヒューリスティック: enemyMaxHp / currentEnemyHp
-            if (newGenome.EnemyPlayer.hp > 0) {
-                newNode.hCost =  newGenome.EnemyPlayer.hp / static_cast<double>(enemyMaxHp);
-            } else {
-                newNode.hCost = 0; // 敵が倒れた場合
-            }
-
-            newNode.fCost = newNode.gCost + newNode.hCost;
-            newNode.stateHash = newStateHash;
-
-            // openSetに追加
-            openSet.push(newNode);
         }
 
         counter++;
@@ -294,7 +318,7 @@ std::pair<int, Genome> ActionOptimizer::RunAlgorithmAsync(const Player players[2
     lcg::init(seed, true);
     int chunkSize = totalIterations / numThreads;
 
-    std::vector<std::future<std::pair<int, Genome>>> futures;
+    std::vector<std::future<std::pair<int, Genome> > > futures;
     futures.reserve(numThreads);
 
     for (int i = 0; i < numThreads; ++i) {
@@ -302,7 +326,7 @@ std::pair<int, Genome> ActionOptimizer::RunAlgorithmAsync(const Player players[2
         int end = (i == numThreads - 1) ? totalIterations : start + chunkSize;
 
         futures.push_back(std::async(std::launch::async, RunAlgorithmSingleThread,
-                                     std::cref(players), seed, turns, 2000000, actions, start, end));
+                                     std::cref(players), seed, turns, 4000000, actions, start, end));
     }
 
     Genome bestGenome = {};
