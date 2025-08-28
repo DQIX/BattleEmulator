@@ -295,7 +295,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
         int32_t actionTable = -1;
 
-        if (Gene[genePosition] == 0 || Gene[genePosition] == -1) {
+        if (genePosition == -1 || Gene[genePosition] == 0 || Gene[genePosition] == -1) {
             genePosition = -1;
             //throw std::invalid_argument("GenePosition is invalid");
         }

@@ -22,6 +22,8 @@ public:
 private:
     static std::pair<int, Genome> RunAlgorithmSingleThread(const Player players[2], uint64_t seed, int turns, int maxGenerations, int actions[], int start, int end);
 
+
+    static uint64_t calculateStateHash(const Genome &genome);
 #endif
 
 private:

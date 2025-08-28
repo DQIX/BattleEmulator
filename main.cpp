@@ -67,7 +67,7 @@ namespace {
 
     std::stringstream performanceLogger = std::stringstream();
 
-    constexpr int THREAD_COUNT = 4;
+    constexpr int THREAD_COUNT = 1;
     // `InputBuilder` インスタンス作成
     InputBuilder builder;
 
@@ -493,7 +493,7 @@ namespace {
         }
 
         auto [turnProcessed,genome] =
-                ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 2500, gene, numThreads);
+                ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 1, gene, numThreads);
 
         std::optional<BattleResult> result1;
         result1 = BattleResult();
@@ -895,7 +895,7 @@ int main(int argc, char *argv[]) {
     uint64_t seed = 139924924;
 
     int actions[350] = {
-        25, 25, 26, 25, 22, 25, 25, -1
+        25, -1
     };
     Player Player5[2] = {BasePlayers[0], BasePlayers[1]};
     SearchRequest(Player5, seed, actions, 1);
