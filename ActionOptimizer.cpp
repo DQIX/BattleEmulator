@@ -100,6 +100,8 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
     int counter = 0;
 
+    double startT = turns + 40;
+
     while (!openSet.empty() && (maxGenerations == -1 || counter < maxGenerations)) {
         // 最小fCostのノードを取得
         AStarNode currentNode = openSet.top();
@@ -118,7 +120,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
         Genome currentGenome = currentNode.genome;
 
         // ターン数制限チェック
-        if (currentGenome.turn > 40) {
+        if (currentGenome.turn > startT) {
             continue;
         }
 
@@ -208,7 +210,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             // A*コスト計算
             AStarNode newNode;
             newNode.genome = newGenome;
-            newNode.gCost = (newGenome.turn - 1) / 30.0; // 実際のターン数コスト
+            newNode.gCost = (newGenome.turn - 1) / 50.0; // 実際のターン数コスト
 
             // ヒューリスティック: enemyMaxHp / currentEnemyHp
             if (newGenome.EnemyPlayer.hp > 0) {
