@@ -58,6 +58,10 @@ set(SOURCES
         EnhancedHashCalculator.h
         EnhancedHeapQueue.cpp
         EnhancedHeapQueue.h
+        AdaptiveActionGenerator.cpp
+        FlexibleConstraintManager.cpp
+        FlexibleConstraintManager.h
+        AdaptiveActionGenerator.h
 )
 
 # マルチスレッド版（multithreading = ON）
