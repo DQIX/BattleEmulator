@@ -54,13 +54,13 @@ double EnhancedCostCalculator::getActionCost(int action) {
             return 0.15; // Higher penalty for defensive actions
             
         case BattleEmulator::FLEE_ALLY:
-            return 0.8; // High penalty for fleeing
+            return 0.1; // High penalty for fleeing
             
         case BattleEmulator::CRACK_ALLY:
             return 0.02; // Small penalty for buff spells
             
         case BattleEmulator::ACROBATIC_STAR:
-            return 0.01; // Small penalty for special abilities
+            return 0.001; // Small penalty for special abilities
             
         default:
             return 0.1; // Default moderate penalty

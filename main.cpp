@@ -249,7 +249,7 @@ namespace {
 #endif
 
 #if defined(MULTITHREADING)
-        std::string multiThreading = ", multithreading is supported, -j " + std::to_string(THREAD_COUNT);
+        std::string multiThreading = ", multithreading is not supported, -j " + std::to_string(THREAD_COUNT);
 #elif defined(NO_MULTITHREADING)
         std::string multiThreading = ", multithreading is disabled";
 #endif
@@ -646,10 +646,10 @@ namespace {
 
         int totalSeconds = hours * 3600 + minutes * 60 + seconds;
         totalSeconds = totalSeconds - 15;
-        auto time1 = static_cast<uint64_t>(floor((totalSeconds - 6.5) * (1 / 0.12515)));
+        auto time1 = static_cast<uint64_t>(floor((totalSeconds - 3.5) * (1 / 0.12515)));
         time1 = (time1 & 0xffff) << 16;
 
-        auto time2 = static_cast<uint64_t>(floor((totalSeconds + 6.5) * (1 / 0.125155)));
+        auto time2 = static_cast<uint64_t>(floor((totalSeconds + 3.5) * (1 / 0.125155)));
         time2 = (time2 & 0xffff) << 16;
 
         /*
@@ -896,7 +896,8 @@ int main(int argc, char *argv[]) {
     uint64_t seed = 139924924;
 
     int actions[350] = {
-        25, 25, 26, 25, 22, 25, 25, -1
+        25, -1,
+        //25, 25, 26, 25, 22, 25, 25, -1
         //        25, 25, 26, 25, 22, 25, 25, -1
     };
     Player Player5[2] = {BasePlayers[0], BasePlayers[1]};

@@ -48,7 +48,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         # Artifact name
-        name: isilyudaru_lv10_v
+        name: isilyudaru_lv10_new_arugo_v
         path: |
           ${{github.workspace}}/build/${{env.BUILD_TYPE}}/ybe_v5_lv10.exe
           ${{github.workspace}}/build/${{env.BUILD_TYPE}}/ybe_v5_lv10.pdb

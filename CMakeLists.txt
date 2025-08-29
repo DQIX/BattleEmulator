@@ -46,7 +46,6 @@ set(SOURCES
         BattleResult.h
         Genome.h
         ActionBanManager.h
-        HeapQueue.h
         InputBuilder.cpp
         InputBuilder.h
         ResultStructure.h
@@ -58,10 +57,6 @@ set(SOURCES
         EnhancedHashCalculator.h
         EnhancedHeapQueue.cpp
         EnhancedHeapQueue.h
-        AdaptiveActionGenerator.cpp
-        FlexibleConstraintManager.cpp
-        FlexibleConstraintManager.h
-        AdaptiveActionGenerator.h
 )
 
 # マルチスレッド版（multithreading = ON）
