@@ -89,9 +89,13 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
     int counter = 0;
     double startT = turns + 40;
+    double startD = turns + 6;
     double lastBestFCost = 1000000.0;
     auto percent = 0.0;
     auto percenttmp = 0.0;
+
+    std::optional<BattleResult> result1;
+    result1 = BattleResult();
 
     while (!openSet.empty() && (maxGenerations == -1 || counter < maxGenerations)) {
         // Get node with minimum f-cost
@@ -99,27 +103,19 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
         openSet.pop();
 
         // Progress reporting with constraint info
-        //         if (counter % 30000 == 0) {
-        //             percenttmp = counter / static_cast<double>(maxGenerations) * 100.0;
-        // #if defined(DEBUG3)
-        //             if (percenttmp != percent) {
-        //                 std::cout << "[Node Info] " << percenttmp << "%"
-        //                           << " | turn=" << currentNode.genome.turn
-        //                           << " | hCost=" << currentNode.hCost
-        //                           << " | gCost=" << currentNode.gCost
-        //                           << " | enemyHP=" << currentNode.genome.EnemyPlayer.hp
-        //                           << " | bestTurn=" << (solutionFound ? bestSolution.turn - 1: -1)
-        //                           << std::endl;
-        //                 percent = percenttmp;
-        //             }
-        // #else
-        //             if (percenttmp != percent) {
-        //                 std::cout << "[Node Info] " << percenttmp << "%"
-        //                           << " | bestTurn=" << (solutionFound ? bestSolution.turn - 1: -1) << std::endl;
-        //                 percent = percenttmp;
-        //             }
-        // #endif
-
+                // if (counter % 10000 == 0) {
+                //     percenttmp = counter / static_cast<double>(maxGenerations) * 100.0;
+                //     if (percenttmp != percent) {
+                //         std::cout << "[Node Info] " << percenttmp << "%"
+                //                   << " | turn=" << currentNode.genome.turn
+                //                   << " | hCost=" << currentNode.hCost
+                //                   << " | gCost=" << currentNode.gCost
+                //                   << " | enemyHP=" << currentNode.genome.EnemyPlayer.hp
+                //                   << " | bestTurn=" << (solutionFound ? bestSolution.turn - 1: -1)
+                //                   << std::endl;
+                //         percent = percenttmp;
+                //     }
+                // }
 
         // if (counter % 1000000 == 0) {
         //     for (int i = 0; i < 350; ++i) {
@@ -203,10 +199,15 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             *position = currentGenome.position;
             *nowState = currentGenome.state;
 
+            result1->clear();
             // Execute one turn
             BattleEmulator::Main(position.get(), newGenome.turn - newGenome.processed, newGenome.actions, CopedPlayers1,
-                                 (std::optional<BattleResult> &) std::nullopt, seed,
-                                 nullptr, nullptr, -2, nowState.get());
+                                 result1, seed,
+                                 nullptr, nullptr, -1, nowState.get());
+
+            if (result1->actions[0] == BattleEmulator::HEAL_ENEMY || result1->actions[1] == BattleEmulator::HEAL_ENEMY) {
+                continue;
+            }
 
             if (CopedPlayers1[0].hp > 0) {
                 // Update genome with results

@@ -413,7 +413,7 @@ namespace {
         }
 
         auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 2000, gene, numThreads);
+                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 200000, gene, numThreads);
 
         auto turnProcessed = BattleEmulator::getTurnProcessed();
 
