@@ -105,7 +105,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
     << " | hCost=" << currentNode.hCost
     << " | gCost=" << currentNode.gCost
     << " | enemyHP=" << currentNode.genome.EnemyPlayer.hp
-    << " | bestTurn=" << bestSolution.turn
+    << " | bestTurn=" << (bestSolution.turn - 2)
     << std::endl;
 
         }
