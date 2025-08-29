@@ -412,8 +412,10 @@ namespace {
             turns++;
         }
 
-        auto [turnProcessed,genome] =
-                ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 2000, gene, numThreads);
+        auto genome =
+                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 2000, gene, numThreads);
+
+        auto turnProcessed = BattleEmulator::getTurnProcessed();
 
         std::optional<BattleResult> result1;
         result1 = BattleResult();
