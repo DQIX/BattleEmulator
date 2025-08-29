@@ -69,7 +69,9 @@ std::vector<int> AdaptiveActionGenerator::getBaseActions() {
         BattleEmulator::ATTACK_ALLY,
         BattleEmulator::DRAGON_SLASH,
         BattleEmulator::DEFENCE,
-        BattleEmulator::FLEE_ALLY
+        BattleEmulator::FLEE_ALLY,
+        BattleEmulator::ACROBATIC_STAR,
+        BattleEmulator::CRACK_ALLY
     };
 }
 

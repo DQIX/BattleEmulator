@@ -95,6 +95,8 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
     int counter = 0;
     double startT = turns + 40;
     double lastBestFCost = 1000000.0;
+    auto percent = 0.0;
+    auto percenttmp = 0.0;
 
     while (!openSet.empty() && (maxGenerations == -1 || counter < maxGenerations)) {
         // Get node with minimum f-cost
@@ -105,25 +107,38 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
         FlexibleConstraintManager::updateConstraintState(currentNode.genome, currentNode.fCost, counter);
 
         // Progress reporting with constraint info
-        if (counter % 10000 == 0) {
-            std::cout << "[Node Info] counter=" << counter
-                      << " | turn=" << currentNode.genome.turn
-                      << " | hCost=" << currentNode.hCost
-                      << " | gCost=" << currentNode.gCost
-                      << " | enemyHP=" << currentNode.genome.EnemyPlayer.hp
-                      << " | bestTurn=" << (solutionFound ? bestSolution.turn - 4 : -1)
-                      << std::endl;
+//         if (counter % 30000 == 0) {
+//             percenttmp = counter / static_cast<double>(maxGenerations) * 100.0;
+// #if defined(DEBUG3)
+//             if (percenttmp != percent) {
+//                 std::cout << "[Node Info] " << percenttmp << "%"
+//                           << " | turn=" << currentNode.genome.turn
+//                           << " | hCost=" << currentNode.hCost
+//                           << " | gCost=" << currentNode.gCost
+//                           << " | enemyHP=" << currentNode.genome.EnemyPlayer.hp
+//                           << " | bestTurn=" << (solutionFound ? bestSolution.turn - 1: -1)
+//                           << std::endl;
+//                 percent = percenttmp;
+//             }
+// #else
+//             if (percenttmp != percent) {
+//                 std::cout << "[Node Info] " << percenttmp << "%"
+//                           << " | bestTurn=" << (solutionFound ? bestSolution.turn - 1: -1) << std::endl;
+//                 percent = percenttmp;
+//             }
+// #endif
 
-            if (counter % 1000000 == 0) {
-                for (int i = 0; i < 350; ++i) {
-                    if (currentNode.genome.actions[i] == 0 || currentNode.genome.actions[i] == -1) {
-                        break;
-                    }
-                    std::cout << currentNode.genome.actions[i];
-                }
-                std::cout << std::endl;
-            }
-        }
+
+            // if (counter % 1000000 == 0) {
+            //     for (int i = 0; i < 350; ++i) {
+            //         if (currentNode.genome.actions[i] == 0 || currentNode.genome.actions[i] == -1) {
+            //             break;
+            //         }
+            //         std::cout << currentNode.genome.actions[i];
+            //     }
+            //     std::cout << std::endl;
+            // }
+ //       }
 
         // Skip already explored states
         if (closedSet.count(currentNode.stateHash)) {

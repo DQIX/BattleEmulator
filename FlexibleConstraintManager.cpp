@@ -155,5 +155,5 @@ double FlexibleConstraintManager::calculateProgressScore(const Genome& genome) {
     double playerHpRatio = static_cast<double>(genome.AllyPlayer.hp) / genome.AllyPlayer.maxHp;
     
     // Progress is good if enemy HP is low and player HP is reasonable
-    return (1.0 - enemyHpRatio) + (playerHpRatio * 0.3);
+    return (1.0 - enemyHpRatio) + (playerHpRatio * 0.1);
 }

@@ -493,7 +493,7 @@ namespace {
         }
 
         auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 500000, gene, numThreads);
+                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 100000, gene, numThreads);
 
         auto turnProcessed = BattleEmulator::getTurnProcessed();
         std::optional<BattleResult> result1;
@@ -896,7 +896,7 @@ int main(int argc, char *argv[]) {
     uint64_t seed = 139924924;
 
     int actions[350] = {
-         25, 25, 26, 25, 22, 25, -1,// 25, 26, 25,22, -1
+        25, 25, 26, 25, 22, 25, 25, -1
         //        25, 25, 26, 25, 22, 25, 25, -1
     };
     Player Player5[2] = {BasePlayers[0], BasePlayers[1]};
