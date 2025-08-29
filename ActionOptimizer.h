@@ -1,34 +1,32 @@
 //
-// Created by Owner on 2024/11/21.
+// Fixed ActionOptimizer Header
+// Contains declarations for the enhanced A* algorithm
 //
 
-#ifndef NEWDIRECTORY_GENETICALGORITHM_H
-#define NEWDIRECTORY_GENETICALGORITHM_H
+#ifndef ACTION_OPTIMIZER_FIXED_H
+#define ACTION_OPTIMIZER_FIXED_H
 
-
-#include <cstdint>
 #include "Player.h"
 #include "Genome.h"
+#include <cstdint>
 
 class ActionOptimizer {
 public:
-    static Genome RunAlgorithm(const Player players[2], uint64_t seed, int turns, int maxGenerations, int actions[350],
-                               int seedOffset);
-# ifdef MULTITHREADING
+    // Main A* algorithm with fixes for f-cost stagnation
+    static Genome RunAlgorithm(const Player players[2], uint64_t seed, int turns, int maxGenerations,
+                               int actions[350], int seedOffset);
+    
+    // Helper function for compromise score updates
+    static void updateCompromiseScore(Genome &genome);
 
+#if defined(MULTITHREADING)
+    // Multithreading support (unchanged from original)
+    static std::pair<int, Genome> RunAlgorithmSingleThread(const Player players[2], uint64_t seed, int turns,
+                                                           int maxGenerations, int actions[], int start, int end);
+    
     static std::pair<int, Genome> RunAlgorithmAsync(const Player players[2], uint64_t seed, int turns,
                                                     int totalIterations, int actions[350], int numThreads);
-
-private:
-    static std::pair<int, Genome> RunAlgorithmSingleThread(const Player players[2], uint64_t seed, int turns, int maxGenerations, int actions[], int start, int end);
-
-
-    static uint64_t calculateStateHash(const Genome &genome);
 #endif
-
-private:
-    static void updateCompromiseScore(Genome &genome);
 };
 
-
-#endif //NEWDIRECTORY_GENETICALGORITHM_H
+#endif // ACTION_OPTIMIZER_FIXED_H

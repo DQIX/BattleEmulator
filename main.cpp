@@ -492,9 +492,10 @@ namespace {
             turns = foundTurn + foundTurnOffset;
         }
 
-        auto [turnProcessed,genome] =
-                ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 1, gene, numThreads);
+        auto genome =
+                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 1000000, gene, numThreads);
 
+        auto turnProcessed = BattleEmulator::getTurnProcessed();
         std::optional<BattleResult> result1;
         result1 = BattleResult();
         Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
@@ -895,7 +896,7 @@ int main(int argc, char *argv[]) {
     uint64_t seed = 139924924;
 
     int actions[350] = {
-        25, -1
+        25, 25, 26, 25, 22, 25, 25, -1
     };
     Player Player5[2] = {BasePlayers[0], BasePlayers[1]};
     SearchRequest(Player5, seed, actions, 1);
