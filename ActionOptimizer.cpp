@@ -24,6 +24,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
     // Cache enemy max HP (immutable value)
     const auto enemyMaxHp = static_cast<double>(players[1].maxHp);
     const auto playerMaxHp = static_cast<double>(players[0].maxHp);
+    //const auto playerMaxMP = static_cast<double>(players[0].maxMp);
 
     std::unique_ptr<int> position = std::make_unique<int>(1);
     std::unique_ptr<uint64_t> nowState = std::make_unique<uint64_t>(0);
