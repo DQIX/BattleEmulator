@@ -172,12 +172,12 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
         possibleActions.push_back(BattleEmulator::FLEE_ALLY);
 
         // Conditional actions
-        if (players[0].SpecialMedicineCount >= 1) {
+        if (currentGenome.AllyPlayer.SpecialMedicineCount >= 1 && currentGenome.AllyPlayer.PoisonEnable == true) {
+            possibleActions.push_back(BattleEmulator::SPECIAL_ANTIDOTE);
+        }else if (currentGenome.AllyPlayer.SpecialMedicineCount >= 1) {
             possibleActions.push_back(BattleEmulator::SPECIAL_MEDICINE);
         }
-        if (players[0].SpecialMedicineCount >= 1 && players[0].PoisonEnable == true) {
-            possibleActions.push_back(BattleEmulator::SPECIAL_ANTIDOTE);
-        }
+
         if (currentGenome.AllyPlayer.mp >= 2) {
             possibleActions.push_back(BattleEmulator::HEAL);
         }

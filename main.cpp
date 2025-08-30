@@ -103,8 +103,8 @@ namespace {
     constexpr Player BasePlayers[2] = {
         // プレイヤー1
         {
-            79, 79.0, 77, 77, 85, 85, 51, 51, 35, 27, // 最初のメンバー
-            27, false, false, 0, false, 0, -1,
+            79, 79.0, 77, 77, 85, 85, 51, 51, 35, 20, // 最初のメンバー
+            20, false, false, 0, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             6, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
             false, -1, 0, -1, 0, false, 1, 1, 1, -1, 0, -1, false, 2, false, -1
@@ -123,8 +123,8 @@ namespace {
     constexpr Player BasePlayers[2] = {
         // プレイヤー1
         {
-            89, 89.0, 82, 82, 90, 90, 58, 58, 39, 23, // 最初のメンバー
-            23, false, false, 0, false, 0, -1,
+            89, 89.0, 82, 82, 90, 90, 58, 58, 39, 20, // 最初のメンバー
+            20, false, false, 0, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             6, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
             false, -1, 0, -1, 0, false, 1, 1, 1, -1, 0, -1, false, 2, false, -1
@@ -642,7 +642,7 @@ namespace {
         auto [turnProcessed,genome] =
         ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 1500, gene, numThreads, Dropbug);
 #elif defined(BattleEmulatorLV15)
-        auto [turnProcessed,genome] =
+        auto genome =
                 ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 250000, gene, 0);
 #endif
 

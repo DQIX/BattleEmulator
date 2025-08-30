@@ -12,6 +12,10 @@ double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action) 
     // Add fine-grained action costs to break ties
     gCost += getActionCost(action);
 
+    if (genome.AllyPlayer.PoisonEnable == true && action == BattleEmulator::SPECIAL_ANTIDOTE) {
+        gCost -= 0.1;
+    }
+
     return gCost;
 }
 
@@ -63,7 +67,7 @@ double EnhancedCostCalculator::getActionCost(int action) {
             return 0.001; // Small penalty for special abilities
 
         case BattleEmulator::SPECIAL_ANTIDOTE:
-            return 0.2;
+            return 0.02;
         case BattleEmulator::SPECIAL_MEDICINE:
             return 0.13;
         case BattleEmulator::WOOSH_ALLY:
