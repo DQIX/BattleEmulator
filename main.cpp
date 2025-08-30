@@ -123,8 +123,8 @@ namespace {
     constexpr Player BasePlayers[2] = {
         // プレイヤー1
         {
-            89, 89.0, 82, 82, 90, 90, 58, 58, 39, 20, // 最初のメンバー
-            20, false, false, 0, false, 0, -1,
+            89, 89.0, 82, 82, 90, 90, 58, 58, 39, 18, // 最初のメンバー
+            18, false, false, 0, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             6, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
             false, -1, 0, -1, 0, false, 1, 1, 1, -1, 0, -1, false, 2, false, -1
@@ -755,10 +755,10 @@ namespace {
 
         int totalSeconds = hours * 3600 + minutes * 60 + seconds;
         totalSeconds = totalSeconds - 15;
-        auto time1 = static_cast<uint64_t>(floor((totalSeconds - 8.5) * (1 / 0.12515)));
+        auto time1 = static_cast<uint64_t>(floor((totalSeconds - 4.5) * (1 / 0.12515)));
         time1 = time1 << 16;
 
-        auto time2 = static_cast<uint64_t>(floor((totalSeconds + 8.5) * (1 / 0.125155)));
+        auto time2 = static_cast<uint64_t>(floor((totalSeconds + 4.5) * (1 / 0.125155)));
         time2 = time2 << 16;
         int32_t gene[350] = {0};
         for (int i = 0; i < 350; ++i) {
