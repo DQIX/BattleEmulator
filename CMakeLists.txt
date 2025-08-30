@@ -45,7 +45,6 @@ set(SOURCES
         debug.h
         BattleResult.h
         Genome.h
-        ActionBanManager.h
         InputBuilder.cpp
         InputBuilder.h
         ResultStructure.h

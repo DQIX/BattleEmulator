@@ -177,7 +177,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
         possibleActions.push_back(BattleEmulator::FLEE_ALLY);
 
         // Conditional actions
-        if (players[0].medicinal_herbs_count >= 1) {
+        if (currentGenome.AllyPlayer.medicinal_herbs_count >= 1) {
             possibleActions.push_back(BattleEmulator::MEDICINAL_HERBS);
         }
         if (currentGenome.AllyPlayer.mp >= 2) {
