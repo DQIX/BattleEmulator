@@ -636,15 +636,17 @@ namespace {
             turns++;
         }
 #if defined(BattleEmulatorLV13)
-        auto [turnProcessed,genome] =
-                ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 3000, gene, numThreads, Dropbug);
+        auto genome =
+                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 250000, gene, 0);
 #elif defined(BattleEmulatorLV19)
         auto [turnProcessed,genome] =
         ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 1500, gene, numThreads, Dropbug);
 #elif defined(BattleEmulatorLV15)
         auto [turnProcessed,genome] =
-                ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 2000, gene, numThreads, Dropbug);
+                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 250000, gene, 0);
 #endif
+
+        auto turnProcessed = BattleEmulator::getTurnProcessed();
 
 #ifdef DEBUG
         auto t3 = std::chrono::high_resolution_clock::now();
@@ -1046,11 +1048,9 @@ int main(int argc, char *argv[]) {
 
     int actions[350] = {
         BattleEmulator::ATTACK_ALLY,
-        BattleEmulator::ATTACK_ALLY,
-        BattleEmulator::SPECIAL_MEDICINE,
         -1,
     };
-    SearchRequest(BasePlayers, seed, actions, THREAD_COUNT);
+    SearchRequest(BasePlayers, seed, actions, THREAD_COUNT, false);
 
     std::cout << performanceLogger.rdbuf() << std::endl;
 
