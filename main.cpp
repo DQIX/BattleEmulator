@@ -643,7 +643,7 @@ namespace {
         ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 1500, gene, numThreads, Dropbug);
 #elif defined(BattleEmulatorLV15)
         auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 250000, gene, 0);
+                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 50000, gene, 0);
 #endif
 
         auto turnProcessed = BattleEmulator::getTurnProcessed();

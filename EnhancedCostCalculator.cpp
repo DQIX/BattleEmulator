@@ -64,7 +64,7 @@ double EnhancedCostCalculator::getActionCost(int action) {
             return 0.02; // Small penalty for buff spells
 
         case BattleEmulator::ACROBATIC_STAR:
-            return 0.001; // Small penalty for special abilities
+            return 0.0001; // Small penalty for special abilities
 
         case BattleEmulator::SPECIAL_ANTIDOTE:
             return 0.02;
