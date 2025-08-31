@@ -94,6 +94,8 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
         EnhancedAStarNode currentNode = openSet.top();
         openSet.pop();
 
+        auto preGCost = currentNode.gCost;
+
         // Progress reporting with constraint info
         //         if (counter % 30000 == 0) {
         //             percenttmp = counter / static_cast<double>(maxGenerations) * 100.0;
@@ -232,7 +234,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
                 // Create new node with enhanced cost calculation
                 EnhancedAStarNode newNode;
                 newNode.genome = newGenome;
-                newNode.gCost = EnhancedCostCalculator::calculateGCost(newGenome, action);
+                newNode.gCost = EnhancedCostCalculator::calculateGCost(newGenome, action, preGCost);
 
                 newNode.hCost = EnhancedCostCalculator::calculateHCost(newGenome, enemyMaxHp, playerMaxHp);
                 newNode.fCost = newNode.gCost + newNode.hCost;

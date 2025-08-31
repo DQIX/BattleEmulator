@@ -5,9 +5,9 @@
 #include "EnhancedCostCalculator.h"
 #include <algorithm>
 
-double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action) {
+double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, int preGCost) {
     // Base cost is turn number (maintains depth-first preference)
-    double gCost = static_cast<double>(genome.turn - 1);
+    double gCost = preGCost + 1.0;
 
     // Add fine-grained action costs to break ties
     gCost += getActionCost(action);
