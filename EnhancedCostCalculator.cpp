@@ -28,6 +28,7 @@ double EnhancedCostCalculator::calculateHCost(const Genome &genome, double enemy
 
     // Primary heuristic: enemy HP ratio (scaled down for better granularity)
     hCost = (genome.EnemyPlayer.hp / enemyMaxHp) * 30.0;
+    //hCost += genome.EnemyPlayer.BuffLevel * 1;
 
     // Player HP consideration (more granular than original)
     double playerHpRatio = genome.AllyPlayer.hp / playerMaxHp;
@@ -69,7 +70,7 @@ double EnhancedCostCalculator::getActionCost(int action) {
         case BattleEmulator::SPECIAL_ANTIDOTE:
             return 0.02;
         case BattleEmulator::SPECIAL_MEDICINE:
-            return 0.13;
+            return 0.5;
         case BattleEmulator::WOOSH_ALLY:
             return 0.3;
         default:
