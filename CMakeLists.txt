@@ -52,6 +52,12 @@ set(SOURCES
         InputBuilder.cpp
         InputBuilder.h
         ResultStructure.h
+        EnhancedHashCalculator.cpp
+        EnhancedHashCalculator.h
+        EnhancedHeapQueue.cpp
+        EnhancedHeapQueue.h
+        EnhancedCostCalculator.cpp
+        EnhancedCostCalculator.h
 )
 
 # シングルスレッド版（multithreading = OFF）

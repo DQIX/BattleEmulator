@@ -49,7 +49,7 @@ namespace {
 
     void help(const char *program_name);
 
-    bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads, bool Dropbug);
+    bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads);
 
     uint64_t BruteForceRequest(const Player copiedPlayers[2], int hours, int minutes, int seconds, int turns,
                                int aActions[350], int damages[350]);
@@ -479,13 +479,9 @@ namespace {
                 auto seed = BruteForceRequest(BasePlayers, hours, minutes, seconds, result.AactionsCounter, aActions,
                                               damages);
                 if (foundSeeds == 1) {
-                    auto test = SearchRequest(BasePlayers, seed, aActions, THREAD_COUNT, true);
+                    auto test = SearchRequest(BasePlayers, seed, aActions, THREAD_COUNT);
                     if (!test) {
                         std::cout << "The first search request failed." << std::endl;
-                        auto test1 = SearchRequest(BasePlayers, seed, aActions, THREAD_COUNT, false);
-                        if (!test1) {
-                            std::cout << "The second search request failed" << std::endl;
-                        }
                     }
                 }
             }
@@ -527,7 +523,7 @@ namespace {
     }
 #if defined(MULTITHREADING)
 
-    bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads, bool Dropbug) {
+    bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads) {
 #if defined(DEBUG)
 
         auto t0 = std::chrono::high_resolution_clock::now();
@@ -546,8 +542,10 @@ namespace {
             turns++;
         }
 
-        auto [turnProcessed,genome] =
-                ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 3000, gene, numThreads, Dropbug);
+        auto genome =
+                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 3000, gene, numThreads);
+
+        auto turnProcessed = BattleEmulator::getTurnProcessed();
 
         std::optional<BattleResult> result1;
         result1 = BattleResult();
