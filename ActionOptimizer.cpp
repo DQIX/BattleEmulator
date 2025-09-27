@@ -184,7 +184,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             }
             if (currentGenome.AllyPlayer.mp >= 3) {
                 possibleActions.push_back(BattleEmulator::CRACK_ALLY);
-                possibleActions.push_back(BattleEmulator::WOOSH_ALLY);
+                //possibleActions.push_back(BattleEmulator::WOOSH_ALLY);
             }
 
             if (currentGenome.AllyPlayer.mp >= 8) {

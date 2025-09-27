@@ -62,7 +62,7 @@ namespace {
 
     uint64_t FoundSeed = 0;
 
-    const char *version = "v7.0.4_vK_v2";
+    const char *version = "v7.0.4_vK_v3";
 
     std::stringstream performanceLogger = std::stringstream();
 
@@ -870,7 +870,7 @@ int main(int argc, char *argv[]) {
 
 #if defined(DEBUG3)
 
-    uint64_t seed = 0x01b433de;
+    uint64_t seed = 0x02751012;
 
     int actions[350] = {BattleEmulator::ATTACK_ALLY, -1,};
     SearchRequest(BasePlayers, seed, actions, THREAD_COUNT);
