@@ -52,6 +52,12 @@ set(SOURCES
         InputBuilder.cpp
         InputBuilder.h
         ResultStructure.h
+        EnhancedCostCalculator.cpp
+        EnhancedCostCalculator.h
+        EnhancedHashCalculator.cpp
+        EnhancedHashCalculator.h
+        EnhancedHeapQueue.cpp
+        EnhancedHeapQueue.h
 )
 
 
