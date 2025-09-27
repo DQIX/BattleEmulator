@@ -63,7 +63,7 @@ namespace {
     int foundTurn = 0;
     int foundTurnOffset = 0;
 
-    const char *version = "v5.0.6_vK_v2";
+    const char *version = "v5.0.6_vK_v3";
 
     std::stringstream performanceLogger = std::stringstream();
 
