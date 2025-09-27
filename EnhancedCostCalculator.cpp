@@ -28,8 +28,6 @@ double EnhancedCostCalculator::calculateHCost(const Genome &genome, double enemy
 
     // Primary heuristic: enemy HP ratio (scaled down for better granularity)
     hCost = (genome.EnemyPlayer.hp / enemyMaxHp) * 30.0;
-    //hCost += genome.EnemyPlayer.BuffLevel * 1;
-
     // Player HP consideration (more granular than original)
     double playerHpRatio = genome.AllyPlayer.hp / playerMaxHp;
     hCost += (1.0 - playerHpRatio) * 2.0;
@@ -46,11 +44,12 @@ double EnhancedCostCalculator::calculateHCost(const Genome &genome, double enemy
 double EnhancedCostCalculator::getActionCost(int action) {
     switch (action) {
         case BattleEmulator::ATTACK_ALLY:
-        case BattleEmulator::DRAGON_SLASH:
             return 0.0; // Offensive actions have no penalty
+        case BattleEmulator::DRAGON_SLASH:
+            return 0.5; // Offensive actions have no penalty
 
         case BattleEmulator::HEAL:
-            return 0.05; // Slight penalty for healing
+            return 0.5; // Slight penalty for healing
 
         case BattleEmulator::MEDICINAL_HERBS:
             return 0.03; // Less penalty for item healing
@@ -70,9 +69,13 @@ double EnhancedCostCalculator::getActionCost(int action) {
         case BattleEmulator::SPECIAL_ANTIDOTE:
             return 0.02;
         case BattleEmulator::SPECIAL_MEDICINE:
-            return 0.5;
+            return 1.5;
         case BattleEmulator::WOOSH_ALLY:
             return 0.3;
+        case BattleEmulator::CRACKLE:
+            return 0.1;
+        case BattleEmulator::ITEM_USE:
+            return 2.0;
         default:
             return 0.1; // Default moderate penalty
     }
@@ -85,6 +88,7 @@ double EnhancedCostCalculator::calculateStatusEffectCost(const Genome &genome) {
     if (genome.AllyPlayer.paralysis) statusCost += 1.0;
     if (genome.AllyPlayer.sleeping) statusCost += 1.5;
     if (genome.AllyPlayer.PoisonEnable) statusCost += 0.5;
+    if (genome.EnemyPlayer.BuffLevel != 0) statusCost += (genome.EnemyPlayer.BuffLevel * 0.1);
 
     // Positive status effects (bonuses - negative cost)
     statusCost -= genome.AllyPlayer.BuffLevel * 0.1;

@@ -543,7 +543,7 @@ namespace {
         }
 
         auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 3000, gene, numThreads);
+                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 100000, gene, numThreads);
 
         auto turnProcessed = BattleEmulator::getTurnProcessed();
 
@@ -967,7 +967,7 @@ int main(int argc, char *argv[]) {
 
 #if defined(DEBUG3)
 
-    uint64_t seed = 0x027f5679;
+    uint64_t seed = 0x027f567a;
 
     int actions[350] = {BattleEmulator::ATTACK_ALLY, -1,};
     SearchRequest(BasePlayers, seed, actions, THREAD_COUNT);

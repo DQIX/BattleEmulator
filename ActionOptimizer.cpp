@@ -186,6 +186,10 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
                 possibleActions.push_back(BattleEmulator::CRACK_ALLY);
                 possibleActions.push_back(BattleEmulator::WOOSH_ALLY);
             }
+
+            if (currentGenome.AllyPlayer.mp >= 8) {
+                possibleActions.push_back(BattleEmulator::CRACKLE);
+            }
             // if (currentGenome.AllyPlayer.specialCharge == true &&
             //     currentGenome.AllyPlayer.specialChargeTurn != 0) {
             //     possibleActions.push_back(BattleEmulator::ACROBATIC_STAR);
