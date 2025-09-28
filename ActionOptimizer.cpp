@@ -192,6 +192,8 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             possibleActions.push_back(BattleEmulator::ACROBATIC_STAR);
         }
 
+        auto preGcost = currentNode.gCost;
+
         // Execute each action and generate new nodes
         for (int action: possibleActions) {
             // // Skip low-priority actions if we have many candidates
@@ -233,7 +235,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
                 // Create new node with enhanced cost calculation
                 EnhancedAStarNode newNode;
                 newNode.genome = newGenome;
-                newNode.gCost = EnhancedCostCalculator::calculateGCost(newGenome, action);
+                newNode.gCost = EnhancedCostCalculator::calculateGCost(newGenome, action, preGcost);
 
                 newNode.hCost = EnhancedCostCalculator::calculateHCost(newGenome, enemyMaxHp, playerMaxHp);
                 newNode.fCost = newNode.gCost + newNode.hCost;

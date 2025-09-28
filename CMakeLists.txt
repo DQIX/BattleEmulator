@@ -56,6 +56,8 @@ set(SOURCES
         EnhancedHashCalculator.h
         EnhancedHeapQueue.cpp
         EnhancedHeapQueue.h
+        SimpleParameterOptimizer.cpp
+        SimpleParameterOptimizer.h
 )
 
 # マルチスレッド版（multithreading = ON）
@@ -63,13 +65,17 @@ add_executable(ybe_v5_lv10 ${SOURCES})
 target_compile_definitions(ybe_v5_lv10 PRIVATE MULTITHREADING)  # `#define MULTITHREADING` を適用
 
 
+add_executable(ybe_v5_lv10_opt ${SOURCES})
+target_compile_definitions(ybe_v5_lv10_opt PRIVATE MULTITHREADING OPTIMIZE_MODE)  # `#define MULTITHREADING` を適用
+
+
 string(TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)
 string(TIMESTAMP BUILD_TIME "%H:%M:%S" UTC)
 add_definitions(-DBUILD_DATE="${BUILD_DATE}" -DBUILD_TIME="${BUILD_TIME}")
 
 if(MINGW)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections") ##-fno-inline-small-functions
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections") ##-fno-inline-small-functions
     set(CMAKE_EXE_LINKER_FLAGS "-static -Wl,--gc-sections")
 elseif(MSVC)
     target_compile_options(ybe_v5_lv10 PRIVATE /W4 /MP)  # `/MP` で並列コンパイル

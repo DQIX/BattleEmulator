@@ -33,7 +33,7 @@
 #endif
 
 
-//#define DEBUG3 1
+#define DEBUG3 1
 
 #ifdef DEBUG3
 #define DEBUG_COUT3(x) std::cout << x << std::endl
