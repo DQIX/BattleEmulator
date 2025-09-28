@@ -76,8 +76,8 @@ double EnhancedCostCalculator::calculateStatusEffectCost(const Genome &genome) {
     statusCost -= genome.AllyPlayer.TensionLevel * 0.05;
 
     // 特殊能力
-    if (genome.AllyPlayer.acrobaticStar) statusCost -= 0.2;
-    if (genome.AllyPlayer.specialCharge) statusCost -= 0.1;
+    if (genome.AllyPlayer.acrobaticStar) statusCost -= CostParams::SpHeight;
+    if (genome.AllyPlayer.specialCharge) statusCost -= CostParams::ActHeight;
 
     return statusCost;
 }

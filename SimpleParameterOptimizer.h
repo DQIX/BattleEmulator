@@ -19,6 +19,8 @@ struct CostParams {
     static double resourceWeight;       // リソース重み
     static double StatusEffectWeight;       // リソース重み
     static double turnHeignt;       // リソース重み
+    static double SpHeight;       // リソース重み
+    static double ActHeight;       // リソース重み
 
     // アクションペナルティ
     static double AttackPenalty;

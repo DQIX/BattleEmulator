@@ -18,6 +18,8 @@ double CostParams::playerHpWeight = 2.0;
 double CostParams::turnHeignt = 2.0;
 double CostParams::resourceWeight = 0.5;
 double CostParams::StatusEffectWeight = 0.5;
+double CostParams::SpHeight = 0.2;
+double CostParams::ActHeight = 0.2;
 double CostParams::healPenalty = 0.01;
 double CostParams::AttackPenalty = 0.01;
 double CostParams::dragonSlashPenalty = 0.01;
@@ -41,6 +43,8 @@ std::string CostParams::toText() {
         << "resourceWeight=" << resourceWeight << "\n"
         << "turnHeignt=" << turnHeignt << "\n"
         << "StatusEffectWeight=" << StatusEffectWeight << "\n"
+        << "SpHeight=" << SpHeight << "\n"
+        << "ActHeight=" << ActHeight << "\n"
         << "healPenalty=" << healPenalty << "\n"
         << "AttackPenalty=" << AttackPenalty << "\n"
         << "dragonSlashPenalty=" << dragonSlashPenalty << "\n"
@@ -65,6 +69,8 @@ void CostParams::setDefaults() {
     resourceWeight = 2.0;
     turnHeignt = 1.0;
     StatusEffectWeight = 3.0;
+    SpHeight = 0.2;
+    ActHeight = 0.2;
     AttackPenalty = 0.00;
     dragonSlashPenalty = 0.01;
     healPenalty = 0.01;
@@ -86,6 +92,8 @@ void CostParams::copyFrom(const CostParams& other) {
     resourceWeight = other.resourceWeight;
     turnHeignt = other.turnHeignt;
     StatusEffectWeight = other.StatusEffectWeight;
+    SpHeight = other.SpHeight;
+    ActHeight = other.ActHeight;
     healPenalty = other.healPenalty;
     AttackPenalty = other.AttackPenalty;
     dragonSlashPenalty = other.dragonSlashPenalty;
@@ -189,6 +197,8 @@ CostParams SimpleParameterOptimizer::generateRandom() {
     std::uniform_real_distribution<> playerHpDist(0.5, 10.0);
     std::uniform_real_distribution<> resourceDist(0.1, 10.0);
     std::uniform_real_distribution<> StatusEffectWeight(0.1, 10.0);
+    std::uniform_real_distribution<> SpHeight(-0.01, 10.0);
+    std::uniform_real_distribution<> ActHeight(0.01, 10.0);
     std::uniform_real_distribution<> turnHeignt(0.1, 1.5);
 
     std::uniform_real_distribution<> AttackPenalty(0.01, 2.0);
@@ -205,6 +215,8 @@ CostParams SimpleParameterOptimizer::generateRandom() {
     params.resourceWeight = resourceDist(gen);
     params.turnHeignt = turnHeignt(gen);
     params.StatusEffectWeight = StatusEffectWeight(gen);
+    params.SpHeight = SpHeight(gen);
+    params.ActHeight = ActHeight(gen);
 
     params.healPenalty = healPenaltyDist(gen);
     params.AttackPenalty = AttackPenalty(gen);
