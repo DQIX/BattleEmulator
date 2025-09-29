@@ -56,6 +56,8 @@ set(SOURCES
         EnhancedCostCalculator.h
         EnhancedHashCalculator.h
         EnhancedHeapQueue.h
+        SimpleParameterOptimizer.cpp
+        SimpleParameterOptimizer.h
 )
 
 # シングルスレッド版（multithreading = OFF）
@@ -73,6 +75,12 @@ target_compile_definitions(rbe_multi_lv13_sp13 PRIVATE MULTITHREADING=1 BattleEm
 # マルチスレッド版（multithreading = ON）
 add_executable(rbe_lv15_sp22_v2 ${SOURCES})
 target_compile_definitions(rbe_lv15_sp22_v2 PRIVATE MULTITHREADING=1 BattleEmulatorLV15=1)  # `#define MULTITHREADING` を適用
+
+
+# マルチスレッド版（multithreading = ON）
+add_executable(rbe_lv15_sp22_v2_opt ${SOURCES})
+target_compile_definitions(rbe_lv15_sp22_v2_opt PRIVATE MULTITHREADING=1 BattleEmulatorLV15=1 OPTIMIZE_MODE=1)  # `#define MULTITHREADING` を適用
+
 
 string(TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)
 string(TIMESTAMP BUILD_TIME "%H:%M:%S" UTC)
