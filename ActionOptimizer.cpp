@@ -90,7 +90,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
     auto percent = 0.0;
     auto percenttmp = 0.0;
 
-    for (int i = 0; i < 6; ++i) {
+    for (int i = 0; i < 10; ++i) {
         if (!solutionFound) {
             maxGenerations *= 2;
         }else {
