@@ -12,6 +12,10 @@
 #include "ActionOptimizer.h"
 #include "InputBuilder.h"
 
+#if defined(OPTIMIZE_MODE)
+#include "SimpleParameterOptimizer.h"
+#endif
+
 #if defined(DEBUG)
 
 
@@ -847,6 +851,18 @@ int main(int argc, char *argv[]) {
         showHeader();
         return 0;
     }
+
+#if defined(OPTIMIZE_MODE)
+
+    int act[350] = {0};
+    int counter = 0;
+    act[counter++] = BattleEmulator::ATTACK_ALLY;
+    act[counter++] = -1;
+    SimpleParameterOptimizer::optimize(BasePlayers, 0x027f567c+2, act, 1000, counter);
+
+    return 0;
+#endif
+
 #if defined(DEBUG)
 
     auto t0 = std::chrono::high_resolution_clock::now();
@@ -967,7 +983,7 @@ int main(int argc, char *argv[]) {
 
 #if defined(DEBUG3)
 
-    uint64_t seed = 0x027f567c;
+    uint64_t seed = 0x027f567c+2;
 
     int actions[350] = {BattleEmulator::ATTACK_ALLY, -1,};
     SearchRequest(BasePlayers, seed, actions, THREAD_COUNT);

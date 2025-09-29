@@ -57,6 +57,8 @@ set(SOURCES
         EnhancedHeapQueue.h
         EnhancedCostCalculator.cpp
         EnhancedCostCalculator.h
+        SimpleParameterOptimizer.cpp
+        SimpleParameterOptimizer.h
 )
 
 # シングルスレッド版（multithreading = OFF）
@@ -69,6 +71,9 @@ target_compile_definitions(zbe_multi_lv19_hagane_atk113 PRIVATE MULTITHREADING H
 
 add_executable(zbe_lv16_sp22_tamahagane_atk123_def86_v2 ${SOURCES})
 target_compile_definitions(zbe_lv16_sp22_tamahagane_atk123_def86_v2 PRIVATE MULTITHREADING lv16_sp22_tamahagane_atk123_def86)
+
+add_executable(zbe_lv16_sp22_tamahagane_atk123_def86_v2_opt ${SOURCES})
+target_compile_definitions(zbe_lv16_sp22_tamahagane_atk123_def86_v2_opt PRIVATE MULTITHREADING lv16_sp22_tamahagane_atk123_def86 OPTIMIZE_MODE)
 
 add_executable(zbe_multi_lv13_sp13_hagane_atk101 ${SOURCES})
 target_compile_definitions(zbe_multi_lv13_sp13_hagane_atk101 PRIVATE MULTITHREADING lv13_sp13_hagane_atk101)
@@ -103,6 +108,7 @@ elseif(MSVC)
     target_compile_options(zbe_lv16_sp22_hagane_atk106_def93_v2 PRIVATE /W4 /MP)  # `/MP` で並列コンパイル
     target_compile_options(zbe_multi_lv16_sp22_hagane_atk106_def86 PRIVATE /W4 /MP)  # `/MP` で並列コンパイル
     target_compile_options(zbe_lv16_sp22_tamahagane_atk123_def86_v2 PRIVATE /W4 /MP)  # `/MP` で並列コンパイル
+    target_compile_options(zbe_lv16_sp22_tamahagane_atk123_def86_v2_opt PRIVATE /W4 /MP)  # `/MP` で並列コンパイル
 
     target_link_options(zbe_multi_lv19_tahamane_atk130 PRIVATE /INCREMENTAL:NO /DEBUG)
     target_link_options(zbe_multi_lv19_hagane_atk113 PRIVATE /INCREMENTAL:NO /DEBUG)
@@ -110,6 +116,7 @@ elseif(MSVC)
     target_link_options(zbe_lv16_sp22_hagane_atk106_def93_v2 PRIVATE /INCREMENTAL:NO /DEBUG)
     target_link_options(zbe_multi_lv16_sp22_hagane_atk106_def86 PRIVATE /INCREMENTAL:NO /DEBUG)
     target_link_options(zbe_lv16_sp22_tamahagane_atk123_def86_v2 PRIVATE /INCREMENTAL:NO /DEBUG)
+    target_link_options(zbe_lv16_sp22_tamahagane_atk123_def86_v2_opt PRIVATE /INCREMENTAL:NO /DEBUG)
 
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi /O2")
     set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
