@@ -26,7 +26,7 @@ std::string rtrim(const std::string &s);
 
 std::string trim(const std::string &s);
 
-bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, int turns, const int aActions[350], bool dropbug);
+bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], bool dropbug);
 
 uint64_t BruteForceRequest(const Player copiedPlayers[2], int hours, int minutes, int seconds, int turns,
                            int eActions[350],
@@ -384,76 +384,16 @@ int main() {
 #ifdef DEBUG3
     uint64_t time1 = 0x3611D5E47;
 
-    int actions[350] = {
-        30, 31, 30, 35, 35
-    };
+    auto counter = 0;
+    int actions[350] = {0};
+    actions[counter++] = BattleEmulator::BUFF;
+    actions[counter] = -1;
 
-    int turns = 5;
-
-    lcg::init(time1);
-
-    BattleResult bestResult;
-    Genome bestGenome;
-    int maxTurns = INT_MAX-1;
-
-    priority_queue<Genome> que;
-
-    std::optional<BattleResult> result1;
-    result1 = BattleResult();
-
-    auto *position = new int(1);
-    auto *nowState = new uint64_t(0);
-
-    for (int i = 0; i < 1200; ++i) {
-        auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, time1, turns, 3000, actions, i * 2);
-
-        Player players[2];
-        players[0] = copiedPlayers[0];
-        players[1] = copiedPlayers[1];
-
-        (*position) = 1;
-        (*nowState) = 0;
-
-        result1->clear();
-        BattleEmulator::Main(position, turns + 100, genome.actions, players, result1, time1, nullptr, nullptr, -1,
-                             nowState);
-
-
-        if (players[0].hp >= 0&& players[1].hp == 0 && players[0].mp >= 0) {
-            if (result1->turn < maxTurns) {
-                maxTurns = result1->turn;
-                bestResult = result1.value();
-                bestGenome = genome;
-            }
-        }
-    }
-
-
-    delete position;
-    delete nowState;
-
-    std::cout << dumpTable(bestResult, bestGenome.actions, 0) << std::endl;
-
-    for (auto i = 0; i < 100; ++i) {
-        if (bestGenome.actions[i] == 0 || bestGenome.actions[i] == -1) {
-            break;
-        }
-        std::cout << bestGenome.actions[i] << ", ";
-    }
-    std::cout << std::endl;
-
-#ifdef DEBUG
-    auto t3 = std::chrono::high_resolution_clock::now();
-    auto elapsed_time1 =
-            std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
-    std::cout << "elapsed time: " << double(elapsed_time1) / 1000 << " ms" << std::endl;
-#endif
-
+    SearchRequest(copiedPlayers, time1, actions, false);
     return 0;
 #endif
 
     mainLoop(copiedPlayers);
-    return 0;
     return 0;
 }
 
