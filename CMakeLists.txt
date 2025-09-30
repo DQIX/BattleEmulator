@@ -57,16 +57,11 @@ set(SOURCES
         EnhancedHashCalculator.h
         EnhancedHeapQueue.cpp
         EnhancedHeapQueue.h
-        SimpleParameterOptimizer.cpp
-        SimpleParameterOptimizer.h
 )
 
 
 add_executable(nbe_lv17_sp22_tamahane_atk125_def93_v2 ${SOURCES})
 target_compile_definitions(nbe_lv17_sp22_tamahane_atk125_def93_v2 PRIVATE MULTITHREADING lv17_sp22_tamahane_atk125_def93)
-
-add_executable(nbe_lv17_sp22_tamahane_atk125_def93_v2_opt ${SOURCES})
-target_compile_definitions(nbe_lv17_sp22_tamahane_atk125_def93_v2_opt PRIVATE MULTITHREADING lv17_sp22_tamahane_atk125_def93 OPTIMIZE_MODE)
 
 add_executable(nbe_lv17_sp22_hagane_atk108_def93_v2 ${SOURCES})
 target_compile_definitions(nbe_lv17_sp22_hagane_atk108_def93_v2 PRIVATE MULTITHREADING lv17_sp22_hagane_atk108_def93)
@@ -86,11 +81,9 @@ elseif (MSVC)
 
     target_compile_options(nbe_lv17_sp22_tamahane_atk125_def93_v2 PRIVATE /W4 /MP)  # `/MP` で並列コンパイル
     target_compile_options(nbe_lv17_sp22_hagane_atk108_def93_v2 PRIVATE /W4 /MP)  # `/MP` で並列コンパイル
-    target_compile_options(nbe_lv17_sp22_tamahane_atk125_def93_v2_opt PRIVATE /W4 /MP)  # `/MP` で並列コンパイル
 
     target_link_options(nbe_lv17_sp22_tamahane_atk125_def93_v2 PRIVATE /INCREMENTAL:NO /DEBUG)
     target_link_options(nbe_lv17_sp22_hagane_atk108_def93_v2 PRIVATE /INCREMENTAL:NO /DEBUG)
-    target_link_options(nbe_lv17_sp22_tamahane_atk125_def93_v2_opt PRIVATE /INCREMENTAL:NO /DEBUG)
 
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi /O2")
     set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
