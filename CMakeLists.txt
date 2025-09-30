@@ -46,7 +46,13 @@ add_executable(newDirectory main.cpp
         ActionOptimizer.h
         Genome.h
         ActionBanManager.h
-        HeapQueue.h
+        EnhancedCostCalculator.h
+        EnhancedCostCalculator.cpp
+        EnhancedHashCalculator.h
+        EnhancedHeapQueue.h
+        EnhancedHeapQueue.cpp
+        EnhancedHashCalculator.cpp
+
 )
 
 string(TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)
