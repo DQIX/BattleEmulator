@@ -90,7 +90,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
     auto percent = 0.0;
     auto percenttmp = 0.0;
 
-    for (int i = 0; i < 6; ++i) {
+    for (int i = 0; i < 3; ++i) {
         if (!solutionFound) {
             maxGenerations *= 2;
         }else {
@@ -184,7 +184,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             }
             if (currentGenome.AllyPlayer.mp >= 3) {
                 possibleActions.push_back(BattleEmulator::CRACK_ALLY);
-                //possibleActions.push_back(BattleEmulator::WOOSH_ALLY);
+                possibleActions.push_back(BattleEmulator::WOOSH_ALLY);
             }
 
             if (currentGenome.AllyPlayer.mp >= 8) {
