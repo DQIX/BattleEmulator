@@ -8,7 +8,7 @@
 #include <iostream>
 
 // 許可する最大乱数の数
-const int ARRAY_SIZE = 20000;
+const int ARRAY_SIZE = 100000;
 
 double precalculatedValues[ARRAY_SIZE]; // 固定メモリ
 uint64_t seeds[ARRAY_SIZE];             // 固定メモリ

@@ -222,7 +222,7 @@ double EnhancedCostCalculator::calculateStatusEffectCost(const Genome &genome) {
     statusCost -= genome.AllyPlayer.AtkBuffLevel * 1.0;
     statusCost -= genome.AllyPlayer.TensionLevel * 1.0;
 
-    statusCost -= genome.AllyPlayer.hasMagicMirror ? 1.0 : 0.0;
+    statusCost -= genome.AllyPlayer.hasMagicMirror ? 10.0 : 0.0;
 
     // Special abilities
     if (genome.AllyPlayer.specialCharge) statusCost -= 0.1;

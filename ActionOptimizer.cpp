@@ -31,7 +31,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
     std::unique_ptr<uint64_t> nowState = std::make_unique<uint64_t>(0);
 
     // Enhanced A* priority queue and visited set
-    EnhancedHeapQueue openSet(578000 * 1);
+    EnhancedHeapQueue openSet(578000 * 5);
     std::unordered_set<uint64_t> closedSet;
 
 
