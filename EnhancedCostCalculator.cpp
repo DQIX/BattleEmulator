@@ -9,7 +9,7 @@
 
 #include "SimpleParameterOptimizer.h"
 
-double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, int preGCost) {
+double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, double preGCost) {
     // Base cost is turn number (maintains depth-first preference)
     double gCost = preGCost + CostParams::turnHeignt;
 
@@ -125,7 +125,7 @@ double EnhancedCostCalculator::calculateResourceCost(const Genome &genome) {
 
 #else
 
-double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, int preGCost) {
+double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, double preGCost) {
     // Base cost is turn number (maintains depth-first preference)
     double gCost = preGCost + 2.0;
 
