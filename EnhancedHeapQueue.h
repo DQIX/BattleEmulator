@@ -18,7 +18,7 @@ struct EnhancedAStarNode {
     int enemyHP;
     int allyHP;
     uint32_t nodeId;
-    uint64_t stateHash;
+    //uint64_t stateHash;
 
     bool operator<(const EnhancedAStarNode& other) const {
         // Primary comparison: f-cost (with epsilon for floating point)
@@ -42,7 +42,7 @@ struct EnhancedAStarNode {
         }
 
         // Final tie-breaker: use state hash for consistent ordering
-        return stateHash > other.stateHash;
+        return nodeId > other.nodeId;
     }
 };
 

@@ -5,7 +5,6 @@
 
 #include "ActionOptimizer.h"
 #include <random>
-#include <unordered_set>
 #include <memory>
 
 #include "BattleEmulator.h"
@@ -77,11 +76,10 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
     std::unique_ptr<int> position = std::make_unique<int>(1);
     std::unique_ptr<uint64_t> nowState = std::make_unique<uint64_t>(0);
 
-    ChunkPool<Genome, 13> Pool{0};
+    ChunkPool<Genome, 12> Pool{0};
 
     // Enhanced A* priority queue and visited set
     EnhancedHeapQueue openSet{};
-    std::unordered_set<uint64_t> closedSet;
 
     Player CopedPlayers[2] = {players[0], players[1]};
     *position = 1;
@@ -123,7 +121,6 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
     initialNode.gCost = 0;
     initialNode.hCost = EnhancedCostCalculator::calculateHCost(initialGenome, enemyMaxHp, playerMaxHp);
     initialNode.fCost = initialNode.gCost + initialNode.hCost;
-    initialNode.stateHash = EnhancedHashCalculator::computeStateHash(initialGenome);
     initialNode.allyHP = initialGenome.AllyPlayer.hp;
     initialNode.enemyHP = initialGenome.EnemyPlayer.hp;
     initialNode.nodeId = Pool.alloc(initialGenome);
@@ -180,12 +177,6 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             //     std::cout << std::endl;
             // }
             //       }
-
-            // Skip already explored states
-            if (closedSet.count(currentNode.stateHash)) {
-                continue;
-            }
-            closedSet.insert(currentNode.stateHash);
 
             Genome currentGenome = Pool.get(currentNode.nodeId);
 
@@ -253,20 +244,11 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
                     newGenome.AllyPlayer = CopedPlayers3[0];
                     newGenome.EnemyPlayer = CopedPlayers3[1];
 
-                    // Calculate enhanced state hash
-                    uint64_t newStateHash = EnhancedHashCalculator::computeStateHash(newGenome);
-
-                    // Skip already explored states
-                    if (closedSet.count(newStateHash)) {
-                        continue;
-                    }
-
                     // Create new node with enhanced cost calculation
                     EnhancedAStarNode newNode{};
                     newNode.gCost = EnhancedCostCalculator::calculateGCost(newGenome, entry.action, preGCost);
                     newNode.hCost = EnhancedCostCalculator::calculateHCost(newGenome, enemyMaxHp, playerMaxHp);
                     newNode.fCost = newNode.gCost + newNode.hCost;
-                    newNode.stateHash = newStateHash;
                     newNode.allyHP = newGenome.AllyPlayer.hp;
                     newNode.enemyHP = newGenome.EnemyPlayer.hp;
                     newNode.nodeId = Pool.alloc(newGenome);
