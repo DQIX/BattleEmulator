@@ -4,22 +4,69 @@
 //
 
 #include "ActionOptimizer.h"
-#include <vector>
 #include <random>
 #include <unordered_set>
 #include <memory>
 
 #include "BattleEmulator.h"
+#include "ChunkPool.h"
 #include "Genome.h"
 #include "EnhancedHashCalculator.h"
 #include "EnhancedCostCalculator.h"
 #include "EnhancedHeapQueue.h"
 #include "lcg.h"
 
+struct ActionEntry {
+    int action;
+    bool (*condition)(const Genome&);
+};
+
+constexpr ActionEntry ACTION_TABLE[] = {
+    { BattleEmulator::ATTACK_ALLY,  [](const Genome&) { return true; } },
+    { BattleEmulator::DRAGON_SLASH, [](const Genome&) { return true; } },
+    { BattleEmulator::DEFENCE,      [](const Genome&) { return true; } },
+    { BattleEmulator::FLEE_ALLY,    [](const Genome&) { return true; } },
+
+    { BattleEmulator::SPECIAL_ANTIDOTE,
+        [](const Genome& g) {
+            return g.AllyPlayer.SpecialMedicineCount >= 1 &&
+                   g.AllyPlayer.PoisonEnable;
+    }
+    },
+    { BattleEmulator::SPECIAL_MEDICINE,
+        [](const Genome& g) {
+            return g.AllyPlayer.SpecialMedicineCount >= 1 &&
+                   !g.AllyPlayer.PoisonEnable;
+    }
+    },
+    { BattleEmulator::HEAL,
+        [](const Genome& g) { return g.AllyPlayer.mp >= 2; }
+    },
+    { BattleEmulator::CRACK_ALLY,
+        [](const Genome& g) { return g.AllyPlayer.mp >= 3; }
+    },
+    { BattleEmulator::WOOSH_ALLY,
+        [](const Genome& g) { return g.AllyPlayer.mp >= 3; }
+    },
+    { BattleEmulator::ACROBATIC_STAR,
+        [](const Genome& g) {
+            return g.AllyPlayer.specialCharge &&
+                   g.AllyPlayer.specialChargeTurn != 0;
+    }
+    }
+};
+
+static uint32_t Node_Used;
+
+uint32_t ActionOptimizer::getNodesUsed() {
+    return Node_Used;
+}
+
 // Flexible A* Algorithm Implementation
 Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int turns, int maxGenerations,
                                      int actions[350], int seedOffset) {
     lcg::init(seed, true);
+    Node_Used = 0;
     //std::mt19937 rng(seed + seedOffset);
 
     // Cache enemy max HP (immutable value)
@@ -30,10 +77,11 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
     std::unique_ptr<int> position = std::make_unique<int>(1);
     std::unique_ptr<uint64_t> nowState = std::make_unique<uint64_t>(0);
 
-    // Enhanced A* priority queue and visited set
-    EnhancedHeapQueue openSet(578000 * 1);
-    std::unordered_set<uint64_t> closedSet;
+    ChunkPool<Genome, 13> Pool{0};
 
+    // Enhanced A* priority queue and visited set
+    EnhancedHeapQueue openSet{};
+    std::unordered_set<uint64_t> closedSet;
 
     Player CopedPlayers[2] = {players[0], players[1]};
     *position = 1;
@@ -71,13 +119,14 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
     }
 
     // Create initial node with enhanced cost calculation
-    EnhancedAStarNode initialNode;
-    initialNode.genome = initialGenome;
+    EnhancedAStarNode initialNode{};
     initialNode.gCost = 0;
     initialNode.hCost = EnhancedCostCalculator::calculateHCost(initialGenome, enemyMaxHp, playerMaxHp);
     initialNode.fCost = initialNode.gCost + initialNode.hCost;
     initialNode.stateHash = EnhancedHashCalculator::computeStateHash(initialGenome);
-
+    initialNode.allyHP = initialGenome.AllyPlayer.hp;
+    initialNode.enemyHP = initialGenome.EnemyPlayer.hp;
+    initialNode.nodeId = Pool.alloc(initialGenome);
     openSet.push(initialNode);
 
     Genome bestSolution = {};
@@ -89,6 +138,8 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
     double lastBestFCost = 1000000.0;
     auto percent = 0.0;
     auto percenttmp = 0.0;
+
+    Player CopedPlayers3[2];
 
     for (int i = 0; i < 10; ++i) {
         if (!solutionFound) {
@@ -136,7 +187,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             }
             closedSet.insert(currentNode.stateHash);
 
-            Genome currentGenome = currentNode.genome;
+            Genome currentGenome = Pool.get(currentNode.nodeId);
 
             // Turn limit check
             if (currentGenome.turn > startT) {
@@ -165,36 +216,11 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
                 continue;
             }
 
-            // Generate possible actions
-            std::vector<int> possibleActions;
-
-            // Basic actions (always available)
-            possibleActions.push_back(BattleEmulator::ATTACK_ALLY);
-            possibleActions.push_back(BattleEmulator::DRAGON_SLASH);
-            possibleActions.push_back(BattleEmulator::DEFENCE);
-            possibleActions.push_back(BattleEmulator::FLEE_ALLY);
-
-            // Conditional actions
-            if (currentGenome.AllyPlayer.SpecialMedicineCount >= 1 && currentGenome.AllyPlayer.PoisonEnable == true) {
-                possibleActions.push_back(BattleEmulator::SPECIAL_ANTIDOTE);
-            }else if (currentGenome.AllyPlayer.SpecialMedicineCount >= 1) {
-                possibleActions.push_back(BattleEmulator::SPECIAL_MEDICINE);
-            }
-
-            if (currentGenome.AllyPlayer.mp >= 2) {
-                possibleActions.push_back(BattleEmulator::HEAL);
-            }
-            if (currentGenome.AllyPlayer.mp >= 3) {
-                possibleActions.push_back(BattleEmulator::CRACK_ALLY);
-                possibleActions.push_back(BattleEmulator::WOOSH_ALLY);
-            }
-            if (currentGenome.AllyPlayer.specialCharge == true &&
-                currentGenome.AllyPlayer.specialChargeTurn != 0) {
-                possibleActions.push_back(BattleEmulator::ACROBATIC_STAR);
-                }
-
             // Execute each action and generate new nodes
-            for (int action: possibleActions) {
+            for (const auto& entry : ACTION_TABLE) {
+                if (!entry.condition(currentGenome)) {
+                    continue;
+                }
                 // // Skip low-priority actions if we have many candidates
                 // if (actionCandidates.size() > 6 && candidate.priority < 0.5) {
                 //     continue;
@@ -204,27 +230,28 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
                 // }
 
                 Genome newGenome = currentGenome;
-                newGenome.actions[currentGenome.turn - 1] = action;
+                newGenome.actions[currentGenome.turn - 1] = entry.action;
                 newGenome.Initialized = true;
 
                 // Copy for battle emulator execution
-                Player CopedPlayers1[2] = {currentGenome.AllyPlayer, currentGenome.EnemyPlayer};
+                CopedPlayers3[0] = currentGenome.AllyPlayer;
+                CopedPlayers3[1] = currentGenome.EnemyPlayer;
                 *position = currentGenome.position;
                 *nowState = currentGenome.state;
 
                 // Execute one turn
-                BattleEmulator::Main(position.get(), newGenome.turn - newGenome.processed, newGenome.actions, CopedPlayers1,
+                BattleEmulator::Main(position.get(), newGenome.turn - newGenome.processed, newGenome.actions, CopedPlayers3,
                                      (std::optional<BattleResult> &) std::nullopt, seed,
                                      nullptr, nullptr, -2, nowState.get());
 
-                if (CopedPlayers1[0].hp > 0) {
+                if (CopedPlayers3[0].hp > 0) {
                     // Update genome with results
                     newGenome.position = *position;
                     newGenome.state = *nowState;
                     newGenome.turn = currentGenome.turn + 1;
                     newGenome.processed = currentGenome.turn;
-                    newGenome.AllyPlayer = CopedPlayers1[0];
-                    newGenome.EnemyPlayer = CopedPlayers1[1];
+                    newGenome.AllyPlayer = CopedPlayers3[0];
+                    newGenome.EnemyPlayer = CopedPlayers3[1];
 
                     // Calculate enhanced state hash
                     uint64_t newStateHash = EnhancedHashCalculator::computeStateHash(newGenome);
@@ -235,13 +262,14 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
                     }
 
                     // Create new node with enhanced cost calculation
-                    EnhancedAStarNode newNode;
-                    newNode.genome = newGenome;
-                    newNode.gCost = EnhancedCostCalculator::calculateGCost(newGenome, action, preGCost);
-
+                    EnhancedAStarNode newNode{};
+                    newNode.gCost = EnhancedCostCalculator::calculateGCost(newGenome, entry.action, preGCost);
                     newNode.hCost = EnhancedCostCalculator::calculateHCost(newGenome, enemyMaxHp, playerMaxHp);
                     newNode.fCost = newNode.gCost + newNode.hCost;
                     newNode.stateHash = newStateHash;
+                    newNode.allyHP = newGenome.AllyPlayer.hp;
+                    newNode.enemyHP = newGenome.EnemyPlayer.hp;
+                    newNode.nodeId = Pool.alloc(newGenome);
 
                     // Add to open set
                     openSet.push(newNode);
@@ -257,13 +285,15 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
         }
     }
 
+    Node_Used = Pool.size();
+
     if (solutionFound) {
         return bestSolution;
     }
 
     // Return best available node if no solution found
     if (!openSet.empty()) {
-        return openSet.top().genome;
+        return Pool.get(openSet.top().nodeId);
     }
 
     return initialGenome;
@@ -272,3 +302,4 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 void ActionOptimizer::updateCompromiseScore(Genome &genome) {
     // Enemy action penalty processing (unchanged)
 }
+

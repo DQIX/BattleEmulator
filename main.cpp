@@ -10,6 +10,7 @@
 #include "BattleEmulator.h"
 #include "debug.h"
 #include "ActionOptimizer.h"
+#include "EnhancedHeapQueue.h"
 #include "InputBuilder.h"
 #if defined(OPTIMIZE_MODE)
 #include "SimpleParameterOptimizer.h"
@@ -622,6 +623,46 @@ namespace {
                 "Performance: " << std::fixed << std::setprecision(2) << performance << " mann turns/s" << std::endl;
     }
 
+    NOINLINE void logMemoryUsage(
+        std::ostream& os,
+        uint64_t nodes,
+        size_t genomeSize,
+        size_t astarNodeSize
+    ) {
+        const uint64_t bytes =
+            nodes * (static_cast<uint64_t>(genomeSize)
+                   + static_cast<uint64_t>(astarNodeSize));
+
+        constexpr uint64_t KB = 1024ull;
+        constexpr uint64_t MB = 1024ull * KB;
+        constexpr uint64_t GB = 1024ull * MB;
+
+        double value;
+        const char* unit;
+
+        if (bytes >= GB) {
+            value = static_cast<double>(bytes) / GB;
+            unit = "GB~";
+        } else if (bytes >= MB) {
+            value = static_cast<double>(bytes) / MB;
+            unit = "MB~";
+        } else if (bytes >= KB) {
+            value = static_cast<double>(bytes) / KB;
+            unit = "KB~";
+        } else {
+            value = static_cast<double>(bytes);
+            unit = "B";
+        }
+
+        os << "Nodes used: " << nodes
+           << ", Memory: "
+           << std::fixed << std::setprecision(2)
+           << value << " " << unit;
+
+        os << std::endl;
+    }
+
+
     bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads, bool Dropbug) {
 #ifdef DEBUG
         auto t0 = std::chrono::high_resolution_clock::now();
@@ -656,7 +697,9 @@ namespace {
         auto t3 = std::chrono::high_resolution_clock::now();
         auto elapsed_time1 =
                 std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
-        PerformanceDebug("Searcher multi", turnProcessed, static_cast<double>(elapsed_time1), 0);
+        PerformanceDebug("Searcher", turnProcessed, static_cast<double>(elapsed_time1), 0);
+        logMemoryUsage(performanceLogger, ActionOptimizer::getNodesUsed(), sizeof(Genome), sizeof(EnhancedAStarNode));
+
 #endif
 
         if (genome.turn >= 100) {
@@ -702,13 +745,14 @@ namespace {
         int *position = new int(1);
         auto *nowState = new uint64_t(0);
         int maxElement = 350;
+        Player players[2];
         for (uint64_t seed = start; seed < end; ++seed) {
             BattleEmulator::resetStartTurn();
             lcg::init(seed);
             (*nowState) = 0;
             (*position) = 1;
-            Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
-
+            players[0] = copiedPlayers[0];
+            players[1] = copiedPlayers[1];
 
             bool resultBool = BattleEmulator::Main(position, 20, gene, players,
                                                    (std::optional<BattleResult> &) std::nullopt, seed, nullptr, damages,
@@ -956,8 +1000,9 @@ int main(int argc, char *argv[]) {
     int act[350] = {0};
     int counter = 0;
     act[counter++] = BattleEmulator::ATTACK_ALLY;
+    act[counter++] = BattleEmulator::SPECIAL_MEDICINE;
     act[counter++] = -1;
-    SimpleParameterOptimizer::optimize(BasePlayers, 70094041+6, act, 1000, counter);
+    SimpleParameterOptimizer::optimize(BasePlayers, 98033215, act, 1000, counter);
 
     return 0;
 #endif

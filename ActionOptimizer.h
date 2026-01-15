@@ -18,6 +18,8 @@ public:
 
     // Helper function for compromise score updates
     static void updateCompromiseScore(Genome &genome);
+
+    static uint32_t getNodesUsed();
 };
 
 #endif // ACTION_OPTIMIZER_FIXED_H

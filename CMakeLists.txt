@@ -73,7 +73,8 @@ add_executable(rbe_multi_lv13_sp13 ${SOURCES})
 target_compile_definitions(rbe_multi_lv13_sp13 PRIVATE MULTITHREADING=1 BattleEmulatorLV13=1)  # `#define MULTITHREADING` を適用
 
 # マルチスレッド版（multithreading = ON）
-add_executable(rbe_lv15_sp22_v2 ${SOURCES})
+add_executable(rbe_lv15_sp22_v2 ${SOURCES}
+        ChunkPool.h)
 target_compile_definitions(rbe_lv15_sp22_v2 PRIVATE MULTITHREADING=1 BattleEmulatorLV15=1)  # `#define MULTITHREADING` を適用
 
 
