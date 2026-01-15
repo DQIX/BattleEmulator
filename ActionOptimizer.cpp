@@ -193,7 +193,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             if (currentGenome.turn > startT) {
                 continue;
             }
-            if (solutionFound && currentGenome.turn > bestSolution.turn) {
+            if (solutionFound && currentGenome.turn > bestSolution.turn - 1) {
                 continue;
             }
 
