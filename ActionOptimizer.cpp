@@ -148,24 +148,23 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             // Get node with minimum f-cost
             EnhancedAStarNode currentNode = openSet.top();
             openSet.pop();
-            Genome currentGenome = Pool.get(currentNode.nodeId);
 
             auto preGCost = currentNode.gCost;
 
             //Progress reporting with constraint info
-              // if (counter % 10 == 0) {
-              //     percenttmp = counter / static_cast<double>(maxGenerations) * 100.0;
-              //     if (percenttmp != percent) {
-              //         std::cout << "[Node Info] " << percenttmp << "%"
-              //                   << " | turn=" << currentGenome.turn
-              //                   << " | hCost=" << currentNode.hCost
-              //                   << " | gCost=" << currentNode.gCost
-              //                   << " | enemyHP=" << currentGenome.EnemyPlayer.hp
-              //                   << " | bestTurn=" << (solutionFound ? bestSolution.turn - 1: -1)
-              //                   << std::endl;
-              //         percent = percenttmp;
-              //     }
-              // }
+            // if (counter % 10 == 0) {
+            //     percenttmp = counter / static_cast<double>(maxGenerations) * 100.0;
+            //     if (percenttmp != percent) {
+            //         std::cout << "[Node Info] " << percenttmp << "%"
+            //                   << " | turn=" << currentNode.genome.turn
+            //                   << " | hCost=" << currentNode.hCost
+            //                   << " | gCost=" << currentNode.gCost
+            //                   << " | enemyHP=" << currentNode.genome.EnemyPlayer.hp
+            //                   << " | bestTurn=" << (solutionFound ? bestSolution.turn - 1: -1)
+            //                   << std::endl;
+            //         percent = percenttmp;
+            //     }
+            // }
 
 
             // if (counter % 1000000 == 0) {
@@ -179,13 +178,13 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             // }
             //       }
 
-
+            Genome currentGenome = Pool.get(currentNode.nodeId);
 
             // Turn limit check
             if (currentGenome.turn > startT) {
                 continue;
             }
-            if (solutionFound && currentGenome.turn > bestSolution.turn - 1) {
+            if (solutionFound && currentGenome.turn > bestSolution.turn) {
                 continue;
             }
 
