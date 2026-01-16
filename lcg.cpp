@@ -175,7 +175,7 @@ static inline uint64_t long_jump(uint64_t state, uint64_t k) noexcept {
  * @param seed 初期化に使用する乱数シード
  * @param init 必要に応じて初期乱数列をすべて生成するかどうかを制御するフラグ、trueに設定すると動的生成が無効になる。
  */
-void lcg::init(uint64_t seed, bool init) {
+void lcg::init(const uint64_t seed, const bool init) {
     base_seed   = seed;
     now_seed    = seed;
     now_seed_F  = 0;
@@ -193,7 +193,7 @@ void lcg::init(uint64_t seed, bool init) {
  *
  * @param need 更新を必要とする配列のインデックス
  */
-uint32_t lcg::GenerateifNeed(int need) {
+uint32_t lcg::GenerateifNeed(const int need) {
     if (need <= 0 || need >= ARRAY_SIZE) {
         return 0;
     }
@@ -222,9 +222,9 @@ uint32_t lcg::GenerateifNeed(int need) {
  */
 uint64_t lcg::lcg_rand(uint64_t seed) {
     // Constants for the LCG formula
-    const uint64_t multiplier = 0x5d588b656c078965;
-    const uint64_t increment = 0x269ec3;
-    const uint64_t modulo = 0xFFFFFFFFFFFFFFFF;
+    constexpr uint64_t multiplier = 0x5d588b656c078965;
+    constexpr uint64_t increment = 0x269ec3;
+    constexpr uint64_t modulo = 0xFFFFFFFFFFFFFFFF;
 
     // Update the seed using the LCG formula
     seed = seed * multiplier + increment;
@@ -242,15 +242,15 @@ uint64_t lcg::lcg_rand(uint64_t seed) {
  * @param input 計算の基となる64ビットの入力値
  * @return 計算された百分率を表す値
  */
-int lcg::calculatePercent(uint64_t input) {
+int lcg::calculatePercent(const uint64_t input) {
     // Right shift the input by 32 bits
-    uint64_t output = input >> 32;
+    const uint64_t output = input >> 32;
 
     return static_cast<int>(output * 1000000 >> 32);
 }
 
 
-int lcg::getPercent(int *position, int max) {
+int lcg::getPercent(int *position, const int max) {
     // nullptrでないことを確認
     if (position == nullptr) {
         throw std::invalid_argument("Null pointer passed to incrementPosition.");
@@ -259,8 +259,8 @@ int lcg::getPercent(int *position, int max) {
         std::cerr << "out of range!!!" << std::endl;
         return 0;
     }
-    uint64_t mul = static_cast<uint64_t>(GenerateifNeed((*position))) * max;
-    auto roundedResult = static_cast<int>(mul >> 32);
+    const uint64_t mul = static_cast<uint64_t>(GenerateifNeed((*position))) * max;
+    const auto roundedResult = static_cast<int>(mul >> 32);
 
     // ポインタの指す位置をインクリメント
     (*position)++;
@@ -273,12 +273,13 @@ int lcg::getPercent(int *position, int max) {
  *
  * @param position 乱数の現在の位置を保持するポインタ
  *                 nullptrの場合は例外がスローされます。
+ * @param min
  * @param max 結果の最大値。0~[最大-1]までを返す
  * @return 0以上max-1未満の整数値
  *         ただし、範囲外エラーが発生した場合は0を返します。
  * @throw std::invalid_argument positionがnullptrの場合
  */
-double lcg::floatRand(int *position, double min, double max) {
+double lcg::floatRand(int *position, const double min, const double max) {
     if (position == nullptr) {
         throw std::invalid_argument("Null pointer passed");
     }
@@ -289,11 +290,11 @@ double lcg::floatRand(int *position, double min, double max) {
 
     GenerateifNeed(*position);
 
-    uint32_t top = GenerateifNeed((*position));
+    const uint32_t top = GenerateifNeed((*position));
     (*position)++;
 
     // [0,1) に正規化（1.0 になることはない）
-    double u = (double)top * (1.0 / 4294967296.0);
+    const double u = (double)top * (1.0 / 4294967296.0);
 
     return min + u * (max - min);
 }
@@ -311,6 +312,6 @@ double lcg::floatRand(int *position, double min, double max) {
  * @note 指定されたpositionはインクリメントされます。
  * @note minおよびmaxは端の値を含みます。
  */
-int lcg::intRangeRand(int *position, int min, int max) {
+int lcg::intRangeRand(int *position, const int min, const int max) {
     return min + getPercent(position, max - min + 1);
 }
