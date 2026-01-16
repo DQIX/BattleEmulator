@@ -40,12 +40,9 @@ void lcg::init(uint64_t seed, bool init) {
  *
  * @param need 更新を必要とする配列のインデックス
  */
-void lcg::GenerateifNeed(int need) {
+inline void lcg::GenerateifNeed(int need) {
     // 配列に値を再計算して格納する
-    if(nowCounter > need){
-        return;
-    }
-    for (int i = nowCounter; i < need+2; ++i) {
+    while (nowCounter < need) {
         now_seed = lcg_rand(now_seed);
         precalcTop32[++nowCounter] = static_cast<uint32_t>(now_seed >> 32);
     }
@@ -114,7 +111,7 @@ int lcg::getPercent(int *position, int max) {
 double lcg::floatRand(int *position, double min, double max) {
     assert(position != nullptr);
     assert((*position) < ARRAY_SIZE);
-    GenerateifNeed(*position);
+    GenerateifNeed((*position));
     uint32_t top = precalcTop32[*position];
     (*position)++;
 
