@@ -155,16 +155,6 @@ static constexpr unsigned long long LCG_C[65] = {
     0x0000000000000000ULL
 };
 
-/**
- * 線形合同法 (Linear Congruential Generator) に基づいて状態をジャンプさせる補助関数です。
- *
- * この関数は状態遷移を効率的に複数回進めるために使用されます。ジャンプ幅は k によって指定され、
- * 線形合同法の遷移係数 (LCG_A) を基に計算が行われます。
- *
- * @param state 初期の内部状態
- * @param k ジャンプさせる遷移ステップ数
- * @return ジャンプ後の新しい内部状態
- */
 static constexpr uint64_t long_jump(uint64_t state, uint64_t k) noexcept {
     unsigned int i = 0;
     while (k != 0) {
@@ -246,17 +236,6 @@ constexpr int lcg::calculatePercent(const uint64_t input) {
 }
 
 
-/**
- * 線形合同法 (Linear Congruential Generator) に基づいて確率値を生成します。
- *
- * この関数は与えられた最大値 (max) に基づいて 0 以上 max 未満の整数を生成します。
- * 内部計算には事前に計算された 32bit の値を使用し、必要に応じて位置をインクリメントします。
- *
- * @param position 状態管理のための位置を指すポインタ。計算後にインクリメントされます。
- * @param max 生成された整数の上限値 (exclusive) です。
- * @return 0 以上 max 未満の整数値を返します。
- * @throws std::invalid_argument position が nullptr の場合にスローされます。
- */
 int lcg::getPercent(int *position, const int max) {
     // nullptrでないことを確認
     if (position == nullptr) {
