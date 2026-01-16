@@ -4,7 +4,6 @@ public:
     LinearIdPool()
         : capacity_(FAST_CAP), size_(0)
     {
-        std::cout << "LinearIdPool: capacity = " << (sizeof(T) * capacity_) << std::endl;
         data_ = static_cast<T*>(std::malloc(sizeof(T) * capacity_));
         if (!data_) std::abort();
     }
