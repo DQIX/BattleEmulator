@@ -193,24 +193,20 @@ void lcg::init(uint64_t seed, bool init) {
  *
  * @param need 更新を必要とする配列のインデックス
  */
-uint32_t lcg::GenerateifNeed(int need) {
-    if (need <= 0 || need >= ARRAY_SIZE) {
-        return 0;
-    }
+void lcg::GenerateifNeed(int need) {
     // 配列に値を再計算して格納する
     if(nowCounter > need){
-        return precalcTop32[need];
+        return;
     }
     if (init_mode) {
         for (int i = nowCounter; i < need+2; ++i) {
             now_seed = lcg_rand(now_seed);
             precalcTop32[++nowCounter] = static_cast<uint32_t>(now_seed >> 32);
         }
-        return precalcTop32[need];
     } else {
         now_seed = long_jump(now_seed, need - nowCounter);
+        precalcTop32[need] = static_cast<uint32_t>(now_seed >> 32);
         nowCounter = need;
-        return static_cast<uint32_t>(now_seed >> 32);
     }
 }
 
@@ -259,7 +255,8 @@ int lcg::getPercent(int *position, int max) {
         std::cerr << "out of range!!!" << std::endl;
         return 0;
     }
-    uint64_t mul = static_cast<uint64_t>(GenerateifNeed((*position))) * max;
+    GenerateifNeed((*position));
+    uint64_t mul = static_cast<uint64_t>(precalcTop32[*position]) * max;
     auto roundedResult = static_cast<int>(mul >> 32);
 
     // ポインタの指す位置をインクリメント
@@ -289,7 +286,7 @@ double lcg::floatRand(int *position, double min, double max) {
 
     GenerateifNeed(*position);
 
-    uint32_t top = GenerateifNeed((*position));
+    uint32_t top = precalcTop32[*position];
     (*position)++;
 
     // [0,1) に正規化（1.0 になることはない）
