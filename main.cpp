@@ -748,7 +748,7 @@ namespace {
         Player players[2];
         for (uint64_t seed = start; seed < end; ++seed) {
             BattleEmulator::resetStartTurn();
-            lcg::init(seed);
+            lcg::init(seed, false);
             (*nowState) = 0;
             (*position) = 1;
             players[0] = copiedPlayers[0];
