@@ -14,7 +14,7 @@ private:
 
     static uint64_t lcg_rand(uint64_t seed);
 
-    static double calculatePercent(uint64_t input);
+    static int calculatePercent(uint64_t input);
 public:
     static void init(uint64_t seed, bool init = false);
 
