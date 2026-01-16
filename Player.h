@@ -16,15 +16,15 @@
  * 特殊な効果やターン制状態異常などを管理します。
  */
 struct Player {
-    int hp;
-    double maxHp;
-    int atk;
-    int defaultATK;
-    int def;
-    int defaultDEF;
-    int speed;
-    int defaultSpeed;
-    int HealPower;
+    int hp = 0;
+    double maxHp = 0;
+    int atk = 0;
+    int defaultATK = 0;
+    int def = 0;
+    int defaultDEF = 0;
+    int speed = 0;
+    int defaultSpeed = 0;
+    int HealPower = 0;
     int mp = 0;
     int maxMp = 0;
     bool specialCharge = false;

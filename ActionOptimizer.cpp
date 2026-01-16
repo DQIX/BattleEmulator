@@ -187,7 +187,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             }
             closedSet.insert(currentNode.stateHash);
 
-            const Genome& currentGenome = Pool.get(currentNode.nodeId);
+            const Genome currentGenome = Pool.get(currentNode.nodeId);
 
             // Turn limit check
             if (currentGenome.turn > startT) {
