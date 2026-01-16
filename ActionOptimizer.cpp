@@ -9,7 +9,7 @@
 #include <memory>
 
 #include "BattleEmulator.h"
-#include "ChunkPool.h"
+#include "LinearIdPool.h"
 #include "Genome.h"
 #include "EnhancedHashCalculator.h"
 #include "EnhancedCostCalculator.h"
@@ -77,7 +77,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
     std::unique_ptr<int> position = std::make_unique<int>(1);
     std::unique_ptr<uint64_t> nowState = std::make_unique<uint64_t>(0);
 
-    ChunkPool<Genome, 13> Pool{0};
+    LinearIdPool<Genome> Pool{1000000};
 
     // Enhanced A* priority queue and visited set
     EnhancedHeapQueue openSet{};
@@ -285,7 +285,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
         }
     }
 
-    Node_Used = Pool.size();
+    Node_Used = Pool.getSize();
 
     if (solutionFound) {
         return bestSolution;
