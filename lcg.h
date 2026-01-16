@@ -10,7 +10,7 @@
 
 class lcg {
 private:
-    static void GenerateifNeed(int need);
+    static uint32_t GenerateifNeed(int need);
 
     static uint64_t lcg_rand(uint64_t seed);
 
