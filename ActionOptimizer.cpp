@@ -136,8 +136,6 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
     int counter = 0;
     double startT = turns + 40;
     double lastBestFCost = 1000000.0;
-    auto percent = 0.0;
-    auto percenttmp = 0.0;
 
     Player CopedPlayers3[2];
 

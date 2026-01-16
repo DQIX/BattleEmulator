@@ -12,9 +12,9 @@ class lcg {
 private:
     static void GenerateifNeed(int need);
 
-    static uint64_t lcg_rand(uint64_t seed);
+    static constexpr uint64_t lcg_rand(uint64_t seed);
 
-    static int calculatePercent(uint64_t input);
+    static constexpr int calculatePercent(uint64_t input);
 public:
     static void init(uint64_t seed, bool init = false);
 
