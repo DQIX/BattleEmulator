@@ -3,7 +3,6 @@
 //
 
 #include <cstdint>
-#include <vector>
 #include <iostream>
 #include <cmath>
 #include "BattleEmulator.h"
@@ -870,7 +869,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             baseDamage = FUN_021e8458_typeD(position, 5, 30);
             if (kaisinn) {
                 tmp = baseDamage * lcg::floatRand(position, 1.5, 2.0);
-                baseDamage = static_cast<int>(floor(tmp));
+                baseDamage = static_cast<int>(tmp);
             }
             ProcessRage(position, baseDamage, players, kaisinn); // 適当
             if (kaisinn) {
@@ -901,10 +900,10 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             baseDamage = FUN_021e8458_typeD(position, 8, 16);
             if (kaisinn) {
                 tmp = baseDamage * lcg::floatRand(position, 1.5, 2.0);
-                baseDamage = static_cast<int>(floor(tmp));
+                baseDamage = static_cast<int>(tmp);
             }
             tmp = static_cast<double>(baseDamage) * 0.75;
-            baseDamage = static_cast<int>(floor(tmp));
+            baseDamage = static_cast<int>(tmp);
             ProcessRage(position, baseDamage, players, kaisinn); // 適当
             if (kaisinn) {
                 if (!players[1].rage) {
@@ -935,7 +934,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             baseDamage = FUN_021e8458_typeD(position, 8, 50);
             if (kaisinn) {
                 tmp = baseDamage * lcg::floatRand(position, 1.5, 2.0);
-                baseDamage = static_cast<int>(floor(tmp));
+                baseDamage = static_cast<int>(tmp);
             }
             ProcessRage(position, baseDamage, players, kaisinn); // 適当
             if (kaisinn) {
@@ -1154,7 +1153,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
             if (kaisinn) {
                 tmp = players[attacker].atk * lcg::floatRand(position, 0.95, 1.05);
-                baseDamage = static_cast<int>(floor(tmp));
+                baseDamage = static_cast<int>(tmp);
             }
         //if (!kaihi) {
             ProcessRage(position, baseDamage, players, kaisinn);
@@ -1245,7 +1244,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     players[attacker].TensionLevel = 0;
                 }
 
-                baseDamage = static_cast<int>(floor(tmp));
+                baseDamage = static_cast<int>(tmp);
 
 
                 //防御が適応される時期を調べる
@@ -1260,12 +1259,12 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 if (baseDamage != 0) {
                     tmp = static_cast<double>(baseDamage);
                     tmp = processCombo(Id & 0xffff, tmp, NowState);
-                    baseDamage = static_cast<int>(floor(tmp));
+                    baseDamage = static_cast<int>(tmp);
                 }
 
                 if (!defenseFlag && !players[0].paralysis && !players[0].sleeping) {
                     tmp = baseDamage * players[defender].defence;
-                    baseDamage = static_cast<int>(floor(tmp));
+                    baseDamage = static_cast<int>(tmp);
                 }
 
 
@@ -1295,7 +1294,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             baseDamage = FUN_021e8458_typeD(position, 5, 35);
             if (kaisinn) {
                 tmp = baseDamage * lcg::floatRand(position, 1.5, 2.0);
-                baseDamage = static_cast<int>(floor(tmp));
+                baseDamage = static_cast<int>(tmp);
             }
             (*position)++; //不明
             if (!players[attacker].specialCharge) {
@@ -1373,7 +1372,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 tmp *= 1.25;
             }
 
-            baseDamage = static_cast<int>(floor(tmp));
+            baseDamage = static_cast<int>(tmp);
 
             ProcessRage(position, baseDamage, players, kaisinn); //不定消費は謎
             (*position)++; //目を覚ました
@@ -1396,7 +1395,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             if ((Id % 0xffff) == BattleEmulator::MIRACLE_SLASH && baseDamage != 0) {
                 tmp = static_cast<double>(baseDamage);
                 tmp *= 0.25;
-                Player::heal(players[attacker], static_cast<int>(floor(tmp)));
+                Player::heal(players[attacker], static_cast<int>(tmp));
             }
             resetCombo(NowState);
             break;
@@ -1411,7 +1410,7 @@ int BattleEmulator::FUN_021e8458_typeC(int *position, double min, double max, do
     //0x02075724
     auto result = lcg::floatRand(position, min, max);
     result += lcg::floatRand(position, -base, base);
-    return static_cast<int>(floor(result));
+    return static_cast<int>(result);
 }
 
 //パーセントは絶対に100%にならないから誤差-1
@@ -1419,7 +1418,7 @@ int BattleEmulator::FUN_021e8458_typeD(int *position, double difference, double 
     //0x021e8668
     auto result = lcg::floatRand(position, -difference, difference);
     result += base;
-    return static_cast<int>(floor(result));
+    return static_cast<int>(result);
 }
 
 
@@ -1440,13 +1439,13 @@ int BattleEmulator::FUN_0207564c(int *position, int atk, int def) {
             if (result <= 0) {
                 result = 0.0;
             }
-            return static_cast<int>(floor(result));
+            return static_cast<int>(result);
         } else {
             double result = lcg::floatRand(position, 0.0, atk2);
             if (result <= 0) {
                 result = 0.0;
             }
-            return static_cast<int>(floor(result));
+            return static_cast<int>(result);
         }
     }
     //return 0;
@@ -1462,11 +1461,8 @@ void BattleEmulator::process7A8(int *position, int baseDamage, Player players[2]
         return;
     }
     auto percent_tmp = lcg::getPercent(position, 100);
-    double tmp = baseDamage;
-
-    auto baseDamage_tmp = static_cast<int>(floor(tmp));
     for (int i = 0; i < 9; ++i) {
-        if (baseDamage_tmp >= proportionTable3[i]) {
+        if (baseDamage >= proportionTable3[i]) {
             if (percent_tmp < proportionTable2[i]) {
                 players[defender].specialCharge = true;
                 players[defender].specialChargeTurn = 6;
@@ -1532,11 +1528,11 @@ void BattleEmulator::RecalculateBuff(Player *players) {
 
     // インデックスが範囲外でないかチェック（-2 <= BuffLevel <= 2 の範囲であることを確認）
     if (index >= 0 && index < 5) {
-        players[0].def = static_cast<int>(floor(players[0].defaultDEF * DEFMultipliers[index]));
+        players[0].def = static_cast<int>(players[0].defaultDEF * DEFMultipliers[index]);
     }
 
     if (index1 >= 0 && index1 < 5) {
-        players[0].speed = static_cast<int>(floor(players[0].defaultSpeed * SpeedMultipliers[index1]));
+        players[0].speed = static_cast<int>(players[0].defaultSpeed * SpeedMultipliers[index1]);
     }
 
     //

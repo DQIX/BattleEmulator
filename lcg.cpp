@@ -3,9 +3,10 @@
 //
 
 #include "lcg.h"
+
+#include <cassert>
 #include <cstdint>
 #include <cmath>  // cmathヘッダーをインクルードする
-#include <iostream>
 
 // Define the size of the array
 const int ARRAY_SIZE = 5000;
@@ -248,13 +249,8 @@ int lcg::calculatePercent(uint64_t input) {
 
 int lcg::getPercent(int *position, int max) {
     // nullptrでないことを確認
-    if (position == nullptr) {
-        throw std::invalid_argument("Null pointer passed to incrementPosition.");
-    }
-    if ((*position) >= ARRAY_SIZE) {
-        std::cerr << "out of range!!!" << std::endl;
-        return 0;
-    }
+    assert(position != nullptr);
+    assert((*position) < ARRAY_SIZE);
     GenerateifNeed((*position));
     uint64_t mul = static_cast<uint64_t>(precalcTop32[*position]) * max;
     auto roundedResult = static_cast<int>(mul >> 32);
@@ -276,16 +272,9 @@ int lcg::getPercent(int *position, int max) {
  * @throw std::invalid_argument positionがnullptrの場合
  */
 double lcg::floatRand(int *position, double min, double max) {
-    if (position == nullptr) {
-        throw std::invalid_argument("Null pointer passed");
-    }
-    if ((*position) >= ARRAY_SIZE) {
-        std::cerr << "out of range!!!" << std::endl;
-        return min;
-    }
-
+    assert(position != nullptr);
+    assert((*position) < ARRAY_SIZE);
     GenerateifNeed(*position);
-
     uint32_t top = precalcTop32[*position];
     (*position)++;
 
