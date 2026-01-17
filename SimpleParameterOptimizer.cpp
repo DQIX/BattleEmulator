@@ -34,6 +34,7 @@ static constexpr int GA_OFFSPRING = 30; // 1世代あたり生成する子の数
 static constexpr double GA_MUTATION_PROB = 0.15; // 各遺伝子が変異する確率
 static constexpr double GA_CROSSOVER_PROB = 0.9; // 親から交叉する確率
 static constexpr double GA_SEED_CHANGE_PROB = 0.2; // 評価時に初期シードを変える確率
+static constexpr int GA_EVAL_SEEDS = 10;
 
 // この配列に最適化対象の action id を並べるだけで追加完了
 static constexpr std::array<int, ids> TUNE_IDS = {
@@ -106,7 +107,7 @@ struct GAGenome {
 static double evaluateGenome(
     GAGenome &g,
     const Player players[2],
-    uint64_t baseSeed,
+    const std::array<uint64_t, GA_EVAL_SEEDS> &evalSeeds, // ★ baseSeed 単体→5個
     const int actions[350],
     int turnsLimit,
     std::mt19937 &rng,
@@ -120,31 +121,38 @@ static double evaluateGenome(
         if (aid >= 0 && aid < MAX_ACTION_ID) s_actionCosts[aid] = g.genes[i];
     }
 
-    // たまに baseSeed を変えて多様性を評価
-    uint64_t seedToUse = baseSeed;
+    long long totalTurns = 0;
+    double totalMs = 0.0;
+    double totalFitness = 0.0;
 
+    for (int i = 0; i < GA_EVAL_SEEDS; ++i) {
+        const uint64_t seedToUse = evalSeeds[i];
 
-    auto t0 = std::chrono::high_resolution_clock::now();
-    int measuredTurn = SimpleParameterOptimizer::testParameters(players, seedToUse, actions, turnsLimit);
-    auto t1 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> elapsed = t1 - t0;
+        auto t0 = std::chrono::high_resolution_clock::now();
+        int measuredTurn = SimpleParameterOptimizer::testParameters(players, seedToUse, actions, turnsLimit);
+        auto t1 = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed = t1 - t0;
 
-    outTurns = measuredTurn;
-    outMs = elapsed.count();
+        totalTurns += measuredTurn;
+        totalMs += elapsed.count();
+
+        // fitness の作り方（既存ロジックを seed ごとに適用して足し算）
+        double fitnessOne;
+        if (measuredTurn >= 99999) {
+            fitnessOne = 1e9 + elapsed.count();
+        } else {
+            fitnessOne = static_cast<double>(measuredTurn) * 10000.0 + static_cast<int>(elapsed.count());
+        }
+        totalFitness += fitnessOne;
+    }
+
+    outTurns = static_cast<int>(totalTurns);
+    outMs = totalMs;
 
     // restore
     s_actionCosts = backup;
 
-    // fitness の作り方: ターン数を優先し、ミリ秒は二次的に効くように組み合わせ
-    // (turns * 1000) + time_ms。ターン数が小さい方を優先するため重みを大きめにする。
-    double fitness;
-    if (measuredTurn >= 99999) {
-        // 失敗は非常に悪いスコアにする
-        fitness = 1e9 + outMs;
-    } else {
-        fitness = static_cast<double>(measuredTurn) * 10000.0 + static_cast<int>(outMs);
-    }
-    return fitness;
+    return totalFitness;
 }
 
 OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t seed,
@@ -183,6 +191,23 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
 
     const size_t geneCount = TUNE_IDS.size();
 
+    // ★ 追加：評価用 seed 5個を保持
+    auto makeEvalSeeds = [&](uint64_t base) {
+        std::array<uint64_t, GA_EVAL_SEEDS> s{};
+        // 先頭は baseSeed をそのまま使う（再現性・比較しやすさ）
+        s[0] = base;
+        for (int i = 1; i < GA_EVAL_SEEDS; ++i) {
+            // rng 由来で “同じ世代内は固定” の seed を作る
+            uint64_t r1 = static_cast<uint64_t>(rng());
+            uint64_t r2 = static_cast<uint64_t>(rng());
+            s[i] = base ^ (r1 << 32) ^ r2 ^ (0x9E3779B97F4A7C15ULL * static_cast<uint64_t>(i));
+        }
+        return s;
+    };
+
+    std::array<uint64_t, GA_EVAL_SEEDS> evalSeeds = makeEvalSeeds(seed);
+
+
     // population 初期化: 現状値を中心にランダム化
     std::vector<GAGenome> population;
     population.reserve(GA_POPULATION);
@@ -216,10 +241,11 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
     // GA loop
     while (evaluations < maxEvaluations) {
         std::uniform_real_distribution<double> ud(0.0, 1.0);
+        // ★ 変更：「世代集計の時に確率で変更」= 世代の先頭で seed セットを更新
         if (ud(rng) < GA_SEED_CHANGE_PROB) {
-            // small perturbation but deterministic given rng
             seed = seed ^ (static_cast<uint64_t>(rng()) << 32) ^ rng();
-            std::cout << "[GA] seed change" << std::endl;
+            evalSeeds = makeEvalSeeds(seed);
+            std::cout << "[GA] evalSeeds changed" << std::endl;
         }
 
         constexpr int MAX_ID = 200;
@@ -272,7 +298,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
             if (!std::isfinite(ind.fitness)) {
                 int measuredTurn;
                 double measuredMs;
-                double fit = evaluateGenome(ind, players, seed, actions, turns, rng, measuredTurn, measuredMs);
+                double fit = evaluateGenome(ind, players, evalSeeds, actions, turns, rng, measuredTurn, measuredMs);
                 ind.fitness = fit;
                 ind.measuredTurns = measuredTurn;
                 ind.measuredMs = measuredMs;
@@ -358,7 +384,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
         if (!std::isfinite(ind.fitness) && evaluations < maxEvaluations) {
             int measuredTurn;
             double measuredMs;
-            double fit = evaluateGenome(ind, players, seed, actions, turns, rng, measuredTurn, measuredMs);
+            double fit = evaluateGenome(ind, players, evalSeeds, actions, turns, rng, measuredTurn, measuredMs);
             ind.fitness = fit;
             ind.measuredTurns = measuredTurn;
             ind.measuredMs = measuredMs;
