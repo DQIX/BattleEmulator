@@ -2,10 +2,10 @@
 // Simple Parameter Optimizer - シンプルで高速なパラメータ自動調整
 //
 
-#if defined(OPTIMIZE_MODE)
-
 #ifndef SIMPLE_PARAMETER_OPTIMIZER_H
 #define SIMPLE_PARAMETER_OPTIMIZER_H
+
+#if defined(OPTIMIZE_MODE)
 
 #include "Player.h"
 #include "Genome.h"
@@ -33,13 +33,14 @@ public:
                                    const int actions[350], int maxSteps = 20);
 
     static double getActionCost(int action);
-private:
-
 
     // パラメータセットをテスト
     static int testParameters(const Player players[2],
                              uint64_t seed, const int actions[350], int turns);
+};
 
+#endif
+class SimpleParameterOptimizerNode {
 public:
     static constexpr int turnHeignt = 150;
     static constexpr int enemyHpWeight = 151;
@@ -54,8 +55,11 @@ public:
     static constexpr int ActHeight = 160;
     static constexpr int ResourceHPCost = 161;
     static constexpr int NoResourceCost = 162;
+    static constexpr int BuffWeight = 163;
+    static constexpr int AtkBuffWeight = 164;
+    static constexpr int TensionWeight = 165;
+    static constexpr int AntidoteWeight = 166;
 };
 
 #endif // SIMPLE_PARAMETER_OPTIMIZER_H
 
-#endif

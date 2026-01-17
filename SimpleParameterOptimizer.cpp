@@ -1,15 +1,7 @@
-// SimpleParameterOptimizer.cpp
-// 非確率的・メンテしやすいパラメータ最適化器（ファイル丸ごと置き換え用）
-// 前提: ヘッダ SimpleParameterOptimizer.h は既に存在し、CostParams の宣言などはそちらにある
+// SimpleParameterOptimizer_GA.cpp
+// シンプルさを保ったまま遺伝的アルゴリズム(GA)へ置き換える実装
+// ファイル丸ごと置換用。ヘッダ SimpleParameterOptimizer.h は既に存在する前提。
 // コンパイラ: C++17
-//
-// 目的要約:
-// - action cost を一次真実源として一本化（配列）
-// - 最適化対象 action id は constexpr 配列で指定（1行で追加完了）
-// - 全コストの初期値は統一（自動化）
-// - testParameters は既存インターフェースをそのまま使用（呼ぶ前に静的 CostParams を同期）
-// - 探索は非確率的（決定論的）ベストファースト（評価値 = ターン数）
-//
 
 #if defined(OPTIMIZE_MODE)
 
@@ -21,26 +13,29 @@
 
 #include <array>
 #include <vector>
-#include <queue>
-#include <unordered_set>
 #include <iostream>
 #include <sstream>
 #include <cmath>
 #include <algorithm>
 #include <random>
-
+#include <chrono>
+#include <limits>
+#include <string>
 
 // --- 設定 ---
-// 最大 action id（BattleEmulator に合わせて適当に余裕を持たせる）
 static constexpr int MAX_ACTION_ID = 512;
-static constexpr int ids = 22;
-
-// すべての action cost の初期値（統一）
+static constexpr int ids = 25;
 static constexpr double DEFAULT_ACTION_COST = 1.0;
+static constexpr double DEFAULT_STEP = 0.5; // 変異の基本スケール
 
-// この配列に最適化対象の action id を並べるだけで追加完了。
-// 例: BattleEmulator::MIDHEAL, BattleEmulator::SPECIAL_ANTIDOTE, ...
-// ここに1行追加/削除すれば最適化対象が変わる（要件どおり）。
+// GA パラメータ（必要なら調整）
+static constexpr int GA_POPULATION = 50;
+static constexpr int GA_OFFSPRING = 30; // 1世代あたり生成する子の数
+static constexpr double GA_MUTATION_PROB = 0.15; // 各遺伝子が変異する確率
+static constexpr double GA_CROSSOVER_PROB = 0.9; // 親から交叉する確率
+static constexpr double GA_SEED_CHANGE_PROB = 0.2; // 評価時に初期シードを変える確率
+
+// この配列に最適化対象の action id を並べるだけで追加完了
 static constexpr std::array<int, ids> TUNE_IDS = {
     BattleEmulator::MIDHEAL,
     BattleEmulator::SPECIAL_ANTIDOTE,
@@ -50,31 +45,29 @@ static constexpr std::array<int, ids> TUNE_IDS = {
     BattleEmulator::FLEE_ALLY,
     BattleEmulator::BUFF,
     BattleEmulator::MULTITHRUST,
-    BattleEmulator::ATTACK_ENEMY,
-    SimpleParameterOptimizer::turnHeignt,
-    SimpleParameterOptimizer::enemyHpWeight,
-    SimpleParameterOptimizer::playerHpWeight,
-    SimpleParameterOptimizer::resourceWeight,
-    SimpleParameterOptimizer::StatusEffectWeight,
-    SimpleParameterOptimizer::paralysisWeight,
-    SimpleParameterOptimizer::sleepWeight,
-    SimpleParameterOptimizer::poisonWeight,
-    SimpleParameterOptimizer::inactiveWeight,
-    SimpleParameterOptimizer::SpHeight,
-    SimpleParameterOptimizer::ActHeight,
-    SimpleParameterOptimizer::ResourceHPCost,
-    SimpleParameterOptimizer::NoResourceCost,
+    SimpleParameterOptimizerNode::turnHeignt,
+    SimpleParameterOptimizerNode::enemyHpWeight,
+    SimpleParameterOptimizerNode::playerHpWeight,
+    SimpleParameterOptimizerNode::resourceWeight,
+    SimpleParameterOptimizerNode::StatusEffectWeight,
+    SimpleParameterOptimizerNode::paralysisWeight,
+    SimpleParameterOptimizerNode::sleepWeight,
+    SimpleParameterOptimizerNode::poisonWeight,
+    SimpleParameterOptimizerNode::inactiveWeight,
+    SimpleParameterOptimizerNode::SpHeight,
+    SimpleParameterOptimizerNode::ActHeight,
+    SimpleParameterOptimizerNode::ResourceHPCost,
+    SimpleParameterOptimizerNode::NoResourceCost,
+    SimpleParameterOptimizerNode::BuffWeight,
+    SimpleParameterOptimizerNode::AtkBuffWeight,
+    SimpleParameterOptimizerNode::TensionWeight,
+    SimpleParameterOptimizerNode::AntidoteWeight,
 };
-
-// step（刻み幅）は一律でここで定義。必要なら後で配列化して個別に設定可。
-static constexpr double DEFAULT_STEP = 0.01;
 
 // action cost テーブル（一次真実源）
 static std::array<double, MAX_ACTION_ID> s_actionCosts;
 
 // --- ヘルパ関数 ---
-// 初期化: 全要素を DEFAULT_ACTION_COST で埋める。
-// （呼び出しは optimize の開始時に自動で行う）
 static void initActionCostsIfNeeded() {
     static bool inited = false;
     if (inited) return;
@@ -82,268 +75,344 @@ static void initActionCostsIfNeeded() {
     inited = true;
 }
 
-// clamp helper
 static inline double clampDouble(double v, double lo, double hi) {
     if (v < lo) return lo;
     if (v > hi) return hi;
     return v;
 }
 
-// ActionCosts -> CostParams の静的フィールドへ反映する（既存コード互換のため）
 static inline void applyActionCostsToCostParams() {
-
-    // その他の重み（hp重み等）は既存の default を尊重（変更しない）。
-    // 必要であればここで s_actionCosts の特定 index を割り当ててください。
-}
-
-// 内部評価（testParameters 実行時に呼ぶためのラッパー）
-// この実装はヘッダの宣言と同じシグネチャを保つ。
-// ただし内部的に action cost テーブルの現在値を CostParams static に同期してから
-// ActionOptimizer を呼び出すようにして、既存の評価ルーチンとの互換性を保ちます。
-int SimpleParameterOptimizer::testParameters(
-                                            const Player players[2],
-                                            uint64_t seed,
-                                            const int actions[350],
-                                            int turns)
-{
-    // まず action table の値を静的 CostParams に反映
-    applyActionCostsToCostParams();
-
-    // players をコピーして副作用を回避
-    Player copiedPlayers[2] = { players[0], players[1] };
-
-    // gene 配列の準備（既存コードと互換）
-    int gene[350];
-    for (int i = 0; i < 350; ++i) {
-        gene[i] = actions[i];
-        if (actions[i] == -1) {
-            gene[i] = -1;
-            break;
-        }
-    }
-
-    // 既存の ActionOptimizer を使って評価（世代数や制限は既存運用に合わせられる）
-    // ここでは既存コードが用いていた呼び出し方に揃える
-    auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 2000, gene, 0);
-
-    if (genome.EnemyPlayer.hp <= 0) {
-        // 勝利した場合は終盤のターン数を返す（小さい方が良い）
-        return genome.turn - 1;
-    } else {
-        return 999; // 失敗（評価上悪い）
-    }
+    // ユーザ環境に依存するため、ここで s_actionCosts の各 index を
+    // CostParams の静的メンバへ割り当てる実装を追加してください。
+    // 例: CostParams::someWeight = s_actionCosts[SomeId];
 }
 
 double SimpleParameterOptimizer::getActionCost(int action) {
-    // 範囲外防御（必要なら）
-    if (action < 0 || action >= 200) {
+    if (action < 0 || action >= MAX_ACTION_ID) {
         throw std::invalid_argument("Invalid action ID");
     }
     return s_actionCosts[action];
 }
 
+// --- 遺伝的アルゴリズム実装 ---
+struct GAGenome {
+    std::vector<double> genes; // size = TUNE_IDS.size()
+    double fitness; // 小さいほど良い（ターン優先）
+    int measuredTurns; // 実測ターン
+    double measuredMs; // 実測時間（ms）
+};
 
-// --- 最適化本体 ---
-// 非確率的ベストファースト（決定論的近傍展開）
-// maxTests は評価回数上限
+// 評価: returns fitness (小さい方が良い)
+static double evaluateGenome(
+    GAGenome &g,
+    const Player players[2],
+    uint64_t baseSeed,
+    const int actions[350],
+    int turnsLimit,
+    std::mt19937 &rng,
+    int &outTurns,
+    double &outMs
+) {
+    // s_actionCosts を書き換えて評価
+    auto backup = s_actionCosts;
+    for (size_t i = 0; i < g.genes.size(); ++i) {
+        int aid = TUNE_IDS[i];
+        if (aid >= 0 && aid < MAX_ACTION_ID) s_actionCosts[aid] = g.genes[i];
+    }
+
+    // たまに baseSeed を変えて多様性を評価
+    uint64_t seedToUse = baseSeed;
+
+
+    auto t0 = std::chrono::high_resolution_clock::now();
+    int measuredTurn = SimpleParameterOptimizer::testParameters(players, seedToUse, actions, turnsLimit);
+    auto t1 = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> elapsed = t1 - t0;
+
+    outTurns = measuredTurn;
+    outMs = elapsed.count();
+
+    // restore
+    s_actionCosts = backup;
+
+    // fitness の作り方: ターン数を優先し、ミリ秒は二次的に効くように組み合わせ
+    // (turns * 1000) + time_ms。ターン数が小さい方を優先するため重みを大きめにする。
+    double fitness;
+    if (measuredTurn >= 99999) {
+        // 失敗は非常に悪いスコアにする
+        fitness = 1e9 + outMs;
+    } else {
+        fitness = static_cast<double>(measuredTurn) * 10000.0 + static_cast<int>(outMs);
+    }
+    return fitness;
+}
+
 OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t seed,
                                                const int actions[350], int maxTests, int turns)
 {
     initActionCostsIfNeeded();
-
-    std::random_device seed_gen;
-    std::uint32_t seed1 = seed_gen();
-    std::mt19937 engine(seed1);
 
     OptimResult result;
     result.bestTurn = 999;
     result.testCount = 0;
     result.found = false;
 
-    // --- スナップショット（自動化された originalParams 保存） ---
-    // 実行前の actionCosts を丸ごと保存（これが "original"）
+    // snapshot
     std::vector<double> originalCosts(MAX_ACTION_ID);
     for (int i = 0; i < MAX_ACTION_ID; ++i) originalCosts[i] = s_actionCosts[i];
 
-    // 静的 CostParams にも反映して、既存の toText / copyFrom 呼び出しと互換性を保つ
     applyActionCostsToCostParams();
-    // ここでユーザ期待どおりに「現在値を保存」したいなら、result.bestParams へ保存する処理を入れるが
-    // ヘッダ上の CostParams は static メンバ中心のため値を格納するインスタンス領域がない点に注意。
-    // とりあえず現状値を表示してログとして残す（人が確認できるようにする）
-    std::cout << "[SimpleParameterOptimizer] original action cost snapshot (first few):\n";
-    for (size_t i = 0; i < TUNE_IDS.size(); ++i) {
-        int id = TUNE_IDS[i];
-        if (id >= 0 && id < MAX_ACTION_ID) {
-            std::cout << "  id=" << id << " cost=" << s_actionCosts[id] << "\n";
-        }
-    }
 
-    // --- 初期評価（現状のまま） ---
+    // 初期評価
     int baseTurn = testParameters(players, seed, actions, turns);
     result.bestTurn = baseTurn;
     result.testCount = 1;
     result.found = (baseTurn < 999);
-    std::cout << "[SimpleParameterOptimizer] initial turn = " << baseTurn << std::endl;
+    std::cout << "[SimpleParameterOptimizer GA] initial turn = " << baseTurn << std::endl;
 
     if (baseTurn <= 5) {
-        // 十分良ければ早期終了
         applyActionCostsToCostParams();
-        // try to "save" best params into static CostParams so downstream can pick up
         result.bestTurn = baseTurn;
         result.found = true;
         return result;
     }
 
-    // --- 探索構造体 ---
-    struct Node {
-        // only store the modified ids (index in TUNE_IDS) and costs for those
-        // but for簡潔に、ここでは full copy
-        std::vector<double> costs; // size = TUNE_IDS.size()
-        int evaluations; // 評価時のターン数
-        int depth; // 深さ（遷移回数）
-    };
+    // GA 初期化
+    std::random_device rd;
+    std::mt19937 rng(static_cast<uint32_t>(seed ^ rd()));
 
-    // 比較：ターン数小さい優先、次に depth 小さい優先
-    auto cmpNode = [](const Node& a, const Node& b) {
-        if (a.evaluations != b.evaluations) return a.evaluations > b.evaluations;
-        return a.depth > b.depth;
-    };
+    const size_t geneCount = TUNE_IDS.size();
 
-    std::priority_queue<Node, std::vector<Node>, decltype(cmpNode)> open(cmpNode);
-    std::unordered_set<std::string> visited;
+    // population 初期化: 現状値を中心にランダム化
+    std::vector<GAGenome> population;
+    population.reserve(GA_POPULATION);
 
-    // ヘルパ: costs -> key 生成
-    auto costsKey = [&](const std::vector<double>& costs)->std::string {
-        std::ostringstream oss;
-        oss.setf(std::ios::fixed);
-        oss.precision(6);
-        for (double v : costs) oss << v << ',';
-        return oss.str();
-    };
-
-    // 初期ノード（現在の TUNE_IDS に対応する値を抽出）
-    std::vector<double> startCosts;
-    startCosts.reserve(TUNE_IDS.size());
-    for (int id : TUNE_IDS) {
-        if (id >= 0 && id < MAX_ACTION_ID) startCosts.push_back(s_actionCosts[id]);
-        else startCosts.push_back(DEFAULT_ACTION_COST);
+    // get current start values
+    std::vector<double> startVals(geneCount);
+    for (size_t i = 0; i < geneCount; ++i) {
+        int aid = TUNE_IDS[i];
+        startVals[i] = (aid >= 0 && aid < MAX_ACTION_ID) ? s_actionCosts[aid] : DEFAULT_ACTION_COST;
     }
-    Node startNode{ startCosts, baseTurn, 0 };
-    open.push(startNode);
-    visited.insert(costsKey(startCosts));
 
+    std::normal_distribution<double> normDist(0.0, DEFAULT_STEP * 5.0);
+    std::uniform_real_distribution<double> uni01(0.0, 1.0);
 
+    for (int p = 0; p < GA_POPULATION; ++p) {
+        GAGenome g;
+        g.genes.resize(geneCount);
+        for (size_t i = 0; i < geneCount; ++i) {
+            // small random perturbation around start
+            double v = startVals[i] + normDist(rng);
+            if (v < 0.0) v = 0.0;
+            g.genes[i] = v;
+        }
+        g.fitness = std::numeric_limits<double>::infinity();
+        population.push_back(std::move(g));
+    }
 
-    int evaluations = 1;
-    const int maxEvaluations = std::max(1, maxTests); // 評価回数上限
-    // 探索ループ（決定論的）
-    while (!open.empty() && evaluations < maxEvaluations) {
-        Node cur = open.top(); open.pop();
-        //
-        // if (evaluations % 5 == 0) {
-        //     std::cout << "[SimpleParameterOptimizer] progress: eval=" << evaluations << " depth=" << cur.depth << std::endl;
-        // }
-        // 収束判定
-        if (cur.evaluations <= 5) {
-            result.bestTurn = cur.evaluations;
-            result.found = true;
-            break;
+    int evaluations = 1; // already did base evaluation
+    const int maxEvaluations = std::max(1, maxTests);
+
+    // GA loop
+    while (evaluations < maxEvaluations) {
+        std::uniform_real_distribution<double> ud(0.0, 1.0);
+        if (ud(rng) < GA_SEED_CHANGE_PROB) {
+            // small perturbation but deterministic given rng
+            seed = seed ^ (static_cast<uint64_t>(rng()) << 32) ^ rng();
+            std::cout << "[GA] seed change" << std::endl;
         }
 
-        for (int i = 0; i < 15; ++i) {
-            std::vector<double> nbCosts = cur.costs;
+        constexpr int MAX_ID = 200;
 
-            for (size_t pi = 0; pi < TUNE_IDS.size(); ++pi) {
-                // 世代単位で変えるかどうかを決定
-                bool doMutate = (engine() & 3) == 0;
-                if (!doMutate) {
-                    // -100 ～ +100 → -1.00 ～ +1.00
-                    int dirInt = static_cast<int>(engine() % 20001) - 10000;
-                    double newdir = dirInt * 0.01;
+        std::vector<double> tmp(MAX_ID + 1, 0.0);
 
-                    double newVal = nbCosts[pi] + newdir * DEFAULT_STEP;
+        // id → 値 を埋める
+        for (size_t i = 0; i < population[0].genes.size(); ++i) {
+            int id = TUNE_IDS[i];
+            tmp[id] = population[0].genes[i];
+        }
 
-                    if (newVal < 0.0) {
-                        newVal = 0.0;
-                    }
+        // constexpr 配列リテラルとして出力
+        std::cout << "constexpr std::array<double, " << (MAX_ID + 1)
+                  << "> GENOME = {\n";
 
-                    nbCosts[pi] = newVal;
-               }
+        auto flag = false;
+        auto flag1 = false;
+        for (int id = 0; id <= MAX_ID; ++id) {
+            if (tmp[id] > 0.0 && flag) {
+                std::cout << "\n";
+                flag1 = true;
             }
-
-
-            std::string key = costsKey(nbCosts);
-            if (visited.find(key) != visited.end()) continue;
-            visited.insert(key);
-
-            // nbCosts をグローバルの s_actionCosts に反映して評価
-            // 作業用に全 actionCosts をコピーしてから上書きし、評価後に復元する
-            std::array<double, MAX_ACTION_ID> backup = s_actionCosts;
-            for (size_t k = 0; k < TUNE_IDS.size(); ++k) {
-                int aid = TUNE_IDS[k];
-                if (aid >= 0 && aid < MAX_ACTION_ID) s_actionCosts[aid] = nbCosts[k];
-            }
-
-            // 評価
-            int turn = testParameters(players, seed, actions, turns);
-            ++evaluations;
-
-            std::cout << "[SimpleParameterOptimizer] eval=" << evaluations  << " -> turn=" << turn << ", " << std::endl;
-
-            for (auto nb_cost: nbCosts) {
-                std::cout << nb_cost << ", ";
-            }
-            std::cout << std::endl;
-
-            // ログ（改善があれば表示）
-            if (turn < result.bestTurn) {
-                std::cout << "===============";
-                result.bestTurn = turn;
-                result.found = true;
-                std::cout << "[SimpleParameterOptimizer] improvement eval=" << evaluations
-                          << " -> turn=" << turn << std::endl;
-
-                std::cout << "[SimpleParameterOptimizer] eval=" << evaluations  << " -> turn=" << turn << ", " << std::endl;
-
-                for (auto nb_cost: nbCosts) {
-                    std::cout << nb_cost << ", ";
+            if (tmp[id] > 0.0) {
+                std::cout << "    /* " << id << " */ " << tmp[id];
+            }else {
+                if (flag1) {
+                    std::cout << "    ";
+                    flag1 = false;
                 }
-                std::cout << std::endl;
-                std::cout << "===============";
+                std::cout << "0.0";
             }
-
-            if (turn == 999) {
-                continue;
+            if (id != MAX_ID)
+                std::cout << ",";
+            if (tmp[id] > 0.0) {
+                std::cout << "\n";
+                flag = false;
+                flag1 = true;
+            }else {
+                flag = true;
             }
+        }
 
-            // 新ノードを open に push
-            Node nbNode{ nbCosts, turn, cur.depth + 1 };
-            open.push(nbNode);
+        std::cout << "\n};\n";
 
-            // 復元
-            s_actionCosts = backup;
-            if (evaluations >= maxEvaluations) break;
+
+
+        // evaluate population members that are not yet evaluated
+        for (auto &ind : population) {
+            if (!std::isfinite(ind.fitness)) {
+                int measuredTurn;
+                double measuredMs;
+                double fit = evaluateGenome(ind, players, seed, actions, turns, rng, measuredTurn, measuredMs);
+                ind.fitness = fit;
+                ind.measuredTurns = measuredTurn;
+                ind.measuredMs = measuredMs;
+                ++evaluations;
+                ++result.testCount;
+
+                std::cout << "[GA] eval=" << evaluations << " turn=" << measuredTurn
+                          << " ms=" << measuredMs << " fitness=" << fit << std::endl;
+
+                if (measuredTurn < result.bestTurn) {
+                    result.bestTurn = measuredTurn;
+                    result.found = true;
+                    std::cout << "[GA] improvement -> bestTurn=" << baseTurn << std::endl;
+
+                    std::cout << std::endl;
+                }
+
+                if (evaluations >= maxEvaluations) break;
+            }
         }
         if (evaluations >= maxEvaluations) break;
-    } // while
 
-    // 最終結果: bestTurn に対応する actionCosts を静的 CostParams に反映して返却
-    // ここでは result.bestTurn に到達した時点の s_actionCosts が反映されているとは限らないので、
-    // 最後に best を探す（簡単のため、visited をスキャンして最良評価を探すのが重いので、
-    // 現状最良評価に到達した時点でその値は result.bestTurn に入っている。ここでは
-    // 単純に「最後に見つけた改善時の s_actionCosts」を反映する方針とする）
-    // （実運用で bestCosts を保持したい場合はノードに bestCosts を保持するよう拡張してください）
+        // sort by fitness (小さい方が良い)
+        std::sort(population.begin(), population.end(), [](const GAGenome &a, const GAGenome &b){
+            return a.fitness < b.fitness;
+        });
 
-    // 最後に静的 CostParams を現在の s_actionCosts に反映しておく
-    applyActionCostsToCostParams();
+        // エリート保存
+        int eliteCount = std::max(1, GA_POPULATION / 10);
+        std::vector<GAGenome> nextGen;
+        nextGen.reserve(GA_POPULATION);
+        for (int e = 0; e < eliteCount; ++e) nextGen.push_back(population[e]);
+
+        // ルーレット／トーナメント: シンプルにトーナメント選択
+        auto tournamentSelect = [&](int k)->const GAGenome& {
+            int best = rng() % GA_POPULATION;
+            for (int i = 1; i < k; ++i) {
+                int cand = rng() % GA_POPULATION;
+                if (population[cand].fitness < population[best].fitness) best = cand;
+            }
+            return population[best];
+        };
+
+        // 子生成
+        while ((int)nextGen.size() < GA_POPULATION && evaluations < maxEvaluations) {
+            // 選択
+            const GAGenome &parentA = tournamentSelect(3);
+            const GAGenome &parentB = tournamentSelect(3);
+
+            GAGenome child;
+            child.genes.resize(geneCount);
+            // 交叉
+            if (uni01(rng) < GA_CROSSOVER_PROB) {
+                // arithmetic crossover (平均)
+                for (size_t i = 0; i < geneCount; ++i) {
+                    child.genes[i] = 0.5 * (parentA.genes[i] + parentB.genes[i]);
+                }
+            } else {
+                // クローン
+                child.genes = parentA.genes;
+            }
+
+            // 変異
+            for (size_t i = 0; i < geneCount; ++i) {
+                if (uni01(rng) < GA_MUTATION_PROB) {
+                    double delta = normDist(rng);
+                    child.genes[i] = clampDouble(child.genes[i] + delta, 0.0, 1e6);
+                }
+            }
+            child.fitness = std::numeric_limits<double>::infinity();
+            nextGen.push_back(std::move(child));
+
+            // 評価は次ループで一括して行うことで評価回数制御をシンプルにしている
+        }
+
+        // 次世代へ
+        population.swap(nextGen);
+    }
+
+    // 最終的な best を決定
+    // population が評価済みであることを仮定するが、保険として評価されていないものは評価する
+    for (auto &ind : population) {
+        if (!std::isfinite(ind.fitness) && evaluations < maxEvaluations) {
+            int measuredTurn;
+            double measuredMs;
+            double fit = evaluateGenome(ind, players, seed, actions, turns, rng, measuredTurn, measuredMs);
+            ind.fitness = fit;
+            ind.measuredTurns = measuredTurn;
+            ind.measuredMs = measuredMs;
+            ++evaluations;
+            ++result.testCount;
+        }
+    }
+
+    std::sort(population.begin(), population.end(), [](const GAGenome &a, const GAGenome &b){
+        return a.fitness < b.fitness;
+    });
+
+    if (!population.empty()) {
+        const GAGenome &best = population.front();
+        // best を s_actionCosts に反映
+        for (size_t i = 0; i < best.genes.size(); ++i) {
+            int aid = TUNE_IDS[i];
+            if (aid >= 0 && aid < MAX_ACTION_ID) s_actionCosts[aid] = best.genes[i];
+        }
+        applyActionCostsToCostParams();
+        result.bestTurn = std::min(result.bestTurn, best.measuredTurns);
+    }
 
     result.testCount = evaluations;
-    std::cout << "[SimpleParameterOptimizer] done. bestTurn=" << result.bestTurn
+    std::cout << "[SimpleParameterOptimizer GA] done. bestTurn=" << result.bestTurn
               << " evaluations=" << evaluations << std::endl;
 
     return result;
 }
 
+// --- 既存の testParameters の定義（ヘッダ宣言に沿う） ---
+int SimpleParameterOptimizer::testParameters(
+                                            const Player players[2],
+                                            uint64_t seed,
+                                            const int actions[350],
+                                            int turns)
+{
+    applyActionCostsToCostParams();
 
-// --- ここまで ---
+    Player copiedPlayers[2] = { players[0], players[1] };
+
+    int gene[350];
+    for (int i = 0; i < 350; ++i) {
+        gene[i] = actions[i];
+        if (actions[i] == -1) { gene[i] = -1; break; }
+    }
+
+    auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 6000, gene, 0);
+
+    if (genome.EnemyPlayer.hp <= 0) {
+        return genome.turn - 1;
+    } else {
+        return 9999999;
+    }
+}
+
 #endif // OPTIMIZE_MODE
