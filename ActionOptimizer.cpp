@@ -19,36 +19,79 @@
 struct ActionEntry {
     int action;
     bool (*condition)(const Genome&);
+    // 実行後、効果があったか（事後）
+    bool (*isEffective)(
+        const Genome& before,
+        const Genome& after
+    );
 };
 
+// 1要素の検証
+constexpr bool isValid(const ActionEntry& e) {
+    return e.condition != nullptr
+        && e.isEffective != nullptr;
+}
+
+// テーブル全体の検証
+template <size_t N>
+constexpr bool validateActionTable(const ActionEntry (&table)[N]) {
+    for (size_t i = 0; i < N; ++i) {
+        if (!isValid(table[i])) {
+            return false;
+        }
+    }
+    return true;
+}
 constexpr ActionEntry ACTION_TABLE[] = {
     { BattleEmulator::MIDHEAL,  [](const Genome& g) {
         return (g.AllyPlayer.hp / g.AllyPlayer.maxHp) < 0.7;
-    } },
+    },
+     [](const Genome& before, const Genome& after) { return true; }
+    },
     { BattleEmulator::SPECIAL_ANTIDOTE, [](const Genome& g) {
         return g.AllyPlayer.PoisonEnable == true && g.AllyPlayer.SpecialAntidoteCount > 0;
-    } },
+    },
+     [](const Genome& before, const Genome& after) { return true; }
+    },
     { BattleEmulator::SPECIAL_MEDICINE,      [](const Genome& g) {
         return g.AllyPlayer.SpecialMedicineCount > 0;
-    } },
-    { BattleEmulator::FLEE_ALLY,    [](const Genome&) { return true; } },
+    },
+     [](const Genome& before, const Genome& after) { return true; }
+    },
+    { BattleEmulator::FLEE_ALLY,    [](const Genome&) { return true; },
+        [](const Genome& before, const Genome& after) { return true; }
+    },
 { BattleEmulator::DOUBLE_UP,
         [](const Genome& g) {
             return g.AllyPlayer.AtkBuffLevel == 0;
-    }
+    },
+    [](const Genome& before, const Genome& after) { return true; }
     },
     { BattleEmulator::PSYCHE_UP_ALLY,
         [](const Genome& g) {
             return g.EnemyPlayer.hp > 180 && g.AllyPlayer.TensionLevel <= 3;
-    }
+
+    },
+        [](const Genome& before, const Genome& after) { return after.AllyPlayer.TensionLevel > before.AllyPlayer.TensionLevel;}
+        // 事後: テンションが上がったか
+
     },
     { BattleEmulator::BUFF,
-        [](const Genome& g) { return g.AllyPlayer.mp >= 10 && g.AllyPlayer.BuffLevel <= 1; }
+        [](const Genome& g) { return g.AllyPlayer.mp >= 10 && g.AllyPlayer.BuffLevel <= 1; },
+        [](const Genome& before, const Genome& after) { return true; }
     },
     { BattleEmulator::MULTITHRUST,
-        [](const Genome& g) { return g.AllyPlayer.mp >= 10; }
+        [](const Genome& g) { return g.AllyPlayer.mp >= 10; },
+        [](const Genome& before, const Genome& after) { return true; }
     }
 };
+
+// ★ ここが本体 ★
+static_assert(
+    validateActionTable(ACTION_TABLE),
+    "ACTION_TABLE contains null function pointer"
+);
+
 
 static uint32_t Node_Used;
 
@@ -265,6 +308,9 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
                     newNode.enemyHP = newGenome.EnemyPlayer.hp;
                     newNode.nodeId = Pool.alloc(newGenome);
 
+                    if (!entry.isEffective(currentGenome, newGenome)) {
+                        continue;
+                    }
                     // Add to open set
                     openSet.push(newNode);
                 }

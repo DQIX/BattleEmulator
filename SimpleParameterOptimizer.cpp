@@ -138,10 +138,10 @@ static double evaluateGenome(
 
         // fitness の作り方（既存ロジックを seed ごとに適用して足し算）
         double fitnessOne;
-        if (measuredTurn >= 99999) {
+        if (measuredTurn >= 9999999) {
             fitnessOne = 1e9 + elapsed.count();
         } else {
-            fitnessOne = static_cast<double>(measuredTurn) * 10000.0 + static_cast<int>(elapsed.count());
+            fitnessOne = static_cast<double>(measuredTurn) * 1000.0 + static_cast<int>(elapsed.count());
         }
         totalFitness += fitnessOne;
     }
@@ -161,7 +161,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
     initActionCostsIfNeeded();
 
     OptimResult result;
-    result.bestTurn = 999;
+    result.bestTurn = 9999;
     result.testCount = 0;
     result.found = false;
 
@@ -175,7 +175,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
     int baseTurn = testParameters(players, seed, actions, turns);
     result.bestTurn = baseTurn;
     result.testCount = 1;
-    result.found = (baseTurn < 999);
+    result.found = (baseTurn < 9999);
     std::cout << "[SimpleParameterOptimizer GA] initial turn = " << baseTurn << std::endl;
 
     if (baseTurn <= 5) {
@@ -237,7 +237,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
     const int maxEvaluations = std::max(1, maxTests);
 
     // --- Stability tuning parameters (内部定義・調整可能) ---
-    constexpr int STABILITY_CHECKS = 5;           // 世代ごとに最良個体を何回別 seed で再評価するか
+    constexpr int STABILITY_CHECKS = 20;           // 世代ごとに最良個体を何回別 seed で再評価するか
     constexpr double GA_INSTABILITY_WEIGHT = 10.0; // instability を fitness に掛ける重み（経験則で調整）
     // --------------------------------------------------------
 
@@ -337,7 +337,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
             GAGenome bestGenomeCopy = population.front(); // コピー（評価で書き換えられても本体は安全）
             int baselineTurn = bestGenomeCopy.measuredTurns;
             // baseline が未設定なら現在の evalSeeds で評価して基準を作る（評価回数を消費）
-            if (baselineTurn == 0 || baselineTurn == 999) {
+            if (baselineTurn == 0 || baselineTurn >= 9999) {
                 int mTurn;
                 double mMs;
                 double baseFit = evaluateGenome(bestGenomeCopy, players, evalSeeds, actions, turns, rng, mTurn, mMs);
@@ -514,7 +514,7 @@ int SimpleParameterOptimizer::testParameters(
     if (genome.EnemyPlayer.hp <= 0) {
         return genome.turn - 1;
     } else {
-        return 9999999;
+        return 9999;
     }
 }
 

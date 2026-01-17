@@ -552,7 +552,7 @@ namespace {
         }
 #if defined(z_lv20)
         auto genome =
-        ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 8000, gene, 0);
+        ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 6000, gene, 0);
 #endif
 
         auto turnProcessed = BattleEmulator::getTurnProcessed();
@@ -877,6 +877,8 @@ int main(int argc, char *argv[]) {
     int actions1[350] = {};
     auto counter = 0;
     actions1[counter++] = BattleEmulator::BUFF;
+    actions1[counter++] = BattleEmulator::BUFF;
+    actions1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
     actions1[counter] = -1;
     SimpleParameterOptimizer::optimize(BasePlayers, 0x12345, actions1, 100000, counter);
     return 0;
@@ -1028,6 +1030,8 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 
     int actions[350] = {
         BattleEmulator::BUFF,
+        //BattleEmulator::BUFF,
+        //BattleEmulator::SPECIAL_MEDICINE,
         -1,
     };
     SearchRequest(BasePlayers, seed, actions, THREAD_COUNT, true);
