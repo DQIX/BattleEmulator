@@ -191,13 +191,11 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
 
     const size_t geneCount = TUNE_IDS.size();
 
-    // ★ 追加：評価用 seed 5個を保持
+    // ★ 追加：評価用 seed 生成関数（世代内で固定に使う）
     auto makeEvalSeeds = [&](uint64_t base) {
         std::array<uint64_t, GA_EVAL_SEEDS> s{};
-        // 先頭は baseSeed をそのまま使う（再現性・比較しやすさ）
         s[0] = base;
         for (int i = 1; i < GA_EVAL_SEEDS; ++i) {
-            // rng 由来で “同じ世代内は固定” の seed を作る
             uint64_t r1 = static_cast<uint64_t>(rng());
             uint64_t r2 = static_cast<uint64_t>(rng());
             s[i] = base ^ (r1 << 32) ^ r2 ^ (0x9E3779B97F4A7C15ULL * static_cast<uint64_t>(i));
@@ -238,15 +236,23 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
     int evaluations = 1; // already did base evaluation
     const int maxEvaluations = std::max(1, maxTests);
 
+    // --- Stability tuning parameters (内部定義・調整可能) ---
+    constexpr int STABILITY_CHECKS = 5;           // 世代ごとに最良個体を何回別 seed で再評価するか
+    constexpr double GA_INSTABILITY_WEIGHT = 10.0; // instability を fitness に掛ける重み（経験則で調整）
+    // --------------------------------------------------------
+
     // GA loop
     while (evaluations < maxEvaluations) {
+        // 世代内で evalSeeds を確率的に変える処理は GA の収束特性を壊すので無効化します。
+        // 必要であれば外側ループで GA を複数回回す（各回で seed を変える）方針を推奨します。
+        /*
         std::uniform_real_distribution<double> ud(0.0, 1.0);
-        // ★ 変更：「世代集計の時に確率で変更」= 世代の先頭で seed セットを更新
         if (ud(rng) < GA_SEED_CHANGE_PROB) {
             seed = seed ^ (static_cast<uint64_t>(rng()) << 32) ^ rng();
             evalSeeds = makeEvalSeeds(seed);
             std::cout << "[GA] evalSeeds changed" << std::endl;
         }
+        */
 
         constexpr int MAX_ID = 200;
 
@@ -271,7 +277,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
             }
             if (tmp[id] > 0.0) {
                 std::cout << "    /* " << id << " */ " << tmp[id];
-            }else {
+            } else {
                 if (flag1) {
                     std::cout << "    ";
                     flag1 = false;
@@ -284,14 +290,12 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
                 std::cout << "\n";
                 flag = false;
                 flag1 = true;
-            }else {
+            } else {
                 flag = true;
             }
         }
 
         std::cout << "\n};\n";
-
-
 
         // evaluate population members that are not yet evaluated
         for (auto &ind : population) {
@@ -311,8 +315,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
                 if (measuredTurn < result.bestTurn) {
                     result.bestTurn = measuredTurn;
                     result.found = true;
-                    std::cout << "[GA] improvement -> bestTurn=" << baseTurn << std::endl;
-
+                    std::cout << "[GA] improvement -> bestTurn=" << result.bestTurn << std::endl;
                     std::cout << std::endl;
                 }
 
@@ -325,6 +328,80 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
         std::sort(population.begin(), population.end(), [](const GAGenome &a, const GAGenome &b){
             return a.fitness < b.fitness;
         });
+
+        // ---------- Stability feedback: 最良個体の安定性を測って fitness にペナルティを与える ----------
+        // NOTE:
+        // - 再評価はローカル RNG を使い、main rng の状態を汚しません。
+        // - 再評価は評価回数予算を消費します。予算が不足する場合はチェック回数を落とすかスキップします。
+        if (!population.empty()) {
+            GAGenome bestGenomeCopy = population.front(); // コピー（評価で書き換えられても本体は安全）
+            int baselineTurn = bestGenomeCopy.measuredTurns;
+            // baseline が未設定なら現在の evalSeeds で評価して基準を作る（評価回数を消費）
+            if (baselineTurn == 0 || baselineTurn == 999) {
+                int mTurn;
+                double mMs;
+                double baseFit = evaluateGenome(bestGenomeCopy, players, evalSeeds, actions, turns, rng, mTurn, mMs);
+                baselineTurn = mTurn;
+                // 注意: ここで本来の population.front().fitness は書き換えない（コピーに対して評価）
+                ++evaluations;
+                ++result.testCount;
+            }
+
+            // 予算に応じて実際に何回チェックできるかを決める
+            int availableChecks = std::min(STABILITY_CHECKS, maxEvaluations - evaluations);
+            double instabilitySum = 0.0;
+            int performedChecks = 0;
+
+            for (int i = 0; i < availableChecks; ++i) {
+                // 別 seed を作るが、main evalSeeds は変更しない
+                uint64_t altBase = seed ^ (0x9E3779B97F4A7C15ULL * static_cast<uint64_t>(i + 1));
+                auto altEvalSeeds = makeEvalSeeds(altBase);
+
+                // local RNG: main rng を汚さないため、altBase に基づく固定シードを使う
+                uint32_t localSeed32 = static_cast<uint32_t>((altBase >> 32) ^ (altBase & 0xFFFFFFFFu));
+                std::mt19937 localRng(localSeed32);
+
+                // 評価はコピーで行う（population のデータを書き換えない）
+                GAGenome copyForCheck = bestGenomeCopy;
+                int mTurn;
+                double mMs;
+                double f = evaluateGenome(copyForCheck, players, altEvalSeeds, actions, turns, localRng, mTurn, mMs);
+
+                // instability の定義（ここでは baseline より悪ければその差分をペナルティにする）
+                if (mTurn > baselineTurn) {
+                    instabilitySum += static_cast<double>(mTurn - baselineTurn);
+                } else {
+                    // もし baseline より良ければペナルティは 0（安定性向上の報酬は現在は与えず）
+                    instabilitySum += 0.0;
+                }
+
+                ++performedChecks;
+                ++evaluations;
+                ++result.testCount;
+
+                std::cout << "[GA] stability check " << i << " altTurn=" << mTurn
+                          << " baseline=" << baselineTurn << " fit=" << f << std::endl;
+
+                if (evaluations >= maxEvaluations) break;
+            }
+
+            if (performedChecks > 0) {
+                double instabilityPenalty = (instabilitySum / static_cast<double>(performedChecks));
+                double penaltyToApply = GA_INSTABILITY_WEIGHT * instabilityPenalty;
+
+                // population.front() に対してペナルティを追加（GA に「不安定は悪」と学ばせる）
+                population.front().fitness += penaltyToApply;
+
+                std::cout << "[GA] applied instability penalty=" << penaltyToApply
+                          << " (mean diff=" << (instabilitySum / performedChecks) << ")\n";
+
+                // もう一度ソートして選択が安定するようにする
+                std::sort(population.begin(), population.end(), [](const GAGenome &a, const GAGenome &b){
+                    return a.fitness < b.fitness;
+                });
+            }
+        }
+        // ---------- end stability feedback ----------
 
         // エリート保存
         int eliteCount = std::max(1, GA_POPULATION / 10);
