@@ -1,3 +1,6 @@
+#ifndef LINEAR_ID_POOL_H
+#define LINEAR_ID_POOL_H
+
 template<typename T, size_t FAST_CAP>
 class LinearIdPool {
 public:
@@ -50,3 +53,5 @@ private:
     size_t capacity_;
     size_t size_;
 };
+
+#endif // LINEAR_ID_POOL_H
