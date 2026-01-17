@@ -31,6 +31,7 @@ endif()
 #    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic -Werror -Wshadow -Wstrict-aliasing -Wunreachable-code -Wnull-dereference -Winit-self -Wfloat-equal -Wconversion -Wstrict-overflow=5 -fsanitize=undefined")
 #endif()
 
+
 # 共通のソースファイル
 set(SOURCES
         main.cpp
@@ -47,13 +48,23 @@ set(SOURCES
         ActionOptimizer.cpp
         ActionOptimizer.h
         Genome.h
-        ActionBanManager.h
-        HeapQueue.h
         InputBuilder.cpp
         InputBuilder.h
         ResultStructure.h
-        Equipment.h
+        EnhancedCostCalculator.cpp
+        EnhancedHashCalculator.cpp
+        EnhancedHeapQueue.cpp
+        EnhancedCostCalculator.h
+        EnhancedHashCalculator.h
+        EnhancedHeapQueue.h
+        SimpleParameterOptimizer.cpp
+        SimpleParameterOptimizer.h
+        LinearIdPool.h
 )
+
+add_executable(zuo_lv20_v2_opt ${SOURCES})
+target_compile_definitions(zuo_lv20_v2_opt PRIVATE MULTITHREADING=1 z_lv20=1 OPTIMIZE_MODE=1)  # `#define MULTITHREADING` を適用
+
 
 # シングルスレッド版（multithreading = OFF）
 #add_executable(rbe_single ${SOURCES})
@@ -67,8 +78,8 @@ string(TIMESTAMP BUILD_TIME "%H:%M:%S" UTC)
 add_definitions(-DBUILD_DATE="${BUILD_DATE}" -DBUILD_TIME="${BUILD_TIME}")
 
 if(MINGW)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections") #  -fno-inline-small-functions
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections") #  -fno-inline-small-functions
     set(CMAKE_EXE_LINKER_FLAGS "-static -Wl,--gc-sections")
 elseif(MSVC)
     target_compile_options(zuo_lv20_v2 PRIVATE /W4 /MP)  # `/MP` で並列コンパイル

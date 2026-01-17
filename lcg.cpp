@@ -3,17 +3,20 @@
 //
 
 #include "lcg.h"
+
+#include <cassert>
 #include <cstdint>
 #include <cmath>  // cmathヘッダーをインクルードする
-#include <iostream>
 
 // Define the size of the array
 const int ARRAY_SIZE = 5000;
 
-double precalculatedValues[ARRAY_SIZE]; // 固定メモリ
-uint64_t seeds[ARRAY_SIZE];             // 固定メモリ
+uint32_t precalcTop32[ARRAY_SIZE]; // 固定メモリ
 int nowCounter = 1;
-uint64_t now_seed;
+uint64_t now_seed;      // 現在のシード（逐次 or ジャンプ後）
+bool init_mode;         // true = 初期一括生成モード
+
+
 
 /**
  * 指定された乱数シードで線形合同法生成器を初期化します。
@@ -22,8 +25,9 @@ uint64_t now_seed;
  * @param init 必要に応じて初期乱数列をすべて生成するかどうかを制御するフラグ、trueに設定すると動的生成が無効になる。
  */
 void lcg::init(uint64_t seed, bool init) {
-    nowCounter = 1;
-    now_seed = seed;
+    now_seed    = seed;
+    nowCounter  = 0;
+    init_mode   = init;
 
     if (init) {
         GenerateifNeed(ARRAY_SIZE - 3);
@@ -43,8 +47,7 @@ void lcg::GenerateifNeed(int need) {
     }
     for (int i = nowCounter; i < need+2; ++i) {
         now_seed = lcg_rand(now_seed);
-        precalculatedValues[nowCounter] = calculatePercent(now_seed) * 0.01;
-        seeds[nowCounter++] = now_seed >> 32;
+        precalcTop32[++nowCounter] = static_cast<uint32_t>(now_seed >> 32);
     }
 }
 
@@ -76,15 +79,29 @@ uint64_t lcg::lcg_rand(uint64_t seed) {
  * @param input 計算の基となる64ビットの入力値
  * @return 計算された百分率を表す値
  */
-double lcg::calculatePercent(uint64_t input) {
+int lcg::calculatePercent(uint64_t input) {
     // Right shift the input by 32 bits
     uint64_t output = input >> 32;
 
-    // Multiply the result by 100
-    output *= 100;
+    return static_cast<int>(output * 1000000 >> 32);
+}
 
-    // Divide the result by (2 << 31) and apply % 2
-    return static_cast<double>(output) / (2ULL << 31);
+uint32_t lcg::getSeed(const int *position) {
+    return precalcTop32[*position];
+}
+
+
+int lcg::getPercent(int *position, int max) {
+    // nullptrでないことを確認
+    assert(position != nullptr);
+    assert((*position) < ARRAY_SIZE);
+    GenerateifNeed((*position));
+    uint64_t mul = static_cast<uint64_t>(precalcTop32[*position]) * max;
+    auto roundedResult = static_cast<int>(mul >> 32);
+
+    // ポインタの指す位置をインクリメント
+    (*position)++;
+    return roundedResult;
 }
 
 /**
@@ -98,51 +115,19 @@ double lcg::calculatePercent(uint64_t input) {
  *         ただし、範囲外エラーが発生した場合は0を返します。
  * @throw std::invalid_argument positionがnullptrの場合
  */
-int lcg::getPercent(int *position, int max) {
-    // nullptrでないことを確認
-    if (position == nullptr) {
-        throw std::invalid_argument("Null pointer passed to incrementPosition.");
-    }
-    if ((*position) >= ARRAY_SIZE) {
-        std::cerr << "out of range!!!" << std::endl;
-        return 0;
-    }
-    GenerateifNeed((*position));
-    double result = precalculatedValues[*position];
-    double scaledResult = result * max;
-
-    // floorしてintにキャスト
-    int roundedResult = static_cast<int>(floor(scaledResult));
-
-    // ポインタの指す位置をインクリメント
-    (*position)++;
-    return roundedResult;
-}
-
-/**
- * 線形合同法生成器を使用して指定された範囲内でランダムな浮動小数点値を生成します。
- *
- * @param position 乱数生成の進行位置を示すポインタ。呼び出しごとに位置が更新されます。
- * @param min 生成される乱数の最小値（範囲の下限）。
- * @param max 生成される乱数の最大値（範囲の上限）。
- * @return
- *   指定された範囲 [min, max] 内のランダムな浮動小数点値。
- *   ただし最大値と最小値に一致する乱数は全部に返却されないことに注意する必要があります。
- * @throws std::invalid_argument 引数 position が nullptr の場合にスローされます。
- */
 double lcg::floatRand(int *position, double min, double max) {
-    if (position == nullptr) {
-        throw std::invalid_argument("Null pointer passed to incrementPosition.");
-    }
-    if ((*position) >= ARRAY_SIZE) {
-        std::cerr << "out of range!!!" << std::endl;
-        return 0;
-    }
-    GenerateifNeed((*position));
-    double result = precalculatedValues[*position];
+    assert(position != nullptr);
+    assert((*position) < ARRAY_SIZE);
+    GenerateifNeed(*position);
+    uint32_t top = precalcTop32[*position];
     (*position)++;
-    return min + result * (max - min);
+
+    // [0,1) に正規化（1.0 になることはない）
+    double u = (double)top * (1.0 / 4294967296.0);
+
+    return min + u * (max - min);
 }
+
 
 /**
  * 指定された範囲内で整数型の乱数を生成します。
@@ -158,14 +143,4 @@ double lcg::floatRand(int *position, double min, double max) {
  */
 int lcg::intRangeRand(int *position, int min, int max) {
     return min + getPercent(position, max - min + 1);
-}
-
-uint64_t lcg::getSeed(int *position) {
-    if (position == nullptr) {
-        throw std::invalid_argument("Null pointer passed to incrementPosition.");
-    }
-    GenerateifNeed((*position));
-    uint64_t result = seeds[*position];
-    (*position)++;
-    return result;
 }

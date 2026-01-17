@@ -9,7 +9,7 @@
 #define DEBUG 1
 //THIS DEBUG CODE!
 //#define DEBUG2 1
-//#define DEBUG3 1
+#define DEBUG3 1
 //#define DEBUG4 1
 //THIS DEBUG CODE!
 

@@ -12,6 +12,10 @@
 #include "debug.h"
 #include "ActionOptimizer.h"
 #include "InputBuilder.h"
+#if defined(OPTIMIZE_MODE)
+#include "SimpleParameterOptimizer.h"
+#endif
+
 
 #ifdef DEBUG
 
@@ -546,16 +550,12 @@ namespace {
             }
             turns++;
         }
-#if defined(BattleEmulatorLV13)
-        auto [turnProcessed,genome] =
-                ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 3000, gene, numThreads, Dropbug);
-#elif defined(BattleEmulatorLV19)
-        auto [turnProcessed,genome] =
-        ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 1500, gene, numThreads, Dropbug);
-#elif defined(z_lv20)
-        auto [turnProcessed,genome] =
-                ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 250, gene, numThreads, Dropbug);
+#if defined(z_lv20)
+        auto genome =
+        ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 8000, gene, 0);
 #endif
+
+        auto turnProcessed = BattleEmulator::getTurnProcessed();
 
 #ifdef DEBUG
         auto t3 = std::chrono::high_resolution_clock::now();
@@ -873,6 +873,16 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
+#if defined(OPTIMIZE_MODE)
+    int actions1[350] = {};
+    auto counter = 0;
+    actions1[counter++] = BattleEmulator::BUFF;
+    actions1[counter] = -1;
+    SimpleParameterOptimizer::optimize(BasePlayers, 0x12345, actions1, 100000, counter);
+    return 0;
+#endif
+
+
 #ifdef DEBUG
     auto t0 = std::chrono::high_resolution_clock::now();
 #endif
@@ -904,7 +914,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 
     //AI Warning: This is code related to debug2
-    uint64_t time1 = 10328;
+    uint64_t time1 = 0x03590a56;
 
     int dummy[100];
     lcg::init(time1, false);
@@ -940,34 +950,34 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
     //0x22e2dbaf:
 
     //AI Warning: This is code related to debug2
-    // int32_t gene1[350] = {
-    //     30, 30, 53, 62, 62, 50, 33, 62, 62, 34,
-    //     BattleEmulator::ATTACK_ALLY};
+     int32_t gene1[350] = {
+         30, 62, 30, 50, 62, 30, 62, 33, 50, 62, 34,
+         BattleEmulator::ATTACK_ALLY};
     //gene1[19-1] = BattleEmulator::DEFENCE;
     int counter = 0;
-    int32_t gene1[350] = {0};
-    gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-    gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-    gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
-    gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-    gene1[counter++] = BattleEmulator::BUFF;
-    gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-    gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-    gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
-    gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-    gene1[counter++] = BattleEmulator::MULTITHRUST;
-    gene1[counter++] = BattleEmulator::DOUBLE_UP;
-    gene1[counter++] = BattleEmulator::BUFF;
-    gene1[counter++] = BattleEmulator::MULTITHRUST;
-    gene1[counter++] = BattleEmulator::MULTITHRUST;
-    gene1[counter++] = BattleEmulator::MULTITHRUST;
-    gene1[counter++] = BattleEmulator::MIDHEAL;
-    gene1[counter++] = BattleEmulator::MULTITHRUST;
-    gene1[counter++] = BattleEmulator::MULTITHRUST;
-    gene1[counter++] = BattleEmulator::MULTITHRUST;
-    gene1[counter++] = BattleEmulator::MIDHEAL;
-    gene1[counter++] = BattleEmulator::MIDHEAL;
-    gene1[counter++] = BattleEmulator::MIDHEAL;
+    // int32_t gene1[350] = {0};
+    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    // gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
+    // gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+    // gene1[counter++] = BattleEmulator::BUFF;
+    // gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+    // gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+    // gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
+    // gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+    // gene1[counter++] = BattleEmulator::MULTITHRUST;
+    // gene1[counter++] = BattleEmulator::DOUBLE_UP;
+    // gene1[counter++] = BattleEmulator::BUFF;
+    // gene1[counter++] = BattleEmulator::MULTITHRUST;
+    // gene1[counter++] = BattleEmulator::MULTITHRUST;
+    // gene1[counter++] = BattleEmulator::MULTITHRUST;
+    // gene1[counter++] = BattleEmulator::MIDHEAL;
+    // gene1[counter++] = BattleEmulator::MULTITHRUST;
+    // gene1[counter++] = BattleEmulator::MULTITHRUST;
+    // gene1[counter++] = BattleEmulator::MULTITHRUST;
+    // gene1[counter++] = BattleEmulator::MIDHEAL;
+    // gene1[counter++] = BattleEmulator::MIDHEAL;
+    // gene1[counter++] = BattleEmulator::MIDHEAL;
     //  gene1[counter++] = BattleEmulator::BUFF;
     //  gene1[counter++] = BattleEmulator::BUFF;
     //  gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
@@ -1014,7 +1024,7 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 0x0b6a462e;
+    uint64_t seed = 0x03590a56;
 
     int actions[350] = {
         BattleEmulator::BUFF,
