@@ -479,6 +479,12 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         int32_t enemyAction = 0;
         (*position)++; //0x02160d64
 
+        /** やすみturnの時に逃げるを押すと、一回だけやすみをストレージできる */
+        auto isInactiveFlag = false;
+        if (players[0].inactive) {
+            isInactiveFlag = true;
+        }
+
         // ソートされた結果を出力
         for (int t = 0; t < 2; ++t) {
             if (!Player::isPlayerAlive(players[1])) {
@@ -573,7 +579,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         BattleResult::add(result, enemyAction, basedamage, true,
                                           def1, poi, agl, counterJ - 1,
                                           player0_has_initiative, ehp,
-                                          ahp, tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag);
+                                          ahp, tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag, isInactiveFlag);
                     } else if (mode != -1 && mode != -2) {
                         if (
                             enemyAction == WICKED_WEB ||
@@ -635,7 +641,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 if (action == SLEEPING && !player0_has_initiative && !players[0].sleeping) {
                     skipTurn = true;
                 }
-                if (action == BattleEmulator::FLEE_ALLY) {
+                if (action == BattleEmulator::FLEE_ALLY && !isInactiveFlag) {
                     skipTurn = true;
                 }
                 if (!skipTurn) {
@@ -700,7 +706,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         BattleResult::add(result, action, basedamage, false,
                                           def1, poi, agl, counterJ - 1,
                                           player0_has_initiative, ehp, ahp,
-                                          tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag);
+                                          tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag, isInactiveFlag);
                     }
                     if (action == HEAL || action == MORE_HEAL || action == MIDHEAL ||
                         action == FULLHEAL || action == SPECIAL_MEDICINE || action == GOSPEL_SONG || action ==
@@ -857,7 +863,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         BattleResult::add(result, action, 0, false,
                                           def1, poi, agl, counterJ - 1,
                                           player0_has_initiative, ehp, ahp,
-                                          tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag);
+                                          tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag, isInactiveFlag);
                     }
                 }
             }

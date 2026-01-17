@@ -23,7 +23,7 @@ public:
 
     static void
     add(std::optional<BattleResult> &obj1, int action, int damage, bool isEnemy, int BuffTurns, int PoisonTurns, int speedTurn, int turn,
-        bool player0_has_initiative, int ehp, int ahp, uint64_t nowState, int scTurn, int amp,bool defenseFlag) {
+        bool player0_has_initiative, int ehp, int ahp, uint64_t nowState, int scTurn, int amp,bool defenseFlag, bool isInactiveFlag) {
         if (obj1.has_value()) {
             BattleResult& obj = obj1.value();
             obj.actions[obj.position] = action;
@@ -40,6 +40,7 @@ public:
             obj.scTurn[obj.position] = scTurn;
             obj.amp[obj.position] = amp;
             obj.defenseFlag[obj.position] = defenseFlag;
+            obj.isInactiveFlag[obj.position] = isInactiveFlag;
             obj.turn = turn;
             obj.position++;
         }
@@ -61,6 +62,7 @@ public:
     int amp[400] = {};
     uint64_t state[400] = {};
     bool defenseFlag[400] = {};
+    bool isInactiveFlag[400] = {};
 };
 
 #endif //NEWDIRECTORY_BATTLERESULT_H

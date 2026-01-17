@@ -172,6 +172,7 @@ namespace {
             auto poisonTurn = result.PoisonTurns[i];
             auto SpeedTurn = result.SpeedTurn[i];
             auto defenseFlag = result.defenseFlag[i];
+            auto isInactiveFlag = result.isInactiveFlag[i];
             int amp = -1;
             if (i >= 1) {
                 amp = result.amp[i - 1];
@@ -269,6 +270,9 @@ namespace {
                         sp = "---------------";
                     }
                     if ((action == BattleEmulator::CURE_SLEEPING || action == BattleEmulator::CURE_PARALYSIS)) {
+                        sp = "---------------";
+                    }
+                    if (isInactiveFlag) {
                         sp = "---------------";
                     }
                     if (!initiative && defenseFlag && action != BattleEmulator::DEFENCE) {
@@ -916,7 +920,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 
     //AI Warning: This is code related to debug2
-    uint64_t time1 = 0x03590a56;
+    uint64_t time1 = 0x34f282f;
 
     int dummy[100];
     lcg::init(time1, false);
@@ -953,7 +957,7 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 
     //AI Warning: This is code related to debug2
      int32_t gene1[350] = {
-         30, 62, 30, 50, 62, 30, 62, 33, 50, 62, 34,
+         30, 30, 50, 53, 53, 33, 62, 62, 33, 62, 62, 34,
          BattleEmulator::ATTACK_ALLY};
     //gene1[19-1] = BattleEmulator::DEFENCE;
     int counter = 0;
@@ -1026,7 +1030,7 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 0x03590a58;
+    uint64_t seed = 0x034f282f;
 
     int actions[350] = {
         BattleEmulator::BUFF,
