@@ -1026,12 +1026,12 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 0x03590a56;
+    uint64_t seed = 0x03590a58;
 
     int actions[350] = {
         BattleEmulator::BUFF,
-        //BattleEmulator::BUFF,
-        //BattleEmulator::SPECIAL_MEDICINE,
+        BattleEmulator::BUFF,
+        BattleEmulator::SPECIAL_MEDICINE,
         -1,
     };
     SearchRequest(BasePlayers, seed, actions, THREAD_COUNT, true);

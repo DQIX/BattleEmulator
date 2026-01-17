@@ -24,14 +24,6 @@ public:
     static OptimResult optimize(const Player players[2], uint64_t seed,
                                const int actions[350], int maxTests = 50, int turns = 0);
 
-    // グリッドサーチ（確実だが遅い）
-    static OptimResult gridSearch(const Player players[2], uint64_t seed,
-                                 const int actions[350], int resolution = 3);
-
-    // 山登り法（高速で実用的）
-    static OptimResult hillClimbing(const Player players[2], uint64_t seed,
-                                   const int actions[350], int maxSteps = 20);
-
     static double getActionCost(int action);
 
     // パラメータセットをテスト
