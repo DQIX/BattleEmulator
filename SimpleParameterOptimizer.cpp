@@ -32,7 +32,7 @@ static constexpr double DEFAULT_STEP = 0.5; // 変異の基本スケール
 static constexpr int GA_POPULATION = 50; // 1世代あたり生成する子の数
 static constexpr double GA_MUTATION_PROB = 0.15; // 各遺伝子が変異する確率
 static constexpr double GA_CROSSOVER_PROB = 0.9; // 親から交叉する確率
-static constexpr int GA_EVAL_SEEDS = 30;
+static constexpr int GA_EVAL_SEEDS = 10;
 
 // --- Stability tuning parameters (内部定義・調整可能) ---
 constexpr int STABILITY_CHECKS = 100;           // 世代ごとに最良個体を何回別 seed で再評価するか
@@ -47,7 +47,8 @@ static constexpr std::array<int, 3> STABILITY_RANDOM_ACTION_POOL = {
 };
 // 1回の stability check で最大いくつ挿入するか（0なら無効）
 static constexpr double STABILITY_EXTRA_ACTION_INSERT_PROB = 0.60;
-
+// 1回の stability check で最大いくつ挿入するか（0なら無効）
+static constexpr int STABILITY_EXTRA_ACTIONS_MAX = 2;
 
 // この配列に最適化対象の aABILITY_EXTRA_ACTIONS_MAX = 3;
 //// 各挿入を行う確率（1.0=必ずction id を並べるだけで追加完了
@@ -304,7 +305,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
         for (size_t i = 0; i < geneCount; ++i) {
             // small random perturbation around start
             double v = startVals[i] + normDist(rng);
-            if (v < 0.0) v = 0.0;
+            // if (v < 0.0) v = 0.0;
             g.genes[i] = v;
         }
         g.fitness = std::numeric_limits<double>::infinity();
@@ -345,11 +346,11 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
         auto flag = false;
         auto flag1 = false;
         for (int id = 0; id <= MAX_ID; ++id) {
-            if (tmp[id] > 0.0 && flag) {
+            if (tmp[id] != 0.0 && flag) {
                 std::cout << "\n";
                 flag1 = true;
             }
-            if (tmp[id] > 0.0) {
+            if (tmp[id] != 0.0) {
                 std::cout << "    /* " << id << " */ " << tmp[id];
             } else {
                 if (flag1) {
@@ -528,7 +529,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
             for (size_t i = 0; i < geneCount; ++i) {
                 if (uni01(rng) < GA_MUTATION_PROB) {
                     double delta = normDist(rng);
-                    child.genes[i] = clampDouble(child.genes[i] + delta, 0.0, 1e6);
+                    child.genes[i] = clampDouble(child.genes[i] + delta, -1e6-1, 1e6);
                 }
             }
             child.fitness = std::numeric_limits<double>::infinity();

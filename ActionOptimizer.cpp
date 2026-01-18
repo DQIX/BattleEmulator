@@ -97,7 +97,7 @@ static_assert(
 );
 
 
-static uint32_t Node_Used;
+thread_local static uint32_t Node_Used;
 
 uint32_t ActionOptimizer::getNodesUsed() {
     return Node_Used;
