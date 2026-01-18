@@ -22,14 +22,14 @@ static constexpr double DEFAULT_ACTION_COST = 1.0;
 static constexpr double DEFAULT_STEP = 0.5; // 変異の基本スケール
 
 // GA パラメータ（必要なら調整）
-static constexpr int GA_POPULATION = 200; // 1世代あたり生成する子の数
+static constexpr int GA_POPULATION = 50; // 1世代あたり生成する子の数
 static constexpr double GA_MUTATION_PROB = 0.15; // 各遺伝子が変異する確率
 static constexpr double GA_CROSSOVER_PROB = 0.9; // 親から交叉する確率
-static constexpr int GA_EVAL_SEEDS = 15;
-static constexpr int kNumThreads = 12; // ★固定スレッド数（好きに調整）
+static constexpr int GA_EVAL_SEEDS = 10;
+static constexpr int kNumThreads = 8; // ★固定スレッド数（好きに調整）
 
 // --- Stability tuning parameters (内部定義・調整可能) ---
-constexpr int STABILITY_CHECKS = 70;           // 世代ごとに最良個体を何回別 seed で再評価するか
+constexpr int STABILITY_CHECKS = 30;           // 世代ごとに最良個体を何回別 seed で再評価するか
 constexpr double GA_INSTABILITY_WEIGHT = 10.0; // instability を fitness に掛ける重み（経験則で調整）
 
 // ---- 安定性チェック用: ランダム追加 actions（compile 時に決める） ----
@@ -73,6 +73,7 @@ struct GAGenome {
 struct StabilityChunkResult {
     double instabilitySum = 0.0;
     int performed = 0;
+    int turns = 0;
 };
 
 

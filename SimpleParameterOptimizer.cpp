@@ -473,6 +473,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
                     auto r = f.get();
                     instabilitySum += r.instabilitySum;
                     performedChecks += r.performed;
+                    std::cout << "[GA] stability check=" << r.performed << " instability=" << r.instabilitySum << " turns=" << r.turns << std::endl;
                 }
 
                 evaluations += performedChecks;
@@ -664,6 +665,8 @@ StabilityChunkResult SimpleParameterOptimizer::stabilityCheckRange(const GAGenom
     int beginIdx, int endIdx, uint64_t baseSeed, const Player players[2], const int actions[350], int turnsLimit) {
     StabilityChunkResult out{};
 
+    auto turns = 0;
+
     for (int i = beginIdx; i < endIdx; ++i) {
         uint64_t altBase = baseSeed ^ (0x9E3779B97F4A7C15ULL * static_cast<uint64_t>(i + 1));
         auto altEvalSeeds = makeEvalSeedsDeterministic(altBase);
@@ -690,11 +693,15 @@ StabilityChunkResult SimpleParameterOptimizer::stabilityCheckRange(const GAGenom
         // NOTE: mutatedActions を使う（安定性チェックの意図どおり）
         (void)evaluateGenome(copyForCheck, players, altEvalSeeds, mutatedActions, turnsLimit, localRng, mTurn, mMs);
 
+        turns += mTurn;
+
         if (mTurn > baselineTurn) {
             out.instabilitySum += static_cast<double>(mTurn - baselineTurn);
         }
         ++out.performed;
     }
+
+    out.turns = turns;
 
     return out;
 }
