@@ -118,7 +118,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
     std::unique_ptr<int> position = std::make_unique<int>(1);
     std::unique_ptr<uint64_t> nowState = std::make_unique<uint64_t>(0);
 
-    LinearIdPool<Genome, 100000> Pool{};
+    LinearIdPool<Genome, 50000> Pool{};
 
     // Enhanced A* priority queue and visited set
     EnhancedHeapQueue openSet{};
@@ -252,7 +252,8 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
                 continue;
             }
 
-            if (solutionFound && counter - lastimp > 1000) {
+            if (solutionFound && counter - lastimp > 2000) {
+                Node_Used = Pool.getSize();
                 return bestSolution;
             }
 
