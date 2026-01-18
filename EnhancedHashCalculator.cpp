@@ -31,18 +31,18 @@ uint64_t EnhancedHashCalculator::computeStateHash(const Genome &genome) {
     
     // Important status effects that affect battle outcome
     hash = mixHash(hash, (genome.AllyPlayer.paralysis ? 1ULL : 0ULL) << 48);
-    // hash = mixHash(hash, (genome.AllyPlayer.sleeping ? 1ULL : 0ULL) << 47);
-    // hash = mixHash(hash, (genome.AllyPlayer.PoisonEnable ? 1ULL : 0ULL) << 46);
+    hash = mixHash(hash, (genome.AllyPlayer.sleeping ? 1ULL : 0ULL) << 47);
+    hash = mixHash(hash, (genome.AllyPlayer.PoisonEnable ? 1ULL : 0ULL) << 46);
     
     // // Buff levels that significantly impact combat
-    // hash = mixHash(hash, static_cast<uint64_t>(genome.AllyPlayer.BuffLevel) << 44);
-    // hash = mixHash(hash, static_cast<uint64_t>(genome.AllyPlayer.AtkBuffLevel) << 40);
-    // hash = mixHash(hash, static_cast<uint64_t>(genome.AllyPlayer.TensionLevel) << 36);
+    hash = mixHash(hash, static_cast<uint64_t>(genome.AllyPlayer.BuffLevel) << 44);
+    hash = mixHash(hash, static_cast<uint64_t>(genome.AllyPlayer.AtkBuffLevel) << 40);
+    hash = mixHash(hash, static_cast<uint64_t>(genome.AllyPlayer.TensionLevel) << 36);
     //
     // Special abilities and charges
     hash = mixHash(hash, (genome.AllyPlayer.specialCharge ? 1ULL : 0ULL) << 35);
     hash = mixHash(hash, (genome.AllyPlayer.acrobaticStar ? 1ULL : 0ULL) << 34);
-    hash = mixHash(hash, static_cast<uint64_t>(genome.AllyPlayer.specialChargeTurn) << 24);
+    hash = mixHash(hash, static_cast<uint64_t>(genome.AllyPlayer.specialChargeTurn) << 24);//24+8=
     
     return hash;
 }

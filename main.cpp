@@ -11,6 +11,7 @@
 #include "debug.h"
 #include "ActionOptimizer.h"
 #include "InputBuilder.h"
+#include "SimpleParameterOptimizer.h"
 
 #if defined(DEBUG)
 
@@ -713,6 +714,16 @@ int main(int argc, char *argv[]) {
 #if defined(DEBUG)
 
     auto t0 = std::chrono::high_resolution_clock::now();
+#endif
+
+
+#if defined(OPTIMIZE_MODE)
+    int actions1[350] = {};
+    auto counter = 0;
+    actions1[counter++] = BattleEmulator::DEFENCE;
+    actions1[counter] = -1;
+    SimpleParameterOptimizer::optimize(BasePlayers, 0x12345, actions1, 100000, counter);
+    return 0;
 #endif
 
 
