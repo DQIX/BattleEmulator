@@ -8,13 +8,23 @@
 #include <cstdint>
 #include <cmath>  // cmathヘッダーをインクルードする
 
+#if defined(OPTIMIZE_MODE)
 // Define the size of the array
-const int ARRAY_SIZE = 5000;
+const int ARRAY_SIZE = 50000;
 
+thread_local uint32_t precalcTop32[ARRAY_SIZE]; // 固定メモリ
+thread_local int nowCounter = 1;
+thread_local uint64_t now_seed;      // 現在のシード（逐次 or ジャンプ後）
+thread_local bool init_mode;         // true = 初期一括生成モード
+#else
+const int ARRAY_SIZE = 5000;
 uint32_t precalcTop32[ARRAY_SIZE]; // 固定メモリ
 int nowCounter = 1;
 uint64_t now_seed;      // 現在のシード（逐次 or ジャンプ後）
 bool init_mode;         // true = 初期一括生成モード
+#endif
+
+
 
 
 
