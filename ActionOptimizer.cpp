@@ -182,7 +182,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
     Player CopedPlayers3[2];
 
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 2; ++i) {
         if (!solutionFound) {
             maxGenerations *= 2;
         }else {

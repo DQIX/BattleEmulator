@@ -19,36 +19,11 @@
 #include <algorithm>
 #include <random>
 #include <chrono>
+#include <future>
 #include <limits>
 #include <string>
 
 // --- 設定 ---
-static constexpr int MAX_ACTION_ID = 512;
-static constexpr int ids = 26;
-static constexpr double DEFAULT_ACTION_COST = 1.0;
-static constexpr double DEFAULT_STEP = 0.5; // 変異の基本スケール
-
-// GA パラメータ（必要なら調整）
-static constexpr int GA_POPULATION = 50; // 1世代あたり生成する子の数
-static constexpr double GA_MUTATION_PROB = 0.15; // 各遺伝子が変異する確率
-static constexpr double GA_CROSSOVER_PROB = 0.9; // 親から交叉する確率
-static constexpr int GA_EVAL_SEEDS = 10;
-
-// --- Stability tuning parameters (内部定義・調整可能) ---
-constexpr int STABILITY_CHECKS = 100;           // 世代ごとに最良個体を何回別 seed で再評価するか
-constexpr double GA_INSTABILITY_WEIGHT = 10.0; // instability を fitness に掛ける重み（経験則で調整）
-
-// ---- 安定性チェック用: ランダム追加 actions（compile 時に決める） ----
-// ここを編集するだけで「追加しうる行動」を切り替え可能
-static constexpr std::array<int, 3> STABILITY_RANDOM_ACTION_POOL = {
-    BattleEmulator::BUFF,
-    BattleEmulator::SPECIAL_MEDICINE,
-    BattleEmulator::PSYCHE_UP_ALLY, // ※ もし敵の PSYCHE_UP を混ぜたいなら BattleEmulator::PSYCHE_UP を入れる
-};
-// 1回の stability check で最大いくつ挿入するか（0なら無効）
-static constexpr double STABILITY_EXTRA_ACTION_INSERT_PROB = 0.60;
-// 1回の stability check で最大いくつ挿入するか（0なら無効）
-static constexpr int STABILITY_EXTRA_ACTIONS_MAX = 2;
 
 // この配列に最適化対象の aABILITY_EXTRA_ACTIONS_MAX = 3;
 //// 各挿入を行う確率（1.0=必ずction id を並べるだけで追加完了
@@ -82,7 +57,7 @@ static constexpr std::array<int, ids> TUNE_IDS = {
 };
 
 // action cost テーブル（一次真実源）
-static std::array<double, MAX_ACTION_ID> s_actionCosts;
+static thread_local std::array<double, MAX_ACTION_ID> s_actionCosts;
 
 // --- 安定性チェック用: actions をコピーしてランダム挿入する（本体 actions は汚さない） ---
 template <size_t N>
@@ -174,13 +149,6 @@ double SimpleParameterOptimizer::getActionCost(int action) {
     return s_actionCosts[action];
 }
 
-// --- 遺伝的アルゴリズム実装 ---
-struct GAGenome {
-    std::vector<double> genes; // size = TUNE_IDS.size()
-    double fitness; // 小さいほど良い（ターン優先）
-    int measuredTurns; // 実測ターン
-    double measuredMs; // 実測時間（ms）
-};
 
 // 評価: returns fitness (小さい方が良い)
 static double evaluateGenome(
@@ -372,32 +340,80 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
 
         std::cout << "\n};\n";
 
-        // evaluate population members that are not yet evaluated
-        for (auto &ind : population) {
-            if (!std::isfinite(ind.fitness)) {
-                int measuredTurn;
-                double measuredMs;
-                double fit = evaluateGenome(ind, players, evalSeeds, actions, turns, rng, measuredTurn, measuredMs);
-                ind.fitness = fit;
-                ind.measuredTurns = measuredTurn;
-                ind.measuredMs = measuredMs;
-                ++evaluations;
-                ++result.testCount;
+// --- ここから並列評価ブロック ---
 
-                std::cout << "[GA] eval=" << evaluations << " turn=" << measuredTurn
-                          << " ms=" << measuredMs << " fitness=" << fit << std::endl;
 
-                if (measuredTurn < result.bestTurn) {
-                    result.bestTurn = measuredTurn;
-                    result.found = true;
-                    std::cout << "[GA] improvement -> bestTurn=" << result.bestTurn << std::endl;
-                    std::cout << std::endl;
+            // 未評価 index を収集（予算も考慮）
+            std::vector<int> pending;
+            pending.reserve(population.size());
+
+            const int budget = maxEvaluations - evaluations;
+            if (budget > 0) {
+                for (int i = 0; i < static_cast<int>(population.size()) && static_cast<int>(pending.size()) < budget; ++i) {
+                    if (!std::isfinite(population[i].fitness)) {
+                        pending.push_back(i);
+                    }
+                }
+            }
+
+            if (!pending.empty()) {
+                const int numThreads = std::min(kNumThreads, static_cast<int>(pending.size()));
+                const int chunkSize = (static_cast<int>(pending.size()) + numThreads - 1) / numThreads;
+
+                std::vector<std::future<std::vector<EvalResult>>> futures;
+                futures.reserve(numThreads);
+
+                for (int t = 0; t < numThreads; ++t) {
+                    const int start = t * chunkSize;
+                    const int end = std::min(static_cast<int>(pending.size()), start + chunkSize);
+                    if (start >= end) break;
+
+                    // スレッドごとの seed（固定でもいいけど、分けた方が安全）
+                    const uint64_t threadSeed = seed ^ (0x9E3779B97F4A7C15ULL * static_cast<uint64_t>(t + 1));
+
+                    futures.push_back(std::async(
+                        std::launch::async,
+                        evaluateGenomeRange,
+                        &population,
+                        &pending,
+                        start,
+                        end,
+                        players,
+                        std::cref(evalSeeds),
+                        actions,
+                        turns,
+                        threadSeed
+                    ));
                 }
 
-                if (evaluations >= maxEvaluations) break;
+                // 回収→反映（反映とログはメインスレッドでまとめてやる）
+                for (auto &fut : futures) {
+                    auto results = fut.get();
+                    for (const auto &r : results) {
+                        auto &ind = population[r.index];
+
+                        ind.fitness = r.fitness;
+                        ind.measuredTurns = r.measuredTurns;
+                        ind.measuredMs = r.measuredMs;
+
+                        ++evaluations;
+                        ++result.testCount;
+
+                        std::cout << "[GA] eval=" << evaluations << " turn=" << r.measuredTurns
+                                  << " ms=" << r.measuredMs << " fitness=" << r.fitness << std::endl;
+
+                        if (r.measuredTurns < result.bestTurn) {
+                            result.bestTurn = r.measuredTurns;
+                            result.found = true;
+                            std::cout << "[GA] improvement -> bestTurn=" << result.bestTurn << std::endl;
+                            std::cout << std::endl;
+                        }
+
+                        if (evaluations >= maxEvaluations) break;
+                    }
+                    if (evaluations >= maxEvaluations) break;
+                }
             }
-        }
-        if (evaluations >= maxEvaluations) break;
 
         // sort by fitness (小さい方が良い)
         std::sort(population.begin(), population.end(), [](const GAGenome &a, const GAGenome &b){
@@ -423,69 +439,60 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
             }
 
             // 予算に応じて実際に何回チェックできるかを決める
-            int availableChecks = std::min(STABILITY_CHECKS, maxEvaluations - evaluations);
-            double instabilitySum = 0.0;
-            int performedChecks = 0;
+             int availableChecks = std::min(STABILITY_CHECKS, maxEvaluations - evaluations);
+            if (availableChecks > 0) {
+                const int numThreads = std::min(kNumThreads, availableChecks);
+                const int chunkSize = (availableChecks + numThreads - 1) / numThreads;
 
-            for (int i = 0; i < availableChecks; ++i) {
-                // 別 seed を作るが、main evalSeeds は変更しない
-                uint64_t altBase = seed ^ (0x9E3779B97F4A7C15ULL * static_cast<uint64_t>(i + 1));
-                auto altEvalSeeds = makeEvalSeeds(altBase);
+                std::vector<std::future<StabilityChunkResult>> futures;
+                futures.reserve(numThreads);
 
-                // local RNG: main rng を汚さないため、altBase に基づく固定シードを使う
-                uint32_t localSeed32 = static_cast<uint32_t>((altBase >> 32) ^ (altBase & 0xFFFFFFFFu));
-                std::mt19937 localRng(localSeed32);
+                for (int t = 0; t < numThreads; ++t) {
+                    const int beginIdx = t * chunkSize;
+                    const int endIdx = std::min(availableChecks, beginIdx + chunkSize);
+                    if (beginIdx >= endIdx) break;
 
-                int mutatedActions[350];
-                std::string insertedSummary;
-                buildActionsWithRandomInserts(
-                    actions,
-                    mutatedActions,
-                    localRng,
-                    STABILITY_RANDOM_ACTION_POOL,
-                    STABILITY_EXTRA_ACTIONS_MAX,
-                    STABILITY_EXTRA_ACTION_INSERT_PROB,
-                    &insertedSummary
-                );
-
-                // 評価はコピーで行う（population のデータを書き換えない）
-                GAGenome copyForCheck = bestGenomeCopy;
-                int mTurn;
-                double mMs;
-                double f = evaluateGenome(copyForCheck, players, altEvalSeeds, actions, turns, localRng, mTurn, mMs);
-
-                // instability の定義（ここでは baseline より悪ければその差分をペナルティにする）
-                if (mTurn > baselineTurn) {
-                    instabilitySum += static_cast<double>(mTurn - baselineTurn);
-                } else {
-                    // もし baseline より良ければペナルティは 0（安定性向上の報酬は現在は与えず）
-                    instabilitySum += 0.0;
+                    futures.push_back(std::async(
+                        std::launch::async,
+                        stabilityCheckRange,
+                        &bestGenomeCopy,
+                        baselineTurn,
+                        beginIdx,
+                        endIdx,
+                        seed,
+                        players,
+                        actions,
+                        turns
+                    ));
                 }
 
-                ++performedChecks;
-                ++evaluations;
-                ++result.testCount;
+                double instabilitySum = 0.0;
+                int performedChecks = 0;
 
-                std::cout << "[GA] stability check " << i << " altTurn=" << mTurn
-                          << " baseline=" << baselineTurn << " fit=" << f << std::endl;
+                for (auto &f : futures) {
+                    auto r = f.get();
+                    instabilitySum += r.instabilitySum;
+                    performedChecks += r.performed;
+                }
 
-                if (evaluations >= maxEvaluations) break;
-            }
+                evaluations += performedChecks;
+                result.testCount += performedChecks;
 
-            if (performedChecks > 0) {
-                double instabilityPenalty = (instabilitySum / static_cast<double>(performedChecks));
-                double penaltyToApply = GA_INSTABILITY_WEIGHT * instabilityPenalty;
+                if (performedChecks > 0) {
+                    double instabilityPenalty = (instabilitySum / static_cast<double>(performedChecks));
+                    double penaltyToApply = GA_INSTABILITY_WEIGHT * instabilityPenalty;
 
-                // population.front() に対してペナルティを追加（GA に「不安定は悪」と学ばせる）
-                population.front().fitness += penaltyToApply;
+                    population.front().fitness += penaltyToApply;
 
-                std::cout << "[GA] applied instability penalty=" << penaltyToApply
-                          << " (mean diff=" << (instabilitySum / performedChecks) << ")\n";
+                    std::cout << "[GA] stability checks(performed)=" << performedChecks
+                              << " baseline=" << baselineTurn
+                              << " applied penalty=" << penaltyToApply
+                              << " (mean diff=" << (instabilitySum / performedChecks) << ")\n";
 
-                // もう一度ソートして選択が安定するようにする
-                std::sort(population.begin(), population.end(), [](const GAGenome &a, const GAGenome &b){
-                    return a.fitness < b.fitness;
-                });
+                    std::sort(population.begin(), population.end(), [](const GAGenome &a, const GAGenome &b){
+                        return a.fitness < b.fitness;
+                    });
+                }
             }
         }
         // ---------- end stability feedback ----------
@@ -596,7 +603,7 @@ int SimpleParameterOptimizer::testParameters(
         if (actions[i] == -1) { gene[i] = -1; break; }
     }
 
-    auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 6000, gene, 0);
+    auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
 
     if (genome.EnemyPlayer.hp <= 0) {
         return genome.turn - 1;
@@ -604,5 +611,95 @@ int SimpleParameterOptimizer::testParameters(
         return 9999;
     }
 }
+
+std::vector<EvalResult> SimpleParameterOptimizer::evaluateGenomeRange(std::vector<GAGenome> *population,
+    const std::vector<int> *pendingIndices, int start, int end, const Player players[2],
+    const std::array<uint64_t, GA_EVAL_SEEDS> &evalSeeds, const int actions[350], int turnsLimit,
+    uint64_t seedForThread) {
+
+    std::mt19937 localRng(static_cast<uint32_t>(seedForThread));
+
+    std::vector<EvalResult> out;
+    out.reserve(static_cast<size_t>(std::max(0, end - start)));
+
+    for (int k = start; k < end; ++k) {
+        const int idx = (*pendingIndices)[k];
+        auto &ind = (*population)[idx];
+
+        int measuredTurn = 0;
+        double measuredMs = 0.0;
+
+        // evaluateGenome はそのまま使う
+        double fit = evaluateGenome(ind, players, evalSeeds, actions, turnsLimit, localRng, measuredTurn, measuredMs);
+
+        EvalResult r;
+        r.index = idx;
+        r.fitness = fit;
+        r.measuredTurns = measuredTurn;
+        r.measuredMs = measuredMs;
+        out.push_back(r);
+    }
+
+    return out;
+}
+
+// --- 追加: stability check 用の決定的 seed 生成（スレッドセーフ） ---
+static inline uint64_t splitmix64(uint64_t &x) {
+    uint64_t z = (x += 0x9E3779B97F4A7C15ULL);
+    z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
+    z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
+    return z ^ (z >> 31);
+}
+
+static std::array<uint64_t, GA_EVAL_SEEDS> makeEvalSeedsDeterministic(uint64_t base) {
+    std::array<uint64_t, GA_EVAL_SEEDS> s{};
+    uint64_t x = base;
+    for (int i = 0; i < GA_EVAL_SEEDS; ++i) {
+        s[i] = splitmix64(x);
+    }
+    return s;
+}
+
+StabilityChunkResult SimpleParameterOptimizer::stabilityCheckRange(const GAGenome *bestGenomeCopy, int baselineTurn,
+    int beginIdx, int endIdx, uint64_t baseSeed, const Player players[2], const int actions[350], int turnsLimit) {
+    StabilityChunkResult out{};
+
+    for (int i = beginIdx; i < endIdx; ++i) {
+        uint64_t altBase = baseSeed ^ (0x9E3779B97F4A7C15ULL * static_cast<uint64_t>(i + 1));
+        auto altEvalSeeds = makeEvalSeedsDeterministic(altBase);
+
+        auto localSeed32 = static_cast<uint32_t>((altBase >> 32) ^ (altBase & 0xFFFFFFFFu));
+        std::mt19937 localRng(localSeed32);
+
+        int mutatedActions[350];
+        std::string insertedSummary;
+        buildActionsWithRandomInserts(
+            actions,
+            mutatedActions,
+            localRng,
+            STABILITY_RANDOM_ACTION_POOL,
+            STABILITY_EXTRA_ACTIONS_MAX,
+            STABILITY_EXTRA_ACTION_INSERT_PROB,
+            &insertedSummary
+        );
+
+        GAGenome copyForCheck = *bestGenomeCopy;
+        int mTurn = 0;
+        double mMs = 0.0;
+
+        // NOTE: mutatedActions を使う（安定性チェックの意図どおり）
+        (void)evaluateGenome(copyForCheck, players, altEvalSeeds, mutatedActions, turnsLimit, localRng, mTurn, mMs);
+
+        if (mTurn > baselineTurn) {
+            out.instabilitySum += static_cast<double>(mTurn - baselineTurn);
+        }
+        ++out.performed;
+    }
+
+    return out;
+}
+
+
+
 
 #endif // OPTIMIZE_MODE
