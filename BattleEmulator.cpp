@@ -19,7 +19,7 @@
 #include "InputBuilder.h"
 
 
-thread_local int preHP[3] = {0, 0, 0};
+int preHP[3] = {0, 0, 0};
 
 /**
  * @brief 状態データから現在のコンボ情報をリセットします。
@@ -285,8 +285,8 @@ const char *BattleEmulator::getActionName(int actionId) {
 }
 
 
-thread_local int threadTurnProcessed = 0;
-thread_local int startTurn = 0;
+int threadTurnProcessed = 0;
+int startTurn = 0;
 
 void BattleEmulator::resetStartTurn() {
     startTurn = 0;

@@ -46,26 +46,26 @@ constexpr ActionEntry ACTION_TABLE[] = {
     { BattleEmulator::MIDHEAL,  [](const Genome& g) {
         return (g.AllyPlayer.hp / g.AllyPlayer.maxHp) < 0.7;
     },
-     [](const Genome& before, const Genome& after) { return true; }
+     [](const Genome&, const Genome&) { return true; }
     },
     { BattleEmulator::SPECIAL_ANTIDOTE, [](const Genome& g) {
         return g.AllyPlayer.PoisonEnable == true && g.AllyPlayer.SpecialAntidoteCount > 0;
     },
-     [](const Genome& before, const Genome& after) { return true; }
+     [](const Genome&, const Genome&) { return true; }
     },
     { BattleEmulator::SPECIAL_MEDICINE,      [](const Genome& g) {
         return g.AllyPlayer.SpecialMedicineCount > 0;
     },
-     [](const Genome& before, const Genome& after) { return true; }
+     [](const Genome&, const Genome&) { return true; }
     },
     { BattleEmulator::FLEE_ALLY,    [](const Genome&) { return true; },
-        [](const Genome& before, const Genome& after) { return true; }
+        [](const Genome&, const Genome&) { return true; }
     },
 { BattleEmulator::DOUBLE_UP,
         [](const Genome& g) {
             return g.AllyPlayer.AtkBuffLevel == 0;
     },
-    [](const Genome& before, const Genome& after) { return true; }
+    [](const Genome&, const Genome&) { return true; }
     },
     { BattleEmulator::PSYCHE_UP_ALLY,
         [](const Genome& g) {
@@ -78,12 +78,16 @@ constexpr ActionEntry ACTION_TABLE[] = {
     },
     { BattleEmulator::BUFF,
         [](const Genome& g) { return g.AllyPlayer.mp >= 10 && g.AllyPlayer.BuffLevel <= 1; },
-        [](const Genome& before, const Genome& after) { return true; }
+        [](const Genome&, const Genome&) { return true; }
     },
     { BattleEmulator::MULTITHRUST,
         [](const Genome& g) { return g.AllyPlayer.mp >= 10; },
-        [](const Genome& before, const Genome& after) { return true; }
-    }
+        [](const Genome&, const Genome&) { return true; }
+    },
+    { BattleEmulator::DEFENCE,
+        [](const Genome&) { return true; },
+        [](const Genome&, const Genome&) { return true; }
+    },
 };
 
 // ★ ここが本体 ★

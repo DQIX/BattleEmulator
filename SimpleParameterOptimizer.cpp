@@ -24,19 +24,33 @@
 
 // --- 設定 ---
 static constexpr int MAX_ACTION_ID = 512;
-static constexpr int ids = 25;
+static constexpr int ids = 26;
 static constexpr double DEFAULT_ACTION_COST = 1.0;
 static constexpr double DEFAULT_STEP = 0.5; // 変異の基本スケール
 
 // GA パラメータ（必要なら調整）
-static constexpr int GA_POPULATION = 50;
-static constexpr int GA_OFFSPRING = 30; // 1世代あたり生成する子の数
+static constexpr int GA_POPULATION = 50; // 1世代あたり生成する子の数
 static constexpr double GA_MUTATION_PROB = 0.15; // 各遺伝子が変異する確率
 static constexpr double GA_CROSSOVER_PROB = 0.9; // 親から交叉する確率
-static constexpr double GA_SEED_CHANGE_PROB = 0.2; // 評価時に初期シードを変える確率
-static constexpr int GA_EVAL_SEEDS = 10;
+static constexpr int GA_EVAL_SEEDS = 30;
 
-// この配列に最適化対象の action id を並べるだけで追加完了
+// --- Stability tuning parameters (内部定義・調整可能) ---
+constexpr int STABILITY_CHECKS = 100;           // 世代ごとに最良個体を何回別 seed で再評価するか
+constexpr double GA_INSTABILITY_WEIGHT = 10.0; // instability を fitness に掛ける重み（経験則で調整）
+
+// ---- 安定性チェック用: ランダム追加 actions（compile 時に決める） ----
+// ここを編集するだけで「追加しうる行動」を切り替え可能
+static constexpr std::array<int, 3> STABILITY_RANDOM_ACTION_POOL = {
+    BattleEmulator::BUFF,
+    BattleEmulator::SPECIAL_MEDICINE,
+    BattleEmulator::PSYCHE_UP_ALLY, // ※ もし敵の PSYCHE_UP を混ぜたいなら BattleEmulator::PSYCHE_UP を入れる
+};
+// 1回の stability check で最大いくつ挿入するか（0なら無効）
+static constexpr double STABILITY_EXTRA_ACTION_INSERT_PROB = 0.60;
+
+
+// この配列に最適化対象の aABILITY_EXTRA_ACTIONS_MAX = 3;
+//// 各挿入を行う確率（1.0=必ずction id を並べるだけで追加完了
 static constexpr std::array<int, ids> TUNE_IDS = {
     BattleEmulator::MIDHEAL,
     BattleEmulator::SPECIAL_ANTIDOTE,
@@ -46,6 +60,7 @@ static constexpr std::array<int, ids> TUNE_IDS = {
     BattleEmulator::FLEE_ALLY,
     BattleEmulator::BUFF,
     BattleEmulator::MULTITHRUST,
+    BattleEmulator::DEFENCE,
     SimpleParameterOptimizerNode::turnHeignt,
     SimpleParameterOptimizerNode::enemyHpWeight,
     SimpleParameterOptimizerNode::playerHpWeight,
@@ -67,6 +82,69 @@ static constexpr std::array<int, ids> TUNE_IDS = {
 
 // action cost テーブル（一次真実源）
 static std::array<double, MAX_ACTION_ID> s_actionCosts;
+
+// --- 安定性チェック用: actions をコピーしてランダム挿入する（本体 actions は汚さない） ---
+template <size_t N>
+static int buildActionsWithRandomInserts(
+    const int srcActions[350],
+    int dstActions[350],
+    std::mt19937 &rng,
+    const std::array<int, N> &pool,
+    int maxInserts,
+    double insertProb,
+    std::string *outInsertedSummary // nullptr 可
+) {
+    // src をコピー & 長さ測定
+    int len = 0;
+    for (; len < 350; ++len) {
+        dstActions[len] = srcActions[len];
+        if (srcActions[len] == -1) break;
+    }
+    if (len == 350) {
+        // 念のため終端を保証
+        dstActions[349] = -1;
+        len = 349;
+    }
+
+    if (maxInserts <= 0 || N == 0 || insertProb <= 0.0) {
+        if (outInsertedSummary) *outInsertedSummary = "";
+        return len;
+    }
+
+    std::uniform_real_distribution<double> uni01(0.0, 1.0);
+    std::uniform_int_distribution<int> pickAction(0, static_cast<int>(N) - 1);
+
+    std::ostringstream oss;
+    int inserted = 0;
+
+    // 「-1」を含まない実データ長（挿入位置計算に使う）
+    int dataLen = 0;
+    while (dataLen < 350 && dstActions[dataLen] != -1) ++dataLen;
+
+    for (int k = 0; k < maxInserts; ++k) {
+        if (uni01(rng) > insertProb) continue;
+        if (dataLen >= 349) break; // これ以上挿入すると -1 が置けない
+
+        const int actionToInsert = pool[pickAction(rng)];
+        std::uniform_int_distribution<int> pickPos(0, dataLen); // 末尾(=append)も含む
+        const int pos = pickPos(rng);
+
+        // 右に1つずらして挿入
+        for (int i = std::min(349, dataLen); i > pos; --i) {
+            dstActions[i] = dstActions[i - 1];
+        }
+        dstActions[pos] = actionToInsert;
+        ++dataLen;
+        dstActions[dataLen] = -1; // 終端更新
+
+        if (inserted > 0) oss << ", ";
+        oss << BattleEmulator::getActionName(actionToInsert) << "@idx" << pos;
+        ++inserted;
+    }
+
+    if (outInsertedSummary) *outInsertedSummary = oss.str();
+    return dataLen;
+}
 
 // --- ヘルパ関数 ---
 static void initActionCostsIfNeeded() {
@@ -235,10 +313,6 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
 
     int evaluations = 1; // already did base evaluation
     const int maxEvaluations = std::max(1, maxTests);
-
-    // --- Stability tuning parameters (内部定義・調整可能) ---
-    constexpr int STABILITY_CHECKS = 20;           // 世代ごとに最良個体を何回別 seed で再評価するか
-    constexpr double GA_INSTABILITY_WEIGHT = 10.0; // instability を fitness に掛ける重み（経験則で調整）
     // --------------------------------------------------------
 
     // GA loop
@@ -360,6 +434,18 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
                 // local RNG: main rng を汚さないため、altBase に基づく固定シードを使う
                 uint32_t localSeed32 = static_cast<uint32_t>((altBase >> 32) ^ (altBase & 0xFFFFFFFFu));
                 std::mt19937 localRng(localSeed32);
+
+                int mutatedActions[350];
+                std::string insertedSummary;
+                buildActionsWithRandomInserts(
+                    actions,
+                    mutatedActions,
+                    localRng,
+                    STABILITY_RANDOM_ACTION_POOL,
+                    STABILITY_EXTRA_ACTIONS_MAX,
+                    STABILITY_EXTRA_ACTION_INSERT_PROB,
+                    &insertedSummary
+                );
 
                 // 評価はコピーで行う（population のデータを書き換えない）
                 GAGenome copyForCheck = bestGenomeCopy;
