@@ -182,6 +182,8 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
     Player CopedPlayers3[2];
 
+    auto lastimp = 0;
+
     for (int i = 0; i < 3; ++i) {
         if (!solutionFound) {
             maxGenerations *= 2;
@@ -195,20 +197,6 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
             auto preGCost = currentNode.gCost;
 
-            //Progress reporting with constraint info
-            // if (counter % 10 == 0) {
-            //     percenttmp = counter / static_cast<double>(maxGenerations) * 100.0;
-            //     if (percenttmp != percent) {
-            //         std::cout << "[Node Info] " << percenttmp << "%"
-            //                   << " | turn=" << currentNode.genome.turn
-            //                   << " | hCost=" << currentNode.hCost
-            //                   << " | gCost=" << currentNode.gCost
-            //                   << " | enemyHP=" << currentNode.genome.EnemyPlayer.hp
-            //                   << " | bestTurn=" << (solutionFound ? bestSolution.turn - 1: -1)
-            //                   << std::endl;
-            //         percent = percenttmp;
-            //     }
-            // }
 
 
             // if (counter % 1000000 == 0) {
@@ -230,6 +218,22 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
             const Genome currentGenome = Pool.get(currentNode.nodeId);
 
+            //Progress reporting with constraint info
+            // if (false && counter % 10 == 0) {
+            //     percenttmp = counter / static_cast<double>(maxGenerations) * 100.0;
+            //     if (percenttmp != percent) {
+            //         std::cout << "[Node Info] " << percenttmp << "%"
+            //                   << " | turn=" << currentGenome.turn
+            //                   << " | hCost=" << currentNode.hCost
+            //                   << " | gCost=" << currentNode.gCost
+            //                   << " | enemyHP=" << currentGenome.EnemyPlayer.hp
+            //                   << " | bestTurn=" << (solutionFound ? bestSolution.turn - 1: -1)
+            //                   << std::endl;
+            //         percent = percenttmp;
+            //     }
+            // }
+
+
             // Turn limit check
             if (currentGenome.turn > startT) {
                 continue;
@@ -241,10 +245,15 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             // Victory condition check
             if (currentGenome.EnemyPlayer.hp <= 0) {
                 if (!solutionFound || currentGenome.turn < bestSolution.turn) {
+                    lastimp = counter;
                     bestSolution = currentGenome;
                     solutionFound = true;
                 }
                 continue;
+            }
+
+            if (solutionFound && counter - lastimp > 1000) {
+                return bestSolution;
             }
 
             // Defeat condition check

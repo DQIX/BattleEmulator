@@ -11,6 +11,7 @@
 #include "BattleEmulator.h"
 #include "debug.h"
 #include "ActionOptimizer.h"
+#include "EnhancedHeapQueue.h"
 #include "InputBuilder.h"
 #if defined(OPTIMIZE_MODE)
 #include "SimpleParameterOptimizer.h"
@@ -444,6 +445,46 @@ namespace {
         return true;
     }
 
+    NOINLINE void logMemoryUsage(
+    std::ostream& os,
+    uint64_t nodes,
+    size_t genomeSize,
+    size_t astarNodeSize
+) {
+        const uint64_t bytes =
+            nodes * (static_cast<uint64_t>(genomeSize)
+                   + static_cast<uint64_t>(astarNodeSize));
+
+        constexpr uint64_t KB = 1024ull;
+        constexpr uint64_t MB = 1024ull * KB;
+        constexpr uint64_t GB = 1024ull * MB;
+
+        double value;
+        const char* unit;
+
+        if (bytes >= GB) {
+            value = static_cast<double>(bytes) / GB;
+            unit = "GB~";
+        } else if (bytes >= MB) {
+            value = static_cast<double>(bytes) / MB;
+            unit = "MB~";
+        } else if (bytes >= KB) {
+            value = static_cast<double>(bytes) / KB;
+            unit = "KB~";
+        } else {
+            value = static_cast<double>(bytes);
+            unit = "B";
+        }
+
+        os << "Nodes used: " << nodes
+           << ", Memory: "
+           << std::fixed << std::setprecision(2)
+           << value << " " << unit;
+
+        os << std::endl;
+    }
+
+
     /**
      * このexeのメインロジック。
      *
@@ -565,7 +606,8 @@ namespace {
         auto t3 = std::chrono::high_resolution_clock::now();
         auto elapsed_time1 =
                 std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
-        PerformanceDebug("Searcher multi", turnProcessed, static_cast<double>(elapsed_time1), 0);
+        PerformanceDebug("Searcher", turnProcessed, static_cast<double>(elapsed_time1), 0);
+        logMemoryUsage(performanceLogger, ActionOptimizer::getNodesUsed(), sizeof(Genome), sizeof(EnhancedAStarNode));
 #endif
 
         if (genome.turn >= 100) {
@@ -871,6 +913,7 @@ namespace {
     }
 }
 
+
 int main(int argc, char *argv[]) {
     if (argc == 2 && isMatchStrWithTrim(argv[1], "h")) {
         showHeader();
@@ -1028,12 +1071,11 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 0x034f282f;
+    uint64_t seed = 0x037337d4;
 
     int actions[350] = {
         BattleEmulator::BUFF,
         BattleEmulator::BUFF,
-        BattleEmulator::PSYCHE_UP_ALLY,
         -1,
     };
     SearchRequest(BasePlayers, seed, actions, THREAD_COUNT, true);
