@@ -19,29 +19,29 @@
 static constexpr uint64_t kUnevaluatedFitness = std::numeric_limits<uint64_t>::max();
 
 
-constexpr uint64_t FAULT_WEIGHT = 46ull;
-constexpr uint64_t TURN_WEIGHT  = 42ull;
-constexpr uint64_t HP_WEIGHT    = 30ull;
-constexpr uint64_t MS_WEIGHT    = 22ULL;
-constexpr uint64_t NODES_WEIGHT = 8ull;
+constexpr uint64_t FAULT_WEIGHT = 50ull;
+constexpr uint64_t TURN_WEIGHT  = 32ull;
+constexpr uint64_t HP_WEIGHT    = 16ull;
+//constexpr uint64_t MS_WEIGHT    = -24ULL;
+//constexpr uint64_t NODES_WEIGHT = 10ull;
 constexpr uint64_t HERB_WEIGHT = 0ull;
 
 static_assert(FAULT_WEIGHT > TURN_WEIGHT);
 static_assert(TURN_WEIGHT  > HP_WEIGHT);
-static_assert(HP_WEIGHT    > MS_WEIGHT);
-static_assert(MS_WEIGHT    > NODES_WEIGHT);
-static_assert(NODES_WEIGHT > HERB_WEIGHT);
+// static_assert(HP_WEIGHT    > MS_WEIGHT);
+//static_assert(MS_WEIGHT    > NODES_WEIGHT);
+static_assert(HP_WEIGHT > HERB_WEIGHT);
 
 static constexpr int MAX_ACTION_ID = 512;
-static constexpr int ids = 25;
+static constexpr int ids = 26;
 static constexpr double DEFAULT_ACTION_COST = 1.0;
 static constexpr double DEFAULT_STEP = 0.5; // 変異の基本スケール
 
 // GA パラメータ（必要なら調整）
-static constexpr int GA_POPULATION = 200; // 1世代あたり生成する子の数
+static constexpr int GA_POPULATION = 50; // 1世代あたり生成する子の数
 static constexpr double GA_MUTATION_PROB = 0.15; // 各遺伝子が変異する確率
 static constexpr double GA_CROSSOVER_PROB = 0.9; // 親から交叉する確率
-static constexpr int GA_EVAL_SEEDS = 1;
+static constexpr int GA_EVAL_SEEDS = 5;
 static constexpr uint64_t kNumThreads = 8; // ★固定スレッド数（好きに調整）
 
 // --- Stability tuning parameters (内部定義・調整可能) ---
@@ -69,7 +69,7 @@ struct OptimResult {
 };
 
 
-// --- 追加: クッション関数（範囲を評価して結果だけ返す） ---
+// --- 追加: idx（範囲を評価して結果だけ返す） ---
 struct EvalResult {
     int index = -1;
     uint64_t fitness = UINT64_MAX;
@@ -77,6 +77,7 @@ struct EvalResult {
     uint64_t totalHP; // 実測ターン
     uint64_t faultCount; // 実測ターン
     double measuredMs = 0.0;
+    int idx = 0;
 };
 
 // --- 遺伝的アルゴリズム実装 ---

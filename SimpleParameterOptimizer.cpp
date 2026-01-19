@@ -24,6 +24,7 @@
 #include <string>
 #include <cstdint>
 
+#include "lcg.h"
 #include "setting.h"
 
 // --- 設定 ---
@@ -55,6 +56,7 @@ static constexpr std::array<int, ids> TUNE_IDS = {
     SimpleParameterOptimizerNode::AtkBuffWeight,
     SimpleParameterOptimizerNode::TensionWeight,
     SimpleParameterOptimizerNode::AntidoteWeight,
+    SimpleParameterOptimizerNode::SpecialMedicineCount,
 };
 
 static_assert(TUNE_IDS[ids - 1] != 0, "TUNE_IDS mismatch");
@@ -148,8 +150,6 @@ static inline void ensureActionCostsInitializedForThisThread() {
     tlsInited = true;
 }
 
-// --- evaluateGenomeRange: EvalResult::fitness は uint64_t に準拠 ---
-// ... existing code ...
 static uint64_t evaluateGenome(
     GAGenome &g,
     const Player players[2],
@@ -160,26 +160,30 @@ static uint64_t evaluateGenome(
     double &outMs,
     uint64_t &outtotalHP,
     uint64_t &outfaultCount
-
 ) {
     ensureActionCostsInitializedForThisThread();
     BattleEmulator::ResetTurnProcessed();
 
-    // genes を s_actionCosts に適用（評価時のみ）
+    // --- genes を action cost に適用 ---
     auto backup = s_actionCosts;
     for (size_t i = 0; i < g.genes.size(); ++i) {
         int aid = TUNE_IDS[i];
-        if (aid >= 0 && aid < MAX_ACTION_ID) s_actionCosts[aid] = g.genes[i];
+        if (aid >= 0 && aid < MAX_ACTION_ID) {
+            s_actionCosts[aid] = g.genes[i];
+        }
     }
-    constexpr uint64_t kFailedTurnSentinel = 9999; // ★失敗時は「成功ターン」として扱わない
 
-    uint64_t totalTurn = 0;
+    constexpr uint64_t kFailedTurnSentinel = 9999;
+
+    // --- 評価用集計 ---
+    uint64_t bestTurn = kFailedTurnSentinel;   // ★最重要
+    double   successTurnSum = 0.0;
+    uint64_t successCount = 0;
+
+    uint64_t totalMs10 = 0;
     int totalHP = 0;
-
-    uint64_t totalMs10 = 0; // 0.1ms 単位
+    uint64_t totalHerb = 0;
     uint64_t faultCount = 0;
-    uint64_t totalherb = 0;
-    int performed = 0;
 
     for (int i = 0; i < GA_EVAL_SEEDS; ++i) {
         const uint64_t seedToUse = evalSeeds[i];
@@ -189,55 +193,70 @@ static uint64_t evaluateGenome(
         uint64_t turn = 0;
         int enemyHp = 0;
         int herbcount = 0;
+
         SimpleParameterOptimizer::testParameters(
-            players, seedToUse, actions, static_cast<int>(turnsLimit), turn, enemyHp, herbcount
+            players, seedToUse, actions,
+            static_cast<int>(turnsLimit),
+            turn, enemyHp, herbcount
         );
 
         auto t1 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed = t1 - t0;
 
         totalMs10 += static_cast<uint64_t>(elapsed.count() * 10.0);
-
         totalHP += enemyHp;
-        totalherb += setting::herbcount - herbcount;
-        ++performed;
+        totalHerb += setting::herbcount - herbcount;
 
-        if (enemyHp != 0) {
-            totalTurn += 999;
-            ++faultCount;
+        if (enemyHp == 0) {
+            // ★成功 seed のみ評価に使う
+            bestTurn = std::min(bestTurn, turn);
+            successTurnSum += static_cast<double>(turn);
+            ++successCount;
         } else {
-            totalTurn += turn;
+            ++faultCount;
         }
     }
 
-    const uint64_t denom = (performed > 0) ? static_cast<uint64_t>(performed) : 1ULL;
+    // --- 成功 seed のみで平均 ---
+    const double avgTurn =
+        (successCount > 0)
+            ? (successTurnSum / static_cast<double>(successCount))
+            : static_cast<double>(kFailedTurnSentinel);
 
-    const uint64_t avgTurn = totalTurn / denom;
-    const uint64_t avgHP   = static_cast<uint64_t>(totalHP) / denom;
-    const uint64_t avgMs10 = totalMs10 / denom;
-    const uint64_t avgherb = totalherb / denom;
+    const double avgHP =
+        (successCount > 0)
+            ? static_cast<double>(totalHP) / successCount
+            : static_cast<double>(totalHP);
 
-    outMs = static_cast<double>(avgMs10) / 10.0;
-    outtotalHP = avgHP;
-    // ★重要：成功(全seed討伐)のときだけ「成功ターン」を返す。失敗は 9999 扱い。
-    const bool solvedAll = (faultCount == 0);
-    outTurns = solvedAll ? avgTurn : kFailedTurnSentinel;
+    const double avgherb =
+        (successCount > 0)
+            ? static_cast<double>(totalHerb) / successCount
+            : static_cast<double>(totalHerb);
 
-    const uint64_t f =
-          (faultCount << FAULT_WEIGHT)
-        | (avgTurn << TURN_WEIGHT)
-        | (avgHP << HP_WEIGHT)
-        | (avgMs10 << MS_WEIGHT)
-        | (BattleEmulator::getTurnProcessed() << NODES_WEIGHT)
-        | (avgherb << HERB_WEIGHT);
+    const double avgMs =
+        static_cast<double>(totalMs10) / (GA_EVAL_SEEDS * 10.0);
 
+    // --- 出力 ---
+    outTurns = (bestTurn < kFailedTurnSentinel)
+        ? bestTurn
+        : kFailedTurnSentinel;
 
+    outMs = avgMs;
+    outtotalHP = static_cast<uint64_t>(avgHP);
     outfaultCount = faultCount;
+
+    // --- fitness 合成 ---
+    // ★ OR 禁止。必ず +
+    // ★ bestTurn を主、avgTurn を副
+    const uint64_t f =
+          (bestTurn << TURN_WEIGHT)
+        + (static_cast<uint64_t>(avgTurn * 100.0) << (TURN_WEIGHT - 8))
+        + (static_cast<uint64_t>(avgherb * 100.0) << HERB_WEIGHT)
+        + (faultCount << (TURN_WEIGHT - 12)); // ★失敗 seed に軽いペナルティ
 
     s_actionCosts = backup;
     return f;
 }
-
 
 // --- testParameters の定義（参照版） ---
 void SimpleParameterOptimizer::testParameters(
@@ -249,6 +268,7 @@ void SimpleParameterOptimizer::testParameters(
     int &outEnemyHp,
     int &outherb
 ){
+    lcg::init(seed);
     Player copiedPlayers[2] = { players[0], players[1] };
 
     int gene[350];
@@ -391,14 +411,6 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
 
         constexpr int MAX_ID = 200;
 
-        std::vector<double> tmp(MAX_ID + 1, 0.0);
-
-        // id → 値 を埋める
-        for (size_t i = 0; i < population[0].genes.size(); ++i) {
-            int id = TUNE_IDS[i];
-            tmp[id] = population[0].genes[i];
-        }
-
         // --- ここから並列評価ブロック ---
         // 未評価 index を収集（予算も考慮）
         std::vector<int> pending;
@@ -465,6 +477,47 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
                         result.found = true;
                         std::cout << "[GA] improvement -> bestTurn=" << result.bestTurn << std::endl;
                         std::cout << std::endl;
+
+                        // constexpr 配列リテラルとして出力
+                        std::cout << "constexpr std::array<double, " << (MAX_ID + 1)
+                                  << "> GENOME = {\n";
+
+                        std::vector<double> tmp(MAX_ID + 1, 0.0);
+
+                        // id → 値 を埋める
+                        for (size_t i = 0; i < population[r.idx].genes.size(); ++i) {
+                            int id = TUNE_IDS[i];
+                            tmp[id] = population[r.idx].genes[i];
+                        }
+
+                        auto flag = false;
+                        auto flag1 = false;
+                        for (int id = 0; id <= MAX_ID; ++id) {
+                            if (tmp[id] != 0.0 && flag) {
+                                std::cout << "\n";
+                                flag1 = true;
+                            }
+                            if (tmp[id] != 0.0) {
+                                std::cout << "    /* " << id << " */ " << tmp[id];
+                            } else {
+                                if (flag1) {
+                                    std::cout << "    ";
+                                    flag1 = false;
+                                }
+                                std::cout << "0.0";
+                            }
+                            if (id != MAX_ID)
+                                std::cout << ",";
+                            if (tmp[id] > 0.0) {
+                                std::cout << "\n";
+                                flag = false;
+                                flag1 = true;
+                            } else {
+                                flag = true;
+                            }
+                        }
+
+                        std::cout << "\n};\n";
                     }
 
                     if (evaluations >= maxEvaluations) break;
@@ -477,39 +530,6 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
         std::sort(population.begin(), population.end(), [](const GAGenome &a, const GAGenome &b){
             return a.fitness < b.fitness;
         });
-
-        // constexpr 配列リテラルとして出力
-        std::cout << "constexpr std::array<double, " << (MAX_ID + 1)
-                  << "> GENOME = {\n";
-
-        auto flag = false;
-        auto flag1 = false;
-        for (int id = 0; id <= MAX_ID; ++id) {
-            if (tmp[id] != 0.0 && flag) {
-                std::cout << "\n";
-                flag1 = true;
-            }
-            if (tmp[id] != 0.0) {
-                std::cout << "    /* " << id << " */ " << tmp[id];
-            } else {
-                if (flag1) {
-                    std::cout << "    ";
-                    flag1 = false;
-                }
-                std::cout << "0.0";
-            }
-            if (id != MAX_ID)
-                std::cout << ",";
-            if (tmp[id] > 0.0) {
-                std::cout << "\n";
-                flag = false;
-                flag1 = true;
-            } else {
-                flag = true;
-            }
-        }
-
-        std::cout << "\n};\n";
 
         // ---------- Stability feedback ----------
         if (false && !population.empty()) {
@@ -696,6 +716,7 @@ std::vector<EvalResult> SimpleParameterOptimizer::evaluateGenomeRange(std::vecto
         r.measuredMs = measuredMs;
         r.totalHP = outtotalHP;
         r.faultCount = outfaultCount;
+        r.idx = idx;
         out.push_back(r);
     }
 

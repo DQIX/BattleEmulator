@@ -14,7 +14,7 @@ const int ARRAY_SIZE = 50000;
 
 thread_local uint32_t precalcTop32[ARRAY_SIZE]; // 固定メモリ
 thread_local int nowCounter = 1;
-thread_local uint64_t now_seed;      // 現在のシード（逐次 or ジャンプ後）
+thread_local uint64_t now_seed = 0;      // 現在のシード（逐次 or ジャンプ後）
 thread_local bool init_mode;         // true = 初期一括生成モード
 #else
 const int ARRAY_SIZE = 5000;
@@ -51,6 +51,7 @@ void lcg::init(uint64_t seed, bool init) {
  * @param need 更新を必要とする配列のインデックス
  */
 void lcg::GenerateifNeed(int need) {
+    assert(now_seed != 0);
     // 配列に値を再計算して格納する
     if(nowCounter > need){
         return;
