@@ -385,6 +385,9 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
     result.bestTurn = 9999;
     result.testCount = 0;
     result.found = false;
+    result.bestStableDeviation = 0;
+    result.bestStableGap = 0;
+    result.testCount = 0;
 
     // snapshot
     std::vector<double> originalCosts(MAX_ACTION_ID);
@@ -550,7 +553,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
                         else if (r.stabilityGap == result.bestStableGap &&
                                  r.maxDeviation > 0 &&
                                  r.maxDeviation < result.bestStableDeviation) {
-                            improved = true;
+                                    improved = true;
                                  }
                     }
                     if (improved){
@@ -568,9 +571,9 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
                         std::vector<double> tmp(MAX_ID + 1, 0.0);
 
                         // id → 値 を埋める
-                        for (size_t i = 0; i < population[r.idx].genes.size(); ++i) {
+                        for (size_t i = 0; i < population[r.index].genes.size(); ++i) {
                             int id = TUNE_IDS[i];
-                            tmp[id] = population[r.idx].genes[i];
+                            tmp[id] = population[r.index].genes[i];
                         }
 
                         auto flag = false;
