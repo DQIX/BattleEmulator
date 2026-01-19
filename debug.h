@@ -36,7 +36,7 @@
 #endif
 
 
-//#define DEBUG3 1
+#define DEBUG3 1
 
 #if defined(DEBUG3)
 
