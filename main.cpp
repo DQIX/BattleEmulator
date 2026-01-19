@@ -76,7 +76,7 @@ namespace {
     constexpr Player BasePlayers[2] = {
         // プレイヤー1
         {
-            56, 56.0, 57, 57, 50, 50, 33, 33, 22, 19, // 最初のメンバー
+            setting::Ally_MAX_HP, static_cast<double>(setting::Ally_MAX_HP), 57, 57, 50, 50, 33, 33, 22, 19, // 最初のメンバー
             19, true, false, -1, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             setting::herbcount, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
@@ -85,7 +85,7 @@ namespace {
 
         // プレイヤー2
         {
-            296, 296.0, 53, 53, 50, 50, 45, 45, 0, 255, // 最初のメンバー
+            setting::ENEMY_MAX_HP, static_cast<double>(setting::ENEMY_MAX_HP), 53, 53, 50, 50, 45, 45, 0, 255, // 最初のメンバー
             255, false, false, 0, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             0, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns

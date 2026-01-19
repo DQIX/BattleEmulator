@@ -197,14 +197,16 @@ static uint64_t evaluateGenome(
         std::chrono::duration<double, std::milli> elapsed = t1 - t0;
 
         totalMs10 += static_cast<uint64_t>(elapsed.count() * 10.0);
-        totalTurn += turn;
+
         totalHP += enemyHp;
         totalherb += setting::herbcount - herbcount;
         ++performed;
 
         if (enemyHp != 0) {
+            totalTurn += 999;
             ++faultCount;
-            break;
+        } else {
+            totalTurn += turn;
         }
     }
 
@@ -223,11 +225,11 @@ static uint64_t evaluateGenome(
 
     const uint64_t f =
           (faultCount << FAULT_WEIGHT)
-        + ((solvedAll == false ? 9999ULL : avgTurn) << TURN_WEIGHT)
-        + (avgHP << HP_WEIGHT)
-        + (avgMs10 << MS_WEIGHT)
-        + (BattleEmulator::getTurnProcessed() << NODES_WEIGHT)
-        + (avgherb << HERB_WEIGHT);
+        | (avgTurn << TURN_WEIGHT)
+        | (avgHP << HP_WEIGHT)
+        | (avgMs10 << MS_WEIGHT)
+        | (BattleEmulator::getTurnProcessed() << NODES_WEIGHT)
+        | (avgherb << HERB_WEIGHT);
 
 
     outfaultCount = faultCount;

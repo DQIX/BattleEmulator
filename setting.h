@@ -8,6 +8,8 @@
 class setting {
 public:
     static constexpr int herbcount = 8;
+    static constexpr int ENEMY_MAX_HP = 296;
+    static constexpr int Ally_MAX_HP = 56;
 };
 
 #endif //NEWDIRECTORY_SETTING_H

@@ -24,7 +24,13 @@ constexpr uint64_t TURN_WEIGHT  = 42ull;
 constexpr uint64_t HP_WEIGHT    = 30ull;
 constexpr uint64_t MS_WEIGHT    = 22ULL;
 constexpr uint64_t NODES_WEIGHT = 8ull;
-constexpr uint64_t HERB_WEIGHT = 0;
+constexpr uint64_t HERB_WEIGHT = 0ull;
+
+static_assert(FAULT_WEIGHT > TURN_WEIGHT);
+static_assert(TURN_WEIGHT  > HP_WEIGHT);
+static_assert(HP_WEIGHT    > MS_WEIGHT);
+static_assert(MS_WEIGHT    > NODES_WEIGHT);
+static_assert(NODES_WEIGHT > HERB_WEIGHT);
 
 static constexpr int MAX_ACTION_ID = 512;
 static constexpr int ids = 25;
@@ -32,14 +38,14 @@ static constexpr double DEFAULT_ACTION_COST = 1.0;
 static constexpr double DEFAULT_STEP = 0.5; // 変異の基本スケール
 
 // GA パラメータ（必要なら調整）
-static constexpr int GA_POPULATION = 50; // 1世代あたり生成する子の数
+static constexpr int GA_POPULATION = 200; // 1世代あたり生成する子の数
 static constexpr double GA_MUTATION_PROB = 0.15; // 各遺伝子が変異する確率
 static constexpr double GA_CROSSOVER_PROB = 0.9; // 親から交叉する確率
-static constexpr int GA_EVAL_SEEDS = 10;
+static constexpr int GA_EVAL_SEEDS = 1;
 static constexpr uint64_t kNumThreads = 8; // ★固定スレッド数（好きに調整）
 
 // --- Stability tuning parameters (内部定義・調整可能) ---
-constexpr uint64_t STABILITY_CHECKS = 30;           // 世代ごとに最良個体を何回別 seed で再評価するか
+constexpr uint64_t STABILITY_CHECKS = 0;           // 世代ごとに最良個体を何回別 seed で再評価するか
 constexpr uint64_t GA_INSTABILITY_WEIGHT = 10.0; // instability を fitness に掛ける重み（経験則で調整）
 
 // ---- 安定性チェック用: ランダム追加 actions（compile 時に決める） ----
