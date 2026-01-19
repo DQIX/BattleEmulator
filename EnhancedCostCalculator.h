@@ -12,7 +12,7 @@
 class EnhancedCostCalculator {
 public:
     // Calculate enhanced g-cost with action-specific costs
-    static double calculateGCost(const Genome &genome, int action, double preGCost);
+    static double calculateGCost(const Genome &genome, int action);
     
     // Calculate enhanced h-cost with multiple factors
     static double calculateHCost(const Genome &genome, double enemyMaxHp, double playerMaxHp);
