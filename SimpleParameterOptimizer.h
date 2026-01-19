@@ -16,13 +16,15 @@
 
 #include "BattleEmulator.h"
 
+static constexpr uint64_t kUnevaluatedFitness = std::numeric_limits<uint64_t>::max();
+
 static constexpr int MAX_ACTION_ID = 512;
-static constexpr int ids = 26;
+static constexpr int ids = 25;
 static constexpr double DEFAULT_ACTION_COST = 1.0;
 static constexpr double DEFAULT_STEP = 0.5; // 変異の基本スケール
 
 // GA パラメータ（必要なら調整）
-static constexpr int GA_POPULATION = 50; // 1世代あたり生成する子の数
+static constexpr int GA_POPULATION = 200; // 1世代あたり生成する子の数
 static constexpr double GA_MUTATION_PROB = 0.15; // 各遺伝子が変異する確率
 static constexpr double GA_CROSSOVER_PROB = 0.9; // 親から交叉する確率
 static constexpr int GA_EVAL_SEEDS = 10;
@@ -37,12 +39,12 @@ constexpr uint64_t GA_INSTABILITY_WEIGHT = 10.0; // instability を fitness に�
 static constexpr std::array<int, 3> STABILITY_RANDOM_ACTION_POOL = {
     BattleEmulator::ATTACK_ALLY,
     BattleEmulator::MEDICINAL_HERBS,
-    BattleEmulator::DEFENCE, // ※ もし敵の PSYCHE_UP を混ぜたいなら BattleEmulator::PSYCHE_UP を入れる
+    BattleEmulator::DEFENCE,
 };
 // 1回の stability check で最大いくつ挿入するか（0なら無効）
 static constexpr double STABILITY_EXTRA_ACTION_INSERT_PROB = 0.60;
 // 1回の stability check で最大いくつ挿入するか（0なら無効）
-static constexpr int STABILITY_EXTRA_ACTIONS_MAX = 2;
+static constexpr int STABILITY_EXTRA_ACTIONS_MAX = 5;
 
 
 // 最適化結果
@@ -56,7 +58,7 @@ struct OptimResult {
 // --- 追加: クッション関数（範囲を評価して結果だけ返す） ---
 struct EvalResult {
     int index = -1;
-    uint64_t fitness = std::numeric_limits<uint64_t>::infinity();
+    uint64_t fitness = UINT64_MAX;
     uint64_t measuredTurns = 0;
     double measuredMs = 0.0;
 };
@@ -78,18 +80,25 @@ struct StabilityChunkResult {
 
 
 class SimpleParameterOptimizer {
-
-
-    public:
+public:
     // メイン最適化実行（シンプルなランダムサーチ）
     static OptimResult optimize(const Player players[2], uint64_t seed,
                                const int actions[350], int maxTests = 50, int turns = 0);
 
     static double getActionCost(int action);
 
-    // パラメータセットをテスト
+    // ★追加: パラメータセットをテスト（turn と enemyHp を参照で返す）
+    static void testParameters(const Player players[2],
+                              uint64_t seed,
+                              const int actions[350],
+                              int turns,
+                              uint64_t &outTurn,
+                              int &outEnemyHp);
+
+    // 既存API（互換用）
     static uint64_t testParameters(const Player players[2],
-                             uint64_t seed, const int actions[350], int turns);
+                                  uint64_t seed, const int actions[350], int turns);
+
 private:
     static std::vector<EvalResult> evaluateGenomeRange(
         std::vector<GAGenome> *population,
@@ -113,7 +122,6 @@ private:
         const int actions[350],
         int turnsLimit
     );
-
 };
 
 #endif

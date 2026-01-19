@@ -62,11 +62,13 @@ constexpr ActionEntry ACTION_TABLE[] = {
     { BattleEmulator::HEAL,
         [](const Genome& g) {return g.AllyPlayer.mp >= 2;},
         [](const Genome&, const Genome&) { return true;}
-        // 事後: テンションが上がったか
-
     },
     { BattleEmulator::CRACK_ALLY,
         [](const Genome& g) { return g.AllyPlayer.mp >= 3; },
+        [](const Genome&, const Genome&) { return true; }
+    },
+    { BattleEmulator::ACROBATIC_STAR,
+        [](const Genome& g) { return g.AllyPlayer.specialCharge == true && g.AllyPlayer.specialChargeTurn >= 1; },
         [](const Genome&, const Genome&) { return true; }
     },
 };
@@ -165,7 +167,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
     auto lastimp = 0;
 
-    for (int i = 0; i < 2; ++i) {
+    for (int i = 0; i < 1; ++i) {
         if (!solutionFound) {
             maxGenerations *= 2;
         }else {
