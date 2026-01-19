@@ -857,7 +857,7 @@ int main(int argc, char *argv[]) {
 
     uint64_t seed = 0x03005d91;
 
-    int actions[350] = {BattleEmulator::ATTACK_ALLY, -1,};
+    int actions[350] = {BattleEmulator::DEFENCE, -1,};
     SearchRequest(BasePlayers, seed, actions, THREAD_COUNT);
 
     std::cout << performanceLogger.rdbuf() << std::endl;

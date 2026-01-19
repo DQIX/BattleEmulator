@@ -22,10 +22,10 @@ static constexpr double DEFAULT_ACTION_COST = 1.0;
 static constexpr double DEFAULT_STEP = 0.5; // 変異の基本スケール
 
 // GA パラメータ（必要なら調整）
-static constexpr int GA_POPULATION = 50; // 1世代あたり生成する子の数
+static constexpr int GA_POPULATION = 30; // 1世代あたり生成する子の数
 static constexpr double GA_MUTATION_PROB = 0.15; // 各遺伝子が変異する確率
 static constexpr double GA_CROSSOVER_PROB = 0.9; // 親から交叉する確率
-static constexpr int GA_EVAL_SEEDS = 10;
+static constexpr int GA_EVAL_SEEDS = 5;
 static constexpr uint64_t kNumThreads = 8; // ★固定スレッド数（好きに調整）
 
 // --- Stability tuning parameters (内部定義・調整可能) ---
@@ -42,7 +42,7 @@ static constexpr std::array<int, 3> STABILITY_RANDOM_ACTION_POOL = {
 // 1回の stability check で最大いくつ挿入するか（0なら無効）
 static constexpr double STABILITY_EXTRA_ACTION_INSERT_PROB = 0.60;
 // 1回の stability check で最大いくつ挿入するか（0なら無効）
-static constexpr int STABILITY_EXTRA_ACTIONS_MAX = 2;
+static constexpr int STABILITY_EXTRA_ACTIONS_MAX = 5;
 
 
 // 最適化結果
