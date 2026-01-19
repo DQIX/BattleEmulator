@@ -146,9 +146,11 @@ static uint64_t evaluateGenome(
     const std::array<uint64_t, GA_EVAL_SEEDS> &evalSeeds,
     const int actions[350],
     uint64_t turnsLimit,
-    std::mt19937 &rng,
     uint64_t &outTurns,
-    double &outMs
+    double &outMs,
+    uint64_t &outtotalHP,
+    uint64_t &outfaultCount
+
 ) {
     // genes を s_actionCosts に適用（評価時のみ）
     auto backup = s_actionCosts;
@@ -156,17 +158,12 @@ static uint64_t evaluateGenome(
         int aid = TUNE_IDS[i];
         if (aid >= 0 && aid < MAX_ACTION_ID) s_actionCosts[aid] = g.genes[i];
     }
-
-    // ★turn優先、次にenemyHp（割り算なし）
-    constexpr uint64_t FAULT_WEIGHT = 1000000000000ULL;
-    constexpr uint64_t TURN_WEIGHT  = 1000000000ULL;
-    constexpr uint64_t HP_WEIGHT    = 1000ULL;
-    constexpr uint64_t MS_WEIGHT    = 1ULL;
+    constexpr uint64_t kFailedTurnSentinel = 9999; // ★失敗時は「成功ターン」として扱わない
 
     uint64_t totalTurn = 0;
     int totalHP = 0;
 
-    uint64_t totalMs10 = 0;   // ms を 0.1ms 単位で保持
+    uint64_t totalMs10 = 0; // 0.1ms 単位
     uint64_t faultCount = 0;
 
     for (int i = 0; i < GA_EVAL_SEEDS; ++i) {
@@ -204,20 +201,21 @@ static uint64_t evaluateGenome(
         ? (totalMs10 / static_cast<uint64_t>(GA_EVAL_SEEDS))
         : totalMs10;
 
-    // ★比較・ログ用の measuredTurns は「平均ターン」に統一
-    outTurns = avgTurn;
     outMs = static_cast<double>(avgMs10) / 10.0;
+    outtotalHP = avgHP;
+    // ★重要：成功(全seed討伐)のときだけ「成功ターン」を返す。失敗は 9999 扱い。
+    const bool solvedAll = (faultCount == 0);
+    outTurns = solvedAll ? avgTurn : kFailedTurnSentinel;
 
-    // ★fitness も平均ターン基準で一貫させる（turn最優先）
     const uint64_t f =
         faultCount * FAULT_WEIGHT +
-        avgTurn * TURN_WEIGHT +
+        ((solvedAll == false ? 9999 : avgTurn) * TURN_WEIGHT) +
         avgHP * HP_WEIGHT +
         (avgMs10 / 10) * MS_WEIGHT;
 
-    // restore
-    s_actionCosts = backup;
+    outfaultCount = faultCount;
 
+    s_actionCosts = backup;
     return f;
 }
 
@@ -289,22 +287,11 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
 
     applyActionCostsToCostParams();
 
-    uint64_t out_turn = 0;
-    int b = 0;
-
-    // 初期評価
-    testParameters(players, seed, actions, turns, out_turn , b);
-    result.bestTurn = out_turn;
-    result.testCount = 1;
-    result.found = (out_turn < 9999);
-    std::cout << "[SimpleParameterOptimizer GA] initial turn = " << out_turn << std::endl;
-    // GA 初期化
     std::random_device rd;
     std::mt19937 rng(static_cast<uint32_t>(seed ^ rd()));
 
     const size_t geneCount = TUNE_IDS.size();
 
-    // ★ 追加：評価用 seed 生成関数（世代内で固定に使う）
     auto makeEvalSeeds = [&](uint64_t base) {
         std::array<uint64_t, GA_EVAL_SEEDS> s{};
         s[0] = base;
@@ -318,16 +305,33 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
 
     std::array<uint64_t, GA_EVAL_SEEDS> evalSeeds = makeEvalSeeds(seed);
 
-    // population 初期化: 現状値を中心にランダム化
-    std::vector<GAGenome> population;
-    population.reserve(GA_POPULATION);
-
-    // get current start values
     std::vector<double> startVals(geneCount);
     for (size_t i = 0; i < geneCount; ++i) {
         int aid = TUNE_IDS[i];
         startVals[i] = (aid >= 0 && aid < MAX_ACTION_ID) ? s_actionCosts[aid] : DEFAULT_ACTION_COST;
     }
+
+    {
+        GAGenome baseline;
+        baseline.genes = startVals;
+
+        uint64_t baselineTurn = 0;
+        uint64_t outtotalHP = 0;
+        uint64_t outfaultCount = 0;
+        double baselineMs = 0.0;
+        (void)evaluateGenome(baseline, players, evalSeeds, actions, turns, baselineTurn, baselineMs, outtotalHP, outfaultCount);
+
+        result.bestTurn = baselineTurn;
+        result.testCount = 1;
+        result.found = (baselineTurn < 9999);
+
+        std::cout << "[SimpleParameterOptimizer GA] baseline(avg) turn = " << baselineTurn
+                  << " ms=" << baselineMs << std::endl;
+    }
+
+    // population 初期化: 現状値を中心にランダム化
+    std::vector<GAGenome> population;
+    population.reserve(GA_POPULATION);
 
     std::normal_distribution<double> normDist(0.0, DEFAULT_STEP * 5.0);
     std::uniform_real_distribution<double> uni01(0.0, 1.0);
@@ -339,14 +343,13 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
             double v = startVals[i] + normDist(rng);
             g.genes[i] = v;
         }
-        // ★修正: 整数に infinity() は使わない
         g.fitness = kUnevaluatedFitness;
         g.measuredTurns = 0;
         g.measuredMs = 0.0;
         population.push_back(std::move(g));
     }
 
-    uint64_t evaluations = 1; // 基本評価1回消費済み
+    uint64_t evaluations = 1; // baseline 評価1回消費済み
     const uint64_t maxEvaluations = std::max(1, maxTests);
 
     while (evaluations < maxEvaluations) {
@@ -424,12 +427,13 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
                     ind.fitness = r.fitness;
                     ind.measuredTurns = r.measuredTurns;
                     ind.measuredMs = r.measuredMs;
-
+                    ind.totalHP = r.totalHP;
+                    ind.faultCount = r.faultCount;
                     ++evaluations;
                     ++result.testCount;
 
                     std::cout << "[GA] eval=" << evaluations << " turn=" << r.measuredTurns
-                              << " ms=" << r.measuredMs << " fitness=" << r.fitness << ", best=" << result.bestTurn << std::endl;
+                              << " ms=" << r.measuredMs << " fitness=" << r.fitness << " totalHP=" << r.totalHP << " faultCount=" << r.faultCount << " best=" << result.bestTurn << std::endl;
 
                     if (r.measuredTurns < result.bestTurn) {
                         result.bestTurn = r.measuredTurns;
@@ -489,7 +493,9 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
             if (baselineTurn == 0 || baselineTurn >= 9999) {
                 uint64_t mTurn;
                 double mMs;
-                uint64_t baseFit = evaluateGenome(bestGenomeCopy, players, evalSeeds, actions, turns, rng, mTurn, mMs);
+                uint64_t outtotalHP = 0;
+                uint64_t outfaultCount = 0;
+                uint64_t baseFit = evaluateGenome(bestGenomeCopy, players, evalSeeds, actions, turns, mTurn, mMs, outtotalHP, outfaultCount);
                 baselineTurn = mTurn;
                 ++evaluations;
                 ++result.testCount;
@@ -614,10 +620,14 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
         if (ind.fitness == kUnevaluatedFitness && evaluations < maxEvaluations) {
             uint64_t measuredTurn;
             double measuredMs;
-            uint64_t fit = evaluateGenome(ind, players, evalSeeds, actions, turns, rng, measuredTurn, measuredMs);
+            uint64_t outtotalHP = 0;
+            uint64_t outfaultCount = 0;
+            uint64_t fit = evaluateGenome(ind, players, evalSeeds, actions, turns, measuredTurn, measuredMs, outtotalHP, outfaultCount);
             ind.fitness = fit;
             ind.measuredTurns = measuredTurn;
             ind.measuredMs = measuredMs;
+            ind.totalHP = outtotalHP;
+            ind.faultCount = outfaultCount;
             ++evaluations;
             ++result.testCount;
         }
@@ -649,13 +659,18 @@ std::vector<EvalResult> SimpleParameterOptimizer::evaluateGenomeRange(std::vecto
         uint64_t measuredTurn = 0;
         double measuredMs = 0.0;
 
-        uint64_t fit = evaluateGenome(ind, players, evalSeeds, actions, turnsLimit, localRng, measuredTurn, measuredMs);
+        uint64_t outtotalHP = 0;
+        uint64_t outfaultCount = 0;
+
+        uint64_t fit = evaluateGenome(ind, players, evalSeeds, actions, turnsLimit, measuredTurn, measuredMs, outtotalHP, outfaultCount);
 
         EvalResult r;
         r.index = idx;
         r.fitness = fit; // uint64_t
         r.measuredTurns = measuredTurn;
         r.measuredMs = measuredMs;
+        r.totalHP = outtotalHP;
+        r.faultCount = outfaultCount;
         out.push_back(r);
     }
 
@@ -706,9 +721,11 @@ StabilityChunkResult SimpleParameterOptimizer::stabilityCheckRange(const GAGenom
         GAGenome copyForCheck = *bestGenomeCopy;
         uint64_t mTurn = 0;
         double mMs = 0.0;
+        uint64_t outtotalHP = 0;
+        uint64_t outfaultCount = 0;
 
         // NOTE: mutatedActions を使う（安定性チェックの意図どおり）
-        (void)evaluateGenome(copyForCheck, players, altEvalSeeds, mutatedActions, turnsLimit, localRng, mTurn, mMs);
+        (void)evaluateGenome(copyForCheck, players, altEvalSeeds, mutatedActions, turnsLimit, mTurn, mMs, outtotalHP, outfaultCount);
 
         turns += mTurn;
 

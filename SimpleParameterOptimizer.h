@@ -18,6 +18,11 @@
 
 static constexpr uint64_t kUnevaluatedFitness = std::numeric_limits<uint64_t>::max();
 
+constexpr uint64_t FAULT_WEIGHT = 100000000000ULL;
+constexpr uint64_t TURN_WEIGHT  = 10000000ULL;
+constexpr uint64_t HP_WEIGHT    = 1000ULL;
+constexpr uint64_t MS_WEIGHT    = 1ULL;
+
 static constexpr int MAX_ACTION_ID = 512;
 static constexpr int ids = 25;
 static constexpr double DEFAULT_ACTION_COST = 1.0;
@@ -60,6 +65,8 @@ struct EvalResult {
     int index = -1;
     uint64_t fitness = UINT64_MAX;
     uint64_t measuredTurns = 0;
+    uint64_t totalHP; // 実測ターン
+    uint64_t faultCount; // 実測ターン
     double measuredMs = 0.0;
 };
 
@@ -68,6 +75,8 @@ struct GAGenome {
     std::vector<double> genes; // size = TUNE_IDS.size()
     uint64_t fitness; // 小さいほど良い（ターン優先）
     uint64_t measuredTurns; // 実測ターン
+    uint64_t totalHP; // 実測ターン
+    uint64_t faultCount; // 実測ターン
     double measuredMs; // 実測時間（ms）
 };
 
