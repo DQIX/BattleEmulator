@@ -26,11 +26,11 @@ static constexpr int GA_POPULATION = 50; // 1世代あたり生成する子の�
 static constexpr double GA_MUTATION_PROB = 0.15; // 各遺伝子が変異する確率
 static constexpr double GA_CROSSOVER_PROB = 0.9; // 親から交叉する確率
 static constexpr int GA_EVAL_SEEDS = 10;
-static constexpr int kNumThreads = 8; // ★固定スレッド数（好きに調整）
+static constexpr uint64_t kNumThreads = 8; // ★固定スレッド数（好きに調整）
 
 // --- Stability tuning parameters (内部定義・調整可能) ---
-constexpr int STABILITY_CHECKS = 30;           // 世代ごとに最良個体を何回別 seed で再評価するか
-constexpr double GA_INSTABILITY_WEIGHT = 10.0; // instability を fitness に掛ける重み（経験則で調整）
+constexpr uint64_t STABILITY_CHECKS = 30;           // 世代ごとに最良個体を何回別 seed で再評価するか
+constexpr uint64_t GA_INSTABILITY_WEIGHT = 10.0; // instability を fitness に掛ける重み（経験則で調整）
 
 // ---- 安定性チェック用: ランダム追加 actions（compile 時に決める） ----
 // ここを編集するだけで「追加しうる行動」を切り替え可能
@@ -42,13 +42,13 @@ static constexpr std::array<int, 3> STABILITY_RANDOM_ACTION_POOL = {
 // 1回の stability check で最大いくつ挿入するか（0なら無効）
 static constexpr double STABILITY_EXTRA_ACTION_INSERT_PROB = 0.60;
 // 1回の stability check で最大いくつ挿入するか（0なら無効）
-static constexpr int STABILITY_EXTRA_ACTIONS_MAX = 3;
+static constexpr int STABILITY_EXTRA_ACTIONS_MAX = 2;
 
 
 // 最適化結果
 struct OptimResult {
-    int bestTurn = 999;
-    int testCount = 0;
+    uint64_t bestTurn = 999;
+    uint64_t testCount = 0;
     bool found = false;
 };
 
@@ -56,24 +56,24 @@ struct OptimResult {
 // --- 追加: クッション関数（範囲を評価して結果だけ返す） ---
 struct EvalResult {
     int index = -1;
-    double fitness = std::numeric_limits<double>::infinity();
-    int measuredTurns = 0;
+    uint64_t fitness = std::numeric_limits<uint64_t>::infinity();
+    uint64_t measuredTurns = 0;
     double measuredMs = 0.0;
 };
 
 // --- 遺伝的アルゴリズム実装 ---
 struct GAGenome {
     std::vector<double> genes; // size = TUNE_IDS.size()
-    double fitness; // 小さいほど良い（ターン優先）
-    int measuredTurns; // 実測ターン
+    uint64_t fitness; // 小さいほど良い（ターン優先）
+    uint64_t measuredTurns; // 実測ターン
     double measuredMs; // 実測時間（ms）
 };
 
 // --- 追加: stability check のクッション関数（範囲を評価して合計だけ返す） ---
 struct StabilityChunkResult {
-    double instabilitySum = 0.0;
+    uint64_t instabilitySum = 0;
     int performed = 0;
-    int turns = 0;
+    uint64_t turns = 0;
 };
 
 
@@ -88,7 +88,7 @@ class SimpleParameterOptimizer {
     static double getActionCost(int action);
 
     // パラメータセットをテスト
-    static int testParameters(const Player players[2],
+    static uint64_t testParameters(const Player players[2],
                              uint64_t seed, const int actions[350], int turns);
 private:
     static std::vector<EvalResult> evaluateGenomeRange(
