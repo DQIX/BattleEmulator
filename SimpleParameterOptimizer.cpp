@@ -277,13 +277,42 @@ static uint64_t evaluateGenome(
     // --- fitness 合成 ---
     // ★ OR 禁止。必ず +
     // ★ bestTurn を主、avgTurn を副
-    const uint64_t f =
-           (bestTurn << TURN_WEIGHT)
-         + (static_cast<uint64_t>(avgTurn * 100.0) << (TURN_WEIGHT - 8))
-         + (static_cast<uint64_t>(avgherb * 100.0) << HERB_WEIGHT)
-         + (faultCount << (TURN_WEIGHT - 12)); // ★失敗 seed に軽いペナルティ
+    constexpr int HERB_SHIFT      = 0;   // 8bit
+    constexpr int FAULT_SHIFT     = 8;   // 3bit
+    constexpr int DEVIATION_SHIFT = 11;  // 11bit
+    constexpr int STABILITY_SHIFT = 22;  // 11bit
+    constexpr int SUCCESS_SHIFT   = 33;  // 2bit
+    constexpr int AVG_SHIFT       = 35;  // 12bit
+    constexpr int BEST_SHIFT      = 47;  // 12bit
 
 
+    // ---- 共通で整数化 ----
+    const auto best100 = static_cast<uint64_t>(bestTurn * 100);
+    const auto avg100  = static_cast<uint64_t>(avgTurn  * 100.0);
+    const auto herb100 = static_cast<uint64_t>(avgherb  * 100.0);
+
+    // ---- 失敗フェーズ（全 seed 討伐できていない）----
+    if (bestTurn >= kFailedTurnSentinel) {
+        const uint64_t f =
+              (best100 << BEST_SHIFT)
+            + (avg100  << AVG_SHIFT)
+            + (successCount << SUCCESS_SHIFT)
+            + (faultCount << FAULT_SHIFT)
+            + (herb100 << HERB_SHIFT);
+
+        s_actionCosts = backup;
+        return f;
+    }
+
+    // ---- 成功フェーズ ----
+    uint64_t f =
+          (best100 << BEST_SHIFT)            // 絶対主軸
+        + (avg100  << AVG_SHIFT)             // 平均性能
+        + (outStabilityGap << STABILITY_SHIFT)
+        + (successCount << SUCCESS_SHIFT)
+        + (outMaxDeviation << DEVIATION_SHIFT)
+        + (faultCount << FAULT_SHIFT)
+        + (herb100 << HERB_SHIFT);
 
     s_actionCosts = backup;
     return f;
