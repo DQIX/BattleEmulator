@@ -159,7 +159,9 @@ static uint64_t evaluateGenome(
     uint64_t &outTurns,
     double &outMs,
     uint64_t &outtotalHP,
-    uint64_t &outfaultCount
+    uint64_t &outfaultCount,
+    uint64_t &outStabilityGap,
+    uint64_t &outMaxDeviation
 ) {
     ensureActionCostsInitializedForThisThread();
     BattleEmulator::ResetTurnProcessed();
@@ -184,6 +186,8 @@ static uint64_t evaluateGenome(
     int totalHP = 0;
     uint64_t totalHerb = 0;
     uint64_t faultCount = 0;
+
+    std::vector<double> successTurns{};
 
     for (int i = 0; i < GA_EVAL_SEEDS; ++i) {
         const uint64_t seedToUse = evalSeeds[i];
@@ -212,6 +216,7 @@ static uint64_t evaluateGenome(
             bestTurn = std::min(bestTurn, turn);
             successTurnSum += static_cast<double>(turn);
             ++successCount;
+            successTurns.push_back(static_cast<double>(turn));
         } else {
             ++faultCount;
         }
@@ -225,12 +230,12 @@ static uint64_t evaluateGenome(
 
     const double avgHP =
         (successCount > 0)
-            ? static_cast<double>(totalHP) / successCount
+            ? static_cast<double>(totalHP) / static_cast<double>(successCount)
             : static_cast<double>(totalHP);
 
     const double avgherb =
         (successCount > 0)
-            ? static_cast<double>(totalHerb) / successCount
+            ? static_cast<double>(totalHerb) / static_cast<double>(successCount)
             : static_cast<double>(totalHerb);
 
     const double avgMs =
@@ -245,14 +250,40 @@ static uint64_t evaluateGenome(
     outtotalHP = static_cast<uint64_t>(avgHP);
     outfaultCount = faultCount;
 
+    if (successCount >= 2) {
+        double worstTurn = 0.0;
+        for (double t : successTurns) {
+            worstTurn = std::max(worstTurn, t);
+        }
+
+        double stabilityGap = worstTurn - avgTurn;
+
+        // median-based deviation
+        std::sort(successTurns.begin(), successTurns.end());
+        double median = successTurns[successTurns.size() / 2];
+        double maxDeviation = 0.0;
+        for (double t : successTurns) {
+            maxDeviation = std::max(maxDeviation, std::abs(t - median));
+        }
+
+        // out 用（整数化）
+        outStabilityGap = static_cast<uint64_t>(stabilityGap * 100.0);
+        outMaxDeviation = static_cast<uint64_t>(maxDeviation * 100.0);
+    }else {
+        outStabilityGap = 0;
+        outMaxDeviation = 0;
+    }
+
     // --- fitness 合成 ---
     // ★ OR 禁止。必ず +
     // ★ bestTurn を主、avgTurn を副
     const uint64_t f =
-          (bestTurn << TURN_WEIGHT)
-        + (static_cast<uint64_t>(avgTurn * 100.0) << (TURN_WEIGHT - 8))
-        + (static_cast<uint64_t>(avgherb * 100.0) << HERB_WEIGHT)
-        + (faultCount << (TURN_WEIGHT - 12)); // ★失敗 seed に軽いペナルティ
+           (bestTurn << TURN_WEIGHT)
+         + (static_cast<uint64_t>(avgTurn * 100.0) << (TURN_WEIGHT - 8))
+         + (static_cast<uint64_t>(avgherb * 100.0) << HERB_WEIGHT)
+         + (faultCount << (TURN_WEIGHT - 12)); // ★失敗 seed に軽いペナルティ
+
+
 
     s_actionCosts = backup;
     return f;
@@ -363,8 +394,10 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
         uint64_t baselineTurn = 0;
         uint64_t outtotalHP = 0;
         uint64_t outfaultCount = 0;
+        uint64_t outStabilityGap = 0;
+        uint64_t outMaxDeviation = 0;
         double baselineMs = 0.0;
-        (void)evaluateGenome(baseline, players, evalSeeds, actions, turns, baselineTurn, baselineMs, outtotalHP, outfaultCount);
+        (void)evaluateGenome(baseline, players, evalSeeds, actions, turns, baselineTurn, baselineMs, outtotalHP, outfaultCount, outStabilityGap, outMaxDeviation);
 
         result.bestTurn = baselineTurn;
         result.testCount = 1;
@@ -466,14 +499,35 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
                     ind.measuredMs = r.measuredMs;
                     ind.totalHP = r.totalHP;
                     ind.faultCount = r.faultCount;
+                    ind.stabilityGap = r.stabilityGap;
+                    ind.maxDeviation = r.maxDeviation;
                     ++evaluations;
                     ++result.testCount;
 
                     std::cout << "[GA] eval=" << evaluations << " turn=" << r.measuredTurns
-                              << " ms=" << r.measuredMs << " fitness=" << r.fitness << " totalHP=" << r.totalHP << " faultCount=" << r.faultCount << " best=" << result.bestTurn << std::endl;
+                              << " ms=" << r.measuredMs << " fitness=" << r.fitness << " totalHP=" << r.totalHP << " faultCount=" << r.faultCount <<  " stabilityGap=" << r.stabilityGap << " maxDeviation=" << r.maxDeviation <<" best=" << result.bestTurn << std::endl;
+
+                    bool improved = false;
 
                     if (r.measuredTurns < result.bestTurn) {
+                        improved = true;
+                    }
+                    else if (r.measuredTurns == result.bestTurn) {
+                        // 0 は「未定義」なので無視
+                        if (r.stabilityGap > 0 &&
+                            r.stabilityGap < result.bestStableGap) {
+                            improved = true;
+                            }
+                        else if (r.stabilityGap == result.bestStableGap &&
+                                 r.maxDeviation > 0 &&
+                                 r.maxDeviation < result.bestStableDeviation) {
+                            improved = true;
+                                 }
+                    }
+                    if (improved){
                         result.bestTurn = r.measuredTurns;
+                        result.bestStableGap = r.stabilityGap;
+                        result.bestStableDeviation = r.maxDeviation;
                         result.found = true;
                         std::cout << "[GA] improvement -> bestTurn=" << result.bestTurn << std::endl;
                         std::cout << std::endl;
@@ -540,7 +594,9 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
                 double mMs;
                 uint64_t outtotalHP = 0;
                 uint64_t outfaultCount = 0;
-                uint64_t baseFit = evaluateGenome(bestGenomeCopy, players, evalSeeds, actions, turns, mTurn, mMs, outtotalHP, outfaultCount);
+                uint64_t outStabilityGap = 0;
+                uint64_t outMaxDeviation = 0;
+                uint64_t baseFit = evaluateGenome(bestGenomeCopy, players, evalSeeds, actions, turns, mTurn, mMs, outtotalHP, outfaultCount, outStabilityGap, outMaxDeviation);
                 baselineTurn = mTurn;
                 ++evaluations;
                 ++result.testCount;
@@ -667,7 +723,9 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
             double measuredMs;
             uint64_t outtotalHP = 0;
             uint64_t outfaultCount = 0;
-            uint64_t fit = evaluateGenome(ind, players, evalSeeds, actions, turns, measuredTurn, measuredMs, outtotalHP, outfaultCount);
+            uint64_t outStabilityGap = 0;
+            uint64_t outMaxDeviation = 0;
+            uint64_t fit = evaluateGenome(ind, players, evalSeeds, actions, turns, measuredTurn, measuredMs, outtotalHP, outfaultCount, outStabilityGap, outMaxDeviation);
             ind.fitness = fit;
             ind.measuredTurns = measuredTurn;
             ind.measuredMs = measuredMs;
@@ -706,8 +764,10 @@ std::vector<EvalResult> SimpleParameterOptimizer::evaluateGenomeRange(std::vecto
 
         uint64_t outtotalHP = 0;
         uint64_t outfaultCount = 0;
+        uint64_t outStabilityGap = 0;
+        uint64_t outMaxDeviation = 0;
 
-        uint64_t fit = evaluateGenome(ind, players, evalSeeds, actions, turnsLimit, measuredTurn, measuredMs, outtotalHP, outfaultCount);
+        uint64_t fit = evaluateGenome(ind, players, evalSeeds, actions, turnsLimit, measuredTurn, measuredMs, outtotalHP, outfaultCount, outStabilityGap, outMaxDeviation);
 
         EvalResult r;
         r.index = idx;
@@ -716,6 +776,8 @@ std::vector<EvalResult> SimpleParameterOptimizer::evaluateGenomeRange(std::vecto
         r.measuredMs = measuredMs;
         r.totalHP = outtotalHP;
         r.faultCount = outfaultCount;
+        r.stabilityGap = outStabilityGap;
+        r.maxDeviation = outMaxDeviation;
         r.idx = idx;
         out.push_back(r);
     }
@@ -769,9 +831,11 @@ StabilityChunkResult SimpleParameterOptimizer::stabilityCheckRange(const GAGenom
         double mMs = 0.0;
         uint64_t outtotalHP = 0;
         uint64_t outfaultCount = 0;
+        uint64_t outStabilityGap = 0;
+        uint64_t outMaxDeviation = 0;
 
         // NOTE: mutatedActions を使う（安定性チェックの意図どおり）
-        (void)evaluateGenome(copyForCheck, players, altEvalSeeds, mutatedActions, turnsLimit, mTurn, mMs, outtotalHP, outfaultCount);
+        (void)evaluateGenome(copyForCheck, players, altEvalSeeds, mutatedActions, turnsLimit, mTurn, mMs, outtotalHP, outfaultCount, outStabilityGap, outMaxDeviation);
 
         turns += mTurn;
 

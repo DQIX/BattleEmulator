@@ -64,6 +64,8 @@ static constexpr int STABILITY_EXTRA_ACTIONS_MAX = 0;
 // 最適化結果
 struct OptimResult {
     uint64_t bestTurn = 999;
+    uint64_t bestStableGap = 0;
+    uint64_t bestStableDeviation = 0;
     uint64_t testCount = 0;
     bool found = false;
 };
@@ -78,6 +80,8 @@ struct EvalResult {
     uint64_t faultCount; // 実測ターン
     double measuredMs = 0.0;
     int idx = 0;
+    uint64_t stabilityGap;
+    uint64_t maxDeviation;
 };
 
 // --- 遺伝的アルゴリズム実装 ---
@@ -88,6 +92,8 @@ struct GAGenome {
     uint64_t totalHP; // 実測ターン
     uint64_t faultCount; // 実測ターン
     double measuredMs; // 実測時間（ms）
+    uint64_t stabilityGap;
+    uint64_t maxDeviation;
 };
 
 // --- 追加: stability check のクッション関数（範囲を評価して合計だけ返す） ---
