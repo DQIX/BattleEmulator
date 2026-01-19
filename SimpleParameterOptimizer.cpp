@@ -23,7 +23,6 @@
 #include <limits>
 #include <string>
 #include <cstdint>
-#include <cstring>
 
 // --- 設定 ---
 // この配列に最適化対象の aABILITY_EXTRA_ACTIONS_MAX = 3;
@@ -72,7 +71,15 @@ static int buildActionsWithRandomInserts(
 ) {
     // src をコピー & 長さ測定
     int len = 0;
-    std::fill_n(dstActions, 350, -1);
+    for (; len < 350; ++len) {
+        dstActions[len] = srcActions[len];
+        if (srcActions[len] == -1) break;
+    }
+    if (len == 350) {
+        // 念のため終端を保証
+        dstActions[349] = -1;
+        len = 349;
+    }
 
     if (maxInserts <= 0 || N == 0 || insertProb <= 0.0) {
         if (outInsertedSummary) *outInsertedSummary = "";
@@ -108,18 +115,6 @@ static int buildActionsWithRandomInserts(
         if (inserted > 0) oss << ", ";
         oss << BattleEmulator::getActionName(actionToInsert) << "@idx" << pos;
         ++inserted;
-    }
-
-    if (dstActions[0] == -1) {
-        const int actionToInsert = pool[pickAction(rng)];
-        dstActions[0] = actionToInsert;
-        dstActions[1] = -1;
-        len = 1;
-
-        if (outInsertedSummary) {
-            *outInsertedSummary =
-                BattleEmulator::getActionName(actionToInsert) + std::string("@idx0");
-        }
     }
 
     if (outInsertedSummary) *outInsertedSummary = oss.str();
@@ -189,10 +184,8 @@ static uint64_t evaluateGenome(
         totalTurns += measuredTurn;
         totalMs += elapsed.count();
 
-        totalFitness +=
-            static_cast<uint64_t>(measuredTurn) * 800ull +
-            static_cast<uint64_t>(elapsed.count()) * 200ull;
-
+        // fitness の作り方（既存ロジックを seed ごとに適用して足し算）
+        totalFitness += static_cast<uint64_t>(measuredTurn) * 10000ull + static_cast<uint64_t>(elapsed.count() * 1000);
     }
 
     outTurns = static_cast<int>(totalTurns);
@@ -414,6 +407,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
         std::sort(population.begin(), population.end(), [](const GAGenome &a, const GAGenome &b){
             return a.fitness < b.fitness;
         });
+
         // ---------- Stability feedback ----------
         if (!population.empty()) {
             GAGenome bestGenomeCopy = population.front();
@@ -485,26 +479,11 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
         }
         // ---------- end stability feedback ----------
 
-        // 上位10%（悪い側ではなく「評価候補側」基準）
-        std::vector<uint64_t> fs;
-        fs.reserve(population.size());
-        for (auto& p : population) {
-            fs.push_back(p.fitness);
-        }
-        size_t k = fs.size() * 10 / 100;
-        std::nth_element(fs.begin(), fs.begin() + k, fs.end());
-        uint64_t dynamicCutoff = fs[k];
-
-        std::cout << "[GA] cutoff=" << dynamicCutoff << std::endl;
-
         // エリート保存
         int eliteCount = std::max(1, GA_POPULATION / 10);
         std::vector<GAGenome> nextGen;
         nextGen.reserve(GA_POPULATION);
-        for (int e = 0; e < eliteCount; ++e) {
-            if (population[e].fitness <= dynamicCutoff) continue;
-            nextGen.push_back(population[e]);
-        }
+        for (int e = 0; e < eliteCount; ++e) nextGen.push_back(population[e]);
 
         // ルーレット／トーナメント: シンプルにトーナメント選択
         auto tournamentSelect = [&](int k)->const GAGenome& {
@@ -608,11 +587,11 @@ uint64_t SimpleParameterOptimizer::testParameters(
 
     auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
 
-    return
-        static_cast<uint64_t>(genome.turn) * 1000ull +
-        static_cast<uint64_t>(genome.EnemyPlayer.hp) * 100ull;
-
-
+    if (genome.EnemyPlayer.hp <= 0) {
+        return genome.turn - 1;
+    } else {
+        return genome.EnemyPlayer.hp * 1000;
+    }
 }
 
 // --- evaluateGenomeRange: EvalResult::fitness は uint64_t に準拠 ---

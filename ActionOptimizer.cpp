@@ -69,10 +69,6 @@ constexpr ActionEntry ACTION_TABLE[] = {
         [](const Genome& g) { return g.AllyPlayer.mp >= 3; },
         [](const Genome&, const Genome&) { return true; }
     },
-    { BattleEmulator::ACROBATIC_STAR,
-        [](const Genome& g) { return g.AllyPlayer.specialCharge == true && g.AllyPlayer.specialChargeTurn >= 1; },
-        [](const Genome&, const Genome&) { return true; }
-    },
 };
 
 // ★ ここが本体 ★
@@ -237,12 +233,10 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
                 continue;
             }
 
-#if !defined(OPTIMIZE_MODE)
             if (solutionFound && counter - lastimp > 2000) {
                 Node_Used = Pool.getSize();
                 return bestSolution;
             }
-#endif
 
             // Defeat condition check
             if (currentGenome.AllyPlayer.hp <= 0) {
