@@ -24,6 +24,8 @@
 #include <string>
 #include <cstdint>
 
+#include "setting.h"
+
 // --- 設定 ---
 // この配列に最適化対象の aABILITY_EXTRA_ACTIONS_MAX = 3;
 //// 各挿入を行う確率（1.0=必ずction id を並べるだけで追加完了
@@ -138,6 +140,14 @@ static int buildActionsWithRandomInserts(
     return dataLen;
 }
 
+// ★追加: thread_local を各スレッドで確実に初期化する
+static inline void ensureActionCostsInitializedForThisThread() {
+    static thread_local bool tlsInited = false;
+    if (tlsInited) return;
+    for (int i = 0; i < MAX_ACTION_ID; ++i) s_actionCosts[i] = DEFAULT_ACTION_COST;
+    tlsInited = true;
+}
+
 // --- evaluateGenomeRange: EvalResult::fitness は uint64_t に準拠 ---
 // ... existing code ...
 static uint64_t evaluateGenome(
@@ -152,6 +162,9 @@ static uint64_t evaluateGenome(
     uint64_t &outfaultCount
 
 ) {
+    ensureActionCostsInitializedForThisThread();
+    BattleEmulator::ResetTurnProcessed();
+
     // genes を s_actionCosts に適用（評価時のみ）
     auto backup = s_actionCosts;
     for (size_t i = 0; i < g.genes.size(); ++i) {
@@ -165,6 +178,8 @@ static uint64_t evaluateGenome(
 
     uint64_t totalMs10 = 0; // 0.1ms 単位
     uint64_t faultCount = 0;
+    uint64_t totalherb = 0;
+    int performed = 0;
 
     for (int i = 0; i < GA_EVAL_SEEDS; ++i) {
         const uint64_t seedToUse = evalSeeds[i];
@@ -173,8 +188,9 @@ static uint64_t evaluateGenome(
 
         uint64_t turn = 0;
         int enemyHp = 0;
+        int herbcount = 0;
         SimpleParameterOptimizer::testParameters(
-            players, seedToUse, actions, static_cast<int>(turnsLimit), turn, enemyHp
+            players, seedToUse, actions, static_cast<int>(turnsLimit), turn, enemyHp, herbcount
         );
 
         auto t1 = std::chrono::high_resolution_clock::now();
@@ -183,23 +199,21 @@ static uint64_t evaluateGenome(
         totalMs10 += static_cast<uint64_t>(elapsed.count() * 10.0);
         totalTurn += turn;
         totalHP += enemyHp;
+        totalherb += setting::herbcount - herbcount;
+        ++performed;
 
         if (enemyHp != 0) {
             ++faultCount;
+            break;
         }
     }
 
-    const uint64_t avgTurn = (GA_EVAL_SEEDS > 0)
-        ? (totalTurn / static_cast<uint64_t>(GA_EVAL_SEEDS))
-        : totalTurn;
+    const uint64_t denom = (performed > 0) ? static_cast<uint64_t>(performed) : 1ULL;
 
-    const uint64_t avgHP = (GA_EVAL_SEEDS > 0)
-        ? (static_cast<uint64_t>(totalHP) / static_cast<uint64_t>(GA_EVAL_SEEDS))
-        : static_cast<uint64_t>(totalHP);
-
-    const uint64_t avgMs10 = (GA_EVAL_SEEDS > 0)
-        ? (totalMs10 / static_cast<uint64_t>(GA_EVAL_SEEDS))
-        : totalMs10;
+    const uint64_t avgTurn = totalTurn / denom;
+    const uint64_t avgHP   = static_cast<uint64_t>(totalHP) / denom;
+    const uint64_t avgMs10 = totalMs10 / denom;
+    const uint64_t avgherb = totalherb / denom;
 
     outMs = static_cast<double>(avgMs10) / 10.0;
     outtotalHP = avgHP;
@@ -208,16 +222,20 @@ static uint64_t evaluateGenome(
     outTurns = solvedAll ? avgTurn : kFailedTurnSentinel;
 
     const uint64_t f =
-        faultCount * FAULT_WEIGHT +
-        ((solvedAll == false ? 9999 : avgTurn) * TURN_WEIGHT) +
-        avgHP * HP_WEIGHT +
-        (avgMs10 / 10) * MS_WEIGHT;
+          (faultCount << FAULT_WEIGHT)
+        + ((solvedAll == false ? 9999ULL : avgTurn) << TURN_WEIGHT)
+        + (avgHP << HP_WEIGHT)
+        + (avgMs10 << MS_WEIGHT)
+        + (BattleEmulator::getTurnProcessed() << NODES_WEIGHT)
+        + (avgherb << HERB_WEIGHT);
+
 
     outfaultCount = faultCount;
 
     s_actionCosts = backup;
     return f;
 }
+
 
 // --- testParameters の定義（参照版） ---
 void SimpleParameterOptimizer::testParameters(
@@ -226,8 +244,9 @@ void SimpleParameterOptimizer::testParameters(
     const int actions[350],
     int turns,
     uint64_t &outTurn,
-    int &outEnemyHp)
-{
+    int &outEnemyHp,
+    int &outherb
+){
     Player copiedPlayers[2] = { players[0], players[1] };
 
     int gene[350];
@@ -240,6 +259,7 @@ void SimpleParameterOptimizer::testParameters(
 
     outTurn = static_cast<uint64_t>(genome.turn);
     outEnemyHp = genome.EnemyPlayer.hp;
+    outherb = copiedPlayers[0].medicinal_herbs_count;
 }
 
 // ... existing code ...
@@ -265,6 +285,8 @@ static inline void applyActionCostsToCostParams() {
 }
 
 double SimpleParameterOptimizer::getActionCost(int action) {
+    ensureActionCostsInitializedForThisThread();
+
     if (action < 0 || action >= MAX_ACTION_ID) {
         throw std::invalid_argument("Invalid action ID");
     }
@@ -275,6 +297,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
                                                const int actions[350], int maxTests, int turns)
 {
     initActionCostsIfNeeded();
+    ensureActionCostsInitializedForThisThread();
 
     OptimResult result;
     result.bestTurn = 9999;
@@ -487,7 +510,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
         std::cout << "\n};\n";
 
         // ---------- Stability feedback ----------
-        if (!population.empty()) {
+        if (false && !population.empty()) {
             GAGenome bestGenomeCopy = population.front();
             auto baselineTurn = bestGenomeCopy.measuredTurns;
             if (baselineTurn == 0 || baselineTurn >= 9999) {
@@ -647,7 +670,7 @@ std::vector<EvalResult> SimpleParameterOptimizer::evaluateGenomeRange(std::vecto
     const std::array<uint64_t, GA_EVAL_SEEDS> &evalSeeds, const int actions[350], int turnsLimit,
     uint64_t seedForThread) {
 
-    std::mt19937 localRng(static_cast<uint32_t>(seedForThread));
+    s_actionCosts.fill(-1.0);
 
     std::vector<EvalResult> out;
     out.reserve(static_cast<size_t>(std::max(0, end - start)));

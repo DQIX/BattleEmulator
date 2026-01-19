@@ -101,7 +101,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
     std::unique_ptr<int> position = std::make_unique<int>(1);
     std::unique_ptr<uint64_t> nowState = std::make_unique<uint64_t>(0);
 
-    LinearIdPool<Genome, 50000> Pool{};
+    LinearIdPool<Genome, 1700000> Pool{};
 
     // Enhanced A* priority queue and visited set
     EnhancedHeapQueue openSet{};
@@ -164,6 +164,9 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
     auto percenttmp = 0.0;
 
     Player CopedPlayers3[2];
+
+    std::optional<BattleResult> result1;
+    result1 = BattleResult();
 
     auto lastimp = 0;
 
@@ -235,11 +238,6 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
                 continue;
             }
 
-            if (solutionFound && counter - lastimp > 2000) {
-                Node_Used = Pool.getSize();
-                return bestSolution;
-            }
-
             // Defeat condition check
             if (currentGenome.AllyPlayer.hp <= 0) {
                 continue;
@@ -273,10 +271,11 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
                 *position = currentGenome.position;
                 *nowState = currentGenome.state;
 
+                result1->clear();
                 // Execute one turn
                 BattleEmulator::Main(position.get(), newGenome.turn - newGenome.processed, newGenome.actions, CopedPlayers3,
-                                     (std::optional<BattleResult> &) std::nullopt, seed,
-                                     nullptr, nullptr, -2, nowState.get());
+                                     result1, seed,
+                                     nullptr, nullptr, -1, nowState.get());
 
                 if (CopedPlayers3[0].hp > 0) {
                     // Update genome with results
@@ -304,6 +303,15 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
                     newNode.allyHP = newGenome.AllyPlayer.hp;
                     newNode.enemyHP = newGenome.EnemyPlayer.hp;
                     newNode.nodeId = Pool.alloc(newGenome);
+
+                    if (newGenome.EnemyPlayer.hp > currentGenome.EnemyPlayer.hp) {
+                        continue;
+                    }
+
+                    if ((turns + 3) < currentGenome.turn && result1->actions[0] == BattleEmulator::HEAL_ENEMY || result1->actions[1] == BattleEmulator::HEAL_ENEMY) {
+                        continue;
+                    }
+
 
                     if (!entry.isEffective(currentGenome, newGenome)) {
                         continue;

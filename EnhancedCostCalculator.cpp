@@ -6,10 +6,9 @@
 #include <array>
 
 #include "SimpleParameterOptimizer.h"
+#include "setting.h"
 
 #if defined(OPTIMIZE_MODE)
-
-#include "SimpleParameterOptimizer.h"
 
 double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, double preGCost) {
     // Base cost is turn number (maintains depth-first preference)
@@ -82,8 +81,10 @@ double EnhancedCostCalculator::calculateResourceCost(const Genome &genome) {
         resourceCost += (1.0 - mpRatio) * getActionCost(SimpleParameterOptimizerNode::ResourceHPCost); // Penalty for low MP
     }
 
+    resourceCost += (setting::herbcount - genome.AllyPlayer.medicinal_herbs_count) * getActionCost(SimpleParameterOptimizerNode::SpecialMedicineCount);
+
     // Item count considerations (rough estimates)
-    if (genome.AllyPlayer.SpecialMedicineCount <= 1 && genome.AllyPlayer.SpecialAntidoteCount <= 1) {
+    if (genome.AllyPlayer.medicinal_herbs_count <= 1) {
         resourceCost += getActionCost(SimpleParameterOptimizerNode::NoResourceCost); // Penalty for low healing items
     }
 
@@ -196,9 +197,9 @@ double EnhancedCostCalculator::calculateResourceCost(const Genome &genome) {
         double mpRatio = static_cast<double>(genome.AllyPlayer.mp) / genome.AllyPlayer.maxMp;
         resourceCost += (1.0 - mpRatio) * GENOME[SimpleParameterOptimizerNode::ResourceHPCost]; // Penalty for low MP
     }
-
+    resourceCost += (setting::herbcount - genome.AllyPlayer.medicinal_herbs_count) * GENOME[SimpleParameterOptimizerNode::SpecialMedicineCount];
     // Item count considerations (rough estimates)
-    if (genome.AllyPlayer.SpecialMedicineCount <= 1 && genome.AllyPlayer.SpecialAntidoteCount <= 1) {
+    if (genome.AllyPlayer.medicinal_herbs_count <= 1) {
         resourceCost += GENOME[SimpleParameterOptimizerNode::NoResourceCost]; // Penalty for low healing items
     }
 

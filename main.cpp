@@ -11,13 +11,14 @@
 #include "debug.h"
 #include "ActionOptimizer.h"
 #include "InputBuilder.h"
+#include "setting.h"
 #include "SimpleParameterOptimizer.h"
 
 #if defined(DEBUG)
 
 
 #include <chrono>
-
+#include "EnhancedHeapQueue.h"
 #endif
 
 
@@ -71,7 +72,6 @@ namespace {
     // `InputBuilder` インスタンス作成
     InputBuilder builder;
 
-
 #if defined(kbattle_v2_Normal)
     constexpr Player BasePlayers[2] = {
         // プレイヤー1
@@ -79,7 +79,7 @@ namespace {
             56, 56.0, 57, 57, 50, 50, 33, 33, 22, 19, // 最初のメンバー
             19, true, false, -1, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-            8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
+            setting::herbcount, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
             false, -1, 0, -1, 0, false, 1, 1, 1, -1, 0, -1, false, 2, false, -1
         }, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 
@@ -362,6 +362,46 @@ namespace {
         return 0;
     }
 
+
+    NOINLINE void logMemoryUsage(
+    std::ostream& os,
+    uint64_t nodes,
+    size_t genomeSize,
+    size_t astarNodeSize
+) {
+        const uint64_t bytes =
+            nodes * (static_cast<uint64_t>(genomeSize)
+                   + static_cast<uint64_t>(astarNodeSize));
+
+        constexpr uint64_t KB = 1024ull;
+        constexpr uint64_t MB = 1024ull * KB;
+        constexpr uint64_t GB = 1024ull * MB;
+
+        double value;
+        const char* unit;
+
+        if (bytes >= GB) {
+            value = static_cast<double>(bytes) / GB;
+            unit = "GB~";
+        } else if (bytes >= MB) {
+            value = static_cast<double>(bytes) / MB;
+            unit = "MB~";
+        } else if (bytes >= KB) {
+            value = static_cast<double>(bytes) / KB;
+            unit = "KB~";
+        } else {
+            value = static_cast<double>(bytes);
+            unit = "B";
+        }
+
+        os << "Nodes used: " << nodes
+           << ", Memory: "
+           << std::fixed << std::setprecision(2)
+           << value << " " << unit;
+
+        os << std::endl;
+    }
+
     void dumpTableMain(BattleResult &result1, Genome &genome, uint64_t seed, int turns) {
         std::cout << dumpTable(result1, genome.actions, turns) << std::endl;
 
@@ -414,7 +454,7 @@ namespace {
         }
 
         auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 100000, gene, numThreads);
+                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 80000, gene, numThreads);
 
         auto turnProcessed = BattleEmulator::getTurnProcessed();
 
@@ -444,7 +484,8 @@ namespace {
         auto t3 = std::chrono::high_resolution_clock::now();
         auto elapsed_time1 =
                 std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
-        PerformanceDebug("Searcher multi", turnProcessed, static_cast<double>(elapsed_time1), 0);
+        PerformanceDebug("Searcher", turnProcessed, static_cast<double>(elapsed_time1), 0);
+        logMemoryUsage(performanceLogger, ActionOptimizer::getNodesUsed(), sizeof(Genome), sizeof(EnhancedAStarNode));
 #endif
     }
 #elif NO_MULTITHREADING

@@ -18,10 +18,13 @@
 
 static constexpr uint64_t kUnevaluatedFitness = std::numeric_limits<uint64_t>::max();
 
-constexpr uint64_t FAULT_WEIGHT = 100000000000ULL;
-constexpr uint64_t TURN_WEIGHT  = 10000000ULL;
-constexpr uint64_t HP_WEIGHT    = 1000ULL;
-constexpr uint64_t MS_WEIGHT    = 1ULL;
+
+constexpr uint64_t FAULT_WEIGHT = 46ull;
+constexpr uint64_t TURN_WEIGHT  = 42ull;
+constexpr uint64_t HP_WEIGHT    = 30ull;
+constexpr uint64_t MS_WEIGHT    = 22ULL;
+constexpr uint64_t NODES_WEIGHT = 8ull;
+constexpr uint64_t HERB_WEIGHT = 0;
 
 static constexpr int MAX_ACTION_ID = 512;
 static constexpr int ids = 25;
@@ -49,7 +52,7 @@ static constexpr std::array<int, 3> STABILITY_RANDOM_ACTION_POOL = {
 // 1回の stability check で最大いくつ挿入するか（0なら無効）
 static constexpr double STABILITY_EXTRA_ACTION_INSERT_PROB = 0.60;
 // 1回の stability check で最大いくつ挿入するか（0なら無効）
-static constexpr int STABILITY_EXTRA_ACTIONS_MAX = 5;
+static constexpr int STABILITY_EXTRA_ACTIONS_MAX = 0;
 
 
 // 最適化結果
@@ -97,16 +100,15 @@ public:
     static double getActionCost(int action);
 
     // ★追加: パラメータセットをテスト（turn と enemyHp を参照で返す）
-    static void testParameters(const Player players[2],
-                              uint64_t seed,
-                              const int actions[350],
-                              int turns,
-                              uint64_t &outTurn,
-                              int &outEnemyHp);
-
-    // 既存API（互換用）
-    static uint64_t testParameters(const Player players[2],
-                                  uint64_t seed, const int actions[350], int turns);
+    static void testParameters(
+    const Player players[2],
+    uint64_t seed,
+    const int actions[350],
+    int turns,
+    uint64_t &outTurn,
+    int &outEnemyHp,
+    int &outherb
+);
 
 private:
     static std::vector<EvalResult> evaluateGenomeRange(
@@ -153,6 +155,7 @@ public:
     static constexpr int AtkBuffWeight = 164;
     static constexpr int TensionWeight = 165;
     static constexpr int AntidoteWeight = 166;
+    static constexpr int SpecialMedicineCount = 167;
 };
 
 #endif // SIMPLE_PARAMETER_OPTIMIZER_H
