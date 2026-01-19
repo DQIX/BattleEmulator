@@ -65,8 +65,8 @@ set(SOURCES
 add_executable(kbattle_v2 ${SOURCES})
 target_compile_definitions(kbattle_v2 PRIVATE MULTITHREADING kbattle_v2_Normal)
 
-add_executable(kbattle_v2_opt ${SOURCES})
-target_compile_definitions(kbattle_v2_opt PRIVATE MULTITHREADING=1 kbattle_v2_Normal=1 OPTIMIZE_MODE=1)  # `#define MULTITHREADING` を適用
+add_executable(zuo_lv20_v2_opt ${SOURCES})
+target_compile_definitions(zuo_lv20_v2_opt PRIVATE MULTITHREADING=1 kbattle_v2_Normal=1 OPTIMIZE_MODE=1)  # `#define MULTITHREADING` を適用
 
 
 string(TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)
