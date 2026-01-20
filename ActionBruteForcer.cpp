@@ -3,11 +3,11 @@
 
 #include <cstring>
 #include <optional>
-#include <array>
 #include <vector>
 #include <cstdint>
-#include <limits>
 #include <queue>
+
+#include "setting.h"
 
 struct ActionEntry {
     int action;
@@ -38,7 +38,7 @@ constexpr ActionEntry ACTION_TABLE[] = {
         [](const Player &Ally) { return Ally.mp >= 2; },
     },
     {
-        BattleEmulator::CRACK_ALLY, 10,
+        BattleEmulator::CRACK_ALLY, 30,
         [](const Player &Ally) { return Ally.mp >= 3; },
     }
 };
@@ -46,39 +46,36 @@ constexpr ActionEntry ACTION_TABLE[] = {
 // Evaluate: 単純な例（差分）。実運用ではここを書き換えること。
 static inline int EvaluatePlayers(const Player players[2]) {
     // プレイヤー側有利度（例）
-    return players[1].hp;// * 1000 + players[0].mp;
+    return players[1].hp * 1000 + (setting::ALLY_CURRENT_MP - players[0].mp);
 }
 
 
 // クラスの static メソッド実装
-std::vector<::SearchResult> ActionBruteForcer::Search(
+void ActionBruteForcer::Search(
     const Player *rootPlayers,
     uint64_t rootNowState,
     int rootPosition,
-    int F // この実装は F==3 を想定している（汎用化は後で可能）
+    int F, // この実装は F==3 を想定している（汎用化は後で可能）
+    bool isFirstExec,
+    SearchResult best[10]
 ) {
     if (F <= 0) F = 1;
     if (F > 6) F = 6;
+
+
+    int bestCount = 0;
+    int worstIdx = -1;
+    int worstScore = INT_MAX;
+
 
     constexpr std::size_t BRANCH = ActionBruteForcer::ids; // 7
     std::size_t totalLeaves = 1;
     for (int i = 0; i < F; ++i) totalLeaves *= BRANCH;
 
-    std::vector<SearchResult> resultsArr;
-    resultsArr.resize(totalLeaves);
-    std::size_t resultCount = 0;
-
     std::optional<BattleResult> dummyResult;
 
     int32_t Gene[350];
-    for (int i = 0; i < 350; ++i) Gene[i] = -1;
-
-    auto compare = [](const SearchResult& a, const SearchResult& b) { return a.score > b.score; };
-    std::priority_queue<
-        SearchResult,
-        std::vector<SearchResult>,
-        decltype(compare)
-    > queue(compare);
+    for (int & i : Gene) i = -1;
 
     SimState root;
     std::memcpy(root.players, rootPlayers, sizeof(Player) * 2);
@@ -105,10 +102,14 @@ std::vector<::SearchResult> ActionBruteForcer::Search(
             0ULL,
             nullptr,
             nullptr,
-            -2,
+            -1,
             &s1.NowState,
             true
         );
+
+        if (!isFirstExec && dummyResult->actions[0] == BattleEmulator::HEAL_ENEMY || dummyResult->actions[1] == BattleEmulator::HEAL_ENEMY) {
+            continue;
+        }
 
         for (auto action_table1: ACTION_TABLE) {
             int a1 = action_table1.action;
@@ -122,6 +123,7 @@ std::vector<::SearchResult> ActionBruteForcer::Search(
             }
 
             if (!s2complete) {
+                dummyResult->clear();
                 BattleEmulator::Main(
                     &s2.position,
                     1,
@@ -131,11 +133,16 @@ std::vector<::SearchResult> ActionBruteForcer::Search(
                     0ULL,
                     nullptr,
                     nullptr,
-                    -2,
+                    -1,
                     &s2.NowState,
                     true
                 );
             }
+
+            if (dummyResult->actions[0] == BattleEmulator::HEAL_ENEMY || dummyResult->actions[1] == BattleEmulator::HEAL_ENEMY) {
+                continue;
+            }
+
 
             for (auto action_table3: ACTION_TABLE) {
                 int a2 = action_table3.action;
@@ -149,6 +156,7 @@ std::vector<::SearchResult> ActionBruteForcer::Search(
                     continue;
                 }
                 if (!s3complete) {
+                    dummyResult->clear();
                     BattleEmulator::Main(
                         &s3.position,
                         1,
@@ -158,13 +166,17 @@ std::vector<::SearchResult> ActionBruteForcer::Search(
                         0ULL,
                         nullptr,
                         nullptr,
-                        -2,
+                        -1,
                         &s3.NowState,
                         true
                     );
                 }
 
                 if (s3.players[0].hp <= 0) continue;
+
+                if (dummyResult->actions[0] == BattleEmulator::HEAL_ENEMY || dummyResult->actions[1] == BattleEmulator::HEAL_ENEMY) {
+                    continue;
+                }
 
                 int score = EvaluatePlayers(s3.players);
 
@@ -184,28 +196,8 @@ std::vector<::SearchResult> ActionBruteForcer::Search(
                 r.actions[3] = -1;
                 r.score = score;
                 r.depth = 3;
-                queue.push(r);
+                tryInsertBest(best, bestCount, worstIdx, worstScore, r);
             }
         }
     }
-
-    std::vector<::SearchResult> results;
-
-    for (int i = 0; i < 10; ++i) {
-        const auto s1 = queue.top();
-        queue.pop();
-        results.push_back(s1);
-    }
-
-    return results;
-}
-
-// グローバルな free function が宣言されている場合のラッパー実装（必要なら）
-std::vector<SearchResult> Search(
-    const Player *rootPlayers,
-    uint64_t rootNowState,
-    int rootPosition,
-    int F
-) {
-    return ActionBruteForcer::Search(rootPlayers, rootNowState, rootPosition, F);
 }

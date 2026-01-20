@@ -51,7 +51,48 @@ public:
 
     static_assert(TUNE_IDS.size() == ids);
 
-    static std::vector<::SearchResult> Search(const Player *rootPlayers, uint64_t rootNowState, int rootPosition, int F);
+    static void Search(const Player *rootPlayers, uint64_t rootNowState, int rootPosition, int F, bool isFirstExec, SearchResult *best);
+
+private:
+    static inline void tryInsertBest(
+        SearchResult best[10],
+        int &bestCount,
+        int &worstIdx,
+        int &worstScore,
+        const SearchResult &cand
+    ) {
+        // まだ空きがある
+        if (bestCount < 10) {
+            best[bestCount] = cand;
+
+            // 最悪更新
+            if (bestCount == 0 || cand.score < worstScore) {
+                worstScore = cand.score;
+                worstIdx = bestCount;
+            }
+
+            ++bestCount;
+            return;
+        }
+
+        // 10件埋まっていて、最悪より悪いなら即捨て
+        if (cand.score < worstScore) {
+            return;
+        }
+
+        // 最悪を差し替え
+        best[worstIdx] = cand;
+
+        // 新しい最悪を線形探索（10要素）
+        worstScore = best[0].score;
+        worstIdx = 0;
+        for (int i = 1; i < 10; ++i) {
+            if (best[i].score < worstScore) {
+                worstScore = best[i].score;
+                worstIdx = i;
+            }
+        }
+    }
 };
 
 

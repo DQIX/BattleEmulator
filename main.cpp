@@ -74,8 +74,8 @@ namespace {
     constexpr Player BasePlayers[2] = {
         // プレイヤー1
         {
-            setting::Ally_MAX_HP, static_cast<double>(setting::Ally_MAX_HP), 57, 57, 50, 50, 33, 33, 22, 19, // 最初のメンバー
-            19, true, false, -1, false, 0, -1,
+            setting::Ally_MAX_HP, static_cast<double>(setting::Ally_MAX_HP), 57, 57, 50, 50, 33, 33, 22,setting::ALLY_CURRENT_MP, // 最初のメンバー
+            setting::Ally_MAX_MP, true, false, -1, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             setting::herbcount, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
             false, -1, 0, -1, 0, false, 1, 1, 1, -1, 0, -1, false, 2, false, -1
@@ -454,12 +454,13 @@ namespace {
         uint64_t nows = 0;
 
         //枝分かれの爆発をどうするか
+        SearchResult result[10] = {};
 
         Player player[2] = {copiedPlayers[0], copiedPlayers[1]};
 
         BattleEmulator::Main(&pos, turns, gene, player, (std::optional<BattleResult> &) std::nullopt, seed, nullptr, nullptr, -2, &nows, false);
 
-        auto ret = ActionBruteForcer::Search(player, nows,pos, 3);
+        ActionBruteForcer::Search(player, nows,pos, 3, true, result);
 
         auto turnProcessed = BattleEmulator::getTurnProcessed();
 
@@ -675,137 +676,6 @@ namespace {
         }
     }
 }
-
-#if defined(OPTIMIZE_MODE)
-
-//CMA-ES
-
-void testParameters(
-    const Player players[2],
-    uint64_t seed,
-    const int actions[350],
-    int turns,
-    uint64_t &outTurn,
-    int &outEnemyHp,
-    int &outherb
-){
-    Player copiedPlayers[2] = { players[0], players[1] };
-
-    int gene[350];
-    for (int i = 0; i < 350; ++i) {
-        gene[i] = actions[i];
-        if (actions[i] == -1) { gene[i] = -1; break; }
-    }
-
-    auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 10000, gene, 0);
-
-    outTurn = static_cast<uint64_t>(genome.turn);
-    outEnemyHp = genome.EnemyPlayer.hp;
-    outherb = copiedPlayers[0].medicinal_herbs_count;
-}
-
-
-double evaluateGenes(
-    const std::vector<double>& genes,
-    uint64_t seed
-) {
-    Player players[2] = { BasePlayers[0], BasePlayers[1] };
-
-    const auto& ids = SimpleParameterOptimizerNode::TUNE_IDS;
-
-    int actions[350] = {
-        BattleEmulator::DEFENCE,
-        -1,
-    };
-    EnhancedCostCalculator::set(genes);
-
-    uint32_t totalturn = 0;
-    auto totalhp = 0;
-    auto totalHerb = 0;
-    uint32_t winCount = 0;;
-
-    for (int i = 0; i < 5; ++i) {
-        uint64_t outTurn;
-        int outEnemyHp;
-        int outHerb;
-
-        testParameters(
-            players,
-            seed + i,
-            actions,
-            1,
-            outTurn,
-            outEnemyHp,
-            outHerb
-        );
-
-        totalhp += outEnemyHp;
-        totalHerb += setting::herbcount - outHerb;
-
-        if (outEnemyHp <= 0) {
-            ++winCount;
-            totalturn += static_cast<uint32_t>(outTurn);
-        }
-
-
-    }
-
-    double winRate = static_cast<double>(winCount) / 5.0;
-
-    if (winCount < 5) {
-        return -10000.0 + winCount * 100.0;
-    }
-
-    // 勝利時
-    double score =
-        5000.0
-        - static_cast<double>(totalturn) * 10.0
-        + static_cast<double>(totalHerb) * 0.2;
-
-    auto averageTurn = static_cast<double>(totalturn) / winCount;
-
-    std::cout << "averageTurn=" << averageTurn << std::endl;
-
-    auto bonus = 0;
-
-    // 40ターン以下から段階的ボーナス
-    if (averageTurn <= 40) {
-        bonus += 500;
-    }
-
-    if (averageTurn <= 35) {
-        bonus += 500;
-    }
-
-    if (averageTurn <= 30) {
-        bonus += 500;
-    }
-
-    if (averageTurn <= 25) {
-        bonus += 500;
-    }
-
-    if (averageTurn <= 20) {
-        bonus += 500;
-    }
-
-    if (averageTurn <= 15) {
-        bonus += 500;
-    }
-
-    score += bonus;
-
-    //std::cout << (totalturn / 5) << std::endl;
-
-    //std::cout << " bonus=" << bonus << "　totalhp=" << totalhp <<  " winCount=" << winCount << " herb=" <<  (static_cast<double>(totalHerb) * 1.0) << " totalturn1=" << totalturn << " totalturn=" << (static_cast<double>(totalturn) * 20.0) << " winRate=" << winRate << " score=" << score << std::endl;
-
-    return score;
-}
-
-
-// --- testParameters の定義（参照版） ---
-
-#endif
 
 
 int main(int argc, char *argv[]) {
