@@ -4,6 +4,7 @@
 
 #include "EnhancedCostCalculator.h"
 #include <array>
+#include <cassert>
 
 #include "SimpleParameterOptimizer.h"
 #include "setting.h"
@@ -39,15 +40,18 @@ double EnhancedCostCalculator::calculateHCost(const Genome &genome, double enemy
     hCost += (1.0 - playerHpRatio) * getActionCost(SimpleParameterOptimizerNode::playerHpWeight);
 
     // MP consideration (resource management)
-    hCost += calculateResourceCost(genome) * getActionCost(SimpleParameterOptimizerNode::resourceWeight);
+    hCost += calculateResourceCost(genome);
 
     // Status effect penalties/bonuses
-    hCost += calculateStatusEffectCost(genome) * getActionCost(SimpleParameterOptimizerNode::StatusEffectWeight);
+    hCost += calculateStatusEffectCost(genome);
 
     return hCost;
 }
 
 double EnhancedCostCalculator::getActionCost(int action) {
+    const auto& ids1 = SimpleParameterOptimizerNode::TUNE_IDS;
+
+    assert(std::find(ids1.begin(), ids1.end(), action) != ids1.end());
    return SimpleParameterOptimizer::getActionCost(action);
 }
 
@@ -95,53 +99,63 @@ double EnhancedCostCalculator::calculateResourceCost(const Genome &genome) {
 #else
 
 
-constexpr std::array<double, 201> GENOME = {
+constexpr std::array<double, 168> GENOME = {
     0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 25 */ -0.877647,
-        /* 26 */ 1.43929,
-        /* 27 */ 4.21526,
+        /* 25 */ -1.28284,
+        /* 26 */ 0.891202,
+        /* 27 */ 1.65719,
         0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 53 */ 4.67107,
+        /* 53 */ 3.9743,
         0.0,0.0,
-        /* 56 */ 0.994775,
+        /* 56 */ 1.60631,
         0.0,0.0,
-        /* 59 */ 4.40507,
-        0.0,
-        /* 61 */ -2.14668,
-        /* 62 */ 1.25307,
+        /* 59 */ -0.492571,    0.0,
+        /* 61 */ 0.389296,
+        /* 62 */ 0.357513,
         0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 150 */ -0.590299,
-        /* 151 */ 4.04072,
-        /* 152 */ 1.51789,
-        /* 153 */ 1.79358,
-        /* 154 */ -1.92916,
-        /* 155 */ -1.76557,
-        /* 156 */ 2.38162,
-        /* 157 */ 0.154366,
-        /* 158 */ 1.28583,
-        /* 159 */ -3.70889,
-        /* 160 */ 2.00058,
-        /* 161 */ 2.33734,
-        /* 162 */ 1.02816,
-        /* 163 */ 2.37807,
-        /* 164 */ -2.77906,
-        /* 165 */ -0.412116,
-        /* 166 */ 0.0436227,
-        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+        /* 150 */ -0.0603709,
+        /* 151 */ 7.23698,
+        /* 152 */ 0.551487,
+        /* 153 */ 0.415658,
+        /* 154 */ 0.890252,
+        /* 155 */ -0.313462,
+        /* 156 */ -0.440239,
+        /* 157 */ 0.744697,
+        /* 158 */ 3.49012,
+        /* 159 */ 2.42142,
+        /* 160 */ 0.700254,
+        /* 161 */ 1.59053,
+        /* 162 */ 1.42713,
+        /* 163 */ -0.844072,
+        /* 164 */ -1.03045,
+        /* 165 */ 1.84442,
+        /* 166 */ 1.3378,
+        /* 167 */ 1.52095,
+
     };
 double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, double preGCost) {
     // Base cost is turn number (maintains depth-first preference)
-    double gCost = preGCost + GENOME[SimpleParameterOptimizerNode::turnHeignt];
+    double gCost = preGCost + getActionCost(SimpleParameterOptimizerNode::turnHeignt);
 
     // Add fine-grained action costs to break ties
     gCost += getActionCost(action);
 
     if (genome.AllyPlayer.PoisonEnable == true && action == BattleEmulator::SPECIAL_ANTIDOTE) {
-        gCost -= GENOME[SimpleParameterOptimizerNode::AntidoteWeight];
+        gCost -= getActionCost(SimpleParameterOptimizerNode::AntidoteWeight);
     }
 
     return gCost;
 }
+
+double EnhancedCostCalculator::getActionCost(int action) {
+    const auto& ids1 = SimpleParameterOptimizerNode::TUNE_IDS;
+    assert((action >= 0 && action < GENOME.size()));
+    assert(std::find(ids1.begin(), ids1.end(), action) != ids1.end());
+    auto data = GENOME[action];
+    assert(data != 0.0);
+    return data;
+}
+
 
 double EnhancedCostCalculator::calculateHCost(const Genome &genome, double enemyMaxHp, double playerMaxHp) {
     if (genome.EnemyPlayer.hp <= 0) {
@@ -151,41 +165,37 @@ double EnhancedCostCalculator::calculateHCost(const Genome &genome, double enemy
     double hCost = 0.0;
 
     // Primary heuristic: enemy HP ratio (scaled down for better granularity)
-    hCost = (genome.EnemyPlayer.hp / enemyMaxHp) * GENOME[SimpleParameterOptimizerNode::enemyHpWeight];
+    hCost = (genome.EnemyPlayer.hp / enemyMaxHp) * getActionCost(SimpleParameterOptimizerNode::enemyHpWeight);
 
     // Player HP consideration (more granular than original)
     double playerHpRatio = genome.AllyPlayer.hp / playerMaxHp;
-    hCost += (1.0 - playerHpRatio) * GENOME[SimpleParameterOptimizerNode::playerHpWeight];
+    hCost += (1.0 - playerHpRatio) * getActionCost(SimpleParameterOptimizerNode::playerHpWeight);
 
     // MP consideration (resource management)
-    hCost += calculateResourceCost(genome) * GENOME[SimpleParameterOptimizerNode::resourceWeight];
+    hCost += calculateResourceCost(genome);
 
     // Status effect penalties/bonuses
-    hCost += calculateStatusEffectCost(genome) * GENOME[SimpleParameterOptimizerNode::StatusEffectWeight];
+    hCost += calculateStatusEffectCost(genome);
 
     return hCost;
-}
-
-double EnhancedCostCalculator::getActionCost(int action) {
-    return (action >= 0 && action < GENOME.size()) ? GENOME[action] : 0.0;
 }
 
 double EnhancedCostCalculator::calculateStatusEffectCost(const Genome &genome) {
     double statusCost = 0.0;
 
     // Negative status effects (penalties)
-    if (genome.AllyPlayer.paralysis) statusCost += GENOME[SimpleParameterOptimizerNode::paralysisWeight];
-    if (genome.AllyPlayer.sleeping) statusCost += GENOME[SimpleParameterOptimizerNode::sleepWeight];
-    if (genome.AllyPlayer.PoisonEnable) statusCost += GENOME[SimpleParameterOptimizerNode::poisonWeight];
+    if (genome.AllyPlayer.paralysis) statusCost += getActionCost(SimpleParameterOptimizerNode::paralysisWeight);
+    if (genome.AllyPlayer.sleeping) statusCost += getActionCost(SimpleParameterOptimizerNode::sleepWeight);
+    if (genome.AllyPlayer.PoisonEnable) statusCost += getActionCost(SimpleParameterOptimizerNode::poisonWeight);
 
     // Positive status effects (bonuses - negative cost)
-    statusCost -= genome.AllyPlayer.BuffLevel * GENOME[SimpleParameterOptimizerNode::BuffWeight];
-    statusCost -= genome.AllyPlayer.AtkBuffLevel * GENOME[SimpleParameterOptimizerNode::AtkBuffWeight];
-    statusCost -= genome.AllyPlayer.TensionLevel * GENOME[SimpleParameterOptimizerNode::TensionWeight];
+    statusCost -= genome.AllyPlayer.BuffLevel * getActionCost(SimpleParameterOptimizerNode::BuffWeight);
+    statusCost -= genome.AllyPlayer.AtkBuffLevel * getActionCost(SimpleParameterOptimizerNode::AtkBuffWeight);
+    statusCost -= genome.AllyPlayer.TensionLevel * getActionCost(SimpleParameterOptimizerNode::TensionWeight);
 
     // Special abilities
-    if (genome.AllyPlayer.acrobaticStar) statusCost -= GENOME[SimpleParameterOptimizerNode::SpHeight];
-    if (genome.AllyPlayer.specialCharge) statusCost -= GENOME[SimpleParameterOptimizerNode::ActHeight];
+    if (genome.AllyPlayer.acrobaticStar) statusCost -= getActionCost(SimpleParameterOptimizerNode::SpHeight);
+    if (genome.AllyPlayer.specialCharge) statusCost -= getActionCost(SimpleParameterOptimizerNode::ActHeight);
 
     return statusCost;
 }
@@ -196,12 +206,12 @@ double EnhancedCostCalculator::calculateResourceCost(const Genome &genome) {
     // MP consideration
     if (genome.AllyPlayer.maxMp > 0) {
         double mpRatio = static_cast<double>(genome.AllyPlayer.mp) / genome.AllyPlayer.maxMp;
-        resourceCost += (1.0 - mpRatio) * GENOME[SimpleParameterOptimizerNode::ResourceHPCost]; // Penalty for low MP
+        resourceCost += (1.0 - mpRatio) * getActionCost(SimpleParameterOptimizerNode::ResourceHPCost); // Penalty for low MP
     }
-    resourceCost += (setting::herbcount - genome.AllyPlayer.medicinal_herbs_count) * GENOME[SimpleParameterOptimizerNode::SpecialMedicineCount];
+    resourceCost += (setting::herbcount - genome.AllyPlayer.medicinal_herbs_count) * getActionCost(SimpleParameterOptimizerNode::SpecialMedicineCount);
     // Item count considerations (rough estimates)
     if (genome.AllyPlayer.medicinal_herbs_count <= 1) {
-        resourceCost += GENOME[SimpleParameterOptimizerNode::NoResourceCost]; // Penalty for low healing items
+        resourceCost += getActionCost(SimpleParameterOptimizerNode::NoResourceCost); // Penalty for low healing items
     }
 
     return resourceCost;

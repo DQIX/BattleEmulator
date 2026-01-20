@@ -28,38 +28,9 @@
 #include "setting.h"
 
 // --- 設定 ---
-// この配列に最適化対象の aABILITY_EXTRA_ACTIONS_MAX = 3;
-//// 各挿入を行う確率（1.0=必ずction id を並べるだけで追加完了
-static constexpr std::array<int, ids> TUNE_IDS = {
-    BattleEmulator::ATTACK_ALLY,
-    BattleEmulator::DRAGON_SLASH,
-    BattleEmulator::DEFENCE,
-    BattleEmulator::FLEE_ALLY,
-    BattleEmulator::MEDICINAL_HERBS,
-    BattleEmulator::HEAL,
-    BattleEmulator::CRACK_ALLY,
-    BattleEmulator::ACROBATIC_STAR,
-    SimpleParameterOptimizerNode::turnHeignt,
-    SimpleParameterOptimizerNode::enemyHpWeight,
-    SimpleParameterOptimizerNode::playerHpWeight,
-    SimpleParameterOptimizerNode::resourceWeight,
-    SimpleParameterOptimizerNode::StatusEffectWeight,
-    SimpleParameterOptimizerNode::paralysisWeight,
-    SimpleParameterOptimizerNode::sleepWeight,
-    SimpleParameterOptimizerNode::poisonWeight,
-    SimpleParameterOptimizerNode::inactiveWeight,
-    SimpleParameterOptimizerNode::SpHeight,
-    SimpleParameterOptimizerNode::ActHeight,
-    SimpleParameterOptimizerNode::ResourceHPCost,
-    SimpleParameterOptimizerNode::NoResourceCost,
-    SimpleParameterOptimizerNode::BuffWeight,
-    SimpleParameterOptimizerNode::AtkBuffWeight,
-    SimpleParameterOptimizerNode::TensionWeight,
-    SimpleParameterOptimizerNode::AntidoteWeight,
-    SimpleParameterOptimizerNode::SpecialMedicineCount,
-};
 
-static_assert(TUNE_IDS[ids - 1] != 0, "TUNE_IDS mismatch");
+
+
 
 // action cost テーブル（一次真実源）
 static thread_local std::array<double, MAX_ACTION_ID> s_actionCosts;
@@ -169,7 +140,7 @@ static uint64_t evaluateGenome(
     // --- genes を action cost に適用 ---
     auto backup = s_actionCosts;
     for (size_t i = 0; i < g.genes.size(); ++i) {
-        int aid = TUNE_IDS[i];
+        int aid = SimpleParameterOptimizerNode::TUNE_IDS[i];
         if (aid >= 0 && aid < MAX_ACTION_ID) {
             s_actionCosts[aid] = g.genes[i];
         }
@@ -270,8 +241,8 @@ static uint64_t evaluateGenome(
         outStabilityGap = static_cast<uint64_t>(stabilityGap * 100.0);
         outMaxDeviation = static_cast<uint64_t>(maxDeviation * 100.0);
     }else {
-        outStabilityGap = 0;
-        outMaxDeviation = 0;
+        outStabilityGap = UINT64_MAX;
+        outMaxDeviation = UINT64_MAX;
     }
 
     // --- fitness 合成 ---
@@ -304,13 +275,22 @@ static uint64_t evaluateGenome(
         return f;
     }
 
+    auto MaxDeviation = outMaxDeviation;
+    if (outMaxDeviation == UINT64_MAX) {
+        MaxDeviation = 2000;
+    }
+
+    auto StabilityGap = outStabilityGap;
+    if (StabilityGap == UINT64_MAX) {
+        StabilityGap = 2000;
+    }
     // ---- 成功フェーズ ----
     uint64_t f =
           (best100 << BEST_SHIFT)            // 絶対主軸
         + (avg100  << AVG_SHIFT)             // 平均性能
-        + (outStabilityGap << STABILITY_SHIFT)
+        + (StabilityGap << STABILITY_SHIFT)
         + (successCount << SUCCESS_SHIFT)
-        + (outMaxDeviation << DEVIATION_SHIFT)
+        + (MaxDeviation << DEVIATION_SHIFT)
         + (faultCount << FAULT_SHIFT)
         + (herb100 << HERB_SHIFT);
 
@@ -378,6 +358,7 @@ double SimpleParameterOptimizer::getActionCost(int action) {
 OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t seed,
                                                const int actions[350], int maxTests, int turns)
 {
+
     initActionCostsIfNeeded();
     ensureActionCostsInitializedForThisThread();
 
@@ -398,7 +379,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
     std::random_device rd;
     std::mt19937 rng(static_cast<uint32_t>(seed ^ rd()));
 
-    const size_t geneCount = TUNE_IDS.size();
+    const size_t geneCount = SimpleParameterOptimizerNode::TUNE_IDS.size();
 
     auto makeEvalSeeds = [&](uint64_t base) {
         std::array<uint64_t, GA_EVAL_SEEDS> s{};
@@ -415,7 +396,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
 
     std::vector<double> startVals(geneCount);
     for (size_t i = 0; i < geneCount; ++i) {
-        int aid = TUNE_IDS[i];
+        int aid = SimpleParameterOptimizerNode::TUNE_IDS[i];
         startVals[i] = (aid >= 0 && aid < MAX_ACTION_ID) ? s_actionCosts[aid] : DEFAULT_ACTION_COST;
     }
 
@@ -537,9 +518,11 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
                     ++result.testCount;
 
                     std::cout << "[GA] eval=" << evaluations << " turn=" << r.measuredTurns
-                              << " ms=" << r.measuredMs << " fitness=" << r.fitness << " totalHP=" << r.totalHP << " faultCount=" << r.faultCount <<  " stabilityGap=" << r.stabilityGap << " maxDeviation=" << r.maxDeviation <<" best=" << result.bestTurn << std::endl;
+                              << " ms=" << r.measuredMs << " fitness=" << r.fitness << " totalHP=" << r.totalHP << " faultCount=" << r.faultCount <<  " stabilityGap=" << (r.stabilityGap == UINT64_MAX ? 2000 : r.stabilityGap) << " maxDeviation=" << (r.maxDeviation == UINT64_MAX ? 2000 : r.maxDeviation) <<" best=" << result.bestTurn << std::endl;
 
                     bool improved = false;
+
+
 
                     if (r.measuredTurns < result.bestTurn) {
                         improved = true;
@@ -547,38 +530,39 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
                     else if (r.measuredTurns == result.bestTurn) {
                         // 0 は「未定義」なので無視
                         if (r.stabilityGap > 0 &&
-                            r.stabilityGap < result.bestStableGap) {
+                            r.stabilityGap < result.bestStableGap && r.faultCount == 0) {
                             improved = true;
                             }
                         else if (r.stabilityGap == result.bestStableGap &&
                                  r.maxDeviation > 0 &&
-                                 r.maxDeviation < result.bestStableDeviation) {
+                                 r.maxDeviation < result.bestStableDeviation && r.faultCount == 0) {
                                     improved = true;
                                  }
                     }
+
                     if (improved){
                         result.bestTurn = r.measuredTurns;
-                        result.bestStableGap = r.stabilityGap;
-                        result.bestStableDeviation = r.maxDeviation;
+                        result.bestStableGap = (r.stabilityGap == UINT64_MAX) ? 2000 : r.stabilityGap;
+                        result.bestStableDeviation = (r.maxDeviation == UINT64_MAX) ? 2000 : r.maxDeviation;
                         result.found = true;
                         std::cout << "[GA] improvement -> bestTurn=" << result.bestTurn << std::endl;
                         std::cout << std::endl;
 
                         // constexpr 配列リテラルとして出力
-                        std::cout << "constexpr std::array<double, " << (MAX_ID + 1)
+                        std::cout << "constexpr std::array<double, " << (SimpleParameterOptimizerNode::lastid + 1)
                                   << "> GENOME = {\n";
 
                         std::vector<double> tmp(MAX_ID + 1, 0.0);
 
                         // id → 値 を埋める
                         for (size_t i = 0; i < population[r.index].genes.size(); ++i) {
-                            int id = TUNE_IDS[i];
+                            int id = SimpleParameterOptimizerNode::TUNE_IDS[i];
                             tmp[id] = population[r.index].genes[i];
                         }
 
                         auto flag = false;
                         auto flag1 = false;
-                        for (int id = 0; id <= MAX_ID; ++id) {
+                        for (int id = 0; id <= SimpleParameterOptimizerNode::lastid; ++id) {
                             if (tmp[id] != 0.0 && flag) {
                                 std::cout << "\n";
                                 flag1 = true;

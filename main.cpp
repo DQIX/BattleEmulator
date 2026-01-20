@@ -509,7 +509,7 @@ namespace {
             turns++;
         }
 
-        lcg::init(seed);
+        lcg::init(seed, false);
 
         BattleResult bestResult;
         Genome bestGenome;
@@ -573,7 +573,7 @@ namespace {
         auto *nowState = new uint64_t(0);
         int maxElement = 350;
         for (uint64_t seed = start; seed < end; ++seed) {
-            lcg::init(seed);
+            lcg::init(seed, false);
             (*nowState) = 0;
             (*position) = 1;
             Player players[2] = {copiedPlayers[0], copiedPlayers[1]};

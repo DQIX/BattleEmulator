@@ -5,16 +5,74 @@
 #ifndef SIMPLE_PARAMETER_OPTIMIZER_H
 #define SIMPLE_PARAMETER_OPTIMIZER_H
 
-#if defined(OPTIMIZE_MODE)
+#include "BattleEmulator.h"
 
 #include <array>
 #include <limits>
 
+
+class SimpleParameterOptimizerNode {
+public:
+    static constexpr int turnHeignt = 150;
+    static constexpr int enemyHpWeight = 151;
+    static constexpr int playerHpWeight = 152;
+    static constexpr int resourceWeight = 153;
+    static constexpr int StatusEffectWeight = 154;
+    static constexpr int paralysisWeight = 155;
+    static constexpr int sleepWeight = 156;
+    static constexpr int poisonWeight = 157;
+    static constexpr int inactiveWeight = 158;
+    static constexpr int SpHeight = 159;
+    static constexpr int ActHeight = 160;
+    static constexpr int ResourceHPCost = 161;
+    static constexpr int NoResourceCost = 162;
+    static constexpr int BuffWeight = 163;
+    static constexpr int AtkBuffWeight = 164;
+    static constexpr int TensionWeight = 165;
+    static constexpr int AntidoteWeight = 166;
+    static constexpr int SpecialMedicineCount = 167;
+
+    static constexpr int ids = 24;
+
+    // この配列に最適化対象の aABILITY_EXTRA_ACTIONS_MAX = 3;
+    //// 各挿入を行う確率（1.0=必ずction id を並べるだけで追加完了
+    static constexpr std::array<int, ids> TUNE_IDS = {
+        BattleEmulator::ATTACK_ALLY,
+        BattleEmulator::DRAGON_SLASH,
+        BattleEmulator::DEFENCE,
+        BattleEmulator::FLEE_ALLY,
+        BattleEmulator::MEDICINAL_HERBS,
+        BattleEmulator::HEAL,
+        BattleEmulator::CRACK_ALLY,
+        SimpleParameterOptimizerNode::turnHeignt,
+        SimpleParameterOptimizerNode::enemyHpWeight,
+        SimpleParameterOptimizerNode::playerHpWeight,
+        SimpleParameterOptimizerNode::resourceWeight,
+        SimpleParameterOptimizerNode::StatusEffectWeight,
+        SimpleParameterOptimizerNode::paralysisWeight,
+        SimpleParameterOptimizerNode::sleepWeight,
+        SimpleParameterOptimizerNode::poisonWeight,
+        SimpleParameterOptimizerNode::SpHeight,
+        SimpleParameterOptimizerNode::ActHeight,
+        SimpleParameterOptimizerNode::ResourceHPCost,
+        SimpleParameterOptimizerNode::NoResourceCost,
+        SimpleParameterOptimizerNode::BuffWeight,
+        SimpleParameterOptimizerNode::AtkBuffWeight,
+        SimpleParameterOptimizerNode::TensionWeight,
+        SimpleParameterOptimizerNode::AntidoteWeight,
+        SimpleParameterOptimizerNode::SpecialMedicineCount,
+    };
+
+    static constexpr int lastid = TUNE_IDS[ids - 1];
+
+    static_assert(TUNE_IDS[ids - 1] != 0, "TUNE_IDS mismatch");
+};
+
+#if defined(OPTIMIZE_MODE)
+
 #include "Player.h"
 #include "Genome.h"
 #include <vector>
-
-#include "BattleEmulator.h"
 
 static constexpr uint64_t kUnevaluatedFitness = std::numeric_limits<uint64_t>::max();
 
@@ -33,15 +91,14 @@ static_assert(TURN_WEIGHT  > HP_WEIGHT);
 static_assert(HP_WEIGHT > HERB_WEIGHT);
 
 static constexpr int MAX_ACTION_ID = 512;
-static constexpr int ids = 26;
-static constexpr double DEFAULT_ACTION_COST = 1.0;
+static constexpr double DEFAULT_ACTION_COST = 0.0;
 static constexpr double DEFAULT_STEP = 0.5; // 変異の基本スケール
 
 // GA パラメータ（必要なら調整）
-static constexpr int GA_POPULATION = 50; // 1世代あたり生成する子の数
+static constexpr int GA_POPULATION = 500; // 1世代あたり生成する子の数
 static constexpr double GA_MUTATION_PROB = 0.15; // 各遺伝子が変異する確率
 static constexpr double GA_CROSSOVER_PROB = 0.9; // 親から交叉する確率
-static constexpr int GA_EVAL_SEEDS = 5;
+static constexpr int GA_EVAL_SEEDS = 7;
 static constexpr uint64_t kNumThreads = 8; // ★固定スレッド数（好きに調整）
 
 // --- Stability tuning parameters (内部定義・調整可能) ---
@@ -149,27 +206,7 @@ private:
 };
 
 #endif
-class SimpleParameterOptimizerNode {
-public:
-    static constexpr int turnHeignt = 150;
-    static constexpr int enemyHpWeight = 151;
-    static constexpr int playerHpWeight = 152;
-    static constexpr int resourceWeight = 153;
-    static constexpr int StatusEffectWeight = 154;
-    static constexpr int paralysisWeight = 155;
-    static constexpr int sleepWeight = 156;
-    static constexpr int poisonWeight = 157;
-    static constexpr int inactiveWeight = 158;
-    static constexpr int SpHeight = 159;
-    static constexpr int ActHeight = 160;
-    static constexpr int ResourceHPCost = 161;
-    static constexpr int NoResourceCost = 162;
-    static constexpr int BuffWeight = 163;
-    static constexpr int AtkBuffWeight = 164;
-    static constexpr int TensionWeight = 165;
-    static constexpr int AntidoteWeight = 166;
-    static constexpr int SpecialMedicineCount = 167;
-};
+
 
 #endif // SIMPLE_PARAMETER_OPTIMIZER_H
 

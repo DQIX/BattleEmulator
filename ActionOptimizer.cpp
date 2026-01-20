@@ -66,11 +66,7 @@ constexpr ActionEntry ACTION_TABLE[] = {
     { BattleEmulator::CRACK_ALLY,
         [](const Genome& g) { return g.AllyPlayer.mp >= 3; },
         [](const Genome&, const Genome&) { return true; }
-    },
-    { BattleEmulator::ACROBATIC_STAR,
-        [](const Genome& g) { return g.AllyPlayer.specialCharge == true && g.AllyPlayer.specialChargeTurn >= 1; },
-        [](const Genome&, const Genome&) { return true; }
-    },
+    }
 };
 
 // ★ ここが本体 ★
