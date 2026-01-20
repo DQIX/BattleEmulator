@@ -133,12 +133,13 @@ struct EvalResult {
     int index = -1;
     uint64_t fitness = UINT64_MAX;
     uint64_t measuredTurns = 0;
-    uint64_t totalHP; // 実測ターン
-    uint64_t faultCount; // 実測ターン
+    uint64_t totalHP{}; // 実測ターン
+    uint64_t faultCount{}; // 実測ターン
     double measuredMs = 0.0;
-    int idx = 0;
-    uint64_t stabilityGap;
-    uint64_t maxDeviation;
+    uint64_t stabilityGap{};
+    uint64_t maxDeviation{};
+    uint64_t seed[GA_EVAL_SEEDS]{};
+    int actions[350]{};
 };
 
 // --- 遺伝的アルゴリズム実装 ---

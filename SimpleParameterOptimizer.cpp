@@ -545,8 +545,24 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
                         result.bestStableGap = (r.stabilityGap == UINT64_MAX) ? 2000 : r.stabilityGap;
                         result.bestStableDeviation = (r.maxDeviation == UINT64_MAX) ? 2000 : r.maxDeviation;
                         result.found = true;
-                        std::cout << "[GA] improvement -> bestTurn=" << result.bestTurn << std::endl;
+
+
+                        std::cout << "[GA] !!!improvement -> bestTurn=" << result.bestTurn << std::endl;
                         std::cout << std::endl;
+
+                        std::cout << "action: ";
+                        for (int i = 0; i < 350; ++i) {
+                            auto data = r.actions[i];
+                            std::cout << data << " ";
+                            if (data == -1) {
+                                break;
+                            }
+                        }
+                        std::cout << std::endl;
+                        for (int i = 0; i < GA_EVAL_SEEDS; ++i) {
+                            std::cout << "seed:" << i << ": " << std::hex << r.seed[i] << std::dec << std::endl;
+                        }
+
 
                         // constexpr 配列リテラルとして出力
                         std::cout << "constexpr std::array<double, " << (SimpleParameterOptimizerNode::lastid + 1)
@@ -794,7 +810,10 @@ std::vector<EvalResult> SimpleParameterOptimizer::evaluateGenomeRange(std::vecto
         r.faultCount = outfaultCount;
         r.stabilityGap = outStabilityGap;
         r.maxDeviation = outMaxDeviation;
-        r.idx = idx;
+        for (int i = 0; i < GA_EVAL_SEEDS; ++i) {
+            r.seed[i] = evalSeeds[i];
+        }
+        memcpy(r.actions, actions, sizeof(int) * 350);
         out.push_back(r);
     }
 

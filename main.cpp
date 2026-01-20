@@ -896,7 +896,7 @@ int main(int argc, char *argv[]) {
 
 #if defined(DEBUG3)
 
-    uint64_t seed = 0x03005d91;
+    uint64_t seed = 0x75890fde35dbc04a;
 
     int actions[350] = {BattleEmulator::DEFENCE, -1,};
     SearchRequest(BasePlayers, seed, actions, THREAD_COUNT);
