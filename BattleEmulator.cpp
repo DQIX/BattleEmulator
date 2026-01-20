@@ -259,7 +259,7 @@ constexpr int EnemyTable[6] = {
 bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
                           std::optional<BattleResult> &result,
                           uint64_t seed, const int eActions[350], const int damages[350], int mode,
-                          uint64_t *NowState) {
+                          uint64_t *NowState, bool logicalTurnStart) {
     resetCombo(NowState);
     bool player0_has_initiative = false;
     int genePosition = 0;
@@ -279,7 +279,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
     for (int counterJ = startPos; counterJ < RunCount; ++counterJ) {
         processTurn();
-        if (genePosition != -1) {
+        if (!logicalTurnStart && genePosition != -1) {
             genePosition = counterJ - 1;
         }
         //現在ターンを保存

@@ -10,7 +10,7 @@
 
 #if defined(OPTIMIZE_MODE)
 // Define the size of the array
-const int ARRAY_SIZE = 50000;
+const int ARRAY_SIZE = 5000;
 
 thread_local uint32_t precalcTop32[ARRAY_SIZE]; // 固定メモリ
 thread_local int nowCounter = 1;

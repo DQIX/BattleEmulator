@@ -753,6 +753,8 @@ namespace {
 
 #if defined(OPTIMIZE_MODE)
 
+//CMA-ES
+
 void testParameters(
     const Player players[2],
     uint64_t seed,
@@ -762,7 +764,6 @@ void testParameters(
     int &outEnemyHp,
     int &outherb
 ){
-    lcg::init(seed);
     Player copiedPlayers[2] = { players[0], players[1] };
 
     int gene[350];
@@ -771,7 +772,7 @@ void testParameters(
         if (actions[i] == -1) { gene[i] = -1; break; }
     }
 
-    auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
+    auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 10000, gene, 0);
 
     outTurn = static_cast<uint64_t>(genome.turn);
     outEnemyHp = genome.EnemyPlayer.hp;
@@ -796,33 +797,82 @@ double evaluateGenes(
     uint32_t totalturn = 0;
     auto totalhp = 0;
     auto totalHerb = 0;
+    uint32_t winCount = 0;;
 
     for (int i = 0; i < 5; ++i) {
         uint64_t outTurn;
         int outEnemyHp;
         int outHerb;
+
         testParameters(
             players,
-            seed,
+            seed + i,
             actions,
-            /* turns = */ 1,
+            1,
             outTurn,
             outEnemyHp,
             outHerb
         );
-        totalturn += outTurn;
+
         totalhp += outEnemyHp;
-        totalHerb += outHerb;
+        totalHerb += setting::herbcount - outHerb;
+
+        if (outEnemyHp <= 0) {
+            ++winCount;
+            totalturn += static_cast<uint32_t>(outTurn);
+        }
+
+
     }
 
-    // --- score 合成 ---
-    double score = 0.0;
+    double winRate = static_cast<double>(winCount) / 5.0;
 
-    score =
-      - static_cast<double>(totalturn)
-      - static_cast<double>(totalhp) * 5.0
-      + static_cast<double>(totalHerb) * 2.0;
+    if (winCount < 5) {
+        return -10000.0 + winCount * 100.0;
+    }
 
+    // 勝利時
+    double score =
+        5000.0
+        - static_cast<double>(totalturn) * 10.0
+        + static_cast<double>(totalHerb) * 0.2;
+
+    auto averageTurn = static_cast<double>(totalturn) / winCount;
+
+    std::cout << "averageTurn=" << averageTurn << std::endl;
+
+    auto bonus = 0;
+
+    // 40ターン以下から段階的ボーナス
+    if (averageTurn <= 40) {
+        bonus += 500;
+    }
+
+    if (averageTurn <= 35) {
+        bonus += 500;
+    }
+
+    if (averageTurn <= 30) {
+        bonus += 500;
+    }
+
+    if (averageTurn <= 25) {
+        bonus += 500;
+    }
+
+    if (averageTurn <= 20) {
+        bonus += 500;
+    }
+
+    if (averageTurn <= 15) {
+        bonus += 500;
+    }
+
+    score += bonus;
+
+    //std::cout << (totalturn / 5) << std::endl;
+
+    //std::cout << " bonus=" << bonus << "　totalhp=" << totalhp <<  " winCount=" << winCount << " herb=" <<  (static_cast<double>(totalHerb) * 1.0) << " totalturn1=" << totalturn << " totalturn=" << (static_cast<double>(totalturn) * 20.0) << " winRate=" << winRate << " score=" << score << std::endl;
 
     return score;
 }
@@ -850,7 +900,7 @@ int main(int argc, char *argv[]) {
         /* threads = */ 1
     );
 
-    auto result = opt.run(200);
+    auto result = opt.run(100);
 
     SimpleParameterOptimizer::printGenome(result.genes);
     return 0;
@@ -986,6 +1036,7 @@ int main(int argc, char *argv[]) {
 #if defined(DEBUG3)
 
     uint64_t seed = 123456;
+    //uint64_t seed = 0x03005d91;
 
     int actions[350] = {BattleEmulator::DEFENCE, -1,};
     SearchRequest(BasePlayers, seed, actions, THREAD_COUNT);
