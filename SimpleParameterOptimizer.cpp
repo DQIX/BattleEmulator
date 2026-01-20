@@ -28,10 +28,6 @@
 #include "setting.h"
 
 // --- 設定 ---
-
-
-
-
 // action cost テーブル（一次真実源）
 static thread_local std::array<double, MAX_ACTION_ID> s_actionCosts;
 
@@ -121,7 +117,7 @@ static inline void ensureActionCostsInitializedForThisThread() {
     tlsInited = true;
 }
 
-static uint64_t evaluateGenome(
+static fitness_t evaluateGenome(
     GAGenome &g,
     const Player players[2],
     const std::array<uint64_t, GA_EVAL_SEEDS> &evalSeeds,
@@ -212,6 +208,18 @@ static uint64_t evaluateGenome(
     const double avgMs =
         static_cast<double>(totalMs10) / (GA_EVAL_SEEDS * 10.0);
 
+    // turn 系
+    const uint64_t best100   = (bestTurn < kFailedTurnSentinel)
+                             ? bestTurn * 100
+                             : kFailedTurnSentinel * 100;
+
+    const auto avg100    = static_cast<uint64_t>(avgTurn * 100.0);
+    const auto herb100   = static_cast<uint64_t>(avgherb * 100.0);
+
+    // 成功 seed
+    const uint64_t success   = successCount;
+
+
     // --- 出力 ---
     outTurns = (bestTurn < kFailedTurnSentinel)
         ? bestTurn
@@ -244,58 +252,60 @@ static uint64_t evaluateGenome(
         outStabilityGap = UINT64_MAX;
         outMaxDeviation = UINT64_MAX;
     }
+    // 重み（すべて加算）
+    constexpr fitness_t W_SUCCESS     = static_cast<fitness_t>(1) << 100;
+    constexpr fitness_t W_FAILSEED    = static_cast<fitness_t>(1) << 96;
+    constexpr fitness_t W_BEST        = static_cast<fitness_t>(1) << 80;
+    constexpr fitness_t W_MEDIAN      = static_cast<fitness_t>(1) << 72;
+    constexpr fitness_t W_AVG         = static_cast<fitness_t>(1) << 64;
+    constexpr fitness_t W_STABILITY   = static_cast<fitness_t>(1) << 48;
+    constexpr fitness_t W_DEVIATION   = static_cast<fitness_t>(1) << 30;
+    constexpr fitness_t W_FAULT       = static_cast<fitness_t>(1) << 16;
+    constexpr fitness_t W_HERB        = static_cast<fitness_t>(1) << 0;
 
-    // --- fitness 合成 ---
-    // ★ OR 禁止。必ず +
-    // ★ bestTurn を主、avgTurn を副
-    constexpr int HERB_SHIFT      = 0;   // 8bit
-    constexpr int FAULT_SHIFT     = 8;   // 3bit
-    constexpr int DEVIATION_SHIFT = 11;  // 11bit
-    constexpr int STABILITY_SHIFT = 22;  // 11bit
-    constexpr int SUCCESS_SHIFT   = 33;  // 2bit
-    constexpr int AVG_SHIFT       = 35;  // 12bit
-    constexpr int BEST_SHIFT      = 47;  // 12bit
 
 
-    // ---- 共通で整数化 ----
-    const auto best100 = static_cast<uint64_t>(bestTurn * 100);
-    const auto avg100  = static_cast<uint64_t>(avgTurn  * 100.0);
-    const auto herb100 = static_cast<uint64_t>(avgherb  * 100.0);
-
-    // ---- 失敗フェーズ（全 seed 討伐できていない）----
-    if (bestTurn >= kFailedTurnSentinel) {
-        const uint64_t f =
-              (best100 << BEST_SHIFT)
-            + (avg100  << AVG_SHIFT)
-            + (successCount << SUCCESS_SHIFT)
-            + (faultCount << FAULT_SHIFT)
-            + (herb100 << HERB_SHIFT);
-
-        s_actionCosts = backup;
-        return f;
+    uint64_t median100 = kFailedTurnSentinel * 100;
+    if (!successTurns.empty()) {
+        std::sort(successTurns.begin(), successTurns.end());
+        median100 = static_cast<uint64_t>(
+            successTurns[successTurns.size() / 2] * 100.0
+        );
     }
 
-    auto MaxDeviation = outMaxDeviation;
-    if (outMaxDeviation == UINT64_MAX) {
-        MaxDeviation = 2000;
-    }
+    uint64_t stabilityGap = outStabilityGap;
+    if (stabilityGap == UINT64_MAX) stabilityGap = 5000;
 
-    auto StabilityGap = outStabilityGap;
-    if (StabilityGap == UINT64_MAX) {
-        StabilityGap = 2000;
-    }
-    // ---- 成功フェーズ ----
-    uint64_t f =
-          (best100 << BEST_SHIFT)            // 絶対主軸
-        + (avg100  << AVG_SHIFT)             // 平均性能
-        + (StabilityGap << STABILITY_SHIFT)
-        + (successCount << SUCCESS_SHIFT)
-        + (MaxDeviation << DEVIATION_SHIFT)
-        + (faultCount << FAULT_SHIFT)
-        + (herb100 << HERB_SHIFT);
+    uint64_t maxDeviation = outMaxDeviation;
+    if (maxDeviation == UINT64_MAX) maxDeviation = 5000;
 
     s_actionCosts = backup;
-    return f;
+
+    const auto failSeeds = static_cast<uint64_t>(GA_EVAL_SEEDS) - successCount;
+
+    // success を「良いほど小さい」に変換
+    const auto successScore = static_cast<fitness_t>(GA_EVAL_SEEDS - successCount);
+
+    // 失敗 seed があると強烈に悪化
+    const fitness_t failPenalty = static_cast<fitness_t>(failSeeds) * 2000 * 100;
+
+
+    fitness_t fitness = 0;
+
+    fitness += successScore * W_SUCCESS;
+    fitness += static_cast<fitness_t>(failSeeds)   * W_FAILSEED;
+
+    fitness += static_cast<fitness_t>(best100   + failPenalty) * W_BEST;
+    fitness += static_cast<fitness_t>(median100 + failPenalty) * W_MEDIAN;
+    fitness += static_cast<fitness_t>(avg100    + failPenalty) * W_AVG;
+
+    fitness += static_cast<fitness_t>(stabilityGap) * W_STABILITY;
+    fitness += static_cast<fitness_t>(maxDeviation) * W_DEVIATION;
+
+    fitness += static_cast<fitness_t>(faultCount) * W_FAULT;
+    fitness += static_cast<fitness_t>(herb100)    * W_HERB;
+
+    return fitness;
 }
 
 // --- testParameters の定義（参照版） ---
@@ -628,7 +638,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
                 uint64_t outfaultCount = 0;
                 uint64_t outStabilityGap = 0;
                 uint64_t outMaxDeviation = 0;
-                uint64_t baseFit = evaluateGenome(bestGenomeCopy, players, evalSeeds, actions, turns, mTurn, mMs, outtotalHP, outfaultCount, outStabilityGap, outMaxDeviation);
+                auto baseFit = evaluateGenome(bestGenomeCopy, players, evalSeeds, actions, turns, mTurn, mMs, outtotalHP, outfaultCount, outStabilityGap, outMaxDeviation);
                 baselineTurn = mTurn;
                 ++evaluations;
                 ++result.testCount;
@@ -757,7 +767,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
             uint64_t outfaultCount = 0;
             uint64_t outStabilityGap = 0;
             uint64_t outMaxDeviation = 0;
-            uint64_t fit = evaluateGenome(ind, players, evalSeeds, actions, turns, measuredTurn, measuredMs, outtotalHP, outfaultCount, outStabilityGap, outMaxDeviation);
+            auto fit = evaluateGenome(ind, players, evalSeeds, actions, turns, measuredTurn, measuredMs, outtotalHP, outfaultCount, outStabilityGap, outMaxDeviation);
             ind.fitness = fit;
             ind.measuredTurns = measuredTurn;
             ind.measuredMs = measuredMs;
@@ -799,7 +809,7 @@ std::vector<EvalResult> SimpleParameterOptimizer::evaluateGenomeRange(std::vecto
         uint64_t outStabilityGap = 0;
         uint64_t outMaxDeviation = 0;
 
-        uint64_t fit = evaluateGenome(ind, players, evalSeeds, actions, turnsLimit, measuredTurn, measuredMs, outtotalHP, outfaultCount, outStabilityGap, outMaxDeviation);
+        const auto fit = evaluateGenome(ind, players, evalSeeds, actions, turnsLimit, measuredTurn, measuredMs, outtotalHP, outfaultCount, outStabilityGap, outMaxDeviation);
 
         EvalResult r;
         r.index = idx;

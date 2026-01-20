@@ -9,7 +9,7 @@
 
 #include <array>
 #include <limits>
-
+#include <ostream>
 
 class SimpleParameterOptimizerNode {
 public:
@@ -74,7 +74,9 @@ public:
 #include "Genome.h"
 #include <vector>
 
-static constexpr uint64_t kUnevaluatedFitness = std::numeric_limits<uint64_t>::max();
+using fitness_t = __int128;
+
+static constexpr fitness_t kUnevaluatedFitness = std::numeric_limits<__int128>::max();
 
 
 constexpr uint64_t FAULT_WEIGHT = 50ull;
@@ -131,7 +133,7 @@ struct OptimResult {
 // --- 追加: idx（範囲を評価して結果だけ返す） ---
 struct EvalResult {
     int index = -1;
-    uint64_t fitness = UINT64_MAX;
+    fitness_t fitness = std::numeric_limits<fitness_t>::max();
     uint64_t measuredTurns = 0;
     uint64_t totalHP{}; // 実測ターン
     uint64_t faultCount{}; // 実測ターン
@@ -145,7 +147,7 @@ struct EvalResult {
 // --- 遺伝的アルゴリズム実装 ---
 struct GAGenome {
     std::vector<double> genes; // size = TUNE_IDS.size()
-    uint64_t fitness; // 小さいほど良い（ターン優先）
+    fitness_t fitness = std::numeric_limits<fitness_t>::max(); // 小さいほど良い（ターン優先）
     uint64_t measuredTurns; // 実測ターン
     uint64_t totalHP; // 実測ターン
     uint64_t faultCount; // 実測ターン
@@ -161,6 +163,27 @@ struct StabilityChunkResult {
     uint64_t turns = 0;
 };
 
+inline std::string to_string(__int128 value) {
+    if (value == 0) return "0";
+
+    bool negative = value < 0;
+    if (negative) value = -value;
+
+    std::string result;
+    while (value > 0) {
+        result.push_back('0' + value % 10);
+        value /= 10;
+    }
+
+    if (negative) result.push_back('-');
+    std::reverse(result.begin(), result.end());
+    return result;
+}
+
+
+inline std::ostream& operator<<(std::ostream& os, __int128 value) {
+    return os << to_string(value);
+}
 
 class SimpleParameterOptimizer {
 public:
