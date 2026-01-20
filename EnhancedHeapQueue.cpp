@@ -1,3 +1,0 @@
-//
-// Enhanced Heap Queue Implementation
-//

@@ -276,6 +276,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         RunCount++;
     }
 
+    if (players[0].hp <= 0 || players[1].hp <= 0) {
+        return false;
+    }
 
     for (int counterJ = startPos; counterJ < RunCount; ++counterJ) {
         processTurn();

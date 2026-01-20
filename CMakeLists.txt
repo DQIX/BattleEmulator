@@ -44,22 +44,12 @@ set(SOURCES
         debug.cpp
         debug.h
         BattleResult.h
-        ActionOptimizer.cpp
-        ActionOptimizer.h
-        Genome.h
-        HeapQueue.h
         InputBuilder.cpp
         InputBuilder.h
         ResultStructure.h
-        EnhancedCostCalculator.cpp
-        EnhancedHashCalculator.cpp
-        EnhancedHeapQueue.cpp
-        EnhancedCostCalculator.h
-        EnhancedHashCalculator.h
-        EnhancedHeapQueue.h
-        LinearIdPool.h
-        SimpleParameterOptimizer.cpp
         setting.h
+        ActionBruteForcer.cpp
+        ActionBruteForcer.h
 )
 
 # シングルスレッド版（multithreading = OFF）
