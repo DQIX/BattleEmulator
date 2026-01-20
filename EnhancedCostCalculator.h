@@ -6,11 +6,18 @@
 #ifndef ENHANCED_COST_CALCULATOR_H
 #define ENHANCED_COST_CALCULATOR_H
 
+#include <vector>
+
 #include "Genome.h"
 #include "BattleEmulator.h"
 
 class EnhancedCostCalculator {
 public:
+
+#if defined(OPTIMIZE_MODE)
+    static void set(const std::vector<double>& genes);
+#endif
+
     // Calculate enhanced g-cost with action-specific costs
     static double calculateGCost(const Genome &genome, int action, double preGCost);
     

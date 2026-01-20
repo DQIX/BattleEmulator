@@ -5,11 +5,22 @@
 #include "EnhancedCostCalculator.h"
 #include <array>
 #include <cassert>
+#include <cstring>
 
 #include "SimpleParameterOptimizer.h"
 #include "setting.h"
 
 #if defined(OPTIMIZE_MODE)
+
+thread_local double data[SimpleParameterOptimizerNode::lastid]{};
+
+void EnhancedCostCalculator::set(const std::vector<double>& genes) {
+    memset(data, 0, sizeof(data));
+    for (int i = 0; i < SimpleParameterOptimizerNode::ids; ++i) {
+        const auto id = SimpleParameterOptimizerNode::TUNE_IDS[i];
+        data[id] = genes[i];
+    }
+}
 
 double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, double preGCost) {
     // Base cost is turn number (maintains depth-first preference)
@@ -52,7 +63,7 @@ double EnhancedCostCalculator::getActionCost(int action) {
     const auto& ids1 = SimpleParameterOptimizerNode::TUNE_IDS;
 
     assert(std::find(ids1.begin(), ids1.end(), action) != ids1.end());
-   return SimpleParameterOptimizer::getActionCost(action);
+   return data[action];
 }
 
 
@@ -99,41 +110,33 @@ double EnhancedCostCalculator::calculateResourceCost(const Genome &genome) {
 #else
 
 
-constexpr std::array<double, 201> GENOME = {
-    /* 0 */ 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-    /* 25 */ 0.0001,
-    /* 26 */ 0.05,
-    /* 27 */ 0.15,
-    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-    /* 53 */ 0.1,
-    0.0,0.0,
-    /* 56 */ 0.0001,
-    0.0,0.0,
-    /* 59 */ 0.0001,
-    0.0,
-    /* 61 */ 0.02,
-    /* 62 */ 0.03,
-    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-    /* 150 */ 1.0,
-    /* 151 */ 30.0,
-    /* 152 */ 2.0,
-    /* 153 */ 1.0,
-    /* 154 */ 1.0,
-    /* 155 */ -1.36188,
-    /* 156 */ -0.373502,
-    /* 157 */ 8.0528,
-    /* 158 */ -0.717498,
-    /* 159 */ 0.1,
-    /* 160 */ 0.2,
-    /* 161 */ -1.44939,
-    /* 162 */ 1.58907,
-    /* 163 */ -0.316739,
-    /* 164 */ 3.30045,
-    /* 165 */ 6.14063,
-    /* 166 */ 3.55607,
-    1.0,
-    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
-};
+constexpr std::array<double, 168> GENOME = {
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1.18737,
+        0.782635,
+        -0.0160994,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.672594,
+        0,0,0,0,0,-1.11926,
+        0,0.152678,
+        -1.00774,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-0.179655,
+        0.658792,
+        -1.71132,
+        0.226435,
+        -0.164419,
+        -0.395231,
+        0.41476,
+        -0.600662,
+        0,0.700232,
+        -0.354917,
+        -0.175682,
+        -1.60287,
+        0.841944,
+        -1.22258,
+        0.609627,
+        0.0210538,
+        -0.632752
+        };
+
 double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, double preGCost) {
     // Base cost is turn number (maintains depth-first preference)
     double gCost = preGCost + getActionCost(SimpleParameterOptimizerNode::turnHeignt);

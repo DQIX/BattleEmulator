@@ -10,6 +10,7 @@
 #include "BattleEmulator.h"
 #include "debug.h"
 #include "ActionOptimizer.h"
+#include "EnhancedCostCalculator.h"
 #include "InputBuilder.h"
 #include "setting.h"
 #include "SimpleParameterOptimizer.h"
@@ -750,6 +751,88 @@ namespace {
     }
 }
 
+#if defined(OPTIMIZE_MODE)
+
+void testParameters(
+    const Player players[2],
+    uint64_t seed,
+    const int actions[350],
+    int turns,
+    uint64_t &outTurn,
+    int &outEnemyHp,
+    int &outherb
+){
+    lcg::init(seed);
+    Player copiedPlayers[2] = { players[0], players[1] };
+
+    int gene[350];
+    for (int i = 0; i < 350; ++i) {
+        gene[i] = actions[i];
+        if (actions[i] == -1) { gene[i] = -1; break; }
+    }
+
+    auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
+
+    outTurn = static_cast<uint64_t>(genome.turn);
+    outEnemyHp = genome.EnemyPlayer.hp;
+    outherb = copiedPlayers[0].medicinal_herbs_count;
+}
+
+
+double evaluateGenes(
+    const std::vector<double>& genes,
+    uint64_t seed
+) {
+    Player players[2] = { BasePlayers[0], BasePlayers[1] };
+
+    const auto& ids = SimpleParameterOptimizerNode::TUNE_IDS;
+
+    int actions[350] = {
+        BattleEmulator::DEFENCE,
+        -1,
+    };
+    EnhancedCostCalculator::set(genes);
+
+    uint32_t totalturn = 0;
+    auto totalhp = 0;
+    auto totalHerb = 0;
+
+    for (int i = 0; i < 5; ++i) {
+        uint64_t outTurn;
+        int outEnemyHp;
+        int outHerb;
+        testParameters(
+            players,
+            seed,
+            actions,
+            /* turns = */ 1,
+            outTurn,
+            outEnemyHp,
+            outHerb
+        );
+        totalturn += outTurn;
+        totalhp += outEnemyHp;
+        totalHerb += outHerb;
+    }
+
+    // --- score 合成 ---
+    double score = 0.0;
+
+    score =
+      - static_cast<double>(totalturn)
+      - static_cast<double>(totalhp) * 5.0
+      + static_cast<double>(totalHerb) * 2.0;
+
+
+    return score;
+}
+
+
+// --- testParameters の定義（参照版） ---
+
+#endif
+
+
 int main(int argc, char *argv[]) {
     showHeader();
 #if defined(DEBUG)
@@ -759,11 +842,17 @@ int main(int argc, char *argv[]) {
 
 
 #if defined(OPTIMIZE_MODE)
-    int actions1[350] = {};
-    auto counter = 0;
-    actions1[counter++] = BattleEmulator::DEFENCE;
-    actions1[counter] = -1;
-    SimpleParameterOptimizer::optimize(BasePlayers, 0x12345, actions1, 100000, counter);
+    SimpleParameterOptimizer opt(
+        evaluateGenes,
+        /* seed = */ 123456,
+        /* lambda = */ 32,
+        /* mu = */ 8,
+        /* threads = */ 1
+    );
+
+    auto result = opt.run(200);
+
+    SimpleParameterOptimizer::printGenome(result.genes);
     return 0;
 #endif
 
@@ -896,7 +985,7 @@ int main(int argc, char *argv[]) {
 
 #if defined(DEBUG3)
 
-    uint64_t seed = 0x75890fde35dbc04a;
+    uint64_t seed = 123456;
 
     int actions[350] = {BattleEmulator::DEFENCE, -1,};
     SearchRequest(BasePlayers, seed, actions, THREAD_COUNT);
