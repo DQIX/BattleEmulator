@@ -562,7 +562,6 @@ namespace {
 
         auto TryUpdateBest = [&](const Node& leaf) {
             const int64_t s = EvaluatePlayersLocal(leaf.p);
-            std::cout << leaf.p[0].hp << " " << leaf.p[1].hp << " " << s << std::endl;
             if (s < globalBestScore) {
                 globalBestScore = s;
                 globalBestDepth = leaf.depth;
