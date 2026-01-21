@@ -52,6 +52,7 @@ void lcg::init(uint64_t seed, bool init) {
  */
 void lcg::GenerateifNeed(int need) {
     assert(now_seed != 0);
+    assert(need != 0);
     // 配列に値を再計算して格納する
     if(nowCounter > need){
         return;

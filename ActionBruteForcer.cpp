@@ -1,6 +1,7 @@
 // ActionBruteForcer.cpp
 #include "ActionBruteForcer.h"
 
+#include <cassert>
 #include <cstring>
 #include <optional>
 #include <vector>
@@ -25,7 +26,7 @@ constexpr ActionEntry ACTION_TABLE[] = {
         BattleEmulator::DRAGON_SLASH, 0, [](const Player &) { return true; },
     },
     {
-        BattleEmulator::DEFENCE, 1, [](const Player &) { return true; },
+        BattleEmulator::DEFENCE, 30, [](const Player &) { return true; },
     },
     {
         BattleEmulator::FLEE_ALLY, 1,[](const Player &) { return true; },
@@ -35,7 +36,7 @@ constexpr ActionEntry ACTION_TABLE[] = {
         [](const Player &Ally) { return Ally.medicinal_herbs_count >= 1; },
     },
     {
-        BattleEmulator::HEAL, 1,
+        BattleEmulator::HEAL, -20,
         [](const Player &Ally) { return Ally.mp >= 2; },
     },
     {
@@ -68,7 +69,7 @@ static inline int64_t EvaluatePlayers(const Player players[2]) {
 void ActionBruteForcer::Search(
     const Player *rootPlayers,
     uint64_t rootNowState,
-    int rootPosition,
+    const int rootPosition,
     int F, // この実装は F==3 を想定している（汎用化は後で可能）
     bool isFirstExec,
     SearchResult best[10]
@@ -120,7 +121,7 @@ void ActionBruteForcer::Search(
             true
         );
 
-        if (!isFirstExec && dummyResult->actions[0] == BattleEmulator::HEAL_ENEMY || dummyResult->actions[1] == BattleEmulator::HEAL_ENEMY) {
+        if (!isFirstExec && (dummyResult->actions[0] == BattleEmulator::HEAL_ENEMY || dummyResult->actions[1] == BattleEmulator::HEAL_ENEMY)) {
             continue;
         }
 
@@ -130,8 +131,8 @@ void ActionBruteForcer::Search(
             Gene[0] = a1;
             Gene[1] = -1;
 
-            auto s2complete = s1.players[0].hp == 0;
-            if (!action_table1.condition(s1.players[0])) {
+            auto s2complete = s2.players[0].hp == 0;
+            if (!action_table1.condition(s2.players[0])) {
                 continue;
             }
 
@@ -163,9 +164,9 @@ void ActionBruteForcer::Search(
                 Gene[0] = a2;
                 Gene[1] = -1;
 
-                auto s3complete = s1.players[0].hp == 0;
+                auto s3complete = s3.players[0].hp == 0;
 
-                if (!action_table3.condition(s1.players[0])) {
+                if (!action_table3.condition(s3.players[0])) {
                     continue;
                 }
                 dummyResult->clear();
@@ -197,9 +198,9 @@ void ActionBruteForcer::Search(
                     Gene[0] = a3;
                     Gene[1] = -1;
 
-                    auto s4complete = s1.players[0].hp == 0;
+                    auto s4complete = s4.players[0].hp == 0;
 
-                    if (!action_table4.condition(s1.players[0])) {
+                    if (!action_table4.condition(s4.players[0])) {
                         continue;
                     }
                     dummyResult->clear();
@@ -221,11 +222,11 @@ void ActionBruteForcer::Search(
 
                     if (s4.players[0].hp <= 0) continue;
 
-                    if (dummyResult->actions[0] == BattleEmulator::HEAL_ENEMY || dummyResult->actions[1] == BattleEmulator::HEAL_ENEMY) {
-                        continue;
-                    }
+                    // if (dummyResult->actions[0] == BattleEmulator::HEAL_ENEMY || dummyResult->actions[1] == BattleEmulator::HEAL_ENEMY) {
+                    //     continue;
+                    // }
 
-                    int score = EvaluatePlayers(s4.players);
+                    auto score = EvaluatePlayers(s4.players);
 
                     score += action_table0.cost;
                     if (s2complete) {
@@ -242,12 +243,38 @@ void ActionBruteForcer::Search(
                     r.actions[2] = a2;
                     r.actions[3] = a3;
                     r.actions[4] = -1;
+                    r.nowState = s4.NowState;
+                    r.position = s4.position;
                     r.score = score;
-                    r.depth = 3;
+                    r.depth = 4;
                     tryInsertBest(best, bestCount, worstIdx, worstScore, r);
                 }
             }
         }
+    }
+
+    for (int i = 0; i < bestCount; ++i) {
+        auto n =  best[i].nowState;
+        auto p =  best[i].position;
+        memcpy(best[i].players, rootPlayers, sizeof(Player) * 2);
+        best[i].nowState = rootNowState;
+        best[i].position = rootPosition;
+        BattleEmulator::Main(
+           &best[i].position,
+           best[i].depth,
+           best[i].actions,
+           best[i].players,
+           dummyResult,
+           0ULL,
+           nullptr,
+           nullptr,
+           -1,
+           &best[i].nowState,
+           true
+       );
+
+        assert(best[i].position == p);
+        assert(best[i].nowState == n);
     }
 }
 

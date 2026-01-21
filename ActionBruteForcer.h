@@ -24,6 +24,9 @@ struct SearchResult {
     int64_t score{};   // ★ int64_t
     int actions[5]{};
     int depth{};
+    Player players[2];
+    uint64_t nowState{};
+    int position{};
 };
 
 
