@@ -21,10 +21,13 @@ constexpr std::size_t ipow(std::size_t base, std::size_t exp) {
 
 struct SearchResult {
     int firstAction{};
-    int score{};
+    int64_t score{};   // ★ int64_t
     int actions[5]{};
     int depth{};
 };
+
+
+std::ostream& operator<<(std::ostream& os, const SearchResult& r);
 
 struct SimState { Player players[2]; uint64_t NowState{}; int position{}; int firstAction{}; };
 
@@ -56,17 +59,16 @@ public:
 private:
     static inline void tryInsertBest(
         SearchResult best[10],
-        int &bestCount,
-        int &worstIdx,
-        int &worstScore,
-        const SearchResult &cand
+        int& bestCount,
+        int& worstIdx,
+        int64_t& worstScore,
+        const SearchResult& cand
     ) {
         // まだ空きがある
         if (bestCount < 10) {
             best[bestCount] = cand;
 
-            // 最悪更新
-            if (bestCount == 0 || cand.score < worstScore) {
+            if (bestCount == 0 || cand.score > worstScore) {
                 worstScore = cand.score;
                 worstIdx = bestCount;
             }
@@ -75,43 +77,24 @@ private:
             return;
         }
 
-        // 10件埋まっていて、最悪より悪いなら即捨て
-        if (cand.score < worstScore) {
+        // 最悪（最大）より悪いなら捨てる
+        if (cand.score >= worstScore) {
             return;
         }
 
         // 最悪を差し替え
         best[worstIdx] = cand;
 
-        // 新しい最悪を線形探索（10要素）
+        // 新しい最悪を線形探索
         worstScore = best[0].score;
         worstIdx = 0;
         for (int i = 1; i < 10; ++i) {
-            if (best[i].score < worstScore) {
+            if (best[i].score > worstScore) {
                 worstScore = best[i].score;
                 worstIdx = i;
             }
         }
     }
 };
-
-
-struct Node {
-    Player players[2];
-    uint64_t nowState{};
-    int position{};
-    uint8_t firstAction{};
-};
-
-constexpr int F = 3;
-constexpr int MAX_WIDTH = ipow(F, ActionBruteForcer::TUNE_IDS.size()) + 100;
-
-alignas(64) static Node layerA[MAX_WIDTH];
-alignas(64) static Node layerB[MAX_WIDTH];
-
-
-
-
-
 
 #endif //NEWDIRECTORY_ACTIONBRUTEFORCER_H

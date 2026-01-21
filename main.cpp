@@ -460,7 +460,28 @@ namespace {
 
         BattleEmulator::Main(&pos, turns, gene, player, (std::optional<BattleResult> &) std::nullopt, seed, nullptr, nullptr, -2, &nows, false);
 
-        ActionBruteForcer::Search(player, nows,pos, 3, true, result);
+        ActionBruteForcer::Search(player, nows,pos, 4, true, result);
+
+        int bestIdx = 0;
+        int64_t bestScore = INT64_MAX;
+        for (int i = 0; i < 10; ++i) {
+            if (result[i].score < bestScore) {
+                bestScore = result[i].score;
+                bestIdx = i;
+            }
+        }
+
+        for (auto search_result: result) {
+            if (search_result.score == bestScore) {
+                std::cout << search_result << std::endl;
+            }
+        }
+
+        std::cout << "bestIdx: " << result[bestIdx] << std::endl;
+
+        for (auto search_result: result) {
+            std::cout << search_result << std::endl;
+        }
 
         auto turnProcessed = BattleEmulator::getTurnProcessed();
 

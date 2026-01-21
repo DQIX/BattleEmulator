@@ -9,7 +9,7 @@ class BattleResult {
 
 public:
     // 各メンバの内容を 0 にリセットする clear 関数
-    void clear() {
+    inline void clear() {
         position = 0;
         turn = 0;
     }
