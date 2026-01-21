@@ -8,7 +8,10 @@
 #include <cstdint>
 #include <queue>
 #include <ostream>
+#include <array>      // 追加
+#include <functional> // 追加
 
+#include "lcg.h"
 #include "setting.h"
 
 struct ActionEntry {
@@ -77,11 +80,9 @@ void ActionBruteForcer::Search(
     if (F <= 0) F = 1;
     if (F > 6) F = 6;
 
-
     int bestCount = 0;
     int worstIdx = -1;
     int64_t worstScore = INT64_MAX;
-
 
     constexpr std::size_t BRANCH = ActionBruteForcer::ids; // 7
     std::size_t totalLeaves = 1;
@@ -97,161 +98,105 @@ void ActionBruteForcer::Search(
     root.position = rootPosition;
     root.firstAction = 0;
 
-    for (auto action_table0: ACTION_TABLE) {
-        int a0 = action_table0.action;
-        SimState s1 = root;
-        Gene[0] = a0;
-        Gene[1] = -1;
+    const int targetDepth = 4; // 元コードは a0,a1,a2,a3 の4手固定
 
-        if (!action_table0.condition(s1.players[0])) {
-            continue;
+    std::array<int, 6> actions{};
+    actions.fill(-1);
+
+    std::array<int, 6> chosenCost{};
+    chosenCost.fill(0);
+
+    // 「その手を実行する直前に既に完了(HP==0)だったか」を保持（元の s2complete/s3complete と同じ意味）
+    std::array<bool, 6> completeBefore{};
+    completeBefore.fill(false);
+
+    auto isHealEnemyInResult = [&](const std::optional<BattleResult>& r) -> bool {
+        return r && (r->actions[0] == BattleEmulator::HEAL_ENEMY || r->actions[1] == BattleEmulator::HEAL_ENEMY);
+    };
+
+    std::function<void(int, const SimState&)> dfs = [&](int depth, const SimState& cur) {
+        // depth: 0..targetDepth-1 の手番
+        if (depth == targetDepth) {
+            // 評価（元コードの a3 まで回した後）
+            auto score = EvaluatePlayers(cur.players);
+
+            // cost 加算ルールは「元コードと同じ」：
+            // - a0 の cost は常に加算
+            // - a1 の cost は s2complete のときのみ加算（= a1直前にHP==0）
+            // - a2 の cost は s3complete のときのみ加算（= a2直前にHP==0）
+            // - a3 の cost は元コード同様 “加算しない”
+            score += chosenCost[0];
+            if (completeBefore[1]) score += chosenCost[1];
+            if (completeBefore[2]) score += chosenCost[2];
+            if (completeBefore[3]) score += chosenCost[3];
+
+            SearchResult r;
+            r.actions[0] = actions[0];
+            r.actions[1] = actions[1];
+            r.actions[2] = actions[2];
+            r.actions[3] = actions[3];
+            r.actions[4] = -1;
+            r.nowState = cur.NowState;
+            r.position = cur.position;
+            r.score = score;
+            r.depth = targetDepth;
+            tryInsertBest(best, bestCount, worstIdx, worstScore, r);
+            return;
         }
 
-        BattleEmulator::Main(
-            &s1.position,
-            1,
-            Gene,
-            s1.players,
-            dummyResult,
-            0ULL,
-            nullptr,
-            nullptr,
-            -1,
-            &s1.NowState,
-            true
-        );
+        for (const auto &[action, cost, condition] : ACTION_TABLE) {
+            SimState next = cur;
 
-        if (!isFirstExec && (dummyResult->actions[0] == BattleEmulator::HEAL_ENEMY || dummyResult->actions[1] == BattleEmulator::HEAL_ENEMY)) {
-            continue;
-        }
+            // その手の直前に完了しているか（元コードの s2complete/s3complete 相当）
+            completeBefore[depth] = (next.players[0].hp == 0);
 
-        for (auto action_table1: ACTION_TABLE) {
-            int a1 = action_table1.action;
-            SimState s2 = s1;
-            Gene[0] = a1;
-            Gene[1] = -1;
-
-            auto s2complete = s2.players[0].hp == 0;
-            if (!action_table1.condition(s2.players[0])) {
+            if (!condition(next.players[0])) {
                 continue;
             }
 
+            actions[depth] = action;
+            chosenCost[depth] = cost;
+
+            Gene[0] = action;
+            Gene[1] = -1;
+
             dummyResult->clear();
-            if (!s2complete) {
+
+            // 完了状態ならエミュレーションを呼ばない（元コード踏襲）
+            if (!completeBefore[depth]) {
                 BattleEmulator::Main(
-                    &s2.position,
+                    &next.position,
                     1,
                     Gene,
-                    s2.players,
+                    next.players,
                     dummyResult,
                     0ULL,
                     nullptr,
                     nullptr,
                     -1,
-                    &s2.NowState,
+                    &next.NowState,
                     true
                 );
             }
 
-            if (dummyResult->actions[0] == BattleEmulator::HEAL_ENEMY || dummyResult->actions[1] == BattleEmulator::HEAL_ENEMY) {
-                continue;
-            }
-
-
-            for (auto action_table3: ACTION_TABLE) {
-                int a2 = action_table3.action;
-                SimState s3 = s2;
-                Gene[0] = a2;
-                Gene[1] = -1;
-
-                auto s3complete = s3.players[0].hp == 0;
-
-                if (!action_table3.condition(s3.players[0])) {
+            // 枝刈り（深さごとに元コードと同じタイミングで実施）
+            if (depth == 0) {
+                if (!isFirstExec && isHealEnemyInResult(dummyResult)) {
                     continue;
                 }
-                dummyResult->clear();
-                if (!s3complete) {
-                    BattleEmulator::Main(
-                        &s3.position,
-                        1,
-                        Gene,
-                        s3.players,
-                        dummyResult,
-                        0ULL,
-                        nullptr,
-                        nullptr,
-                        -1,
-                        &s3.NowState,
-                        true
-                    );
-                }
-
-                if (s3.players[0].hp <= 0) continue;
-
-                if (dummyResult->actions[0] == BattleEmulator::HEAL_ENEMY || dummyResult->actions[1] == BattleEmulator::HEAL_ENEMY) {
+            } else {
+                if (next.players[0].hp <= 0) continue;
+                if (isHealEnemyInResult(dummyResult)) {
                     continue;
                 }
-
-                for (auto action_table4: ACTION_TABLE) {
-                    int a3 = action_table4.action;
-                    SimState s4 = s3;
-                    Gene[0] = a3;
-                    Gene[1] = -1;
-
-                    auto s4complete = s4.players[0].hp == 0;
-
-                    if (!action_table4.condition(s4.players[0])) {
-                        continue;
-                    }
-                    dummyResult->clear();
-                    if (!s4complete) {
-                        BattleEmulator::Main(
-                            &s4.position,
-                            1,
-                            Gene,
-                            s4.players,
-                            dummyResult,
-                            0ULL,
-                            nullptr,
-                            nullptr,
-                            -1,
-                            &s4.NowState,
-                            true
-                        );
-                    }
-
-                    if (s4.players[0].hp <= 0) continue;
-
-                    // if (dummyResult->actions[0] == BattleEmulator::HEAL_ENEMY || dummyResult->actions[1] == BattleEmulator::HEAL_ENEMY) {
-                    //     continue;
-                    // }
-
-                    auto score = EvaluatePlayers(s4.players);
-
-                    score += action_table0.cost;
-                    if (s2complete) {
-                        score += action_table1.cost;
-                    }
-                    if (s3complete) {
-                        score += action_table3.cost;
-                    }
-
-
-                    SearchResult r;
-                    r.actions[0] = a0;
-                    r.actions[1] = a1;
-                    r.actions[2] = a2;
-                    r.actions[3] = a3;
-                    r.actions[4] = -1;
-                    r.nowState = s4.NowState;
-                    r.position = s4.position;
-                    r.score = score;
-                    r.depth = 4;
-                    tryInsertBest(best, bestCount, worstIdx, worstScore, r);
-                }
             }
+            dfs(depth + 1, next);
         }
-    }
+
+        actions[depth] = -1; // 念のため戻す（可読性＆事故防止）
+    };
+
+    dfs(0, root);
 
     for (int i = 0; i < bestCount; ++i) {
         auto n =  best[i].nowState;
@@ -259,25 +204,101 @@ void ActionBruteForcer::Search(
         memcpy(best[i].players, rootPlayers, sizeof(Player) * 2);
         best[i].nowState = rootNowState;
         best[i].position = rootPosition;
+
         BattleEmulator::Main(
-           &best[i].position,
-           best[i].depth,
-           best[i].actions,
-           best[i].players,
-           dummyResult,
-           0ULL,
-           nullptr,
-           nullptr,
-           -1,
-           &best[i].nowState,
-           true
-       );
+            &best[i].position,
+            4,
+            Gene,
+            best[i].players,
+            dummyResult,
+            0ULL,
+            nullptr,
+            nullptr,
+            -1,
+            &best[i].nowState,
+            true
+        );
 
         assert(best[i].position == p);
         assert(best[i].nowState == n);
     }
 }
 
+void ActionBruteForcer::Test_BattleEmulator_Determinism(const Player* player) {
+    Player p1[2] = {player[0], player[1]};
+    Player p2[2] = {player[0], player[1]};
+
+    uint64_t s1 = 0;
+    uint64_t s2 = 0;
+
+    int pos1 = 1;
+    int pos2 = 1;
+
+    int32_t gene[350];
+    for (int i = 0; i < 350; ++i) gene[i] = -1;
+
+    // 仮の4手
+    gene[0] = BattleEmulator::ATTACK_ALLY;
+    gene[1] = BattleEmulator::HEAL;
+    gene[2] = BattleEmulator::CRACK_ALLY;
+    gene[3] = BattleEmulator::HEAL;
+
+    std::optional<BattleResult> r1, r2;
+
+    lcg::init(123456, false);
+
+    // 1手ずつ4回
+    for (int i = 0; i < 4; ++i) {
+        int32_t g[350];
+        for (int j = 0; j < 350; ++j) g[j] = -1;
+        g[0] = gene[i];
+        g[1] = -1;
+
+        BattleEmulator::Main(
+            &pos1,
+            1,
+            g,
+            p1,
+            r1,
+            0ULL,
+            nullptr,
+            nullptr,
+            -1,
+            &s1,
+            true
+        );
+    }
+
+    lcg::init(123456, false);
+    std::cout << "=====" << std::endl;
+    // 4手まとめて1回
+    BattleEmulator::Main(
+        &pos2,
+        4,
+        gene,
+        p2,
+        r2,
+        0ULL,
+        nullptr,
+        nullptr,
+        -1,
+        &s2,
+        false
+    );
+
+    std::cout << pos1 << ", " << pos2 << std::endl;
+    std::cout << s1 << ", " << s2 << std::endl;
+    std::cout << memcmp(p1, p2, sizeof(Player) * 2) << std::endl;
+    std::cout << p1[0].hp << ", " << p2[0].hp << std::endl;
+    std::cout << p1[1].hp << ", " << p2[1].hp << std::endl;
+
+    std::cout << ((s1 >> 4) & 0xf) << ", " << ((s1 >> 8) & 0xf) << std::endl;
+    std::cout << ((s2 >> 4) & 0xf) << ", " << ((s2 >> 8) & 0xf) << std::endl;
+
+    assert(pos1 == pos2);
+    assert(s1 == s2);
+    assert(memcmp(p1, p2, sizeof(Player) * 2) == 0);
+}
 
 
 std::ostream& operator<<(std::ostream& os, const SearchResult& r) {

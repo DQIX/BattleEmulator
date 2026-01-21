@@ -58,6 +58,7 @@ public:
     static_assert(TUNE_IDS.size() == ids);
 
     static void Search(const Player *rootPlayers, uint64_t rootNowState, int rootPosition, int F, bool isFirstExec, SearchResult *best);
+    static void Test_BattleEmulator_Determinism(const Player* player);
 
 private:
     static inline void tryInsertBest(

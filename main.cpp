@@ -1032,7 +1032,10 @@ int main(int argc, char *argv[]) {
     //uint64_t seed = 0x03005d91;
 
     int actions[350] = {BattleEmulator::DEFENCE, -1,};
-    SearchRequest(BasePlayers, seed, actions, THREAD_COUNT);
+    //SearchRequest(BasePlayers, seed, actions, THREAD_COUNT);
+    lcg::init(123456, false);
+    ActionBruteForcer::Test_BattleEmulator_Determinism(BasePlayers);
+
 
     std::cout << performanceLogger.rdbuf() << std::endl;
 

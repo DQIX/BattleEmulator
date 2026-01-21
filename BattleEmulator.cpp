@@ -360,6 +360,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             actionTable = ATTACK_ALLY;
         }
 
+        if (logicalTurnStart) {
+            genePosition++;
+        }
 
         //途中で解除してもいいように2回チェックする
         if (players[0].sleeping) {
@@ -609,12 +612,16 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 #endif
 
         if (!Player::isPlayerAlive(players[1])) {
+            resetCombo(NowState);
             return false;
         }
         if (!Player::isPlayerAlive(players[0])) {
+            resetCombo(NowState);
             return false;
         }
     }
+
+    resetCombo(NowState);
 
     if (mode != -1 && mode != -2) {
         return true;
