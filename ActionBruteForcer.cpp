@@ -208,7 +208,7 @@ void ActionBruteForcer::Search(
         BattleEmulator::Main(
             &best[i].position,
             4,
-            Gene,
+            best[i].actions,
             best[i].players,
             dummyResult,
             0ULL,
@@ -222,82 +222,6 @@ void ActionBruteForcer::Search(
         assert(best[i].position == p);
         assert(best[i].nowState == n);
     }
-}
-
-void ActionBruteForcer::Test_BattleEmulator_Determinism(const Player* player) {
-    Player p1[2] = {player[0], player[1]};
-    Player p2[2] = {player[0], player[1]};
-
-    uint64_t s1 = 0;
-    uint64_t s2 = 0;
-
-    int pos1 = 1;
-    int pos2 = 1;
-
-    int32_t gene[350];
-    for (int i = 0; i < 350; ++i) gene[i] = -1;
-
-    // 仮の4手
-    gene[0] = BattleEmulator::ATTACK_ALLY;
-    gene[1] = BattleEmulator::HEAL;
-    gene[2] = BattleEmulator::CRACK_ALLY;
-    gene[3] = BattleEmulator::HEAL;
-
-    std::optional<BattleResult> r1, r2;
-
-    lcg::init(123456, false);
-
-    // 1手ずつ4回
-    for (int i = 0; i < 4; ++i) {
-        int32_t g[350];
-        for (int j = 0; j < 350; ++j) g[j] = -1;
-        g[0] = gene[i];
-        g[1] = -1;
-
-        BattleEmulator::Main(
-            &pos1,
-            1,
-            g,
-            p1,
-            r1,
-            0ULL,
-            nullptr,
-            nullptr,
-            -1,
-            &s1,
-            true
-        );
-    }
-
-    lcg::init(123456, false);
-    std::cout << "=====" << std::endl;
-    // 4手まとめて1回
-    BattleEmulator::Main(
-        &pos2,
-        4,
-        gene,
-        p2,
-        r2,
-        0ULL,
-        nullptr,
-        nullptr,
-        -1,
-        &s2,
-        false
-    );
-
-    std::cout << pos1 << ", " << pos2 << std::endl;
-    std::cout << s1 << ", " << s2 << std::endl;
-    std::cout << memcmp(p1, p2, sizeof(Player) * 2) << std::endl;
-    std::cout << p1[0].hp << ", " << p2[0].hp << std::endl;
-    std::cout << p1[1].hp << ", " << p2[1].hp << std::endl;
-
-    std::cout << ((s1 >> 4) & 0xf) << ", " << ((s1 >> 8) & 0xf) << std::endl;
-    std::cout << ((s2 >> 4) & 0xf) << ", " << ((s2 >> 8) & 0xf) << std::endl;
-
-    assert(pos1 == pos2);
-    assert(s1 == s2);
-    assert(memcmp(p1, p2, sizeof(Player) * 2) == 0);
 }
 
 

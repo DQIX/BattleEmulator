@@ -13,6 +13,7 @@
 #include "debug.h"
 #include "BattleResult.h"
 #include <array>
+#include <cassert>
 
 thread_local int preHP[3] = {0, 0, 0};
 
@@ -346,6 +347,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
         int32_t actionTable = -1;
 
+        std::cout << "genePosition" << genePosition << "Gene[genePosition]=" << Gene[genePosition] << std::endl;
         if (Gene[genePosition] == 0 || Gene[genePosition] == -1) {
             genePosition = -1;
             //throw std::invalid_argument("GenePosition is invalid");
@@ -357,10 +359,11 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 actionTable = ATTACK_ALLY;
             }
         } else {
+            assert(false);
             actionTable = ATTACK_ALLY;
         }
 
-        if (logicalTurnStart) {
+        if (genePosition != -1 && logicalTurnStart) {
             genePosition++;
         }
 
