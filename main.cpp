@@ -488,10 +488,14 @@ namespace {
             false
         );
 
-        BFS runner(rootPlayers, rootNow, rootPos, 4);
-        runner.Run();
+        auto ret = ActionBruteForcer::Search(rootPlayers, rootNow, rootPos, 4, true);
 
-        ResultPlan* best = runner.getBest();
+
+
+        // BFS runner(rootPlayers, rootNow, rootPos, 4);
+        // runner.Run();
+        //
+        // ResultPlan* best = runner.getBest();
 
         //dumpTableMain(best[0].dummyResult, best[0].actions, seed, prefixTurns);
 
@@ -514,35 +518,35 @@ namespace {
             finalTurns++;
         }
 
-        for (int i = 0; i < 350; ++i) {
-            if (best[0].actions[i] == -1 || best[0].actions[i] == 0) {
-                finalGene[finalTurns++] = -1;
-                break;
-            }
-            std::cout << best[0].actions[i] << ",";
-            finalGene[finalTurns] = best[0].actions[i];
-            finalTurns++;
-        }
-        std::cout << std::endl << "t=" << (finalTurns - 1) << std::endl;
-        // //
-        BattleEmulator::Main(
-            &testPos,
-            finalTurns - 1,
-            finalGene,
-            testPlayers,
-            result1,
-            seed,
-            nullptr,
-            nullptr,
-            -1,
-            &testNow,
-            false
-        );
-
-
-        if (result1.has_value()) {
-            dumpTableMain(result1.value(), finalGene, seed, prefixTurns);
-        }
+        // for (int i = 0; i < 350; ++i) {
+        //     if (best[0].actions[i] == -1 || best[0].actions[i] == 0) {
+        //         finalGene[finalTurns++] = -1;
+        //         break;
+        //     }
+        //     std::cout << best[0].actions[i] << ",";
+        //     finalGene[finalTurns] = best[0].actions[i];
+        //     finalTurns++;
+        // }
+        // std::cout << std::endl << "t=" << (finalTurns - 1) << std::endl;
+        // // //
+        // BattleEmulator::Main(
+        //     &testPos,
+        //     finalTurns - 1,
+        //     finalGene,
+        //     testPlayers,
+        //     result1,
+        //     seed,
+        //     nullptr,
+        //     nullptr,
+        //     -1,
+        //     &testNow,
+        //     false
+        // );
+        //
+        //
+        // if (result1.has_value()) {
+        //     dumpTableMain(result1.value(), finalGene, seed, prefixTurns);
+        // }
 
 #if defined(MINGW_BUILD)
         //std::cout << finalTurns << std::endl;
@@ -905,6 +909,8 @@ BattleEmulator::ATTACK_ALLY,BattleEmulator::ATTACK_ALLY,BattleEmulator::ATTACK_A
 
     int actions[350] = {BattleEmulator::DEFENCE, -1,};
     SearchRequest(BasePlayers, seed, actions, THREAD_COUNT);
+
+
 
 
     std::cout << performanceLogger.rdbuf() << std::endl;

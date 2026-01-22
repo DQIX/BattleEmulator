@@ -59,14 +59,14 @@ int BFS::generateActions(
     SearchResult* outChildren,
     int depth
 ) {
-    ActionBruteForcer::Search(
-        players,
-        nowState,
-        position,
-        NODE_PER_ACTIONS,
-        depth == 0,
-        outChildren
-    );
+    // ActionBruteForcer::Search(
+    //     players,
+    //     nowState,
+    //     position,
+    //     NODE_PER_ACTIONS,
+    //     depth == 0,
+    //     outChildren
+    // );
     return 10;
 }
 
