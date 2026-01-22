@@ -14,39 +14,6 @@
 #include "lcg.h"
 #include "setting.h"
 
-struct ActionEntry {
-    int action;
-    int cost;
-
-    bool (*condition)(const Player &);
-};
-
-constexpr ActionEntry ACTION_TABLE[] = {
-    {
-        BattleEmulator::ATTACK_ALLY, 0, [](const Player &) { return true; },
-    },
-    {
-        BattleEmulator::DRAGON_SLASH, 0, [](const Player &) { return true; },
-    },
-    {
-        BattleEmulator::DEFENCE, 30, [](const Player &) { return true; },
-    },
-    {
-        BattleEmulator::FLEE_ALLY, 1,[](const Player &) { return true; },
-    },
-    {
-        BattleEmulator::MEDICINAL_HERBS, 100,
-        [](const Player &Ally) { return Ally.medicinal_herbs_count >= 1; },
-    },
-    {
-        BattleEmulator::HEAL, 100,
-        [](const Player &Ally) { return Ally.mp >= 2; },
-    },
-    {
-        BattleEmulator::CRACK_ALLY, 30,
-        [](const Player &Ally) { return Ally.mp >= 3; },
-    }
-};
 
 static inline int64_t EvaluatePlayers(const Player players[2]) {
     int64_t score = 0;
@@ -116,15 +83,13 @@ static Node simulate(
     next.depth = depth + 1;
 
     int gene[2] = { action, -1 };
-    std::optional<BattleResult> result;
-    result.emplace();
 
     BattleEmulator::Main(
         &next.position,
         1,
         gene,
         next.players,
-        result,
+        nullptr,
         0ULL,
         nullptr,
         nullptr,
@@ -164,9 +129,10 @@ std::vector<SearchResult> ActionBruteForcer::Search(
     const Player* rootPlayers,
     uint64_t rootNowState,
     int rootPosition,
-    int F,
     bool isFirstExec
 ) {
+    int F = CONST_MAX_DEPTH;
+
     std::vector<Node> current;
     std::vector<Node> next;
 

@@ -581,7 +581,7 @@ namespace {
 
 
             bool resultBool = BattleEmulator::Main(position, 20, gene, players,
-                                                   (std::optional<BattleResult> &) std::nullopt, seed, nullptr, damages,
+                                                   nullptr, seed, nullptr, damages,
                                                    maxElement,
                                                    nowState);
             if (resultBool) {

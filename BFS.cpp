@@ -109,14 +109,14 @@ void BFS::Run() {
             uint64_t rootNow = rootNowState;
             Player rootPlayers1[2] = {rootPlayers[0], rootPlayers[1]};
 
-            std::optional<BattleResult> dummyResult = BattleResult();
+            BattleResult dummyResult = BattleResult();
 
             BattleEmulator::Main(
                 &rootPos,
                 ret.depth,
                 ret.actions,
                 rootPlayers1,
-                dummyResult,
+                &dummyResult,
                 0,
                 nullptr,
                 nullptr,
