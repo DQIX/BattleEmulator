@@ -46,18 +46,6 @@ class ActionBruteForcer {
 public:
     static constexpr int ids = 7;
 
-    static constexpr std::array<int, ids> TUNE_IDS = {
-        BattleEmulator::ATTACK_ALLY,
-        BattleEmulator::DRAGON_SLASH,
-        BattleEmulator::DEFENCE,
-        BattleEmulator::FLEE_ALLY,
-        BattleEmulator::MEDICINAL_HERBS,
-        BattleEmulator::HEAL,
-        BattleEmulator::CRACK_ALLY,
-    };
-
-    static_assert(TUNE_IDS.size() == ids);
-
     static void Search(const Player *rootPlayers, uint64_t rootNowState, int rootPosition, int F, bool isFirstExec, SearchResult *best);
 private:
     static inline void tryInsertBest(

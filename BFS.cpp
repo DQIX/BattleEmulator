@@ -3,7 +3,7 @@
 #include <cassert>
 #include <cstring>
 
-constexpr int NODE_PER_ACTIONS = 6;
+constexpr int NODE_PER_ACTIONS = 5;
 
 BFS::BFS(const Player* rp, uint64_t ns, int pos, int F)
     : maxDepth(F), rootNowState(ns), rootPosition(pos)
