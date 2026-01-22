@@ -1,3 +1,4 @@
+#include <cassert>
 #include <iostream>
 #include <cstring>
 #include <cmath>
@@ -9,6 +10,7 @@
 #include "ActionBruteForcer.h"
 #include "lcg.h"
 #include "BattleEmulator.h"
+#include "BFS.h"
 #include "debug.h"
 #include "InputBuilder.h"
 #include "setting.h"
@@ -78,7 +80,7 @@ namespace {
             setting::Ally_MAX_MP, true, false, -1, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             setting::herbcount, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-            false, -1, 0, -1, 0, false, 1, 1, 1, -1, 0, -1, false, 2, false, -1
+            false, -1, 0, -1, 0, false, 1, 1, 1, -1, 0, -1, false, 2, false, -1, setting::herbcount,
         }, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 
         // プレイヤー2
@@ -429,13 +431,27 @@ namespace {
         performanceLogger << "elapsed time: " << double(elapsed_time1) / 1000 << " ms, " <<
                 "Performance: " << std::fixed << std::setprecision(2) << performance << " mann turns/s" << std::endl;
     }
+    struct Node {
+        Player p[2];
+        uint64_t now{};
+        int pos{};
+        int depth{};         // DFS 深さ（断片数）
+        int planLen{};       // plan の有効長
+        int plan[350]{};     // prefix 以降に追加する手（-1 終端で管理）
+    };
 
-      void SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads) {
+    struct StackFrame {
+        Node node;
+        bool isFirstExec;
+    };
+
+
+    void SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads) {
 #if defined(DEBUG)
         auto t0 = std::chrono::high_resolution_clock::now();
         BattleEmulator::ResetTurnProcessed();
 #endif
-        (void)numThreads; // 現状は決定論的・単スレ前提（必要ならここから並列化）
+        (void) numThreads; // 現状は決定論的・単スレ前提（必要ならここから並列化）
 
         lcg::init(seed, true);
 
@@ -452,6 +468,7 @@ namespace {
             ++prefixTurns;
         }
 
+
         // --- prefix を1回だけ実行して、探索の根状態を作る（従来の挙動を維持） ---
         int rootPos = 1;
         uint64_t rootNow = 0;
@@ -462,7 +479,7 @@ namespace {
             prefixTurns,
             prefixGene,
             rootPlayers,
-            (std::optional<BattleResult> &)std::nullopt,
+            (std::optional<BattleResult> &) std::nullopt,
             seed,
             nullptr,
             nullptr,
@@ -471,208 +488,62 @@ namespace {
             false
         );
 
-        // =====================================================================
-        // ハイブリッド探索（決定論的）
-        // 1) ActionBruteForcer::Search で「局所の全探索（断片＝固定長アクション列）」を生成（best[10]）
-        // 2) その断片を DFS（深さは数値）で繋いで、最終的に action 配列を構成してテストする
-        //
-        // 重要：
-        // - 余計な std コンテナを避け、固定長配列で回す（バトルエミュにリソースを寄せる）
-        // - 決定論的：探索順はスコア昇順→同スコアは配列順（安定）
-        // =====================================================================
+        BFS runner(rootPlayers, rootNow, rootPos, 10);
+        runner.Run();
 
-        // 断片 1つあたりの先読み手数（ActionBruteForcer 側は実質「4手」想定の実装）
-        constexpr int FRAGMENT_F = 4;
-        // DFS の深さ（断片を何個繋ぐか）
-        constexpr int MAX_DEPTH = 8; // 例: 6断片 * 4手 = 24手（prefixとは別）
+        SearchResult* best = runner.getBest();
 
-        // 断片の最大アクション数（SearchResult.actions は 5 要素で -1 終端）
-        constexpr int MAX_FRAGMENT_ACTIONS = 5;
-
-        // 評価関数（ActionBruteForcer.cpp の EvaluatePlayers と同型の軽量版）
-        auto EvaluatePlayersLocal = [&](const Player p[2]) -> int64_t {
-            if (p[0].hp == 0) {
-                return INT64_MAX;
-            }
-            int64_t score = 0;
-            score += static_cast<int64_t>(p[1].hp) * 1'000'000; // 敵残HP（小さいほど良い）
-            score += static_cast<int64_t>(setting::Ally_MAX_HP - p[0].hp) * 1'000; // 味方減HP
-            score += static_cast<int64_t>(setting::ALLY_CURRENT_MP - p[0].mp) * 100; // MP消費
-            score += static_cast<int64_t>(setting::herbcount - p[0].medicinal_herbs_count) * 10; // アイテム消費
-            return score;
-        };
-
-        struct Node {
-            Player p[2];
-            uint64_t now{};
-            int pos{};
-            int depth{};         // DFS 深さ（断片数）
-            int planLen{};       // plan の有効長
-            int plan[350]{};     // prefix 以降に追加する手（-1 終端で管理）
-        };
-
-        auto CopyPlayers = [&](Player dst[2], const Player src[2]) {
-            dst[0] = src[0];
-            dst[1] = src[1];
-        };
-
-        auto InitPlan = [&](int plan[350]) {
-            for (int i = 0; i < 350; ++i) plan[i] = -1;
-        };
-
-        // best を score 昇順・決定論で並べる（std::sort を使わず 10 要素の単純選択）
-        auto SortBest10ByScoreAsc = [&](SearchResult best[10]) {
-            // 空（score=0 の未使用）も混ざるので、まず「有効っぽい」かを緩く判定：
-            // actions[0] が 0 だと「本当に0番アクション」かもしれないため、ここでは
-            // depth/score ではなく「actions[0] が -1 でない」を優先する。
-            // ※未初期化は {} なので actions[0]==0 になりがち。ここは必要に応じて調整可能。
-            auto isValid = [&](const SearchResult& r) -> bool {
-                // 少なくとも終端(-1)ではない何かを持っていること
-                // （本当に action==0 があり得るなら、この条件を別フラグに変える）
-                return r.actions[0] != 0 || r.actions[1] != 0 || r.actions[2] != 0 || r.actions[3] != 0 || r.actions[4] != 0;
-            };
-
-            // 10要素の単純バブル（固定サイズなのでこれで十分・分岐予測にも優しい）
-            for (int i = 0; i < 10; ++i) {
-                for (int j = 0; j + 1 < 10; ++j) {
-                    const bool va = isValid(best[j]);
-                    const bool vb = isValid(best[j + 1]);
-                    if (!va && vb) {
-                        const SearchResult tmp = best[j];
-                        best[j] = best[j + 1];
-                        best[j + 1] = tmp;
-                        continue;
-                    }
-                    if (va && vb) {
-                        if (best[j + 1].score < best[j].score) {
-                            const SearchResult tmp = best[j];
-                            best[j] = best[j + 1];
-                            best[j + 1] = tmp;
-                        }
-                    }
-                }
-            }
-        };
-
-        // DFS 本体（再帰：深さは小さい想定なのでOK。嫌なら明示スタック化も可能）
-        int64_t globalBestScore = INT64_MAX;
-        int globalBestDepth = 0;
-        int globalBestPlan[350] = {};
-        InitPlan(globalBestPlan);
-
-        auto TryUpdateBest = [&](const Node& leaf) {
-            const int64_t s = EvaluatePlayersLocal(leaf.p);
-            if (s < globalBestScore) {
-                globalBestScore = s;
-                globalBestDepth = leaf.depth;
-                for (int i = 0; i < 350; ++i) globalBestPlan[i] = leaf.plan[i];
-                return;
-            }
-            // 同点なら「より浅い（短い）」を優先（決定論）
-            if (s == globalBestScore && leaf.depth < globalBestDepth) {
-                globalBestDepth = leaf.depth;
-                for (int i = 0; i < 350; ++i) globalBestPlan[i] = leaf.plan[i];
-            }
-        };
-
-        // ラムダ再帰（C++17）
-        auto dfs = [&](auto&& self, const Node &cur,const bool isFirstExec) -> void {
-            // 決着 or 深さ上限
-            if (cur.p[0].hp <= 0 || cur.p[1].hp <= 0 || cur.depth >= MAX_DEPTH) {
-                TryUpdateBest(cur);
-                return;
-            }
-
-            // 局所全探索（断片生成）
-            SearchResult best[10] = {};
-            ActionBruteForcer::Search(cur.p, cur.now, cur.pos, FRAGMENT_F, /*isFirstExec=*/isFirstExec, best);
-            SortBest10ByScoreAsc(best);
-
-            // 生成された断片を「良い順」に DFS で試す
-            for (int i = 0; i < 10; ++i) {
-                // 無効っぽい要素は飛ばす（上の isValid と同じ基準）
-                const SearchResult& r = best[i];
-                const bool valid = (r.actions[0] != 0 || r.actions[1] != 0 || r.actions[2] != 0 || r.actions[3] != 0 || r.actions[4] != 0);
-                if (!valid) continue;
-
-                Node nxt;
-                CopyPlayers(nxt.p, cur.p);
-                nxt.now = cur.now;
-                nxt.pos = cur.pos;
-                nxt.depth = cur.depth + 1;
-                nxt.planLen = cur.planLen;
-                nxt.now = r.nowState;
-                nxt.pos = r.position;
-                memcpy(&nxt.p, r.players, sizeof(Player) * 2);
-                memcpy(&nxt.plan, cur.plan, sizeof(int) * 350);
-                memcpy(&nxt.plan[nxt.planLen], r.actions, sizeof(int) * r.depth);
-                nxt.planLen += r.depth;
-
-                self(self, nxt, false);
-            }
-
-            // 子が一切出ない場合も leaf 扱い
-            // （例：ActionBruteForcer が全て弾いた等）
-            // ただし、上で valid 判定が厳しすぎる可能性があるので必要なら調整。
-            // ここは保険。
-            TryUpdateBest(cur);
-        };
-
-        // root node 初期化（prefix の後から plan を積む）
-        Node root;
-        CopyPlayers(root.p, rootPlayers);
-        root.now = rootNow;
-        root.pos = rootPos;
-        root.depth = 0;
-        root.planLen = 0;
-        InitPlan(root.plan);
-
-        dfs(dfs, root, true);
-
-        // --- 最良枝の action 配列を構築（prefix + bestPlan）して「結果としてテスト」 ---
-        int32_t finalGene[350];
-        for (int i = 0; i < 350; ++i) finalGene[i] = -1;
-
-        int finalTurns = 0;
-        for (int i = 0; i < 350 && prefixGene[i] != -1; ++i) {
-            finalGene[finalTurns++] = prefixGene[i];
-        }
-        for (int i = 0; i < 350 && globalBestPlan[i] != -1; ++i) {
-            if (finalTurns >= 349) break;
-            finalGene[finalTurns++] = globalBestPlan[i];
-        }
-        if (finalTurns < 350) finalGene[finalTurns] = -1;
-
-        std::cout << "HybridBest(score=" << globalBestScore << ", depth=" << globalBestDepth
-                  << ", appendedTurns=" << (finalTurns - prefixTurns) << ")\n";
-
-        for (int32_t final_gene: finalGene) {
-            std::cout << final_gene << " ";
-        }
 
         // テスト実行（BattleResult をちゃんと作って dump まで通す）
         int testPos = 1;
         uint64_t testNow = 0;
         Player testPlayers[2] = {copiedPlayers[0], copiedPlayers[1]};
         std::optional<BattleResult> result1 = BattleResult();
+        int finalGene[350] = {};
 
-        BattleEmulator::Main(
-            &testPos,
-            finalTurns,
-            finalGene,
-            testPlayers,
-            result1,
-            seed,
-            nullptr,
-            nullptr,
-            -1,
-            &testNow,
-            false
-        );
+        auto finalTurns = 0;
 
+        //copiedPlayersは初期状態のplayerなので合成する
+        for (int i = 0; i < 350; ++i) {
+            if (prefixGene[i] == -1 || prefixGene[i] == 0) {
+                break;
+            }
+            finalGene[finalTurns] = prefixGene[i];
+            finalTurns++;
+        }
+
+        // for (int i = 0; i < 350; ++i) {
+        //     if (globalBestPlan[i] == -1 || globalBestPlan[i] == 0) {
+        //         finalGene[i] = -1;
+        //         break;
+        //     }
+        //     std::cout << globalBestPlan[i] << ",";
+        //     finalGene[finalTurns] = globalBestPlan[i];
+        //     finalTurns++;
+        // }
+        // std::cout << std::endl << "t=" << finalTurns << std::endl;
+        // //
+        // BattleEmulator::Main(
+        //     &testPos,
+        //     finalTurns - 1,
+        //     finalGene,
+        //     testPlayers,
+        //     result1,
+        //     seed,
+        //     nullptr,
+        //     nullptr,
+        //     -1,
+        //     &testNow,
+        //     false
+        // );
+        //
+        //
+        // if (result1.has_value()) {
+        //     dumpTableMain(result1.value(), finalGene, seed, prefixTurns);
+        // }
 
 #if defined(MINGW_BUILD)
-        std::cout << finalTurns << std::endl;
+        //std::cout << finalTurns << std::endl;
 #else
         if (result1.has_value()) {
             // dumpTableMain は int[350] を受けるので変換
@@ -923,7 +794,7 @@ int main(int argc, char *argv[]) {
 
     //ver: v8.0.1, atk: 51, def: 61, seed: 0x6cc478c, actions: 25, 59, 59, 61, 61, 62, 59, 62, 59, 61, 27, 61, 62, 25, 62, 25, 59, 62, 59, 27, 62, 59, 62, 25, 25, 59, 62, 61, 26, 56, 61,
     //ver: v8.0.1, atk: 61, def: 61, seed: 0x693bdce9, actions: 27, 25, 25, 26, 25, 26, 25, 25, 56, 59, 25, 25, 53, 53,
-    uint64_t time1 = 0x03005d91;
+    uint64_t time1 = 123456;
 
     int dummy[100];
     lcg::init(time1, false);
@@ -952,19 +823,19 @@ int main(int argc, char *argv[]) {
 //ver: v8.0.1, atk: 51, def: 61, seed: 0x6cc478c, actions: 25, 62, 61, 61, 25, 61, 61, 62, 61, 27, 62, 25, 62, 25, 62, 25, 62, 25, 25, 62, 25, 25, 62, 25, 26, 25, 25, 25, 27, 25,
 
     //0x2b79118:
-//     int32_t gene1[350] = {
-//         25, 61, 61, 61, 25, 62, 61, 25, 61, 56, 62, 25, 25, 27, 25, 25, 25,
-// BattleEmulator::ATTACK_ALLY
-//     };
+    int32_t gene1[350] = {
+        BattleEmulator::DEFENCE, 53,61,25,27,
+BattleEmulator::ATTACK_ALLY,BattleEmulator::ATTACK_ALLY,BattleEmulator::ATTACK_ALLY,BattleEmulator::ATTACK_ALLY
+    };
     //gene1[19-1] = BattleEmulator::DEFENCE;
     int counter = 0;
     //
-    int32_t gene1[350] = {};
-    gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-    gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-    gene1[counter++] = BattleEmulator::MEDICINAL_HERBS;
-    gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-    gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+//    int32_t gene1[350] = {};
+    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    // gene1[counter++] = BattleEmulator::MEDICINAL_HERBS;
+    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
     // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
     // gene1[counter++] = BattleEmulator::MEDICINAL_HERBS;
     // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
@@ -1032,6 +903,7 @@ int main(int argc, char *argv[]) {
 
     int actions[350] = {BattleEmulator::DEFENCE, -1,};
     SearchRequest(BasePlayers, seed, actions, THREAD_COUNT);
+
 
     std::cout << performanceLogger.rdbuf() << std::endl;
 

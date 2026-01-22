@@ -331,9 +331,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         int enemyAction[2] = {0, 0};
 
         auto tableind = FUN_0208aecc(position, NowState);
-        if (tableind > 6) {
-            std::cout << tableind << std::endl;
-        }
+
         auto EnemyActions = EnemyTable[tableind];
         if (EnemyActions == ATTACK_ENEMY || EnemyActions == BOLT_CUTTER || EnemyActions == HEAL_ENEMY) {
             (*position) += 3;
@@ -1554,5 +1552,8 @@ int BattleEmulator::FUN_0208aecc(int *position, uint64_t *NowState) {
     uint64_t r3_var12 = r3_var9 & 0xff;
     (*NowState) &= ~0xf0;
     (*NowState) |= (previousState << 4);
+    if (r3_var12 > 6) {
+        assert(false);
+    }
     return static_cast<int>(r3_var12);
 }

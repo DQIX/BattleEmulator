@@ -25,7 +25,7 @@ public:
 
     static int intRangeRand(int *position, int min, int max);
 
-    static uint32_t getSeed(const int * position);
+    static uint32_t getSeed(int * position);
 };
 
 

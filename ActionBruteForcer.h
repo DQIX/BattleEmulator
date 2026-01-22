@@ -22,11 +22,12 @@ constexpr std::size_t ipow(std::size_t base, std::size_t exp) {
 struct SearchResult {
     int firstAction{};
     int64_t score{};   // ★ int64_t
-    int actions[5]{};
+    int actions[10]{};
     int depth{};
     Player players[2];
     uint64_t nowState{};
     int position{};
+    bool valid = false;
 };
 
 
@@ -66,6 +67,28 @@ private:
         int64_t& worstScore,
         const SearchResult& cand
     ) {
+        Player players[2] = {cand.players[0], cand.players[1]};
+        uint64_t currentPlayerState = cand.nowState;
+        int playerPosition = cand.position;
+        constexpr int actions[350] = {BattleEmulator::HEAL, -1};
+        BattleEmulator::Main(
+            &playerPosition,
+            1,
+            actions,
+            players,
+            (std::optional<BattleResult> &) std::nullopt,
+            0ULL,
+            nullptr,
+            nullptr,
+            -2,
+            &currentPlayerState,
+            true
+        );
+
+        if (players[0].hp == 0) {
+            return;
+        }
+
         // まだ空きがある
         if (bestCount < 10) {
             best[bestCount] = cand;

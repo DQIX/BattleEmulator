@@ -77,6 +77,7 @@ void ActionBruteForcer::Search(
     bool isFirstExec,
     SearchResult best[10]
 ) {
+
     if (F <= 0) F = 1;
     if (F > 6) F = 6;
 
@@ -98,7 +99,7 @@ void ActionBruteForcer::Search(
     root.position = rootPosition;
     root.firstAction = 0;
 
-    const int targetDepth = 4; // 元コードは a0,a1,a2,a3 の4手固定
+    const int targetDepth = F; // 元コードは a0,a1,a2,a3 の4手固定
 
     std::array<int, 6> actions{};
     actions.fill(-1);
@@ -116,7 +117,7 @@ void ActionBruteForcer::Search(
 
     std::function<void(int, const SimState&)> dfs = [&](int depth, const SimState& cur) {
         // depth: 0..targetDepth-1 の手番
-        if (depth == targetDepth) {
+        if (cur.players[1].hp == 0 || depth == targetDepth) {
             // 評価（元コードの a3 まで回した後）
             auto score = EvaluatePlayers(cur.players);
 
@@ -126,29 +127,33 @@ void ActionBruteForcer::Search(
             // - a2 の cost は s3complete のときのみ加算（= a2直前にHP==0）
             // - a3 の cost は元コード同様 “加算しない”
             score += chosenCost[0];
-            if (completeBefore[1]) score += chosenCost[1];
-            if (completeBefore[2]) score += chosenCost[2];
-            if (completeBefore[3]) score += chosenCost[3];
+            if (depth <= 2) score += chosenCost[1];
+            if (depth <= 3) score += chosenCost[2];
+            if (depth <= 4) score += chosenCost[3];
+            if (depth <= 5) score += chosenCost[4];
 
             SearchResult r;
             r.actions[0] = actions[0];
             r.actions[1] = actions[1];
             r.actions[2] = actions[2];
             r.actions[3] = actions[3];
-            r.actions[4] = -1;
+            r.actions[4] = actions[4];
+            r.actions[5] = -1;
+            r.valid = true;
+            if (depth != targetDepth) {
+                r.actions[depth] = -1;
+            }
             r.nowState = cur.NowState;
             r.position = cur.position;
+            memcpy(r.players, cur.players, sizeof(Player) * 2);
             r.score = score;
-            r.depth = targetDepth;
+            r.depth = std::min(depth, targetDepth);
             tryInsertBest(best, bestCount, worstIdx, worstScore, r);
             return;
         }
 
         for (const auto &[action, cost, condition] : ACTION_TABLE) {
             SimState next = cur;
-
-            // その手の直前に完了しているか（元コードの s2complete/s3complete 相当）
-            completeBefore[depth] = (next.players[0].hp == 0);
 
             if (!condition(next.players[0])) {
                 continue;
@@ -162,25 +167,23 @@ void ActionBruteForcer::Search(
 
             dummyResult->clear();
 
-            // 完了状態ならエミュレーションを呼ばない（元コード踏襲）
-            if (!completeBefore[depth]) {
-                BattleEmulator::Main(
-                    &next.position,
-                    1,
-                    Gene,
-                    next.players,
-                    dummyResult,
-                    0ULL,
-                    nullptr,
-                    nullptr,
-                    -1,
-                    &next.NowState,
-                    true
-                );
-            }
+            BattleEmulator::Main(
+                &next.position,
+                1,
+                Gene,
+                next.players,
+                dummyResult,
+                0ULL,
+                nullptr,
+                nullptr,
+                -1,
+                &next.NowState,
+                true
+            );
 
             // 枝刈り（深さごとに元コードと同じタイミングで実施）
             if (depth == 0) {
+                if (next.players[0].hp <= 0) continue;
                 if (!isFirstExec && isHealEnemyInResult(dummyResult)) {
                     continue;
                 }
@@ -207,7 +210,7 @@ void ActionBruteForcer::Search(
 
         BattleEmulator::Main(
             &best[i].position,
-            4,
+            best[i].depth,
             best[i].actions,
             best[i].players,
             dummyResult,
