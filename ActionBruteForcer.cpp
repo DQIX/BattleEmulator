@@ -137,8 +137,6 @@ SearchOutput ActionBruteForcer::Search(
         nxt = tmp;
         curCount = nxtCount;
     }
-
-    SearchOutput out{};
     out.count = curCount;
 
     for (int i = 0; i < curCount; ++i) {
