@@ -33,6 +33,8 @@ namespace {
 #endif
 #endif
 
+    static SearchOutput output;
+
     int toint(char *string);
 
     NOINLINE std::pair<char, int> toABCint(const char *str);
@@ -431,19 +433,8 @@ namespace {
         performanceLogger << "elapsed time: " << double(elapsed_time1) / 1000 << " ms, " <<
                 "Performance: " << std::fixed << std::setprecision(2) << performance << " mann turns/s" << std::endl;
     }
-    struct Node {
-        Player p[2];
-        uint64_t now{};
-        int pos{};
-        int depth{};         // DFS 深さ（断片数）
-        int planLen{};       // plan の有効長
-        int plan[350]{};     // prefix 以降に追加する手（-1 終端で管理）
-    };
 
-    struct StackFrame {
-        Node node;
-        bool isFirstExec;
-    };
+
 
 
     void SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads) {
@@ -488,7 +479,7 @@ namespace {
             false
         );
 
-        auto ret = ActionBruteForcer::Search(rootPlayers, rootNow, rootPos, true);
+        auto ret = ActionBruteForcer::Search(rootPlayers, rootNow, rootPos, output);
 
 
 
@@ -504,7 +495,6 @@ namespace {
         int testPos = 1;
         uint64_t testNow = 0;
         Player testPlayers[2] = {copiedPlayers[0], copiedPlayers[1]};
-        std::optional<BattleResult> result1 = BattleResult();
         int finalGene[350] = {};
 
         auto finalTurns = 0;

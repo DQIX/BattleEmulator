@@ -110,7 +110,7 @@ public:
     static SearchResult g_results[ActionBruteForcerConst::MAX_NODES];
 
 
-    static SearchOutput Search(const Player *rootPlayers, uint64_t rootNowState, int rootPosition, bool isFirstExec);
+    static SearchOutput Search(const Player *rootPlayers, uint64_t rootNowState, int rootPosition, SearchOutput &out);
 };
 
 

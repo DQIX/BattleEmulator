@@ -96,7 +96,7 @@ SearchOutput ActionBruteForcer::Search(
     const Player* rootPlayers,
     uint64_t rootNowState,
     int rootPosition,
-    bool /*isFirstExec*/
+    SearchOutput& out
 ) {
     Node* cur = g_nodeBufA;
     Node* nxt = g_nodeBufB;
