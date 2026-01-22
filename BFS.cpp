@@ -129,7 +129,7 @@ void BFS::Run() {
             assert(rootNow == n.children[i].nowState);
             assert(memcmp(rootPlayers1, n.children[i].players, sizeof(Player) * 2) == 0);
 
-            ret.dummyResult = dummyResult.value();
+            ret.dummyResult = dummyResult;
 #endif
             best[bestCount] = ret;
 

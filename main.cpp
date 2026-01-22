@@ -479,7 +479,7 @@ namespace {
             prefixTurns,
             prefixGene,
             rootPlayers,
-            (std::optional<BattleResult> &) std::nullopt,
+            nullptr,
             seed,
             nullptr,
             nullptr,
@@ -488,7 +488,7 @@ namespace {
             false
         );
 
-        auto ret = ActionBruteForcer::Search(rootPlayers, rootNow, rootPos, 4, true);
+        auto ret = ActionBruteForcer::Search(rootPlayers, rootNow, rootPos, true);
 
 
 

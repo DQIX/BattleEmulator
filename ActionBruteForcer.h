@@ -11,13 +11,13 @@
 #include "BattleEmulator.h"
 #include "Player.h"
 
-
 struct ActionEntry {
     int action;
     int cost;
 
     bool (*condition)(const Player &);
 };
+
 
 constexpr ActionEntry ACTION_TABLE[] = {
     {
@@ -46,11 +46,19 @@ constexpr ActionEntry ACTION_TABLE[] = {
     }
 };
 
+
 // constexpr 整数累乗（コンパイル時計算）
 constexpr std::size_t ipow(std::size_t base, std::size_t exp) {
     std::size_t r = 1;
     for (std::size_t i = 0; i < exp; ++i) r *= base;
     return r;
+}
+
+
+namespace ActionBruteForcerConst {
+    constexpr int CONST_MAX_DEPTH = 4;
+    constexpr int ACTION_TABLE_SIZE = std::size(ACTION_TABLE);
+    constexpr int MAX_NODES = ipow(ACTION_TABLE_SIZE, CONST_MAX_DEPTH);
 }
 
 
@@ -73,6 +81,8 @@ struct Node {
     TerminateReason reason;
 };
 
+
+
 struct SearchResult {
     int firstAction{};
     int64_t score{};   // ★ int64_t
@@ -84,7 +94,10 @@ struct SearchResult {
     bool valid = false;
 };
 
-struct SimState { Player players[2]; uint64_t NowState{}; int position{}; int firstAction{}; };
+struct SearchOutput {
+    int count = 0;
+    SearchResult results[ActionBruteForcerConst::MAX_NODES];
+};
 
 class ActionBruteForcer {
 public:
@@ -92,11 +105,14 @@ public:
     static constexpr int ACTION_TABLE_SIZE = std::size(ACTION_TABLE);
     static constexpr int MAX_NODES = ipow(ACTION_TABLE_SIZE, CONST_MAX_DEPTH);
 
-    static Node current[MAX_NODES];
-    static Node next[MAX_NODES];
-    static SearchResult results[MAX_NODES];
+    static Node g_nodeBufA[ActionBruteForcerConst::MAX_NODES];
+    static Node g_nodeBufB[ActionBruteForcerConst::MAX_NODES];
+    static SearchResult g_results[ActionBruteForcerConst::MAX_NODES];
 
-    static std::vector<SearchResult> Search(const Player *rootPlayers, uint64_t rootNowState, int rootPosition, bool isFirstExec);
+
+    static SearchOutput Search(const Player *rootPlayers, uint64_t rootNowState, int rootPosition, bool isFirstExec);
 };
+
+
 
 #endif //NEWDIRECTORY_ACTIONBRUTEFORCER_H
