@@ -92,7 +92,7 @@ static inline Node SimulateStep(
 
 // ================= 探索 =================
 
-SearchOutput ActionBruteForcer::Search(
+void ActionBruteForcer::Search(
     const Player* rootPlayers,
     uint64_t rootNowState,
     int rootPosition,
