@@ -491,7 +491,7 @@ namespace {
         BFS runner(rootPlayers, rootNow, rootPos, 10);
         runner.Run();
 
-        SearchResult* best = runner.getBest();
+        ResultPlan* best = runner.getBest();
 
 
         // テスト実行（BattleResult をちゃんと作って dump まで通す）
@@ -512,35 +512,35 @@ namespace {
             finalTurns++;
         }
 
-        // for (int i = 0; i < 350; ++i) {
-        //     if (globalBestPlan[i] == -1 || globalBestPlan[i] == 0) {
-        //         finalGene[i] = -1;
-        //         break;
-        //     }
-        //     std::cout << globalBestPlan[i] << ",";
-        //     finalGene[finalTurns] = globalBestPlan[i];
-        //     finalTurns++;
-        // }
+        for (int i = 0; i < 350; ++i) {
+            if (best[0].actions[i] == -1 || best[0].actions[i] == 0) {
+                finalGene[i] = -1;
+                break;
+            }
+            std::cout << best[0].actions << ",";
+            finalGene[finalTurns] = best[0].actions[i];
+            finalTurns++;
+        }
         // std::cout << std::endl << "t=" << finalTurns << std::endl;
         // //
-        // BattleEmulator::Main(
-        //     &testPos,
-        //     finalTurns - 1,
-        //     finalGene,
-        //     testPlayers,
-        //     result1,
-        //     seed,
-        //     nullptr,
-        //     nullptr,
-        //     -1,
-        //     &testNow,
-        //     false
-        // );
-        //
-        //
-        // if (result1.has_value()) {
-        //     dumpTableMain(result1.value(), finalGene, seed, prefixTurns);
-        // }
+        BattleEmulator::Main(
+            &testPos,
+            finalTurns - 1,
+            finalGene,
+            testPlayers,
+            result1,
+            seed,
+            nullptr,
+            nullptr,
+            -1,
+            &testNow,
+            false
+        );
+
+
+        if (result1.has_value()) {
+            dumpTableMain(result1.value(), finalGene, seed, prefixTurns);
+        }
 
 #if defined(MINGW_BUILD)
         //std::cout << finalTurns << std::endl;

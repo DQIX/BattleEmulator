@@ -112,7 +112,8 @@ void ActionBruteForcer::Search(
     completeBefore.fill(false);
 
     auto isHealEnemyInResult = [&](const std::optional<BattleResult>& r) -> bool {
-        return r && (r->actions[0] == BattleEmulator::HEAL_ENEMY || r->actions[1] == BattleEmulator::HEAL_ENEMY);
+        return false;
+        //return r && (r->actions[0] == BattleEmulator::HEAL_ENEMY || r->actions[1] == BattleEmulator::HEAL_ENEMY);
     };
 
     std::function<void(int, const SimState&)> dfs = [&](int depth, const SimState& cur) {

@@ -9,20 +9,33 @@
 #include "ActionBruteForcer.h"
 #include "Player.h"
 
+struct ResultPlan {
+    int depth{};
+    int actions[350]{};
+};
 
 class BFS {
 public:
     BFS(const Player* rp, uint64_t ns, int pos, int F);
+
+    void buildPlan(int leafNode, int leafChild, ResultPlan &out) const;
+
     void Run();
 
-    SearchResult *getBest();
+    ResultPlan *getBest();
 
 private:
     struct Node {
         int count{};
         int index{};
-        SearchResult children[10]{};
+
+        SearchResult children[10];
+
+        int parentNode{-1};   // 親ノードの index
+        int parentChild{-1};  // 親ノードの children の何番目か
     };
+
+
 
     int generateActions(
         const Player players[2],
@@ -41,8 +54,8 @@ private:
     uint64_t rootNowState{};
     int rootPosition{};
 
-    Node nodes[6]{};
-    SearchResult best[10]{};
+    Node nodes[10]{};
+    ResultPlan best[10]{};
 };
 
 #endif
