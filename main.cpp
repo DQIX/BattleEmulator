@@ -479,7 +479,7 @@ namespace {
             false
         );
 
-        auto ret = ActionBruteForcer::Search(rootPlayers, rootNow, rootPos, output);
+      ActionBruteForcer::Search(rootPlayers, rootNow, rootPos, output);
 
 
 

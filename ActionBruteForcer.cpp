@@ -152,6 +152,4 @@ SearchOutput ActionBruteForcer::Search(
         r.position = n.position;
         r.valid = true;
     }
-
-    return out;
 }
