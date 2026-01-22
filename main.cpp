@@ -8,9 +8,9 @@
 #include <fstream>
 
 #include "ActionBruteForcer.h"
+#include "ActionSearcher.h"
 #include "lcg.h"
 #include "BattleEmulator.h"
-#include "BFS.h"
 #include "debug.h"
 #include "InputBuilder.h"
 #include "setting.h"
@@ -32,8 +32,6 @@ namespace {
 #define NOINLINE
 #endif
 #endif
-
-    static SearchOutput output;
 
     int toint(char *string);
 
@@ -79,21 +77,16 @@ namespace {
         // プレイヤー1
         {
             setting::Ally_MAX_HP, static_cast<double>(setting::Ally_MAX_HP), 57, 57, 50, 50, 33, 33, 22,setting::ALLY_CURRENT_MP, // 最初のメンバー
-            setting::Ally_MAX_MP, true, false, -1, false, 0, -1,
-            // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-            setting::herbcount, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-            false, -1, 0, -1, 0, false, 1, 1, 1, -1, 0, -1, false, 2, false, -1, setting::herbcount,
-        }, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
-
+            setting::Ally_MAX_MP, true
+        },
         // プレイヤー2
         {
             setting::ENEMY_MAX_HP, static_cast<double>(setting::ENEMY_MAX_HP), 53, 53, 50, 50, 45, 45, 0, 255, // 最初のメンバー
-            255, false, false, 0, false, 0, -1,
-            // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-            0, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-            false, -1, 0, -1, 0, false, 0, 0, 0, -1, 0, -1, false, 2, false, -1
-        } // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
+            255, false
+        }
     };
+
+    static SearchOutput output;
 #endif
 
     // ヘッダーを出力する関数
@@ -479,9 +472,16 @@ namespace {
             false
         );
 
-      ActionBruteForcer::Search(rootPlayers, rootNow, rootPos, output);
+      //ActionBruteForcer::Search(rootPlayers, rootNow, rootPos, output);
 
 
+        ActionSearcher searcher(rootPlayers, rootNow, rootPos, 10);
+        searcher.Run();
+
+        SearchPlan Plan[ActionSearcher::BEST_LIMIT];
+        auto a = searcher.getBest(Plan);
+
+        std::cout << a << std::endl;
 
         // BFS runner(rootPlayers, rootNow, rootPos, 4);
         // runner.Run();

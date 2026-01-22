@@ -1552,8 +1552,6 @@ int BattleEmulator::FUN_0208aecc(int *position, uint64_t *NowState) {
     uint64_t r3_var12 = r3_var9 & 0xff;
     (*NowState) &= ~0xf0;
     (*NowState) |= (previousState << 4);
-    if (r3_var12 > 6) {
-        assert(false);
-    }
+    assert(r3_var12 <= 6);
     return static_cast<int>(r3_var12);
 }

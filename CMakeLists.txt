@@ -51,8 +51,8 @@ set(SOURCES
         setting.h
         ActionBruteForcer.cpp
         ActionBruteForcer.h
-        BFS.cpp
-        BFS.h
+        ActionSearcher.cpp
+        ActionSearcher.h
 )
 
 # シングルスレッド版（multithreading = OFF）

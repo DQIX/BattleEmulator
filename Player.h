@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <iostream>
 
+#include "setting.h"
+
 
 struct Player {
     int hp{};
@@ -25,32 +27,23 @@ struct Player {
     bool dirtySpecialCharge{};
     int specialChargeTurn{};
     bool paralysis{};
-    int paralysisLevel{};
-    int paralysisTurns{};
 
-    int SpecialMedicineCount{};
-    double defence{};
-    bool sleeping{};
-    int sleepingTurn{};
-    int BuffLevel{};
-    int BuffTurns{};
-    bool hasMagicMirror{};
-    int MagicMirrorTurn{};
-    int AtkBuffLevel{};
-    int AtkBuffTurn{};
-    int TensionLevel{};
-    bool rage{};
-    int SageElixirCount{};
-    int ElfinElixirCount{};
-    int MagicWaterCount{};
-    int speedTurn{};
-    int speedLevel{};
-    int PoisonTurn{};
-    bool PoisonEnable{};
-    int SpecialAntidoteCount{};
-    bool acrobaticStar{};
-    int acrobaticStarTurn{};
-    int medicinal_herbs_count{};
+    int SpecialMedicineCount{0};
+    double defence{0.0};
+    bool sleeping{false};
+    int sleepingTurn{0};
+    int BuffLevel{0};
+    int BuffTurns{0};
+    int TensionLevel{0};
+    bool rage{false};
+    int MagicWaterCount{0};
+    int speedLevel{0};
+    int PoisonTurn{0};
+    bool PoisonEnable{false};
+    int SpecialAntidoteCount{0};
+    bool acrobaticStar{false};
+    int acrobaticStarTurn{0};
+    int medicinal_herbs_count{setting::herbcount};
 
     constexpr static bool isPlayerAlive(const Player &obj) {
         return obj.hp != 0;
