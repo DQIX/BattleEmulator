@@ -35,11 +35,11 @@ constexpr ActionEntry ACTION_TABLE[] = {
         BattleEmulator::FLEE_ALLY, 1,[](const Player &) { return true; },
     },
     {
-        BattleEmulator::MEDICINAL_HERBS, 1,
+        BattleEmulator::MEDICINAL_HERBS, 100,
         [](const Player &Ally) { return Ally.medicinal_herbs_count >= 1; },
     },
     {
-        BattleEmulator::HEAL, -20,
+        BattleEmulator::HEAL, 100,
         [](const Player &Ally) { return Ally.mp >= 2; },
     },
     {
@@ -51,6 +51,10 @@ constexpr ActionEntry ACTION_TABLE[] = {
 // Evaluate: 単純な例（差分）。実運用ではここを書き換えること。
 static inline int64_t EvaluatePlayers(const Player players[2]) {
     int64_t score = 0;
+
+    if (players[1].hp == 0) {
+        score = -0xfffffffffffff;
+    }
 
     // [最重要] 敵残HP（完全結果）
     score += static_cast<int64_t>(players[1].hp) * 1'000'000;
@@ -79,7 +83,6 @@ void ActionBruteForcer::Search(
 ) {
 
     if (F <= 0) F = 1;
-    if (F > 6) F = 6;
 
     int bestCount = 0;
     int worstIdx = -1;
@@ -112,8 +115,8 @@ void ActionBruteForcer::Search(
     completeBefore.fill(false);
 
     auto isHealEnemyInResult = [&](const std::optional<BattleResult>& r) -> bool {
-        return false;
-        //return r && (r->actions[0] == BattleEmulator::HEAL_ENEMY || r->actions[1] == BattleEmulator::HEAL_ENEMY);
+        //return false;
+        return r && (r->actions[0] == BattleEmulator::HEAL_ENEMY || r->actions[1] == BattleEmulator::HEAL_ENEMY);
     };
 
     std::function<void(int, const SimState&)> dfs = [&](int depth, const SimState& cur) {
@@ -128,18 +131,23 @@ void ActionBruteForcer::Search(
             // - a2 の cost は s3complete のときのみ加算（= a2直前にHP==0）
             // - a3 の cost は元コード同様 “加算しない”
             score += chosenCost[0];
-            if (depth <= 2) score += chosenCost[1];
-            if (depth <= 3) score += chosenCost[2];
-            if (depth <= 4) score += chosenCost[3];
-            if (depth <= 5) score += chosenCost[4];
+            if (depth >= 2) score += chosenCost[1];
+            if (depth >= 3) score += chosenCost[2];
+            if (depth >= 4) score += chosenCost[3];
+            if (depth >= 5) score += chosenCost[4];
+            if (depth >= 6) score += chosenCost[5];
+            if (depth >= 7) score += chosenCost[6];
 
+            auto counter = 0;
             SearchResult r;
-            r.actions[0] = actions[0];
-            r.actions[1] = actions[1];
-            r.actions[2] = actions[2];
-            r.actions[3] = actions[3];
-            r.actions[4] = actions[4];
-            r.actions[5] = -1;
+            r.actions[0] = actions[counter++];
+             if (depth >= 2) r.actions[counter++] = actions[counter];
+             if (depth >= 3) r.actions[counter++] = actions[counter];
+             if (depth >= 4) r.actions[counter++] = actions[counter];
+             if (depth >= 5) r.actions[counter++] = actions[counter];
+             if (depth >= 6) r.actions[counter++] = actions[counter];
+             if (depth >= 7) r.actions[counter++] = actions[counter];
+            r.actions[counter] = -1;
             r.valid = true;
             if (depth != targetDepth) {
                 r.actions[depth] = -1;

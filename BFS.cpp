@@ -1,5 +1,9 @@
 #include "BFS.h"
+
+#include <cassert>
 #include <cstring>
+
+constexpr int NODE_PER_ACTIONS = 6;
 
 BFS::BFS(const Player* rp, uint64_t ns, int pos, int F)
     : maxDepth(F), rootNowState(ns), rootPosition(pos)
@@ -13,8 +17,8 @@ void BFS::buildPlan(
     int leafChild,
     ResultPlan& out
 ) const {
-    int stackNodes[400];
-    int stackChildren[400];
+    int stackNodes[400]{};
+    int stackChildren[400]{};
     int sp = 0;
 
     int n = leafNode;
@@ -25,7 +29,6 @@ void BFS::buildPlan(
         stackNodes[sp] = n;
         stackChildren[sp] = c;
         sp++;
-
         c = nodes[n].parentChild;
         n = nodes[n].parentNode;
     }
@@ -60,7 +63,7 @@ int BFS::generateActions(
         players,
         nowState,
         position,
-        5,
+        NODE_PER_ACTIONS,
         depth == 0,
         outChildren
     );
@@ -93,8 +96,43 @@ void BFS::Run() {
 
             ResultPlan ret{};
             // ===== plan 再構築 =====
-            buildPlan(depth, n.index, ret);
+            buildPlan(depth, i, ret);
+#if defined(MINGW_BUILD)
+            int counter = 0;
+            for (int k = NODE_PER_ACTIONS * depth; k < NODE_PER_ACTIONS * depth + NODE_PER_ACTIONS; ++k) {
+                if (n.children[i].actions[counter] == 0 || n.children[i].actions[counter] == -1) break;
+                assert(ret.actions[k] == n.children[i].actions[counter]);
+                counter++;
+            }
+
+            int rootPos = rootPosition;
+            uint64_t rootNow = rootNowState;
+            Player rootPlayers1[2] = {rootPlayers[0], rootPlayers[1]};
+
+            std::optional<BattleResult> dummyResult = BattleResult();
+
+            BattleEmulator::Main(
+                &rootPos,
+                ret.depth,
+                ret.actions,
+                rootPlayers1,
+                dummyResult,
+                0,
+                nullptr,
+                nullptr,
+                -1,
+                &rootNow,
+                true
+            );
+
+            assert(rootPos == n.children[i].position);
+            assert(rootNow == n.children[i].nowState);
+            assert(memcmp(rootPlayers1, n.children[i].players, sizeof(Player) * 2) == 0);
+
+            ret.dummyResult = dummyResult.value();
+#endif
             best[bestCount] = ret;
+
             bestCount++;
             if (bestCount == 10) return;
         }

@@ -12,6 +12,9 @@
 struct ResultPlan {
     int depth{};
     int actions[350]{};
+#if defined(MINGW_BUILD)
+    BattleResult dummyResult;
+#endif
 };
 
 class BFS {
@@ -54,7 +57,7 @@ private:
     uint64_t rootNowState{};
     int rootPosition{};
 
-    Node nodes[10]{};
+    Node nodes[100]{};
     ResultPlan best[10]{};
 };
 

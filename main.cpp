@@ -488,10 +488,12 @@ namespace {
             false
         );
 
-        BFS runner(rootPlayers, rootNow, rootPos, 10);
+        BFS runner(rootPlayers, rootNow, rootPos, 4);
         runner.Run();
 
         ResultPlan* best = runner.getBest();
+
+        //dumpTableMain(best[0].dummyResult, best[0].actions, seed, prefixTurns);
 
 
         // テスト実行（BattleResult をちゃんと作って dump まで通す）
@@ -514,14 +516,14 @@ namespace {
 
         for (int i = 0; i < 350; ++i) {
             if (best[0].actions[i] == -1 || best[0].actions[i] == 0) {
-                finalGene[i] = -1;
+                finalGene[finalTurns++] = -1;
                 break;
             }
-            std::cout << best[0].actions << ",";
+            std::cout << best[0].actions[i] << ",";
             finalGene[finalTurns] = best[0].actions[i];
             finalTurns++;
         }
-        // std::cout << std::endl << "t=" << finalTurns << std::endl;
+        std::cout << std::endl << "t=" << (finalTurns - 1) << std::endl;
         // //
         BattleEmulator::Main(
             &testPos,
