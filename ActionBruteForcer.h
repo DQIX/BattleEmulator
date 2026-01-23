@@ -111,7 +111,7 @@ public:
     ~ActionBruteForcer();
 
     void Search(const Player *rootPlayers, uint64_t rootNowState, int rootPosition, SearchOutput &out);
-    static int64_t EvaluateTerminal(const Node& n);
+    static int64_t EvaluateTerminal(const Node& n, int totalDepth);
 private:
     Node* g_nodeBufA = nullptr;
     Node* g_nodeBufB = nullptr;

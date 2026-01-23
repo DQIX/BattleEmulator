@@ -6,29 +6,31 @@
 
 // ================= 評価 =================
 
-static inline int64_t EvaluatePlayers(const Player players[2]) {
-    int64_t score = 0;
+static inline uint64_t PackScore(
+    int totalDepth,
+    const Player players[2]
+) {
+    const auto depth = static_cast<uint64_t>(totalDepth);
+    const auto enemyHp = static_cast<uint64_t>(players[1].hp);
+    const auto allyLost = static_cast<uint64_t>(
+        setting::Ally_MAX_HP - players[0].hp
+    );
+    const auto mpUsed = static_cast<uint64_t>(
+        setting::ALLY_CURRENT_MP - players[0].mp
+    );
+    const auto herbUsed = static_cast<uint64_t>(
+        setting::herbcount - players[0].medicinal_herbs_count
+    );
 
-    if (players[1].hp == 0) {
-        score = -0xfffffffffffffLL;
-    }
-
-    if (players[0].hp == 0) {
-        score = 0xfffffffffffffLL;
-    }
-
-    score += static_cast<int64_t>(players[1].hp) * 1'000'000;
-    score += static_cast<int64_t>(setting::Ally_MAX_HP - players[0].hp) * 1'000;
-    score += static_cast<int64_t>(setting::ALLY_CURRENT_MP - players[0].mp) * 100;
-    score += static_cast<int64_t>(setting::herbcount - players[0].medicinal_herbs_count) * 10;
-
-    return score;
+    return (depth << 48)
+         | (enemyHp << 32)
+         | (allyLost << 16)
+         | (mpUsed << 8)
+         | herbUsed;
 }
 
-int64_t ActionBruteForcer::EvaluateTerminal(const Node& n) {
-    int64_t score = EvaluatePlayers(n.players);
-    score += static_cast<int64_t>(n.depth) * 1'000'00000;
-    return score;
+int64_t ActionBruteForcer::EvaluateTerminal(const Node& n, int totalDepth) {
+    return static_cast<int64_t>(PackScore(totalDepth, n.players));
 }
 
 // ================= 1ステップ =================

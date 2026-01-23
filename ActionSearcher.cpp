@@ -48,7 +48,8 @@ void ActionSearcher::expandNode(
         cand.fragLen = static_cast<uint8_t>(node.depth);
         cand.fragOffset = -1;
         cand.nodeId = -1;
-        cand.score = ActionBruteForcer::EvaluateTerminal(node);
+        const int totalDepth = cur.depth + node.depth;
+        cand.score = ActionBruteForcer::EvaluateTerminal(node, totalDepth);
         cand.nowState = node.nowState;
         cand.position = node.position;
         cand.valid = true;
@@ -144,7 +145,7 @@ ActionSearcher::ActionSearcher(
 
 int ActionSearcher::beamWidthForDepth(int depth) {
     (void)depth;
-    return 256;
+    return 512;
 }
 
 ActionSearcher::~ActionSearcher() {
