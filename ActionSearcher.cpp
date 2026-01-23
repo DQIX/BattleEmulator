@@ -213,19 +213,11 @@ void ActionSearcher::Run() {
         }
 
         // ビーム選択
-        curCount_ = selectTopK(
-            next_,
-            nextCount_,
-            cur_,
-            beamWidthForDepth(depth)
-        );
-
+        // ActionSearcher.cpp:216-228
+        curCount_ = selectTopK(next_, nextCount_, cur_, beamWidthForDepth(depth));
         if (curCount_ == 0) break;
 
-        // ポインタ入替（次ループ用）
-        SearchResult* tmp = cur_;
-        cur_ = next_;
-        next_ = tmp;
+        // swapを削除して、cur_ にある上位Kを次ループで使う
     }
 }
 
