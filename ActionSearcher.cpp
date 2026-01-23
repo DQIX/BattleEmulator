@@ -20,56 +20,6 @@ inline bool WillPlayer0InitiativeNoTie(
     return speed0 > speed1;
 }
 
-int inline ActionSearcher::selectTopK(
-    SearchResult* src,
-    int srcCount,
-    SearchResult* dst,
-    int K
-) {
-    if (srcCount <= K) {
-        memcpy(dst, src, sizeof(SearchResult) * srcCount);
-        return srcCount;
-    }
-
-    int n = 0;
-    int worst = 0; // dst 冁E�� score 最大のインデックス
-
-    for (int i = 0; i < srcCount; ++i) {
-        const SearchResult& r = src[i];
-
-        if (n < K) {
-            dst[n++] = r;
-
-            if (n == K) {
-                // 初回だけ worst を確定
-                worst = 0;
-                for (int j = 1; j < K; ++j) {
-                    if (dst[j].score > dst[worst].score) {
-                        worst = j;
-                    }
-                }
-            }
-            continue;
-        }
-
-        // expandNode と同じワースト判判定
-        if (r.score < dst[worst].score) {
-            dst[worst] = r;
-
-            // worst　を再計算
-            worst = 0;
-            for (int j = 1; j < K; ++j) {
-                if (dst[j].score > dst[worst].score) {
-                    worst = j;
-                }
-            }
-        }
-    }
-
-    return K;
-}
-
-
 void ActionSearcher::expandNode(
     const SearchResult& cur,
     SearchResult* out,
@@ -91,7 +41,7 @@ void ActionSearcher::expandNode(
         }
 
         if (node.players[0].hp <= 15) {
-            // 先制できなぁE��ら即弾ぁE
+            // 先制できないなら弾く
             if (!WillPlayer0InitiativeNoTie(node.position)) {
                 continue;
             }
@@ -201,7 +151,7 @@ ActionSearcher::ActionSearcher(
 
 int ActionSearcher::beamWidthForDepth(int depth) {
     (void)depth;
-    return 64;
+    return 128;
 }
 
 ActionSearcher::~ActionSearcher() {
