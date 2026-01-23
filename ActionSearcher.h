@@ -45,16 +45,16 @@ private:
         int depth
     );
 
-    static int selectTopK(
+    int selectTopK(
         SearchResult* src,
         int srcCount,
         SearchResult* dst,
         int K
     );
 
-    static int beamWidthForDepth(int depth);
-    static void assignNodeId(SearchResult& node);
-    static void buildPlanFromNode(const SearchResult& node, SearchPlan& plan);
+    int beamWidthForDepth(int depth);
+    void assignNodeId(SearchResult& node);
+    void buildPlanFromNode(const SearchResult& node, SearchPlan& plan);
 
     // root
     Player rootPlayers_[2];
@@ -74,13 +74,15 @@ private:
     // success
     SearchPlan best_[BEST_LIMIT];
     int bestCount_;
-};
 
-static int actionPool_[ActionSearcher::ACTION_POOL_SIZE];
-static int actionPoolUsed_;
-static int parentPool_[ActionSearcher::NODE_POOL_SIZE];
-static int fragOffsetPool_[ActionSearcher::NODE_POOL_SIZE];
-static uint8_t fragLenPool_[ActionSearcher::NODE_POOL_SIZE];
-static int nodePoolUsed_;
+    int actionPool_[ActionSearcher::ACTION_POOL_SIZE];
+    int actionPoolUsed_;
+    int parentPool_[ActionSearcher::NODE_POOL_SIZE];
+    int fragOffsetPool_[ActionSearcher::NODE_POOL_SIZE];
+    uint8_t fragLenPool_[ActionSearcher::NODE_POOL_SIZE];
+    int nodePoolUsed_;
+
+    SearchOutput tmpSearchOutput;
+};
 
 #endif

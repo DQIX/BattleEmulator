@@ -10,8 +10,6 @@
 // - beam search / topK は score 昇順で扱う
 constexpr int NODE_PER_ACTIONS = 5;
 
-static SearchOutput tmpSearchOutput;
-
 inline bool WillPlayer0InitiativeNoTie(
     int position
 ) {
