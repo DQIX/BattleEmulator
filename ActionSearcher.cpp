@@ -8,7 +8,6 @@
 // NOTE:
 // - lower score is better
 // - beam search / topK は score 昇順で扱う
-constexpr int NODE_PER_ACTIONS = 5;
 
 inline bool WillPlayer0InitiativeNoTie(
     int position
@@ -77,7 +76,7 @@ int ActionSearcher::expandNode(
     int maxOut,
     int depth
 ) {
-    ActionBruteForcer::Search(
+    brute_->Search(
         cur.players,
         cur.nowState,
         cur.position,
@@ -159,17 +158,48 @@ ActionSearcher::ActionSearcher(
       next_(bufB_),
       curCount_(0),
       nextCount_(0),
-      bestCount_(0)
+      bestCount_(0),
+      actionPoolUsed_(0),
+      nodePoolUsed_(0)
 {
     rootPlayers_[0] = rp[0];
     rootPlayers_[1] = rp[1];
-}
 
+    actionPool_ = static_cast<int*>(
+        std::malloc(sizeof(int) * ACTION_POOL_SIZE)
+    );
+    parentPool_ = static_cast<int*>(
+        std::malloc(sizeof(int) * NODE_POOL_SIZE)
+    );
+    fragOffsetPool_ = static_cast<int*>(
+        std::malloc(sizeof(int) * NODE_POOL_SIZE)
+    );
+    fragLenPool_ = static_cast<uint8_t*>(
+        std::malloc(sizeof(uint8_t) * NODE_POOL_SIZE)
+    );
+
+    brute_ = new ActionBruteForcer();  // ← これが欲しかったやつ
+
+    assert(actionPool_);
+    assert(parentPool_);
+    assert(fragOffsetPool_);
+    assert(fragLenPool_);
+    assert(brute_);
+}
 
 int ActionSearcher::beamWidthForDepth(int depth) {
     (void)depth;
     return 64;
 }
+
+ActionSearcher::~ActionSearcher() {
+    delete brute_;
+    std::free(actionPool_);
+    std::free(parentPool_);
+    std::free(fragOffsetPool_);
+    std::free(fragLenPool_);
+}
+
 
 void ActionSearcher::assignNodeId(SearchResult& node) {
     assert(nodePoolUsed_ < NODE_POOL_SIZE);

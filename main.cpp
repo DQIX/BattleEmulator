@@ -471,15 +471,13 @@ namespace {
             &rootNow,
             false
         );
-
-      //ActionBruteForcer::Search(rootPlayers, rootNow, rootPos, output);
-
-
-        ActionSearcher searcher(rootPlayers, rootNow, rootPos, 10);
-        searcher.Run();
+        auto* search = new ActionSearcher(rootPlayers, rootNow, rootPos, 10);
+        search->Run();
 
         SearchPlan Plan[ActionSearcher::BEST_LIMIT];
-        auto tmp = searcher.getBest(Plan);
+        auto tmp = search->getBest(Plan);
+
+        delete search;   // ← 必須
 
         auto best = Plan[0].depth;
         SearchPlan bestPlan = Plan[0];

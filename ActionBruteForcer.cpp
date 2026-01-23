@@ -4,13 +4,9 @@
 
 #include "setting.h"
 
-Node ActionBruteForcer::g_nodeBufA[ActionBruteForcerConst::MAX_NODES];
-Node ActionBruteForcer::g_nodeBufB[ActionBruteForcerConst::MAX_NODES];
-SearchResult ActionBruteForcer::g_results[ActionBruteForcerConst::MAX_NODES];
-
 // ================= 評価 =================
 
-static inline int64_t EvaluatePlayers(const Player players[2]) {
+inline int64_t EvaluatePlayers(const Player players[2]) {
     int64_t score = 0;
 
     if (players[1].hp == 0) {
@@ -29,7 +25,7 @@ static inline int64_t EvaluatePlayers(const Player players[2]) {
     return score;
 }
 
-static inline int64_t EvaluateTerminal(const Node& n) {
+inline int64_t EvaluateTerminal(const Node& n) {
     int64_t score = EvaluatePlayers(n.players);
     score += static_cast<int64_t>(n.depth) * 1'000'00000;
 
@@ -106,6 +102,30 @@ static inline Node SimulateStep(
 
 
 // ================= 探索 =================
+
+ActionBruteForcer::ActionBruteForcer() {
+    const std::size_t nodeSize =
+        sizeof(Node) * ActionBruteForcerConst::MAX_NODES;
+    const std::size_t resultSize =
+        sizeof(SearchResult) * ActionBruteForcerConst::MAX_NODES;
+
+    g_nodeBufA = static_cast<Node*>(std::malloc(nodeSize));
+    g_nodeBufB = static_cast<Node*>(std::malloc(nodeSize));
+    g_results  = static_cast<SearchResult*>(std::malloc(resultSize));
+
+    if (!g_nodeBufA || !g_nodeBufB || !g_results) {
+        std::free(g_nodeBufA);
+        std::free(g_nodeBufB);
+        std::free(g_results);
+        throw std::bad_alloc();
+    }
+}
+
+ActionBruteForcer::~ActionBruteForcer() {
+    std::free(g_nodeBufA);
+    std::free(g_nodeBufB);
+    std::free(g_results);
+}
 
 void ActionBruteForcer::Search(
     const Player* rootPlayers,

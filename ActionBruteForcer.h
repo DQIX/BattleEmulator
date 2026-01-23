@@ -107,11 +107,14 @@ struct SearchOutput {
 
 class ActionBruteForcer {
 public:
-    static Node g_nodeBufA[ActionBruteForcerConst::MAX_NODES];
-    static Node g_nodeBufB[ActionBruteForcerConst::MAX_NODES];
-    static SearchResult g_results[ActionBruteForcerConst::MAX_NODES];
+    ActionBruteForcer();
+    ~ActionBruteForcer();
 
-    static void Search(const Player *rootPlayers, uint64_t rootNowState, int rootPosition, SearchOutput &out);
+    void Search(const Player *rootPlayers, uint64_t rootNowState, int rootPosition, SearchOutput &out);
+private:
+    Node* g_nodeBufA = nullptr;
+    Node* g_nodeBufB = nullptr;
+    SearchResult* g_results = nullptr;
 };
 
 

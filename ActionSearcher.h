@@ -29,6 +29,8 @@ public:
         int maxDepth
     );
 
+    ~ActionSearcher();
+
     void Run();
     int getBest(SearchPlan* out) const;
 
@@ -53,6 +55,8 @@ private:
     );
 
     int beamWidthForDepth(int depth);
+
+
     void assignNodeId(SearchResult& node);
     void buildPlanFromNode(const SearchResult& node, SearchPlan& plan);
 
@@ -75,12 +79,13 @@ private:
     SearchPlan best_[BEST_LIMIT];
     int bestCount_;
 
-    int actionPool_[ActionSearcher::ACTION_POOL_SIZE];
     int actionPoolUsed_;
-    int parentPool_[ActionSearcher::NODE_POOL_SIZE];
-    int fragOffsetPool_[ActionSearcher::NODE_POOL_SIZE];
-    uint8_t fragLenPool_[ActionSearcher::NODE_POOL_SIZE];
+    int* actionPool_;
+    int* parentPool_;
+    int* fragOffsetPool_;
+    uint8_t* fragLenPool_;
     int nodePoolUsed_;
+    ActionBruteForcer* brute_;
 
     SearchOutput tmpSearchOutput;
 };
