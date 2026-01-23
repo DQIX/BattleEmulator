@@ -23,6 +23,8 @@ public:
 
     static double floatRand(int *position, double min, double max);
 
+    static double floatRandAttack(int *position);
+
     static int intRangeRand(int *position, int min, int max);
 
     static uint32_t getSeed(int * position);

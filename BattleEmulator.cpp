@@ -1375,32 +1375,28 @@ int BattleEmulator::FUN_021e8458_typeD(int *position, double difference, double 
 
 
 int BattleEmulator::FUN_0207564c(int *position, int atk, int def) {
-    auto atk5 = static_cast<double>(atk);
-    auto def5 = static_cast<double>(def);
-
-    auto atk1 = (atk5 - (def5 / 2)) / 2;
-    if (atk1 <= 0) {
-        return 0;
-    } else {
-        auto atk2 = atk / 16.0000;
-        if (atk1 > atk2) {
-            auto atk4 = atk1 / 16;
-            auto atk3 = -atk4;
-            auto result = atk1 + lcg::floatRand(position, atk3, atk4);
-            result = result + lcg::floatRand(position, -1, 1);
-            if (result <= 0) {
-                result = 0.0;
-            }
-            return static_cast<int>((result));
-        } else {
-            double result = lcg::floatRand(position, 0.0, atk2);
-            if (result <= 0) {
-                result = 0.0;
-            }
-            return static_cast<int>((result));
-        }
+    auto result = 0.0;
+    double atk1;
+    {
+        double tmpAtk = atk * 0.5;
+        double tmpDef = def * 0.25;
+        atk1 = tmpAtk - tmpDef;
     }
-    //return 0;
+    if (atk1 <= 0) [[unlikely]]{
+        return 0;
+    }
+    double atk2 = atk * 0.0625; // 1/16
+    if (atk1 <= atk2) [[likely]] {
+        double atk4 = atk1 * 0.0625;
+        result = atk1 + lcg::floatRand(position, -atk4, atk4);
+        result = result + lcg::floatRandAttack(position);
+    } else {
+        result = lcg::floatRand(position, 0.0, atk2);
+    }
+    if (result <= 0.0) [[unlikely]] {
+        return 0;
+    }
+    return static_cast<int>(result);
 }
 
 void BattleEmulator::process7A8(int *position, int baseDamage, Player players[2], int defender) {

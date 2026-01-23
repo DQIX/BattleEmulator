@@ -146,6 +146,16 @@ double lcg::floatRand(int *position, double min, double max) {
     return min + u * (max - min);
 }
 
+double lcg::floatRandAttack(int *position) {
+    assert(position != nullptr);
+    assert((*position) < ARRAY_SIZE);
+    GenerateifNeed(*position);
+    uint32_t top = precalcTop32[*position];
+    (*position)++;
+
+    return -1.0 + static_cast<double>(top) * (1.0 / 2147483648.0); // [-1,1)
+}
+
 
 /**
  * 指定された範囲内で整数型の乱数を生成します。
