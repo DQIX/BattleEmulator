@@ -18,7 +18,7 @@ struct SearchPlan {
 class ActionSearcher {
 public:
     static constexpr int MAX_LAYER = 1024;
-    static constexpr int BEST_LIMIT = 10;
+    static constexpr int BEST_LIMIT = 100;
 
 public:
     ActionSearcher(
