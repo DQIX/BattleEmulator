@@ -19,7 +19,6 @@ class ActionSearcher {
 public:
     static constexpr int MAX_LAYER = 1024;
     static constexpr int BEST_LIMIT = 10;
-    static constexpr int NODE_EXPAND_LIMIT = 15;
 
 public:
     ActionSearcher(

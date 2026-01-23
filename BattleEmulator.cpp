@@ -1543,22 +1543,25 @@ int BattleEmulator::ProcessMagicBurst(int *position) {
 }
 
 
-int BattleEmulator::FUN_0208aecc(int *position, uint64_t *NowState) {
-    uint64_t previousState = ((*NowState) >> 4) & 0xf;
-    if (previousState == 3) {
-        previousState = 0;
+int BattleEmulator::FUN_0208aecc(int* position, uint64_t* nowState)
+{
+    // 現在ステート取得 (4bit〜7bit)
+    uint8_t pre = ((*nowState >> 4) & 0xF);
+    if (pre == 3) {
+        pre = 0;
     }
-    uint64_t r0_var2 = lcg::getSeed(position);
-    uint64_t r3_var3 = previousState;
-    uint64_t r2_var5 = r0_var2 & 0x1;
-    uint64_t r0_var6 = r3_var3 << 0x1 & 0xFFFFFFFF;
-    uint64_t r1_var7 = r0_var6 & 0xff;
-    uint64_t r0_var8 = r3_var3 + 0x1;
-    uint64_t r3_var9 = r1_var7 + r2_var5;
-    previousState = static_cast<int>(r0_var8);
-    uint64_t r3_var12 = r3_var9 & 0xff;
-    (*NowState) &= ~0xf0;
-    (*NowState) |= (previousState << 4);
-    assert(r3_var12 <= 6);
-    return static_cast<int>(r3_var12);
+
+    // LCG の下位 1bit
+    uint8_t lcgBit = lcg::getSeed(position) & 1;
+
+    // 出力値
+    uint8_t output = static_cast<uint8_t>(pre * 2 + lcgBit);
+    assert(output <= 6);
+
+    // 次ステート更新
+    uint8_t next = pre + 1;
+    *nowState = (*nowState & ~0xF0) | (static_cast<uint64_t>(next) << 4);
+
+    return output;
 }
+
