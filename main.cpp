@@ -541,12 +541,12 @@ namespace {
 #if defined(MINGW_BUILD)
         //std::cout << finalTurns << std::endl;
 #else
-        if (result1.has_value()) {
-            // dumpTableMain は int[350] を受けるので変換
-            int printable[350];
-            for (int i = 0; i < 350; ++i) printable[i] = static_cast<int>(finalGene[i]);
-            dumpTableMain(result1.value(), printable, seed, prefixTurns);
-        }
+        // if (result1.has_value()) {
+        //     // dumpTableMain は int[350] を受けるので変換
+        //     int printable[350];
+        //     for (int i = 0; i < 350; ++i) printable[i] = static_cast<int>(finalGene[i]);
+        //     dumpTableMain(result1.value(), printable, seed, prefixTurns);
+        // }
 #endif
 
 #if defined(DEBUG)

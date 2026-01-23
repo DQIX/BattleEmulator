@@ -31,40 +31,8 @@ inline bool WillPlayer0InitiativeNoTie(
     return speed0 > speed1;
 }
 
-// score: lower is better
-// dst は「最大ヒープ」（最悪 = score 最大が root）
-
-static inline void siftUp(SearchResult* heap, int idx) {
-    while (idx > 0) {
-        int p = (idx - 1) >> 1;
-        if (heap[p].score >= heap[idx].score) {
-            break;
-        }
-        std::swap(heap[p], heap[idx]);
-        idx = p;
-    }
-}
-
-static inline void siftDown(SearchResult* heap, int size, int idx) {
-    while (true) {
-        int l = (idx << 1) + 1;
-        if (l >= size) {
-            break;
-        }
-        int r = l + 1;
-        int m = (r < size && heap[r].score > heap[l].score) ? r : l;
-
-        if (heap[idx].score >= heap[m].score) {
-            break;
-        }
-        std::swap(heap[idx], heap[m]);
-        idx = m;
-    }
-}
-
-
-static inline int selectTopKHeap(
-    const SearchResult* src,
+int inline ActionSearcher::selectTopK(
+    SearchResult* src,
     int srcCount,
     SearchResult* dst,
     int K
@@ -74,47 +42,51 @@ static inline int selectTopKHeap(
         return srcCount;
     }
 
-    int size = 0;
+    int n = 0;
+    int worst = 0; // dst 内で score 最大のインデックス
 
     for (int i = 0; i < srcCount; ++i) {
         const SearchResult& r = src[i];
 
-        if (size < K) {
-            dst[size] = r;
-            siftUp(dst, size);
-            ++size;
+        if (n < K) {
+            dst[n++] = r;
+
+            if (n == K) {
+                // 初回だけ worst を確定
+                worst = 0;
+                for (int j = 1; j < K; ++j) {
+                    if (dst[j].score > dst[worst].score) {
+                        worst = j;
+                    }
+                }
+            }
             continue;
         }
 
-        // root = 最悪
-        if (r.score < dst[0].score) {
-            dst[0] = r;
-            siftDown(dst, size, 0);
+        // expandNode と同じワースト判定
+        if (r.score < dst[worst].score) {
+            dst[worst] = r;
+
+            // worst を再計算
+            worst = 0;
+            for (int j = 1; j < K; ++j) {
+                if (dst[j].score > dst[worst].score) {
+                    worst = j;
+                }
+            }
         }
     }
 
     return K;
 }
 
-int inline ActionSearcher::selectTopK(
-    SearchResult* src,
-    int srcCount,
-    SearchResult* dst,
-    int K
-) {
-    return selectTopKHeap(src, srcCount, dst, K);
-}
 
-
-
-
-int inline ActionSearcher::expandNode(
+int ActionSearcher::expandNode(
     const SearchResult& cur,
     SearchResult* out,
     int maxOut,
     int depth
 ) {
-    (void)depth;
     ActionBruteForcer::Search(
         cur.players,
         cur.nowState,
@@ -122,44 +94,67 @@ int inline ActionSearcher::expandNode(
         tmpSearchOutput
     );
 
-    int size = 0;
+    int n = 0;
+    int worst = 0;
 
     for (int i = 0; i < tmpSearchOutput.count; ++i) {
         const SearchResult& r = tmpSearchOutput.results[i];
         if (!r.valid) continue;
-        if (r.isLose) continue;
 
-        if (size < maxOut) {
-            out[size] = r;
-            out[size].depth = cur.depth + r.depth;
-            out[size].firstAction = (cur.depth == 0) ? r.actions[0] : cur.firstAction;
-            out[size].parentIndex = cur.nodeId;
-            out[size].fragLen = static_cast<uint8_t>(r.depth);
-            out[size].fragOffset = -1;
-            out[size].nodeId = -1;
-            siftUp(out, size);
-            ++size;
+        if (r.isLose) {
             continue;
         }
 
-        // root が最悪
-        if (r.score < out[0].score) {
-            out[0] = r;
-            out[0].depth = cur.depth + r.depth;
-            out[0].firstAction = (cur.depth == 0) ? r.actions[0] : cur.firstAction;
-            out[0].parentIndex = cur.nodeId;
-            out[0].fragLen = static_cast<uint8_t>(r.depth);
-            out[0].fragOffset = -1;
-            out[0].nodeId = -1;
-            siftDown(out, size, 0);
+        // if (r.players[0].hp <= 15) {
+        //     // 先制できないなら即弾く
+        //     if (WillPlayer0InitiativeNoTie(r.players, r.position)) {
+        //         continue;
+        //     }
+        // }
+
+        // ... existing code ...
+        if (n < maxOut) {
+            out[n] = r;
+            out[n].depth = cur.depth + r.depth;
+            out[n].firstAction = (cur.depth == 0) ? r.actions[0] : cur.firstAction;
+            out[n].parentIndex = cur.nodeId;
+            out[n].fragLen = static_cast<uint8_t>(r.depth);
+            out[n].fragOffset = -1;
+            out[n].nodeId = -1;
+            ++n;
+
+            if (n == maxOut) {
+                worst = 0;
+                for (int j = 1; j < maxOut; ++j) {
+                    if (out[j].score > out[worst].score) {
+                        worst = j; // 最大 = 最悪
+                    }
+                }
+            }
+            continue;
+        }
+
+        // ★ ここが唯一の修正点
+        if (r.score < out[worst].score) {
+            out[worst] = r;
+            out[worst].depth = cur.depth + r.depth;
+            out[worst].firstAction = (cur.depth == 0) ? r.actions[0] : cur.firstAction;
+            out[worst].parentIndex = cur.nodeId;
+            out[worst].fragLen = static_cast<uint8_t>(r.depth);
+            out[worst].fragOffset = -1;
+            out[worst].nodeId = -1;
+
+            worst = 0;
+            for (int j = 1; j < maxOut; ++j) {
+                if (out[j].score > out[worst].score) {
+                    worst = j;
+                }
+            }
         }
     }
 
-    return size;
+    return n;
 }
-
-
-
 
 ActionSearcher::ActionSearcher(
     const Player* rp,
