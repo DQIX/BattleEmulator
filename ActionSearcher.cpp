@@ -9,16 +9,16 @@
 // - lower score is better
 // - beam search / topK は score　昇順で扱う
 
-inline bool WillPlayer0InitiativeNoTie(
-    int position
-) {
-    int pos = position;
-
-    double speed0 = setting::ALLY_SPEED * lcg::floatRand051_1(&pos);
-    double speed1 = setting::ENEMY_SPEED * lcg::floatRand051_1(&pos);
-
-    return speed0 > speed1;
-}
+// inline bool WillPlayer0InitiativeNoTie(
+//     int position
+// ) {
+//     int pos = position;
+//
+//     double speed0 = setting::ALLY_SPEED * lcg::floatRand051_1(&pos);
+//     double speed1 = setting::ENEMY_SPEED * lcg::floatRand051_1(&pos);
+//
+//     return speed0 > speed1;
+// }
 
 void ActionSearcher::expandNode(
     const SearchResult& cur,
@@ -38,13 +38,6 @@ void ActionSearcher::expandNode(
         const Node& node = *tmpSearchOutput.nodes[i];
         if (node.reason == TerminateReason::AllyDead) {
             continue;
-        }
-
-        if (node.players[0].hp <= 15) {
-            // 先制できないなら弾く
-            if (!WillPlayer0InitiativeNoTie(node.position)) {
-                continue;
-            }
         }
 
         SearchResult cand{};
@@ -151,7 +144,7 @@ ActionSearcher::ActionSearcher(
 
 int ActionSearcher::beamWidthForDepth(int depth) {
     (void)depth;
-    return 128;
+    return 256;
 }
 
 ActionSearcher::~ActionSearcher() {

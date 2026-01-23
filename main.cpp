@@ -890,7 +890,7 @@ BattleEmulator::ATTACK_ALLY,BattleEmulator::ATTACK_ALLY,BattleEmulator::ATTACK_A
 
 #if defined(DEBUG3)
 
-    uint64_t seed = 0x03005d91;
+    uint64_t seed = 12345678;
     //uint64_t seed = 0x03005d91;
 
     int actions[350] = {BattleEmulator::DEFENCE, -1,};

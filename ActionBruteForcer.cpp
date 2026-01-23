@@ -28,21 +28,6 @@ static inline int64_t EvaluatePlayers(const Player players[2]) {
 int64_t ActionBruteForcer::EvaluateTerminal(const Node& n) {
     int64_t score = EvaluatePlayers(n.players);
     score += static_cast<int64_t>(n.depth) * 1'000'00000;
-
-    if (n.terminated) {
-        score += 5'000'000'000LL;
-    }
-
-    switch (n.reason) {
-        case TerminateReason::EnemyDead:
-            score += 5'000'000'000LL;
-            break;
-        case TerminateReason::AllyDead:
-            score -= 5'000'000'000LL;
-            break;
-        default:
-            break;
-    }
     return score;
 }
 
