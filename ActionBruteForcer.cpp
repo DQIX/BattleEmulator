@@ -6,7 +6,7 @@
 
 // ================= 評価 =================
 
-inline int64_t EvaluatePlayers(const Player players[2]) {
+static inline int64_t EvaluatePlayers(const Player players[2]) {
     int64_t score = 0;
 
     if (players[1].hp == 0) {
@@ -25,7 +25,7 @@ inline int64_t EvaluatePlayers(const Player players[2]) {
     return score;
 }
 
-inline int64_t EvaluateTerminal(const Node& n) {
+int64_t ActionBruteForcer::EvaluateTerminal(const Node& n) {
     int64_t score = EvaluatePlayers(n.players);
     score += static_cast<int64_t>(n.depth) * 1'000'00000;
 
@@ -106,17 +106,13 @@ static inline Node SimulateStep(
 ActionBruteForcer::ActionBruteForcer() {
     const std::size_t nodeSize =
         sizeof(Node) * ActionBruteForcerConst::MAX_NODES;
-    const std::size_t resultSize =
-        sizeof(SearchResult) * ActionBruteForcerConst::MAX_NODES;
 
     g_nodeBufA = static_cast<Node*>(std::malloc(nodeSize));
     g_nodeBufB = static_cast<Node*>(std::malloc(nodeSize));
-    g_results  = static_cast<SearchResult*>(std::malloc(resultSize));
 
-    if (!g_nodeBufA || !g_nodeBufB || !g_results) {
+    if (!g_nodeBufA || !g_nodeBufB) {
         std::free(g_nodeBufA);
         std::free(g_nodeBufB);
-        std::free(g_results);
         throw std::bad_alloc();
     }
 }
@@ -124,7 +120,6 @@ ActionBruteForcer::ActionBruteForcer() {
 ActionBruteForcer::~ActionBruteForcer() {
     std::free(g_nodeBufA);
     std::free(g_nodeBufB);
-    std::free(g_results);
 }
 
 void ActionBruteForcer::Search(
@@ -174,26 +169,13 @@ void ActionBruteForcer::Search(
     }
     out.count = curCount;
 
-    auto offset = 0;
+    int offset = 0;
     for (int i = 0; i < curCount; ++i) {
         const Node& n = cur[i];
         if (n.reason == TerminateReason::AllyDead) {
             out.count--;
             continue;
         }
-        SearchResult& r = out.results[offset];
-
-
-        r.depth = n.depth;
-        std::memcpy(r.players, n.players, sizeof(Player) * 2);
-        std::memcpy(r.actions, n.actions, sizeof(int) * n.depth);
-        r.score =  EvaluateTerminal(n);
-        r.firstAction = n.actions[0];
-        r.nowState = n.nowState;
-        r.position = n.position;
-        r.valid = true;
-        r.isWin = (n.reason == TerminateReason::EnemyDead);
-        r.isLose = (n.reason == TerminateReason::AllyDead);
-        offset++;
+        out.nodes[offset++] = &n;
     }
 }

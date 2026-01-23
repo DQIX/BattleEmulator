@@ -40,11 +40,12 @@ public:
         NODE_POOL_SIZE * ActionBruteForcerConst::CONST_MAX_DEPTH;
 
 private:
-    int expandNode(
+    void expandNode(
         const SearchResult& cur,
         SearchResult* out,
         int maxOut,
-        int depth
+        int& outCount,
+        int& worst
     );
 
     int selectTopK(

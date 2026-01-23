@@ -7,7 +7,7 @@
 
 // NOTE:
 // - lower score is better
-// - beam search / topK は score 昇順で扱う
+// - beam search / topK は score　昇順で扱う
 
 inline bool WillPlayer0InitiativeNoTie(
     int position
@@ -32,7 +32,7 @@ int inline ActionSearcher::selectTopK(
     }
 
     int n = 0;
-    int worst = 0; // dst 内で score 最大のインデックス
+    int worst = 0; // dst 冁E�� score 最大のインデックス
 
     for (int i = 0; i < srcCount; ++i) {
         const SearchResult& r = src[i];
@@ -52,11 +52,11 @@ int inline ActionSearcher::selectTopK(
             continue;
         }
 
-        // expandNode と同じワースト判定
+        // expandNode と同じワースト判判定
         if (r.score < dst[worst].score) {
             dst[worst] = r;
 
-            // worst を再計算
+            // worst　を再計算
             worst = 0;
             for (int j = 1; j < K; ++j) {
                 if (dst[j].score > dst[worst].score) {
@@ -70,11 +70,12 @@ int inline ActionSearcher::selectTopK(
 }
 
 
-int ActionSearcher::expandNode(
+void ActionSearcher::expandNode(
     const SearchResult& cur,
     SearchResult* out,
     int maxOut,
-    int depth
+    int& outCount,
+    int& worst
 ) {
     brute_->Search(
         cur.players,
@@ -83,55 +84,68 @@ int ActionSearcher::expandNode(
         tmpSearchOutput
     );
 
-    int n = 0;
-    int worst = 0;
-
     for (int i = 0; i < tmpSearchOutput.count; ++i) {
-        const SearchResult& r = tmpSearchOutput.results[i];
-        if (!r.valid) continue;
-
-        if (r.isLose) {
+        const Node& node = *tmpSearchOutput.nodes[i];
+        if (node.reason == TerminateReason::AllyDead) {
             continue;
         }
 
-        if (r.players[0].hp <= 15) {
-            // 先制できないなら即弾く
-            if (!WillPlayer0InitiativeNoTie(r.position)) {
+        if (node.players[0].hp <= 15) {
+            // 先制できなぁE��ら即弾ぁE
+            if (!WillPlayer0InitiativeNoTie(node.position)) {
                 continue;
             }
         }
 
-        // ... existing code ...
-        if (n < maxOut) {
-            out[n] = r;
-            out[n].depth = cur.depth + r.depth;
-            out[n].firstAction = (cur.depth == 0) ? r.actions[0] : cur.firstAction;
-            out[n].parentIndex = cur.nodeId;
-            out[n].fragLen = static_cast<uint8_t>(r.depth);
-            out[n].fragOffset = -1;
-            out[n].nodeId = -1;
-            ++n;
+        SearchResult cand{};
+        cand.depth = cur.depth + node.depth;
+        cand.firstAction =
+            (cur.depth == 0) ? node.actions[0] : cur.firstAction;
+        cand.parentIndex = cur.nodeId;
+        cand.fragLen = static_cast<uint8_t>(node.depth);
+        cand.fragOffset = -1;
+        cand.nodeId = -1;
+        cand.score = ActionBruteForcer::EvaluateTerminal(node);
+        cand.nowState = node.nowState;
+        cand.position = node.position;
+        cand.valid = true;
+        cand.isWin = (node.reason == TerminateReason::EnemyDead);
+        cand.isLose = false;
 
-            if (n == maxOut) {
+        if (outCount < maxOut) {
+            SearchResult& dst = out[outCount++];
+            dst = cand;
+            std::memcpy(dst.players, node.players, sizeof(Player) * 2);
+            if (cand.fragLen > 0) {
+                std::memcpy(
+                    dst.actions,
+                    node.actions,
+                    sizeof(int) * cand.fragLen
+                );
+            }
+
+            if (outCount == maxOut) {
                 worst = 0;
                 for (int j = 1; j < maxOut; ++j) {
                     if (out[j].score > out[worst].score) {
-                        worst = j; // 最大 = 最悪
+                        worst = j;
                     }
                 }
             }
             continue;
         }
 
-        // ★ ここが唯一の修正点
-        if (r.score < out[worst].score) {
-            out[worst] = r;
-            out[worst].depth = cur.depth + r.depth;
-            out[worst].firstAction = (cur.depth == 0) ? r.actions[0] : cur.firstAction;
-            out[worst].parentIndex = cur.nodeId;
-            out[worst].fragLen = static_cast<uint8_t>(r.depth);
-            out[worst].fragOffset = -1;
-            out[worst].nodeId = -1;
+        if (cand.score < out[worst].score) {
+            SearchResult& dst = out[worst];
+            dst = cand;
+            std::memcpy(dst.players, node.players, sizeof(Player) * 2);
+            if (cand.fragLen > 0) {
+                std::memcpy(
+                    dst.actions,
+                    node.actions,
+                    sizeof(int) * cand.fragLen
+                );
+            }
 
             worst = 0;
             for (int j = 1; j < maxOut; ++j) {
@@ -141,8 +155,6 @@ int ActionSearcher::expandNode(
             }
         }
     }
-
-    return n;
 }
 
 ActionSearcher::ActionSearcher(
@@ -178,7 +190,7 @@ ActionSearcher::ActionSearcher(
         std::malloc(sizeof(uint8_t) * NODE_POOL_SIZE)
     );
 
-    brute_ = new ActionBruteForcer();  // ← これが欲しかったやつ
+    brute_ = new ActionBruteForcer();  //  ← これが欲しかったやつ
 
     assert(actionPool_);
     assert(parentPool_);
@@ -265,16 +277,18 @@ void ActionSearcher::Run() {
     // ---- 探索 ----
     for (int depth = 0; depth < maxDepth_; ++depth) {
         nextCount_ = 0;
+        int worst = 0;
+        const int beamWidth = beamWidthForDepth(depth);
 
         for (int i = 0; i < curCount_; ++i) {
             const SearchResult& n = cur_[i];
 
-            // 味方死亡 → 枝切り
+            // 味方死亡 ↁE枝�EめE
             if (!n.valid) {
                 continue;
             }
 
-            // 敵死亡 → 成功
+            // 敵死亡 ↁE成功
             if (n.isWin) {
                 buildPlanFromNode(n, best_[bestCount_++]);
                 if (bestCount_ == BEST_LIMIT) return;
@@ -282,25 +296,26 @@ void ActionSearcher::Run() {
             }
 
             // 展開
-            nextCount_ += expandNode(
+            expandNode(
                 n,
-                next_ + nextCount_,
-                NODE_EXPAND_LIMIT,
-                depth
+                next_,
+                beamWidth,
+                nextCount_,
+                worst
             );
         }
 
-        // ビーム選択
-        // ActionSearcher.cpp:216-228
-        curCount_ = selectTopK(next_, nextCount_, cur_, beamWidthForDepth(depth));
-        if (curCount_ == 0) break;
+        if (nextCount_ == 0) break;
+
+        SearchResult* tmp = cur_;
+        cur_ = next_;
+        next_ = tmp;
+        curCount_ = nextCount_;
         for (int i = 0; i < curCount_; ++i) {
             if (cur_[i].nodeId < 0) {
                 assignNodeId(cur_[i]);
             }
         }
-
-        // swapを削除して、cur_ にある上位Kを次ループで使う
     }
 }
 
@@ -309,3 +324,6 @@ int ActionSearcher::getBest(SearchPlan *out) const {
     std::memcpy(out, best_, sizeof(SearchPlan) * BEST_LIMIT);
     return best_[0].depth;
 }
+
+
+
