@@ -19,6 +19,10 @@ static inline int64_t EvaluatePlayers(const Player players[2]) {
         score = -0xfffffffffffffLL;
     }
 
+    if (players[0].hp == 0) {
+        score = 0xfffffffffffffLL;
+    }
+
     score += static_cast<int64_t>(players[1].hp) * 1'000'000;
     score += static_cast<int64_t>(setting::Ally_MAX_HP - players[0].hp) * 1'000;
     score += static_cast<int64_t>(setting::ALLY_CURRENT_MP - players[0].mp) * 100;

@@ -27,21 +27,21 @@ constexpr ActionEntry ACTION_TABLE[] = {
         BattleEmulator::DRAGON_SLASH, 0, [](const Player &) { return true; },
     },
     {
-        BattleEmulator::DEFENCE, 30, [](const Player &) { return true; },
+        BattleEmulator::DEFENCE, 0, [](const Player &) { return true; },
     },
     {
-        BattleEmulator::FLEE_ALLY, 1,[](const Player &) { return true; },
+        BattleEmulator::FLEE_ALLY, 0,[](const Player &) { return true; },
     },
     {
-        BattleEmulator::MEDICINAL_HERBS, 100,
+        BattleEmulator::MEDICINAL_HERBS, 0,
         [](const Player &Ally) { return Ally.medicinal_herbs_count >= 1; },
     },
     {
-        BattleEmulator::HEAL, 100,
+        BattleEmulator::HEAL, 0,
         [](const Player &Ally) { return Ally.mp >= 2; },
     },
     {
-        BattleEmulator::CRACK_ALLY, 30,
+        BattleEmulator::CRACK_ALLY, 0,
         [](const Player &Ally) { return Ally.mp >= 3; },
     }
 };
