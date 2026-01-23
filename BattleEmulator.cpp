@@ -1375,28 +1375,31 @@ int BattleEmulator::FUN_021e8458_typeD(int *position, double difference, double 
 
 
 int BattleEmulator::FUN_0207564c(int *position, int atk, int def) {
-    auto result = 0.0;
+    [[assume(atk >= 0)]];
+    [[assume(def >= 0)]];
+    double result;
     double atk1;
     {
         double tmpAtk = atk * 0.5;
         double tmpDef = def * 0.25;
         atk1 = tmpAtk - tmpDef;
     }
-    if (atk1 <= 0) [[unlikely]]{
+    if (atk1 <= 0) [[unlikely]] {
         return 0;
     }
-    double atk2 = atk * 0.0625; // 1/16
-    if (atk1 <= atk2) [[likely]] {
-        double atk4 = atk1 * 0.0625;
+    auto atk2 = atk * 0.0625;
+    if (atk1 > atk2) [[likely]] {
+        auto atk4 = atk1 * 0.0625;
         result = atk1 + lcg::floatRand(position, -atk4, atk4);
         result = result + lcg::floatRandAttack(position);
     } else {
         result = lcg::floatRand(position, 0.0, atk2);
     }
-    if (result <= 0.0) [[unlikely]] {
-        return 0;
+    if (result <= 0) [[unlikely]] {
+       return 0;
     }
-    return static_cast<int>(result);
+    return static_cast<int>((result));
+    //return 0;
 }
 
 void BattleEmulator::process7A8(int *position, int baseDamage, Player players[2], int defender) {
