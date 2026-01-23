@@ -1552,7 +1552,7 @@ int BattleEmulator::FUN_0208aecc(int* position, uint64_t* nowState)
     }
 
     // LCG の下位 1bit
-    uint8_t lcgBit = lcg::getSeed(position) & 1;
+    uint8_t lcgBit = lcg::getSeed(position);
 
     // 出力値
     auto output = static_cast<uint8_t>(pre * 2 + lcgBit);

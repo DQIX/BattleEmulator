@@ -29,7 +29,7 @@ public:
 
     static int intRangeRand(int *position, int min, int max);
 
-    static uint32_t getSeed(int * position);
+    static uint8_t getSeed(int * position);
 };
 
 

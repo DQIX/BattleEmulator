@@ -98,12 +98,12 @@ int lcg::calculatePercent(uint64_t input) {
     return static_cast<int>(output * 1000000 >> 32);
 }
 
-uint32_t lcg::getSeed(int *position) {
+uint8_t lcg::getSeed(int *position) {
     assert(position != nullptr);
     assert((*position) < ARRAY_SIZE);
     GenerateifNeed((*position));
 
-    auto result = precalcTop32[(*position)];
+    auto result = precalcTop32[(*position)] & 1;
     (*position)++;
     return result;
 }
