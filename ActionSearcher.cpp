@@ -14,8 +14,8 @@ inline bool WillPlayer0InitiativeNoTie(
 ) {
     int pos = position;
 
-    double speed0 = setting::ALLY_SPEED * lcg::floatRand(&pos, 0.51, 1.0);
-    double speed1 = setting::ENEMY_SPEED * lcg::floatRand(&pos, 0.51, 1.0);
+    double speed0 = setting::ALLY_SPEED * lcg::floatRand051_1(&pos);
+    double speed1 = setting::ENEMY_SPEED * lcg::floatRand051_1(&pos);
 
     return speed0 > speed1;
 }

@@ -146,6 +146,19 @@ double lcg::floatRand(int *position, double min, double max) {
     return min + u * (max - min);
 }
 
+double lcg::floatRand051_1(int *position) {
+    assert(position != nullptr);
+    assert((*position) < ARRAY_SIZE);
+    GenerateifNeed(*position);
+    uint32_t top = precalcTop32[*position];
+    (*position)++;
+
+    // u = top / 2^32
+    // 0.51 + 0.49*u
+    return 0.51 + static_cast<double>(top) * (0.49 / 4294967296.0);
+}
+
+
 double lcg::floatRandAttack(int *position) {
     assert(position != nullptr);
     assert((*position) < ARRAY_SIZE);

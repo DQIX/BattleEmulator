@@ -23,6 +23,8 @@ public:
 
     static double floatRand(int *position, double min, double max);
 
+    static double floatRand051_1(int *position);
+
     static double floatRandAttack(int *position);
 
     static int intRangeRand(int *position, int min, int max);

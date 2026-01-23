@@ -14,6 +14,7 @@ public:
     static constexpr int ALLY_CURRENT_MP = 19;
     static constexpr int ALLY_SPEED = 33;
     static constexpr int ENEMY_SPEED = 45;
+    static constexpr int SPEED_IMMUTABLE = true;
 };
 
 #endif //NEWDIRECTORY_SETTING_H
