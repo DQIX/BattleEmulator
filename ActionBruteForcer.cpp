@@ -186,7 +186,7 @@ void ActionBruteForcer::Search(
 
         r.depth = n.depth;
         std::memcpy(r.players, n.players, sizeof(Player) * 2);
-        std::memcpy(r.actions, n.actions, sizeof(int) * 10);
+        std::memcpy(r.actions, n.actions, sizeof(int) * n.depth);
         r.score =  EvaluateTerminal(n);
         r.firstAction = n.actions[0];
         r.nowState = n.nowState;
