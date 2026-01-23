@@ -8,6 +8,8 @@
 // score は「小さいほど良い（minimize）」
 // 敵撃破は極小値になる
 
+
+
 struct SearchPlan {
     int depth{};
     int actions[350]{};
@@ -30,6 +32,11 @@ public:
     void Run();
     int getBest(SearchPlan* out) const;
 
+
+    static constexpr int NODE_POOL_SIZE = MAX_LAYER * MAX_LAYER;
+    static constexpr int ACTION_POOL_SIZE =
+        NODE_POOL_SIZE * ActionBruteForcerConst::CONST_MAX_DEPTH;
+
 private:
     int expandNode(
         const SearchResult& cur,
@@ -48,18 +55,6 @@ private:
     static int beamWidthForDepth(int depth);
     static void assignNodeId(SearchResult& node);
     static void buildPlanFromNode(const SearchResult& node, SearchPlan& plan);
-
-private:
-    static constexpr int NODE_POOL_SIZE = MAX_LAYER * MAX_LAYER;
-    static constexpr int ACTION_POOL_SIZE =
-        NODE_POOL_SIZE * ActionBruteForcerConst::CONST_MAX_DEPTH;
-
-    static int actionPool_[ACTION_POOL_SIZE];
-    static int actionPoolUsed_;
-    static int parentPool_[NODE_POOL_SIZE];
-    static int fragOffsetPool_[NODE_POOL_SIZE];
-    static uint8_t fragLenPool_[NODE_POOL_SIZE];
-    static int nodePoolUsed_;
 
     // root
     Player rootPlayers_[2];
@@ -80,5 +75,12 @@ private:
     SearchPlan best_[BEST_LIMIT];
     int bestCount_;
 };
+
+static int actionPool_[ActionSearcher::ACTION_POOL_SIZE];
+static int actionPoolUsed_;
+static int parentPool_[ActionSearcher::NODE_POOL_SIZE];
+static int fragOffsetPool_[ActionSearcher::NODE_POOL_SIZE];
+static uint8_t fragLenPool_[ActionSearcher::NODE_POOL_SIZE];
+static int nodePoolUsed_;
 
 #endif

@@ -12,13 +12,6 @@ constexpr int NODE_PER_ACTIONS = 5;
 
 static SearchOutput tmpSearchOutput;
 
-int ActionSearcher::actionPool_[ActionSearcher::ACTION_POOL_SIZE];
-int ActionSearcher::actionPoolUsed_ = 0;
-int ActionSearcher::parentPool_[ActionSearcher::NODE_POOL_SIZE];
-int ActionSearcher::fragOffsetPool_[ActionSearcher::NODE_POOL_SIZE];
-uint8_t ActionSearcher::fragLenPool_[ActionSearcher::NODE_POOL_SIZE];
-int ActionSearcher::nodePoolUsed_ = 0;
-
 inline bool WillPlayer0InitiativeNoTie(
     const Player players[2],
     int position
