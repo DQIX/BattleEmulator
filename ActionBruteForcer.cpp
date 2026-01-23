@@ -157,19 +157,26 @@ void ActionBruteForcer::Search(
     }
     out.count = curCount;
 
+    auto offset = 0;
     for (int i = 0; i < curCount; ++i) {
         const Node& n = cur[i];
-        SearchResult& r = out.results[i];
+        if (n.reason == TerminateReason::AllyDead) {
+            out.count--;
+            continue;
+        }
+        SearchResult& r = out.results[offset];
 
-        r.score = EvaluateTerminal(n);
+
         r.depth = n.depth;
         std::memcpy(r.players, n.players, sizeof(Player) * 2);
         std::memcpy(r.actions, n.actions, sizeof(int) * 10);
+        r.score =  EvaluateTerminal(n);
         r.firstAction = n.actions[0];
         r.nowState = n.nowState;
         r.position = n.position;
         r.valid = true;
         r.isWin = (n.reason == TerminateReason::EnemyDead);
         r.isLose = (n.reason == TerminateReason::AllyDead);
+        offset++;
     }
 }
