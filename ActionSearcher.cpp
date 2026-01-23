@@ -145,7 +145,7 @@ ActionSearcher::ActionSearcher(
 
 int ActionSearcher::beamWidthForDepth(int depth) {
     (void)depth;
-    return 512;
+    return ActionSearcher::MAX_BEAM;
 }
 
 ActionSearcher::~ActionSearcher() {

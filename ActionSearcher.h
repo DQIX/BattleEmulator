@@ -18,7 +18,10 @@ struct SearchPlan {
 class ActionSearcher {
 public:
     static constexpr int MAX_LAYER = 1024;
+    static constexpr int MAX_BEAM = 512;
+    static constexpr int MAX_DEPTH = 7;
     static constexpr int BEST_LIMIT = 100;
+
 
 public:
     ActionSearcher(
@@ -33,9 +36,9 @@ public:
     void Run();
     int getBest(SearchPlan* out) const;
 
-
-    static constexpr int NODE_POOL_SIZE = MAX_LAYER * MAX_LAYER;
-    static constexpr int ACTION_POOL_SIZE =
+    static constexpr size_t NODE_POOL_SIZE =
+        MAX_BEAM * MAX_DEPTH;
+    static constexpr size_t ACTION_POOL_SIZE =
         NODE_POOL_SIZE * ActionBruteForcerConst::CONST_MAX_DEPTH;
 
 private:

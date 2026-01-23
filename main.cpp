@@ -85,8 +85,6 @@ namespace {
             255, false
         }
     };
-
-    static SearchOutput output;
 #endif
 
     // ヘッダーを出力する関数
@@ -357,46 +355,6 @@ namespace {
         return 0;
     }
 
-
-    NOINLINE void logMemoryUsage(
-    std::ostream& os,
-    uint64_t nodes,
-    size_t genomeSize,
-    size_t astarNodeSize
-) {
-        const uint64_t bytes =
-            nodes * (static_cast<uint64_t>(genomeSize)
-                   + static_cast<uint64_t>(astarNodeSize));
-
-        constexpr uint64_t KB = 1024ull;
-        constexpr uint64_t MB = 1024ull * KB;
-        constexpr uint64_t GB = 1024ull * MB;
-
-        double value;
-        const char* unit;
-
-        if (bytes >= GB) {
-            value = static_cast<double>(bytes) / GB;
-            unit = "GB~";
-        } else if (bytes >= MB) {
-            value = static_cast<double>(bytes) / MB;
-            unit = "MB~";
-        } else if (bytes >= KB) {
-            value = static_cast<double>(bytes) / KB;
-            unit = "KB~";
-        } else {
-            value = static_cast<double>(bytes);
-            unit = "B";
-        }
-
-        os << "Nodes used: " << nodes
-           << ", Memory: "
-           << std::fixed << std::setprecision(2)
-           << value << " " << unit;
-
-        os << std::endl;
-    }
-
     void dumpTableMain(BattleResult &result1, int action[350], uint64_t seed, int turns) {
         std::cout << dumpTable(result1, action, turns) << std::endl;
 
@@ -533,6 +491,8 @@ namespace {
         );
 
         dumpTableMain(*result1, finalGene, seed, prefixTurns);
+
+        delete result1;
 
 #if defined(MINGW_BUILD)
         //std::cout << finalTurns << std::endl;

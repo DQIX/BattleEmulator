@@ -56,9 +56,9 @@ constexpr std::size_t ipow(std::size_t base, std::size_t exp) {
 
 
 namespace ActionBruteForcerConst {
-    constexpr int CONST_MAX_DEPTH = 5;
-    constexpr int ACTION_TABLE_SIZE = std::size(ACTION_TABLE);
-    constexpr int MAX_NODES = ipow(ACTION_TABLE_SIZE, CONST_MAX_DEPTH);
+    constexpr size_t CONST_MAX_DEPTH = 5;
+    constexpr size_t ACTION_TABLE_SIZE = std::size(ACTION_TABLE);
+    constexpr size_t MAX_NODES = ipow(ACTION_TABLE_SIZE, CONST_MAX_DEPTH);
 }
 
 
