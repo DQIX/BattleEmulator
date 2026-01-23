@@ -430,7 +430,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             }
                             if (damages[exCounter] < 29) {
                                 exCounter++;
-                            }else if (check_hp(static_cast<int>(players[1].maxHp), preHP[1], damages[exCounter++],
+                            }else if (check_hp(players[1].maxHp, preHP[1], damages[exCounter++],
                                          basedamage) != 0) {
                                 return false;
                             }
@@ -458,7 +458,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             }
                         } else if (damages[exCounter++] != basedamage) {
                             if (c == HEAL_ENEMY) {
-                                if ((static_cast<int>(players[1].maxHp) - players[1].hp) != damages[exCounter - 1]) {
+                                if ((players[1].maxHp - players[1].hp) != damages[exCounter - 1]) {
                                     return false;
                                 }
                             }else{
@@ -541,7 +541,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                                 }
                                 if (damages[exCounter] == -5) {
                                     exCounter++;
-                                }else if (check_hp(static_cast<int>(players[0].maxHp), players[0].hp, damages[exCounter++],
+                                }else if (check_hp(players[0].maxHp, players[0].hp, damages[exCounter++],
                                              basedamage) != 0) {
                                     return false;
                                 }
@@ -595,7 +595,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             players[0].PoisonTurn++;
         }
         if (players[0].PoisonEnable == true) {
-            Player::reduceHp(players[0], static_cast<int>(players[0].maxHp) >> 4); // 16分の1
+            Player::reduceHp(players[0], players[0].maxHp >> 4); // 16分の1
         }
 
         if (Player::isPlayerAlive(players[0]) && Player::isPlayerAlive(players[1])) {
@@ -629,15 +629,6 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         return false;
     }
 }
-
-double BattleEmulator::FUN_021dbc04(int baseHp1, double maxHp) {
-    auto hp = static_cast<double>(baseHp1);
-    if (hp == 0) {
-        return 0;
-    }
-    return hp / maxHp;
-}
-
 // //コンパイラが毎回コピーするコードを生成するからグローバルスコープに追い出しとく
 const int proportionTable2[9] = {90, 90, 64, 32, 16, 8, 4, 2, 1}; //最後の項目を調べるのは手動　P:\lua\isilyudaru\hissatuteki.lua
 // const int proportionTable3[9] = {93, 83, 73, 62, 52, 42, 31, 21, 11}; //6ダメージ以下で0% 309 new: 112 103
@@ -1497,10 +1488,19 @@ void BattleEmulator::ProcessRage(int *position, int baseDamage, Player *players,
     // if (kaisinn) {
     //     return;
     // }
-    auto percent1 = FUN_021dbc04(players[1].hp - baseDamage, players[1].maxHp);
-    if (percent1 < 0.5) {
-        double percent = FUN_021dbc04(players[1].hp, players[1].maxHp);
-        if (percent >= 0.5) {
+
+    int hp_before = players[1].hp;
+    int hp_after  = players[1].hp - baseDamage;
+    int maxHp     = players[1].maxHp;
+
+    if (hp_after < 0) {
+        hp_after = 0;
+    }
+
+    //    if (percent1 < 0.5) {
+    //        if (percent >= 0.5) {
+    if (hp_after * 2 < maxHp) {
+        if (hp_before * 2 >= maxHp) {
             if (!players[1].rage) {
                 (*position)++;
                 (*position)++;
@@ -1508,8 +1508,10 @@ void BattleEmulator::ProcessRage(int *position, int baseDamage, Player *players,
                 (*position)++;
             }
         } else {
-            if (percent1 < 0.25) {
-                if (percent >= 0.25) {
+            // if (percent1 < 0.25) {
+            //     if (percent >= 0.25) {
+            if (hp_after * 4 < maxHp){
+                if (hp_before * 4 >= maxHp){
                     if (!players[1].rage) {
                         (*position)++;
                         (*position)++;

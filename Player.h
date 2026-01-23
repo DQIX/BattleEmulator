@@ -13,7 +13,7 @@
 
 struct Player {
     int hp{};
-    double maxHp{};
+    int maxHp{};
     int atk{};
     int defaultATK{};
     int def{};
