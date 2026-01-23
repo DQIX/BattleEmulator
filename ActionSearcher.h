@@ -46,8 +46,21 @@ private:
     );
 
     static int beamWidthForDepth(int depth);
+    static void assignNodeId(SearchResult& node);
+    static void buildPlanFromNode(const SearchResult& node, SearchPlan& plan);
 
 private:
+    static constexpr int NODE_POOL_SIZE = MAX_LAYER * MAX_LAYER;
+    static constexpr int ACTION_POOL_SIZE =
+        NODE_POOL_SIZE * ActionBruteForcerConst::CONST_MAX_DEPTH;
+
+    static int actionPool_[ACTION_POOL_SIZE];
+    static int actionPoolUsed_;
+    static int parentPool_[NODE_POOL_SIZE];
+    static int fragOffsetPool_[NODE_POOL_SIZE];
+    static uint8_t fragLenPool_[NODE_POOL_SIZE];
+    static int nodePoolUsed_;
+
     // root
     Player rootPlayers_[2];
     uint64_t rootNowState_;

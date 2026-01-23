@@ -94,9 +94,10 @@ struct SearchResult {
     bool valid = false;
     bool isWin;
     bool isLose;
-    int parentIndex;     // cur_ / next_ の配列内インデックス
-    int fragOffset;      // actionPool のオフセット
-    uint8_t fragLen;     // 0..ActionBruteForcerConst::CONST_MAX_DEPTH
+    int nodeId = -1;
+    int parentIndex = -1;
+    int fragOffset = -1;
+    uint8_t fragLen = 0;     // 0..ActionBruteForcerConst::CONST_MAX_DEPTH
 };
 
 struct SearchOutput {
