@@ -12,55 +12,6 @@ constexpr int NODE_PER_ACTIONS = 5;
 
 static SearchOutput tmpSearchOutput;
 
-int ActionSearcher::selectTopK(
-    SearchResult* src,
-    int srcCount,
-    SearchResult* dst,
-    int K
-) {
-    if (srcCount <= K) {
-        memcpy(dst, src, sizeof(SearchResult) * srcCount);
-        return srcCount;
-    }
-
-    int n = 0;
-    int worst = 0; // dst 内で score 最大のインデックス
-
-    for (int i = 0; i < srcCount; ++i) {
-        const SearchResult& r = src[i];
-
-        if (n < K) {
-            dst[n++] = r;
-
-            if (n == K) {
-                // 初回だけ worst を確定
-                worst = 0;
-                for (int j = 1; j < K; ++j) {
-                    if (dst[j].score > dst[worst].score) {
-                        worst = j;
-                    }
-                }
-            }
-            continue;
-        }
-
-        // expandNode と同じワースト判定
-        if (r.score < dst[worst].score) {
-            dst[worst] = r;
-
-            // worst を再計算
-            worst = 0;
-            for (int j = 1; j < K; ++j) {
-                if (dst[j].score > dst[worst].score) {
-                    worst = j;
-                }
-            }
-        }
-    }
-
-    return K;
-}
-
 inline bool WillPlayer0InitiativeNoTie(
     const Player players[2],
     int position
@@ -73,8 +24,84 @@ inline bool WillPlayer0InitiativeNoTie(
     return speed0 > speed1;
 }
 
+// score: lower is better
+// dst は「最大ヒープ」（最悪 = score 最大が root）
 
-int ActionSearcher::expandNode(
+static inline void siftUp(SearchResult* heap, int idx) {
+    while (idx > 0) {
+        int p = (idx - 1) >> 1;
+        if (heap[p].score >= heap[idx].score) {
+            break;
+        }
+        std::swap(heap[p], heap[idx]);
+        idx = p;
+    }
+}
+
+static inline void siftDown(SearchResult* heap, int size, int idx) {
+    while (true) {
+        int l = (idx << 1) + 1;
+        if (l >= size) {
+            break;
+        }
+        int r = l + 1;
+        int m = (r < size && heap[r].score > heap[l].score) ? r : l;
+
+        if (heap[idx].score >= heap[m].score) {
+            break;
+        }
+        std::swap(heap[idx], heap[m]);
+        idx = m;
+    }
+}
+
+
+static inline int selectTopKHeap(
+    const SearchResult* src,
+    int srcCount,
+    SearchResult* dst,
+    int K
+) {
+    if (srcCount <= K) {
+        memcpy(dst, src, sizeof(SearchResult) * srcCount);
+        return srcCount;
+    }
+
+    int size = 0;
+
+    for (int i = 0; i < srcCount; ++i) {
+        const SearchResult& r = src[i];
+
+        if (size < K) {
+            dst[size] = r;
+            siftUp(dst, size);
+            ++size;
+            continue;
+        }
+
+        // root = 最悪
+        if (r.score < dst[0].score) {
+            dst[0] = r;
+            siftDown(dst, size, 0);
+        }
+    }
+
+    return K;
+}
+
+int inline ActionSearcher::selectTopK(
+    SearchResult* src,
+    int srcCount,
+    SearchResult* dst,
+    int K
+) {
+    return selectTopKHeap(src, srcCount, dst, K);
+}
+
+
+
+
+int inline ActionSearcher::expandNode(
     const SearchResult& cur,
     SearchResult* out,
     int maxOut,
@@ -87,53 +114,30 @@ int ActionSearcher::expandNode(
         tmpSearchOutput
     );
 
-    int n = 0;
-    int worst = 0;
+    int size = 0;
 
     for (int i = 0; i < tmpSearchOutput.count; ++i) {
         const SearchResult& r = tmpSearchOutput.results[i];
         if (!r.valid) continue;
+        if (r.isLose) continue;
 
-        if (r.isLose) {
+        if (size < maxOut) {
+            out[size] = r;
+            siftUp(out, size);
+            ++size;
             continue;
         }
 
-        // if (r.players[0].hp <= 15) {
-        //     // 先制できないなら即弾く
-        //     if (WillPlayer0InitiativeNoTie(r.players, r.position)) {
-        //         continue;
-        //     }
-        // }
-
-        if (n < maxOut) {
-            out[n++] = r;
-
-            if (n == maxOut) {
-                worst = 0;
-                for (int j = 1; j < maxOut; ++j) {
-                    if (out[j].score > out[worst].score) {
-                        worst = j; // 最大 = 最悪
-                    }
-                }
-            }
-            continue;
-        }
-
-        // ★ ここが唯一の修正点
-        if (r.score < out[worst].score) {
-            out[worst] = r;
-
-            worst = 0;
-            for (int j = 1; j < maxOut; ++j) {
-                if (out[j].score > out[worst].score) {
-                    worst = j;
-                }
-            }
+        // root が最悪
+        if (r.score < out[0].score) {
+            out[0] = r;
+            siftDown(out, size, 0);
         }
     }
 
-    return n;
+    return size;
 }
+
 
 
 
