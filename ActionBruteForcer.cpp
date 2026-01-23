@@ -10,8 +10,6 @@ SearchResult ActionBruteForcer::g_results[ActionBruteForcerConst::MAX_NODES];
 
 // ================= 評価 =================
 
-static BattleResult *ret1 = new BattleResult();
-
 static inline int64_t EvaluatePlayers(const Player players[2]) {
     int64_t score = 0;
 
@@ -66,17 +64,16 @@ static inline Node SimulateStep(
 
     int gene[2] = { action, -1 };
 
-    ret1->clear();
     BattleEmulator::Main(
         &next.position,
         1,
         gene,
+        nullptr,
         next.players,
-        ret1,
         0ULL,
         nullptr,
         nullptr,
-        -1,
+        -2,
         &next.nowState,
         true
     );
