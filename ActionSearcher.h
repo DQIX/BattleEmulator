@@ -5,6 +5,9 @@
 #include "ActionBruteForcer.h"
 #include "Player.h"
 
+// score は「小さいほど良い（minimize）」
+// 敵撃破は極小値になる
+
 struct SearchPlan {
     int depth{};
     int actions[350]{};
@@ -12,8 +15,9 @@ struct SearchPlan {
 
 class ActionSearcher {
 public:
-    static constexpr int MAX_LAYER  = 1024;
+    static constexpr int MAX_LAYER = 1024;
     static constexpr int BEST_LIMIT = 10;
+    static constexpr int NODE_EXPAND_LIMIT = 15;
 
 public:
     ActionSearcher(

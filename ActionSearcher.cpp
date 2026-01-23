@@ -3,6 +3,11 @@
 #include <cassert>
 #include <cstring>
 
+#include "lcg.h"
+
+// NOTE:
+// - lower score is better
+// - beam search / topK は score 昇順で扱う
 constexpr int NODE_PER_ACTIONS = 5;
 
 static SearchOutput tmpSearchOutput;
@@ -18,22 +23,56 @@ int ActionSearcher::selectTopK(
         return srcCount;
     }
 
-    bool used[512] = {}; // srcCount 上限想定
+    int n = 0;
+    int worst = 0; // dst 内で score 最大のインデックス
 
-    int out = 0;
-    for (; out < K; ++out) {
-        int best = -1;
-        for (int i = 0; i < srcCount; ++i) {
-            if (used[i]) continue;
-            if (best == -1 || src[i].score > src[best].score) {
-                best = i;
+    for (int i = 0; i < srcCount; ++i) {
+        const SearchResult& r = src[i];
+
+        if (n < K) {
+            dst[n++] = r;
+
+            if (n == K) {
+                // 初回だけ worst を確定
+                worst = 0;
+                for (int j = 1; j < K; ++j) {
+                    if (dst[j].score > dst[worst].score) {
+                        worst = j;
+                    }
+                }
+            }
+            continue;
+        }
+
+        // expandNode と同じワースト判定
+        if (r.score < dst[worst].score) {
+            dst[worst] = r;
+
+            // worst を再計算
+            worst = 0;
+            for (int j = 1; j < K; ++j) {
+                if (dst[j].score > dst[worst].score) {
+                    worst = j;
+                }
             }
         }
-        used[best] = true;
-        dst[out] = src[best];
     }
+
     return K;
 }
+
+inline bool WillPlayer0InitiativeNoTie(
+    const Player players[2],
+    int position
+) {
+    int pos = position;
+
+    double speed0 = players[0].speed * lcg::floatRand(&pos, 0.51, 1.0);
+    double speed1 = players[1].speed * lcg::floatRand(&pos, 0.51, 1.0);
+
+    return speed0 > speed1;
+}
+
 
 int ActionSearcher::expandNode(
     const SearchResult& cur,
@@ -41,35 +80,62 @@ int ActionSearcher::expandNode(
     int maxOut,
     int depth
 ) {
-    // 味方死亡 → 枝切り
-    if (cur.players[0].hp <= 0) {
-        return 0;
-    }
-
-    // 敵死亡 → 成功（展開しない）
-    if (cur.players[1].hp <= 0) {
-        return 0;
-    }
-
-    // ActionBruteForcer で次の候補を生成
-
     ActionBruteForcer::Search(
         cur.players,
         cur.nowState,
         cur.position,
-        ///*isFirstExec=*/(depth == 0),
         tmpSearchOutput
     );
 
     int n = 0;
-    for (int i = 0; i < tmpSearchOutput.count && n < maxOut; ++i) {
-        if (!tmpSearchOutput.results[i].valid) continue;
+    int worst = 0;
 
-        out[n] = tmpSearchOutput.results[i];
-        ++n;
+    for (int i = 0; i < tmpSearchOutput.count; ++i) {
+        const SearchResult& r = tmpSearchOutput.results[i];
+        if (!r.valid) continue;
+
+        if (r.isLose) {
+            continue;
+        }
+
+        // if (r.players[0].hp <= 15) {
+        //     // 先制できないなら即弾く
+        //     if (WillPlayer0InitiativeNoTie(r.players, r.position)) {
+        //         continue;
+        //     }
+        // }
+
+        if (n < maxOut) {
+            out[n++] = r;
+
+            if (n == maxOut) {
+                worst = 0;
+                for (int j = 1; j < maxOut; ++j) {
+                    if (out[j].score > out[worst].score) {
+                        worst = j; // 最大 = 最悪
+                    }
+                }
+            }
+            continue;
+        }
+
+        // ★ ここが唯一の修正点
+        if (r.score < out[worst].score) {
+            out[worst] = r;
+
+            worst = 0;
+            for (int j = 1; j < maxOut; ++j) {
+                if (out[j].score > out[worst].score) {
+                    worst = j;
+                }
+            }
+        }
     }
+
     return n;
 }
+
+
 
 ActionSearcher::ActionSearcher(
     const Player* rp,
@@ -93,7 +159,7 @@ ActionSearcher::ActionSearcher(
 
 int ActionSearcher::beamWidthForDepth(int depth) {
     (void)depth;
-    return 32;
+    return 64;
 }
 
 void ActionSearcher::Run() {
@@ -118,12 +184,12 @@ void ActionSearcher::Run() {
             const SearchResult& n = cur_[i];
 
             // 味方死亡 → 枝切り
-            if (n.players[0].hp <= 0) {
+            if (!n.valid) {
                 continue;
             }
 
             // 敵死亡 → 成功
-            if (n.players[1].hp <= 0) {
+            if (n.isWin) {
                 best_[bestCount_++] = {
                     n.depth,
                     {}
@@ -141,7 +207,7 @@ void ActionSearcher::Run() {
             nextCount_ += expandNode(
                 n,
                 next_ + nextCount_,
-                MAX_LAYER - nextCount_,
+                NODE_EXPAND_LIMIT,
                 depth
             );
         }
@@ -164,7 +230,7 @@ void ActionSearcher::Run() {
 }
 
 int ActionSearcher::getBest(SearchPlan *out) const {
-    assert(bestCount_ > 0);
+    assert(bestCount_ != 0);
     std::memcpy(out, best_, sizeof(SearchPlan) * BEST_LIMIT);
     return best_[0].depth;
 }

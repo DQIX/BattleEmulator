@@ -56,7 +56,7 @@ constexpr std::size_t ipow(std::size_t base, std::size_t exp) {
 
 
 namespace ActionBruteForcerConst {
-    constexpr int CONST_MAX_DEPTH = 4;
+    constexpr int CONST_MAX_DEPTH = 5;
     constexpr int ACTION_TABLE_SIZE = std::size(ACTION_TABLE);
     constexpr int MAX_NODES = ipow(ACTION_TABLE_SIZE, CONST_MAX_DEPTH);
 }
@@ -92,6 +92,8 @@ struct SearchResult {
     uint64_t nowState{};
     int position{};
     bool valid = false;
+    bool isWin;
+    bool isLose;
 };
 
 struct SearchOutput {
@@ -101,10 +103,6 @@ struct SearchOutput {
 
 class ActionBruteForcer {
 public:
-    static constexpr int CONST_MAX_DEPTH = 4;
-    static constexpr int ACTION_TABLE_SIZE = std::size(ACTION_TABLE);
-    static constexpr int MAX_NODES = ipow(ACTION_TABLE_SIZE, CONST_MAX_DEPTH);
-
     static Node g_nodeBufA[ActionBruteForcerConst::MAX_NODES];
     static Node g_nodeBufB[ActionBruteForcerConst::MAX_NODES];
     static SearchResult g_results[ActionBruteForcerConst::MAX_NODES];

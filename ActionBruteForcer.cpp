@@ -113,7 +113,7 @@ void ActionBruteForcer::Search(
     root.reason = TerminateReason::None;
     std::fill_n(root.actions, 10, -1);
 
-    for (int depth = 0; depth < CONST_MAX_DEPTH; ++depth) {
+    for (int depth = 0; depth < ActionBruteForcerConst::CONST_MAX_DEPTH; ++depth) {
         nxtCount = 0;
 
         for (int i = 0; i < curCount; ++i) {
@@ -124,7 +124,7 @@ void ActionBruteForcer::Search(
                 continue;
             }
 
-            for (int a = 0; a < ACTION_TABLE_SIZE; ++a) {
+            for (int a = 0; a < ActionBruteForcerConst::ACTION_TABLE_SIZE; ++a) {
                 const ActionEntry& e = ACTION_TABLE[a];
                 if (!e.condition(n.players[0])) continue;
 
@@ -151,5 +151,7 @@ void ActionBruteForcer::Search(
         r.nowState = n.nowState;
         r.position = n.position;
         r.valid = true;
+        r.isWin = (n.reason == TerminateReason::EnemyDead);
+        r.isLose = (n.reason == TerminateReason::AllyDead);
     }
 }
