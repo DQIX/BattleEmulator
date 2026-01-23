@@ -479,18 +479,17 @@ namespace {
         searcher.Run();
 
         SearchPlan Plan[ActionSearcher::BEST_LIMIT];
-        auto a = searcher.getBest(Plan);
+        auto tmp = searcher.getBest(Plan);
 
-        std::cout << a << std::endl;
-
-        // BFS runner(rootPlayers, rootNow, rootPos, 4);
-        // runner.Run();
-        //
-        // ResultPlan* best = runner.getBest();
-
-        //dumpTableMain(best[0].dummyResult, best[0].actions, seed, prefixTurns);
-
-
+        auto best = Plan[0].depth;
+        SearchPlan bestPlan = Plan[0];
+        for (int i = 0; i < ActionSearcher::BEST_LIMIT; ++i) {
+            auto tmp1  = Plan[i].depth;
+            if (best > tmp1) {
+                best = tmp1;
+                bestPlan = Plan[i];
+            }
+        }
         // テスト実行（BattleResult をちゃんと作って dump まで通す）
         int testPos = 1;
         uint64_t testNow = 0;
@@ -504,39 +503,38 @@ namespace {
             if (prefixGene[i] == -1 || prefixGene[i] == 0) {
                 break;
             }
+            std::cout << prefixGene[i] << ",";
             finalGene[finalTurns] = prefixGene[i];
             finalTurns++;
         }
 
-        // for (int i = 0; i < 350; ++i) {
-        //     if (best[0].actions[i] == -1 || best[0].actions[i] == 0) {
-        //         finalGene[finalTurns++] = -1;
-        //         break;
-        //     }
-        //     std::cout << best[0].actions[i] << ",";
-        //     finalGene[finalTurns] = best[0].actions[i];
-        //     finalTurns++;
-        // }
+        for (int i = 0; i < 350; ++i) {
+            if (bestPlan.actions[i] == -1 || bestPlan.actions[i] == 0) {
+                finalGene[finalTurns++] = -1;
+                break;
+            }
+            std::cout << bestPlan.actions[i] << ",";
+            finalGene[finalTurns] = bestPlan.actions[i];
+            finalTurns++;
+        }
         // std::cout << std::endl << "t=" << (finalTurns - 1) << std::endl;
         // // //
-        // BattleEmulator::Main(
-        //     &testPos,
-        //     finalTurns - 1,
-        //     finalGene,
-        //     testPlayers,
-        //     result1,
-        //     seed,
-        //     nullptr,
-        //     nullptr,
-        //     -1,
-        //     &testNow,
-        //     false
-        // );
-        //
-        //
-        // if (result1.has_value()) {
-        //     dumpTableMain(result1.value(), finalGene, seed, prefixTurns);
-        // }
+        auto* result1 = new BattleResult();
+        BattleEmulator::Main(
+            &testPos,
+            finalTurns - 1,
+            finalGene,
+            testPlayers,
+            result1,
+            seed,
+            nullptr,
+            nullptr,
+            -1,
+            &testNow,
+            false
+        );
+
+        dumpTableMain(*result1, finalGene, seed, prefixTurns);
 
 #if defined(MINGW_BUILD)
         //std::cout << finalTurns << std::endl;

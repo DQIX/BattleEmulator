@@ -10,6 +10,8 @@ SearchResult ActionBruteForcer::g_results[ActionBruteForcerConst::MAX_NODES];
 
 // ================= 評価 =================
 
+static BattleResult *ret1 = new BattleResult();
+
 static inline int64_t EvaluatePlayers(const Player players[2]) {
     int64_t score = 0;
 
@@ -60,12 +62,13 @@ static inline Node SimulateStep(
 
     int gene[2] = { action, -1 };
 
+    ret1->clear();
     BattleEmulator::Main(
         &next.position,
         1,
         gene,
         next.players,
-        nullptr,
+        ret1,
         0ULL,
         nullptr,
         nullptr,
@@ -73,6 +76,13 @@ static inline Node SimulateStep(
         &next.nowState,
         true
     );
+
+    //敵の回復は禁止?
+    // if (ret1->actions[0] == BattleEmulator::HEAL_ENEMY || ret1->actions[1] == BattleEmulator::HEAL_ENEMY) {
+    //     next.terminated = true;
+    //     next.reason = TerminateReason::AllyDead;
+    //     return next;
+    // }
 
     if (next.players[0].hp <= 0) {
         next.terminated = true;
