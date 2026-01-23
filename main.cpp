@@ -76,12 +76,12 @@ namespace {
     constexpr Player BasePlayers[2] = {
         // プレイヤー1
         {
-            setting::Ally_MAX_HP, static_cast<double>(setting::Ally_MAX_HP), 57, 57, 50, 50, 33, 33, 22,setting::ALLY_CURRENT_MP, // 最初のメンバー
+            setting::Ally_MAX_HP, static_cast<double>(setting::Ally_MAX_HP), 57, 57, 50, 50, setting::ALLY_SPEED, setting::ALLY_SPEED, 22,setting::ALLY_CURRENT_MP, // 最初のメンバー
             setting::Ally_MAX_MP, true
         },
         // プレイヤー2
         {
-            setting::ENEMY_MAX_HP, static_cast<double>(setting::ENEMY_MAX_HP), 53, 53, 50, 50, 45, 45, 0, 255, // 最初のメンバー
+            setting::ENEMY_MAX_HP, static_cast<double>(setting::ENEMY_MAX_HP), 53, 53, 50, 50, setting::ENEMY_SPEED, setting::ENEMY_SPEED, 0, 255, // 最初のメンバー
             255, false
         }
     };

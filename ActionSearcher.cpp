@@ -13,13 +13,12 @@ constexpr int NODE_PER_ACTIONS = 5;
 static SearchOutput tmpSearchOutput;
 
 inline bool WillPlayer0InitiativeNoTie(
-    const Player players[2],
     int position
 ) {
     int pos = position;
 
-    double speed0 = players[0].speed * lcg::floatRand(&pos, 0.51, 1.0);
-    double speed1 = players[1].speed * lcg::floatRand(&pos, 0.51, 1.0);
+    double speed0 = setting::ALLY_SPEED * lcg::floatRand(&pos, 0.51, 1.0);
+    double speed1 = setting::ENEMY_SPEED * lcg::floatRand(&pos, 0.51, 1.0);
 
     return speed0 > speed1;
 }
@@ -100,7 +99,7 @@ int ActionSearcher::expandNode(
 
         if (r.players[0].hp <= 15) {
             // 先制できないなら即弾く
-            if (!WillPlayer0InitiativeNoTie(r.players, r.position)) {
+            if (!WillPlayer0InitiativeNoTie(r.position)) {
                 continue;
             }
         }

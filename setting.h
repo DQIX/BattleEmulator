@@ -12,6 +12,8 @@ public:
     static constexpr int Ally_MAX_HP = 56;
     static constexpr int Ally_MAX_MP = 19;
     static constexpr int ALLY_CURRENT_MP = 19;
+    static constexpr int ALLY_SPEED = 33;
+    static constexpr int ENEMY_SPEED = 45;
 };
 
 #endif //NEWDIRECTORY_SETTING_H
