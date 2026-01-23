@@ -105,12 +105,12 @@ int ActionSearcher::expandNode(
             continue;
         }
 
-        // if (r.players[0].hp <= 15) {
-        //     // 先制できないなら即弾く
-        //     if (WillPlayer0InitiativeNoTie(r.players, r.position)) {
-        //         continue;
-        //     }
-        // }
+        if (r.players[0].hp <= 15) {
+            // 先制できないなら即弾く
+            if (!WillPlayer0InitiativeNoTie(r.players, r.position)) {
+                continue;
+            }
+        }
 
         // ... existing code ...
         if (n < maxOut) {
