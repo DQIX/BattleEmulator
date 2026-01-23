@@ -104,7 +104,7 @@ static inline Node SimulateStep(
 // ================= 探索 =================
 
 ActionBruteForcer::ActionBruteForcer() {
-    const std::size_t nodeSize =
+    constexpr std::size_t nodeSize =
         sizeof(Node) * ActionBruteForcerConst::MAX_NODES;
 
     g_nodeBufA = static_cast<Node*>(std::malloc(nodeSize));
