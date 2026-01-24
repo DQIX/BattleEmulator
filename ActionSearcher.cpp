@@ -5,33 +5,6 @@
 
 #include "lcg.h"
 
-namespace {
-    constexpr int kPrefixBuckets =
-        ActionBruteForcerConst::ACTION_TABLE_SIZE *
-        (ActionBruteForcerConst::ACTION_TABLE_SIZE + 1);
-
-    int ActionIndexFromId(int action) {
-        for (int i = 0; i < ActionBruteForcerConst::ACTION_TABLE_SIZE; ++i) {
-            if (ACTION_TABLE[i].action == action) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    int PrefixBucket(const Node& node) {
-        const int size = ActionBruteForcerConst::ACTION_TABLE_SIZE;
-        int first = ActionIndexFromId(node.actions[0]);
-        if (first < 0) first = 0;
-        int second = size;
-        if (node.depth >= 2) {
-            int idx = ActionIndexFromId(node.actions[1]);
-            if (idx >= 0) second = idx;
-        }
-        return first * (size + 1) + second;
-    }
-}
-
 // NOTE:
 // - lower score is better
 // - beam search / topK は score　昇順で扱う
@@ -61,9 +34,6 @@ void ActionSearcher::expandNode(
         tmpSearchOutput
     );
 
-    SearchResult prefixBest[kPrefixBuckets];
-    bool prefixUsed[kPrefixBuckets] = {};
-
     for (int i = 0; i < tmpSearchOutput.count; ++i) {
         const Node& node = *tmpSearchOutput.nodes[i];
         if (node.reason == TerminateReason::AllyDead) {
@@ -86,7 +56,8 @@ void ActionSearcher::expandNode(
         cand.isWin = (node.reason == TerminateReason::EnemyDead);
         cand.isLose = false;
 
-        auto storeCandidate = [&](SearchResult& dst) {
+        if (outCount < maxOut) {
+            SearchResult& dst = out[outCount++];
             dst = cand;
             std::memcpy(dst.players, node.players, sizeof(Player) * 2);
             if (cand.fragLen > 0) {
@@ -96,20 +67,6 @@ void ActionSearcher::expandNode(
                     sizeof(int) * cand.fragLen
                 );
             }
-        };
-
-        const int prefixBucket = PrefixBucket(node);
-        if (prefixBucket >= 0 && prefixBucket < kPrefixBuckets) {
-            if (!prefixUsed[prefixBucket]
-                || cand.score < prefixBest[prefixBucket].score) {
-                storeCandidate(prefixBest[prefixBucket]);
-                prefixUsed[prefixBucket] = true;
-            }
-        }
-
-        if (outCount < maxOut) {
-            SearchResult& dst = out[outCount++];
-            storeCandidate(dst);
 
             if (outCount == maxOut) {
                 worst = 0;
@@ -124,40 +81,21 @@ void ActionSearcher::expandNode(
 
         if (cand.score < out[worst].score) {
             SearchResult& dst = out[worst];
-            storeCandidate(dst);
+            dst = cand;
+            std::memcpy(dst.players, node.players, sizeof(Player) * 2);
+            if (cand.fragLen > 0) {
+                std::memcpy(
+                    dst.actions,
+                    node.actions,
+                    sizeof(int) * cand.fragLen
+                );
+            }
 
             worst = 0;
             for (int j = 1; j < maxOut; ++j) {
                 if (out[j].score > out[worst].score) {
                     worst = j;
                 }
-            }
-        }
-    }
-
-    for (int b = 0; b < kPrefixBuckets; ++b) {
-        if (!prefixUsed[b]) {
-            continue;
-        }
-
-        if (outCount < maxOut) {
-            out[outCount++] = prefixBest[b];
-            if (outCount == maxOut) {
-                worst = 0;
-                for (int j = 1; j < maxOut; ++j) {
-                    if (out[j].score > out[worst].score) {
-                        worst = j;
-                    }
-                }
-            }
-            continue;
-        }
-
-        out[worst] = prefixBest[b];
-        worst = 0;
-        for (int j = 1; j < maxOut; ++j) {
-            if (out[j].score > out[worst].score) {
-                worst = j;
             }
         }
     }
