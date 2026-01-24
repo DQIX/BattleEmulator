@@ -57,7 +57,7 @@ void lcg::GenerateifNeed(int need) {
     if(nowCounter > need){
         return;
     }
-    for (int i = nowCounter; i < need+2; ++i) {
+    for (int i = nowCounter; i < need; ++i) {
         now_seed = lcg_rand(now_seed);
         precalcTop32[++nowCounter] = static_cast<uint32_t>(now_seed >> 32);
     }
@@ -103,7 +103,7 @@ uint8_t lcg::getSeed(int *position) {
     assert((*position) < ARRAY_SIZE);
     GenerateifNeed((*position));
 
-    auto result = precalcTop32[(*position)] & 1;
+    const uint8_t result = precalcTop32[(*position)] & 1;
     (*position)++;
     return result;
 }

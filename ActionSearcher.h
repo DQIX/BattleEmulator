@@ -36,9 +36,9 @@ public:
     void Run();
     int getBest(SearchPlan* out) const;
 
-    static constexpr size_t NODE_POOL_SIZE =
+    static constexpr int32_t NODE_POOL_SIZE =
         MAX_BEAM * MAX_DEPTH;
-    static constexpr size_t ACTION_POOL_SIZE =
+    static constexpr int32_t ACTION_POOL_SIZE =
         NODE_POOL_SIZE * ActionBruteForcerConst::CONST_MAX_DEPTH;
 
 private:

@@ -48,17 +48,17 @@ constexpr ActionEntry ACTION_TABLE[] = {
 
 
 // constexpr 整数累乗（コンパイル時計算）
-constexpr std::size_t ipow(std::size_t base, std::size_t exp) {
-    std::size_t r = 1;
-    for (std::size_t i = 0; i < exp; ++i) r *= base;
+constexpr int32_t ipow(int32_t base, int32_t exp) {
+    int32_t r = 1;
+    for (int32_t i = 0; i < exp; ++i) r *= base;
     return r;
 }
 
 
 namespace ActionBruteForcerConst {
-    constexpr size_t CONST_MAX_DEPTH = 5;
-    constexpr size_t ACTION_TABLE_SIZE = std::size(ACTION_TABLE);
-    constexpr size_t MAX_NODES = ipow(ACTION_TABLE_SIZE, CONST_MAX_DEPTH);
+    constexpr int32_t CONST_MAX_DEPTH = 5;
+    constexpr int32_t ACTION_TABLE_SIZE = std::size(ACTION_TABLE);
+    constexpr int32_t MAX_NODES = ipow(ACTION_TABLE_SIZE, CONST_MAX_DEPTH);
 }
 
 

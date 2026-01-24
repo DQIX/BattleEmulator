@@ -42,7 +42,7 @@ void camera::Main(int *position, const int32_t actions[5], uint64_t * NowState, 
 }
 
 void camera::onFreeCameraMove(int *position, const int action, const int param5, uint64_t * NowState) {
-    auto counter = ((*NowState) >> 8) & 0xf;
+    auto counter = static_cast<int>(((*NowState) >> 8) & 0xf);
     do {
         if (param5 == 0) {
             (*position)++;
