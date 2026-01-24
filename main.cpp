@@ -429,7 +429,7 @@ namespace {
             &rootNow,
             false
         );
-        auto* search = new ActionSearcher(rootPlayers, rootNow, rootPos, 10);
+        auto* search = new ActionSearcher(rootPlayers, rootNow, rootPos, 6);
         search->Run();
 
         SearchPlan Plan[ActionSearcher::BEST_LIMIT];
@@ -473,7 +473,7 @@ namespace {
             finalGene[finalTurns] = bestPlan.actions[i];
             finalTurns++;
         }
-        // std::cout << std::endl << "t=" << (finalTurns - 1) << std::endl;
+        std::cout << std::endl << "t=" << (finalTurns - 1) << std::endl;
         // // //
         auto* result1 = new BattleResult();
         BattleEmulator::Main(
@@ -850,10 +850,10 @@ BattleEmulator::ATTACK_ALLY,BattleEmulator::ATTACK_ALLY,BattleEmulator::ATTACK_A
 
 #if defined(DEBUG3)
 
-    //uint64_t seed = 1234567;
-    uint64_t seed = 0x03005d91;
+    uint64_t seed = 0x12d687;
+    //uint64_t seed = 0x03005d91;
 
-    int actions[350] = {BattleEmulator::DEFENCE, -1,};
+    int actions[350] = {BattleEmulator::DEFENCE, BattleEmulator::ATTACK_ALLY, BattleEmulator::ATTACK_ALLY, -1,};
     SearchRequest(BasePlayers, seed, actions, THREAD_COUNT);
 
 

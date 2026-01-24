@@ -156,7 +156,6 @@ ActionSearcher::~ActionSearcher() {
     std::free(fragLenPool_);
 }
 
-
 void ActionSearcher::assignNodeId(SearchResult& node) {
     assert(nodePoolUsed_ < NODE_POOL_SIZE);
     assert(actionPoolUsed_ + node.fragLen <= ACTION_POOL_SIZE);
