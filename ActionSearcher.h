@@ -50,13 +50,6 @@ private:
         int& worst
     );
 
-    int selectTopK(
-        SearchResult* src,
-        int srcCount,
-        SearchResult* dst,
-        int K
-    );
-
     int beamWidthForDepth(int depth);
 
 
