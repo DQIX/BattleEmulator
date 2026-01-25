@@ -902,7 +902,7 @@ int main(int argc, char *argv[]) {
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 139924927;
+    uint64_t seed = 139924928;
 
     int actions[350] = {
         25, -1,
