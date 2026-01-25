@@ -61,13 +61,6 @@ static inline Node SimulateStep(
         true
     );
 
-    //敵の回復は禁止?
-    // if (ret1->actions[0] == BattleEmulator::HEAL_ENEMY || ret1->actions[1] == BattleEmulator::HEAL_ENEMY) {
-    //     next.terminated = true;
-    //     next.reason = TerminateReason::AllyDead;
-    //     return next;
-    // }
-
     if (next.players[0].hp <= 0) {
         next.terminated = true;
         next.reason = TerminateReason::AllyDead;
