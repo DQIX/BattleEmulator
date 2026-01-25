@@ -21,15 +21,13 @@ static inline uint64_t PackScore(
     const auto herbUsed = static_cast<uint64_t>(
         (setting::herbcount - players[0].SpecialMedicineCount) + (setting::anti_herbcount - players[0].SpecialAntidoteCount)
     );
-
-    const auto mahi = (players[0].paralysis ? 1ull : 0ull);
     // const auto specialcharge = (players[0].specialCharge ? 1ull : 1ull);
     // const auto star = (players[0].acrobaticStar ? 1ull : 1ull);
 
-    return (mahi << 62)
+    return
          // | (star << 61)
          // | (specialcharge << 60)
-         | (depth << 48)
+         (depth << 48)
          | (enemyHp << 32)
          | (allyLost << 16)
          | (mpUsed << 8)
