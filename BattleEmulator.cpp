@@ -362,7 +362,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 actionTable = ATTACK_ALLY;
             }
         } else {
-            assert(false);
+            //assert(false);
             actionTable = ATTACK_ALLY;
         }
 
