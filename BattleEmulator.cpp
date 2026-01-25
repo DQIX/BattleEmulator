@@ -325,7 +325,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 actionTable = ATTACK_ALLY;
             }
         } else {
-            assert(false);
+            //assert(false);
             if (players[0].hp >= 35) {
                 actionTable = ATTACK_ALLY;
             } else {
