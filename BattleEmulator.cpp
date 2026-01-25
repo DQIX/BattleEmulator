@@ -16,8 +16,9 @@
 #include "camera.h"
 #include "debug.h"
 #include "BattleResult.h"
+#include "setting.h"
 
-constexpr int baseHP = 0;
+constexpr int baseHP = setting::Ally_MAX_HP;
 constexpr double mitoreP = -0.0330;//見惚れ率
 constexpr double kaisinnP = 200;//会心率
 constexpr double ShieldGuardP = 0.5;//シールドガード率

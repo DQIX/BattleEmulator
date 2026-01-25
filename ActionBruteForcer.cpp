@@ -22,7 +22,14 @@ static inline uint64_t PackScore(
         setting::herbcount - players[0].medicinal_herbs_count
     );
 
-    return (depth << 48)
+    const auto mahi = (players[0].paralysis ? 1ull : 0ull);
+    // const auto specialcharge = (players[0].specialCharge ? 1ull : 1ull);
+    // const auto star = (players[0].acrobaticStar ? 1ull : 1ull);
+
+    return (mahi << 62)
+         // | (star << 61)
+         // | (specialcharge << 60)
+         | (depth << 48)
          | (enemyHp << 32)
          | (allyLost << 16)
          | (mpUsed << 8)

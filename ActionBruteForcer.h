@@ -43,6 +43,10 @@ constexpr ActionEntry ACTION_TABLE[] = {
     {
         BattleEmulator::CRACK_ALLY, 0,
         [](const Player &Ally) { return Ally.mp >= 3; },
+    },
+    {
+        BattleEmulator::ACROBATIC_STAR, 0,
+        [](const Player &Ally) { return Ally.specialCharge == true && Ally.specialChargeTurn != 0; },
     }
 };
 
