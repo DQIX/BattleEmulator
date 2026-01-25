@@ -11,6 +11,7 @@
 #include "debug.h"
 #include "ActionOptimizer.h"
 #include "InputBuilder.h"
+#include "setting.h"
 
 #ifdef DEBUG
 
@@ -502,8 +503,7 @@ namespace {
                 ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 100000, gene, numThreads);
 
         auto turnProcessed = BattleEmulator::getTurnProcessed();
-        std::optional<BattleResult> result1;
-        result1 = BattleResult();
+        BattleResult result1;
         Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
 
         lcg::init(seed);
@@ -511,14 +511,14 @@ namespace {
         auto *position = new int(1);
         auto *nowState = new uint64_t(0);
 
-        BattleEmulator::Main(position, 100, genome.actions, players, result1, seed, nullptr, nullptr, -1,
+        BattleEmulator::Main(position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
                              nowState);
 
         delete position;
         delete nowState;
 
 #if defined(MINGW_BUILD)
-        dumpTableMain(result1.value(), genome, seed, 0);
+        dumpTableMain(result1, genome, seed, 0);
 #else
         dumpTableMain(result1.value(), genome, seed, turns);
 #endif
@@ -604,22 +604,20 @@ namespace {
 
     void BruteForceMainLoop(const Player copiedPlayers[2], uint64_t start, uint64_t end, int turns, int gene[350],
                             int damages[350]) {
-        int *position = new int(1);
-        auto *nowState = new uint64_t(0);
         int maxElement = 350;
         for (uint64_t seed = start; seed < end; ++seed) {
             BattleEmulator::resetStartTurn();
             lcg::init(seed);
-            (*nowState) = 0;
-            (*position) = 1;
+            uint64_t nowState = 0;
+            int position = 1;
             Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
 
 
-            bool resultBool = BattleEmulator::Main(position, 100, gene, players,
-                                                   (std::optional<BattleResult> &) std::nullopt, seed, nullptr,
+            bool resultBool = BattleEmulator::Main(&position, 100, gene, players,
+                                                   nullptr, seed, nullptr,
                                                    damages,
                                                    maxElement,
-                                                   nowState);
+                                                   &nowState);
             if (resultBool) {
                 std::cout << seed << std::endl;
                 FoundSeed = seed;
@@ -627,8 +625,6 @@ namespace {
                 foundTurn = BattleEmulator::getStartTurn();
             }
         }
-        delete position;
-        delete nowState;
     }
 
     // ブルートフォースリクエスト関数
@@ -779,8 +775,8 @@ namespace {
 constexpr Player BasePlayers[2] = {
     // プレイヤー1
     {
-        65, 65.0, 61, 61, 66, 66, 40, 40, 29, 22, // 最初のメンバー
-        22, false, false, 0, false, 0, -1,
+        setting::Ally_MAX_HP, setting::Ally_MAX_HP, 61, 61, 66, 66, setting::ALLY_SPEED, setting::ALLY_SPEED, 29, setting::ALLY_CURRENT_MP, // 最初のメンバー
+        setting::ALLY_CURRENT_MP, false, false, 0, false, 0, -1,
         // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
         8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
         false, -1, 0, -1, 0, false, 1, 1, 1, -1, 0, -1, false, 2, false, -1, -1, 7, false
@@ -788,13 +784,14 @@ constexpr Player BasePlayers[2] = {
 
     // プレイヤー2
     {
-        456, 456.0, 56, 56, 58, 58, 54, 54, 0, 255, // 最初のメンバー
+        setting::ENEMY_MAX_HP, setting::ENEMY_MAX_HP, 56, 56, 58, 58, setting::ENEMY_SPEED, setting::ENEMY_SPEED, 0, 255, // 最初のメンバー
         255, false, false, 0, false, 0, -1,
         // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
         0, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
         false, -1, 0, -1, 0, false, 0, 0, 0, -1, 0, -1, false, 2, false, -1, -1, 7, false
     } // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 };
+
 
 
 int main(int argc, char *argv[]) {
