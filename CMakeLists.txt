@@ -44,20 +44,14 @@ set(SOURCES
         debug.cpp
         debug.h
         BattleResult.h
-        Genome.h
         InputBuilder.cpp
         InputBuilder.h
         ResultStructure.h
-        ActionOptimizer.cpp
-        ActionOptimizer.h
-        EnhancedCostCalculator.cpp
-        EnhancedCostCalculator.h
-        EnhancedHashCalculator.cpp
-        EnhancedHashCalculator.h
-        EnhancedHeapQueue.cpp
-        EnhancedHeapQueue.h
-        SimpleParameterOptimizer.cpp
-        SimpleParameterOptimizer.h
+        setting.h
+        ActionBruteForcer.cpp
+        ActionBruteForcer.h
+        ActionSearcher.cpp
+        ActionSearcher.h
 )
 
 # マルチスレッド版（multithreading = ON）

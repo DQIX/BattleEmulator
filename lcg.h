@@ -14,7 +14,8 @@ private:
 
     static uint64_t lcg_rand(uint64_t seed);
 
-    static double calculatePercent(uint64_t input);
+    static int calculatePercent(uint64_t input);
+
 public:
     static void init(uint64_t seed, bool init = false);
 
@@ -22,7 +23,13 @@ public:
 
     static double floatRand(int *position, double min, double max);
 
+    static double floatRand051_1(int *position);
+
+    static double floatRandAttack(int *position);
+
     static int intRangeRand(int *position, int min, int max);
+
+    static uint8_t getSeed(int * position);
 };
 
 
