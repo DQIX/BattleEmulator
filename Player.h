@@ -17,7 +17,7 @@
  */
 struct Player {
     int hp = 0;
-    double maxHp = 0;
+    int maxHp = 0;
     int atk = 0;
     int defaultATK = 0;
     int def = 0;
@@ -95,7 +95,7 @@ struct Player {
      */
     static void heal(Player &obj, int amount) {
         obj.hp += amount;
-        obj.hp = std::min(static_cast<int>(obj.maxHp), obj.hp);
+        obj.hp = std::min(obj.maxHp, obj.hp);
     }
 };
 

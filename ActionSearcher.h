@@ -1,0 +1,89 @@
+#ifndef NEWDIRECTORY_ACTIONSEARCHER_H
+#define NEWDIRECTORY_ACTIONSEARCHER_H
+
+#include <cstdint>
+#include "ActionBruteForcer.h"
+#include "Player.h"
+
+// score は「小さいほど良い（minimize）」
+// 敵撃破は極小値になる
+
+
+
+struct SearchPlan {
+    int depth{};
+    int actions[350]{};
+};
+
+class ActionSearcher {
+public:
+    static constexpr int MAX_LAYER = 1024;
+    static constexpr int MAX_BEAM = 512;
+    static constexpr int MAX_DEPTH = 5;
+    static constexpr int BEST_LIMIT = 20;
+
+
+public:
+    ActionSearcher(
+        const Player* rootPlayers,
+        uint64_t rootNowState,
+        int rootPosition,
+        int maxDepth
+    );
+
+    ~ActionSearcher();
+
+    void Run();
+    int getBest(SearchPlan* out) const;
+
+    static constexpr int32_t NODE_POOL_SIZE =
+        MAX_BEAM * MAX_DEPTH * 2;
+    static constexpr int32_t ACTION_POOL_SIZE =
+        NODE_POOL_SIZE * ActionBruteForcerConst::CONST_MAX_DEPTH;
+
+private:
+    void expandNode(
+        const SearchResult& cur,
+        SearchResult* out,
+        int maxOut,
+        int& outCount,
+        int& worst
+    );
+
+    int beamWidthForDepth(int depth);
+
+
+    void assignNodeId(SearchResult& node);
+    void buildPlanFromNode(const SearchResult& node, SearchPlan& plan);
+
+    // root
+    Player rootPlayers_[2];
+    uint64_t rootNowState_;
+    int rootPosition_;
+    int maxDepth_;
+
+    // buffers（スタック上）
+    SearchResult bufA_[MAX_LAYER];
+    SearchResult bufB_[MAX_LAYER];
+
+    SearchResult* cur_;
+    SearchResult* next_;
+    int curCount_;
+    int nextCount_;
+
+    // success
+    SearchPlan best_[BEST_LIMIT];
+    int bestCount_;
+
+    int actionPoolUsed_;
+    int* actionPool_;
+    int* parentPool_;
+    int* fragOffsetPool_;
+    uint8_t* fragLenPool_;
+    int nodePoolUsed_;
+    ActionBruteForcer* brute_;
+
+    SearchOutput tmpSearchOutput;
+};
+
+#endif

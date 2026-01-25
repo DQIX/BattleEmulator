@@ -334,9 +334,9 @@ inline void BattleEmulator::processTurn() {
  *   それ以外の場合はfalseを返します。（modeが -1 または -2の場合、常にfalse）
  */
 bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
-                          std::optional<BattleResult> &result,
+                          BattleResult* result,
                           uint64_t seed, const int eActions[350], const int damages[350], int mode,
-                          uint64_t *NowState) {
+                          uint64_t *NowState, bool logicalTurnStart) {
     resetCombo(NowState);
     bool player0_has_initiative = false;
     int genePosition = 0;
@@ -357,7 +357,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
     for (int counterJ = startPos; counterJ < RunCount; ++counterJ) {
         processTurn();
-        if (genePosition != -1) {
+        if (!logicalTurnStart && genePosition != -1) {
             genePosition = counterJ - 1;
         }
         //現在ターンを保存
@@ -485,6 +485,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             actionTable = ATTACK_ALLY;
         }
 
+        if (genePosition != -1 && logicalTurnStart) {
+            genePosition++;
+        }
 
         if (actionTable == DEFENCE) {
             players[0].defence = 0.5;
@@ -782,7 +785,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             players[0].PoisonTurn++;
         }
         if (players[0].PoisonEnable == true) {
-            Player::reduceHp(players[0], static_cast<int>(players[0].maxHp) >> 4); // 16分の1
+            Player::reduceHp(players[0], players[0].maxHp >> 4); // 16分の1
         }
 
         if (Player::isPlayerAlive(players[0]) && Player::isPlayerAlive(players[1])) {
@@ -1421,33 +1424,31 @@ int BattleEmulator::FUN_021e8458_typeD(int *position, double difference, double 
     return static_cast<int>(result);
 }
 
-
 int BattleEmulator::FUN_0207564c(int *position, int atk, int def) {
-    auto atk5 = static_cast<double>(atk);
-    auto def5 = static_cast<double>(def);
-
-    auto atk1 = (atk5 - (def5 / 2)) / 2;
-    if (atk1 <= 0) {
-        return 0;
-    } else {
-        auto atk2 = atk / 16.0000;
-        if (atk1 > atk2) {
-            auto atk4 = atk1 / 16;
-            auto atk3 = -atk4;
-            auto result = atk1 + lcg::floatRand(position, atk3, atk4);
-            result = result + lcg::floatRand(position, -1, 1);
-            if (result <= 0) {
-                result = 0.0;
-            }
-            return static_cast<int>(result);
-        } else {
-            double result = lcg::floatRand(position, 0.0, atk2);
-            if (result <= 0) {
-                result = 0.0;
-            }
-            return static_cast<int>(result);
-        }
+    [[assume(atk >= 0)]];
+    [[assume(def >= 0)]];
+    double result;
+    double atk1;
+    {
+        double tmpAtk = atk * 0.5;
+        double tmpDef = def * 0.25;
+        atk1 = tmpAtk - tmpDef;
     }
+    if (atk1 <= 0) [[unlikely]] {
+        return 0;
+    }
+    auto atk2 = atk * 0.0625;
+    if (atk1 > atk2) [[likely]] {
+        auto atk4 = atk1 * 0.0625;
+        result = atk1 + lcg::floatRand(position, -atk4, atk4);
+        result = result + lcg::floatRandAttack(position);
+    } else {
+        result = lcg::floatRand(position, 0.0, atk2);
+    }
+    if (result <= 0) [[unlikely]] {
+        return 0;
+    }
+    return static_cast<int>((result));
     //return 0;
 }
 
@@ -1543,14 +1544,22 @@ void BattleEmulator::RecalculateBuff(Player *players) {
 }
 
 void BattleEmulator::ProcessRage(int *position, int baseDamage, Player *players, bool kaisinn) {
-    //多分ジャダーマだけ
     // if (kaisinn) {
     //     return;
     // }
-    auto percent1 = FUN_021dbc04(preHP[1] - baseDamage, players[1].maxHp);
-    if (percent1 < 0.5) {
-        double percent = FUN_021dbc04(preHP[1], players[1].maxHp);
-        if (percent >= 0.5) {
+
+    int hp_before = players[1].hp;
+    int hp_after  = players[1].hp - baseDamage;
+    int maxHp     = players[1].maxHp;
+
+    if (hp_after < 0) {
+        hp_after = 0;
+    }
+
+    //    if (percent1 < 0.5) {
+    //        if (percent >= 0.5) {
+    if (hp_after * 2 < maxHp) {
+        if (hp_before * 2 >= maxHp) {
             if (!players[1].rage) {
                 (*position)++;
                 (*position)++;
@@ -1558,8 +1567,10 @@ void BattleEmulator::ProcessRage(int *position, int baseDamage, Player *players,
                 (*position)++;
             }
         } else {
-            if (percent1 < 0.25) {
-                if (percent >= 0.25) {
+            // if (percent1 < 0.25) {
+            //     if (percent >= 0.25) {
+            if (hp_after * 4 < maxHp){
+                if (hp_before * 4 >= maxHp){
                     if (!players[1].rage) {
                         (*position)++;
                         (*position)++;

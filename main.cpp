@@ -6,12 +6,12 @@
 #include <sstream>
 #include <fstream>
 
+#include "ActionSearcher.h"
 #include "lcg.h"
 #include "BattleEmulator.h"
 #include "debug.h"
-#include "ActionOptimizer.h"
-#include "EnhancedHeapQueue.h"
 #include "InputBuilder.h"
+#include "setting.h"
 #if defined(OPTIMIZE_MODE)
 #include "SimpleParameterOptimizer.h"
 #endif
@@ -50,12 +50,12 @@ namespace {
 
     void help(const char *program_name);
 
-    bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads, bool Dropbug);
+    void SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads);
 
     uint64_t BruteForceRequest(const Player copiedPlayers[2], int hours, int minutes, int seconds, int turns,
                                int aActions[350], int damages[350]);
 
-    void dumpTableMain(BattleResult &result1, Genome &genome, uint64_t seed, int turns);
+    void dumpTableMain(BattleResult &result1, int actions[350], uint64_t seed, int turns);
 
     void printHeader(std::stringstream &ss);
 
@@ -128,16 +128,16 @@ namespace {
     constexpr Player BasePlayers[2] = {
         // プレイヤー1
         {
-            89, 89.0, 82, 82, 90, 90, 58, 58, 39, 18, // 最初のメンバー
-            18, false, false, 0, false, 0, -1,
+            setting::Ally_MAX_HP,  setting::Ally_MAX_HP, 82, 82, 90, 90, setting::ALLY_SPEED, setting::ALLY_SPEED, 39, setting::Ally_MAX_MP, // 最初のメンバー
+            setting::ALLY_CURRENT_MP, false, false, 0, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-            6, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-            false, -1, 0, -1, 0, false, 1, 1, 1, -1, 0, -1, false, 2, false, -1
+            setting::herbcount, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
+            false, -1, 0, -1, 0, false, 1, 1, 1, -1, 0, -1, false, setting::anti_herbcount, false, -1
         }, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 
         // プレイヤー2
         {
-            696, 696.0, 68, 68, 68, 68, 50, 50, 0, 255, // 最初のメンバー
+            setting::ENEMY_MAX_HP, setting::ENEMY_MAX_HP, 68, 68, 68, 68, setting::ENEMY_SPEED, setting::ENEMY_SPEED, 0, 255, // 最初のメンバー
             255, false, false, 0, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             0, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
@@ -184,7 +184,7 @@ namespace {
 
     /**
      * バトル結果および対応するデータからテーブルを作成し、その内容を文字列として返します。
-     * テーブルには各ターンの攻撃や防御、特殊行動などの詳細情報が含まれます。
+     * テーブ6ルには各ターンの攻撃や防御、特殊行動などの詳細情報が含まれます。
      *
      * @param result バトル結果を格納したBattleResultオブジェクト
      * @param gene 各ターンの味方の行動を示す遺伝子配列
@@ -567,13 +567,7 @@ namespace {
                 auto seed = BruteForceRequest(BasePlayers, hours, minutes, seconds, result.AactionsCounter, aActions,
                                               damages);
                 if (foundSeeds == 1) {
-                    auto test = SearchRequest(BasePlayers, seed, aActions, THREAD_COUNT, true);
-                    if (!test) {
-                        std::cout << "The first search request failed." << std::endl;
-                        if (!SearchRequest(BasePlayers, seed, aActions, THREAD_COUNT, false)) {
-                            std::cout << "The second search request failed" << std::endl;
-                        }
-                    }
+                    SearchRequest(BasePlayers, seed, aActions, THREAD_COUNT);
                 }
             }
         } catch (const std::runtime_error &e) {
@@ -592,18 +586,18 @@ namespace {
      * @param seed テーブル生成と表示に使用されるランダムシード値。
      * @param turns テーブル表示を省略するターン数(リリースバイナリでのみ使用)
      */
-    void dumpTableMain(BattleResult &result1, Genome &genome, uint64_t seed, int turns) {
-        std::cout << dumpTable(result1, genome.actions, turns) << std::endl;
+    void dumpTableMain(BattleResult &result1, int actions[350], uint64_t seed, int turns) {
+        std::cout << dumpTable(result1, actions, turns) << std::endl;
 
         std::cout << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def <<
                 ", seed: ";
         std::cout << "0x" << std::hex << seed << std::dec << std::endl <<"actions: ";
 
         for (auto i = 0; i < 100; ++i) {
-            if (genome.actions[i] == 0 || genome.actions[i] == -1) {
+            if (actions[i] == 0 || actions[i] == -1) {
                 break;
             }
-            std::cout << genome.actions[i] << ", ";
+            std::cout << actions[i] << ", ";
         }
         std::cout << std::endl;
     }
@@ -623,112 +617,131 @@ namespace {
                 "Performance: " << std::fixed << std::setprecision(2) << performance << " mann turns/s" << std::endl;
     }
 
-    NOINLINE void logMemoryUsage(
-        std::ostream& os,
-        uint64_t nodes,
-        size_t genomeSize,
-        size_t astarNodeSize
-    ) {
-        const uint64_t bytes =
-            nodes * (static_cast<uint64_t>(genomeSize)
-                   + static_cast<uint64_t>(astarNodeSize));
-
-        constexpr uint64_t KB = 1024ull;
-        constexpr uint64_t MB = 1024ull * KB;
-        constexpr uint64_t GB = 1024ull * MB;
-
-        double value;
-        const char* unit;
-
-        if (bytes >= GB) {
-            value = static_cast<double>(bytes) / GB;
-            unit = "GB~";
-        } else if (bytes >= MB) {
-            value = static_cast<double>(bytes) / MB;
-            unit = "MB~";
-        } else if (bytes >= KB) {
-            value = static_cast<double>(bytes) / KB;
-            unit = "KB~";
-        } else {
-            value = static_cast<double>(bytes);
-            unit = "B";
-        }
-
-        os << "Nodes used: " << nodes
-           << ", Memory: "
-           << std::fixed << std::setprecision(2)
-           << value << " " << unit;
-
-        os << std::endl;
-    }
-
-
-    bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads, bool Dropbug) {
-#ifdef DEBUG
+    void SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads) {
+#if defined(DEBUG)
         auto t0 = std::chrono::high_resolution_clock::now();
         BattleEmulator::ResetTurnProcessed();
 #endif
+        (void) numThreads; // 現状は決定論的・単スレ前提（必要ならここから並列化）
 
-        int32_t gene[350] = {0};
-        auto turns = 0;
-        for (int i = 0; i < 349; ++i) {
-            gene[i] = aActions[i];
+        lcg::init(seed, true);
+
+        // --- prefix（既存入力）を gene にコピー（-1 終端） ---
+        int32_t prefixGene[350] = {};
+        int prefixTurns = 0;
+        for (int i = 0; i < 350; ++i) {
+            prefixGene[i] = aActions[i];
             if (aActions[i] == -1) {
-                gene[i] = -1;
-                gene[i + 1] = -1;
+                prefixGene[i] = -1;
+                if (i + 1 < 350) prefixGene[i + 1] = -1;
                 break;
             }
-            turns++;
+            ++prefixTurns;
         }
-#if defined(BattleEmulatorLV13)
-        auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 250000, gene, 0);
-#elif defined(BattleEmulatorLV19)
-        auto [turnProcessed,genome] =
-        ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 1500, gene, numThreads, Dropbug);
-#elif defined(BattleEmulatorLV15)
-        auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 8000, gene, 0);
+
+
+        // --- prefix を1回だけ実行して、探索の根状態を作る（従来の挙動を維持） ---
+        int rootPos = 1;
+        uint64_t rootNow = 0;
+        Player rootPlayers[2] = {copiedPlayers[0], copiedPlayers[1]};
+
+        BattleEmulator::Main(
+            &rootPos,
+            prefixTurns,
+            prefixGene,
+            rootPlayers,
+            nullptr,
+            seed,
+            nullptr,
+            nullptr,
+            -2,
+            &rootNow,
+            false
+        );
+        auto* search = new ActionSearcher(rootPlayers, rootNow, rootPos, 6);
+        search->Run();
+
+        SearchPlan Plan[ActionSearcher::BEST_LIMIT];
+        auto tmp = search->getBest(Plan);
+
+        delete search;   // ← 必須
+
+        auto best = Plan[0].depth;
+        SearchPlan bestPlan = Plan[0];
+        for (int i = 0; i < ActionSearcher::BEST_LIMIT; ++i) {
+            auto tmp1  = Plan[i].depth;
+            if (best > tmp1) {
+                best = tmp1;
+                bestPlan = Plan[i];
+            }
+        }
+        // テスト実行（BattleResult をちゃんと作って dump まで通す）
+        int testPos = 1;
+        uint64_t testNow = 0;
+        Player testPlayers[2] = {copiedPlayers[0], copiedPlayers[1]};
+        int finalGene[350] = {};
+
+        auto finalTurns = 0;
+
+        //copiedPlayersは初期状態のplayerなので合成する
+        for (int i = 0; i < 350; ++i) {
+            if (prefixGene[i] == -1 || prefixGene[i] == 0) {
+                break;
+            }
+            std::cout << prefixGene[i] << ",";
+            finalGene[finalTurns] = prefixGene[i];
+            finalTurns++;
+        }
+
+        for (int i = 0; i < 350; ++i) {
+            if (bestPlan.actions[i] == -1 || bestPlan.actions[i] == 0) {
+                finalGene[finalTurns++] = -1;
+                break;
+            }
+            std::cout << bestPlan.actions[i] << ",";
+            finalGene[finalTurns] = bestPlan.actions[i];
+            finalTurns++;
+        }
+        std::cout << std::endl << "t=" << (finalTurns - 1) << std::endl;
+        // // //
+        auto* result1 = new BattleResult();
+        BattleEmulator::Main(
+            &testPos,
+            finalTurns - 1,
+            finalGene,
+            testPlayers,
+            result1,
+            seed,
+            nullptr,
+            nullptr,
+            -1,
+            &testNow,
+            false
+        );
+
+        dumpTableMain(*result1, finalGene, seed, prefixTurns);
+
+        delete result1;
+
+#if defined(MINGW_BUILD)
+        //std::cout << finalTurns << std::endl;
+#else
+        // if (result1.has_value()) {
+        //     // dumpTableMain は int[350] を受けるので変換
+        //     int printable[350];
+        //     for (int i = 0; i < 350; ++i) printable[i] = static_cast<int>(finalGene[i]);
+        //     dumpTableMain(result1.value(), printable, seed, prefixTurns);
+        // }
 #endif
 
+#if defined(DEBUG)
         auto turnProcessed = BattleEmulator::getTurnProcessed();
-
-#ifdef DEBUG
         auto t3 = std::chrono::high_resolution_clock::now();
         auto elapsed_time1 =
                 std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
-        PerformanceDebug("Searcher", turnProcessed, static_cast<double>(elapsed_time1), 0);
-        logMemoryUsage(performanceLogger, ActionOptimizer::getNodesUsed(), sizeof(Genome), sizeof(EnhancedAStarNode));
-
+        PerformanceDebug("Searcher(Hybrid)", turnProcessed, static_cast<double>(elapsed_time1), 0);
 #endif
-
-        if (genome.turn >= 100) {
-            return false;
-        }
-
-        std::optional<BattleResult> result1;
-        result1 = BattleResult();
-        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
-
-        auto *position = new int(1);
-        auto *nowState = new uint64_t(0);
-
-        BattleEmulator::Main(position, 100, genome.actions, players, result1, seed, nullptr, nullptr, -1,
-                             nowState);
-
-        delete position;
-        delete nowState;
-
-        std::cout << "foundTurn: " << foundTurn << ", " << turns << std::endl;
-#ifdef MINGW_BUILD
-        dumpTableMain(result1.value(), genome, seed, foundTurn);
-#else
-        dumpTableMain(result1.value(), genome, seed, foundTurn);
-#endif
-
-        return true;
     }
-
     /**
      * 指定された範囲のシードを使って総当たりを行い、一致するシード知を探索します。
      * 各シードごとにバトルシミュレーションを実行し、条件を満たす場合はシードを記録します。
@@ -742,22 +755,20 @@ namespace {
      */
     void BruteForceMainLoop(const Player copiedPlayers[2], uint64_t start, uint64_t end, int turns, int gene[350],
                             int damages[350]) {
-        int *position = new int(1);
-        auto *nowState = new uint64_t(0);
         int maxElement = 350;
         Player players[2];
         for (uint64_t seed = start; seed < end; ++seed) {
             BattleEmulator::resetStartTurn();
             lcg::init(seed, false);
-            (*nowState) = 0;
-            (*position) = 1;
+            uint64_t nowState = 0;
+            int position = 1;
             players[0] = copiedPlayers[0];
             players[1] = copiedPlayers[1];
 
-            bool resultBool = BattleEmulator::Main(position, 20, gene, players,
-                                                   (std::optional<BattleResult> &) std::nullopt, seed, nullptr, damages,
+            bool resultBool = BattleEmulator::Main(&position, 20, gene, players,
+                                                   nullptr, seed, nullptr, damages,
                                                    maxElement,
-                                                   nowState);
+                                                   &nowState);
             if (resultBool) {
                 std::cout << seed << std::endl;
                 FoundSeed = seed;
@@ -765,8 +776,6 @@ namespace {
                 foundTurn = BattleEmulator::getStartTurn();
             }
         }
-        delete position;
-        delete nowState;
     }
 
     /**
