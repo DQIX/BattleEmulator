@@ -704,13 +704,13 @@ namespace {
         }
         std::cout << std::endl << "t=" << (finalTurns - 1) << std::endl;
         // // //
-        auto* result1 = new BattleResult();
+        BattleResult result;
         BattleEmulator::Main(
             &testPos,
             finalTurns - 1,
             finalGene,
             testPlayers,
-            result1,
+            &result,
             seed,
             nullptr,
             nullptr,
@@ -719,9 +719,7 @@ namespace {
             false
         );
 
-        dumpTableMain(*result1, finalGene, seed, prefixTurns);
-
-        delete result1;
+        dumpTableMain(result, finalGene, seed, 0);
 
 #if defined(MINGW_BUILD)
         //std::cout << finalTurns << std::endl;

@@ -390,8 +390,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
         int32_t actions[3] = {0, 0, 0};
         int actionsPosition = 0;
-        double speed0 = players[0].speed * lcg::floatRand(position, 0.51, 1.0);
-        double speed1 = players[1].speed * lcg::floatRand(position, 0.51, 1.0);
+        double speed0 = players[0].speed * lcg::floatRand051_1(position);
+        double speed1 = players[1].speed * lcg::floatRand051_1(position);
 
         // 素早さを比較
         if (speed0 > speed1) {
