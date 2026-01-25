@@ -75,21 +75,14 @@ namespace {
     constexpr Player BasePlayers[2] = {
         // プレイヤー1
         {
-            56, 56.0, 57, 57, 50, 50, 33, 33, 22, 19, // 最初のメンバー
-            19, true, false, -1, false, 0, -1,
-            // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-            8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-            false, -1, 0, -1, 0, false, 1, 1, 1, -1, 0, -1, false, 2, false, -1
-        }, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
-
+            setting::Ally_MAX_HP, setting::Ally_MAX_HP, 57, 57, 50, 50, setting::ALLY_SPEED, setting::ALLY_SPEED, 22,setting::ALLY_CURRENT_MP, // 最初のメンバー
+            setting::Ally_MAX_MP, true
+        },
         // プレイヤー2
         {
-            296, 296.0, 53, 53, 50, 50, 45, 45, 0, 255, // 最初のメンバー
-            255, false, false, 0, false, 0, -1,
-            // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-            0, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-            false, -1, 0, -1, 0, false, 0, 0, 0, -1, 0, -1, false, 2, false, -1
-        } // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
+            setting::ENEMY_MAX_HP, setting::ENEMY_MAX_HP, 53, 53, 50, 50, setting::ENEMY_SPEED, setting::ENEMY_SPEED, 0, 255, // 最初のメンバー
+            255, false
+        }
     };
 #endif
 
@@ -417,14 +410,14 @@ namespace {
 
         auto turnProcessed = BattleEmulator::getTurnProcessed();
 
-        std::optional<BattleResult> result1;
+        BattleResult result1;
         result1 = BattleResult();
         Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
 
         auto *position = new int(1);
         auto *nowState = new uint64_t(0);
 
-        BattleEmulator::Main(position, 100, genome.actions, players, result1, seed, nullptr, nullptr, -1,
+        BattleEmulator::Main(position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
                              nowState);
 
         delete position;
@@ -433,7 +426,7 @@ namespace {
 #if defined(MINGW_BUILD)
 
         std::cout << turns << std::endl;
-        dumpTableMain(result1.value(), genome, seed, 0);
+        dumpTableMain(result1, genome, seed, 0);
 #else
         dumpTableMain(result1.value(), genome, seed, turns);
 #endif
@@ -538,7 +531,7 @@ namespace {
 
 
             bool resultBool = BattleEmulator::Main(position, 20, gene, players,
-                                                   (std::optional<BattleResult> &) std::nullopt, seed, nullptr, damages,
+                                                   nullptr, seed, nullptr, damages,
                                                    maxElement,
                                                    nowState);
             if (resultBool) {
@@ -573,10 +566,10 @@ namespace {
 
         int totalSeconds = hours * 3600 + minutes * 60 + seconds;
         totalSeconds = totalSeconds - 15;
-        auto time1 = static_cast<uint64_t>(floor((totalSeconds - 8.5) * (1 / 0.12515)));
+        auto time1 = static_cast<uint64_t>(floor((totalSeconds - 4.5) * (1 / 0.12515)));
         time1 = time1 << 16;
 
-        auto time2 = static_cast<uint64_t>(floor((totalSeconds + 8.5) * (1 / 0.125155)));
+        auto time2 = static_cast<uint64_t>(floor((totalSeconds + 4.5) * (1 / 0.125155)));
         time2 = time2 << 16;
         int32_t gene[350] = {0};
         for (int i = 0; i < 350; ++i) {

@@ -57,6 +57,7 @@ set(SOURCES
         EnhancedCostCalculator.h
         EnhancedHashCalculator.h
         EnhancedHeapQueue.h
+        setting.h
 )
 
 # シングルスレッド版（multithreading = OFF）

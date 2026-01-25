@@ -77,7 +77,6 @@ double EnhancedCostCalculator::calculateStatusEffectCost(const Genome &genome) {
     
     // Positive status effects (bonuses - negative cost)
     statusCost -= genome.AllyPlayer.BuffLevel * 0.1;
-    statusCost -= genome.AllyPlayer.AtkBuffLevel * 0.1;
     statusCost -= genome.AllyPlayer.TensionLevel * 0.05;
     
     // Special abilities

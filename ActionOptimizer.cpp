@@ -41,7 +41,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
     // Execute one turn
     BattleEmulator::Main(position.get(), turns, actions, CopedPlayers,
-                         (std::optional<BattleResult> &) std::nullopt, seed,
+                         nullptr, seed,
                          nullptr, nullptr, -2, nowState.get());
 
     // Initialize starting node
@@ -94,8 +94,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
     auto percent = 0.0;
     auto percenttmp = 0.0;
 
-    std::optional<BattleResult> result1;
-    result1 = BattleResult();
+    BattleResult result1;
 
     while (!openSet.empty() && (maxGenerations == -1 || counter < maxGenerations)) {
         // Get node with minimum f-cost
@@ -199,13 +198,13 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             *position = currentGenome.position;
             *nowState = currentGenome.state;
 
-            result1->clear();
+            result1.clear();
             // Execute one turn
             BattleEmulator::Main(position.get(), newGenome.turn - newGenome.processed, newGenome.actions, CopedPlayers1,
-                                 result1, seed,
+                                 &result1, seed,
                                  nullptr, nullptr, -1, nowState.get());
 
-            if (result1->actions[0] == BattleEmulator::HEAL_ENEMY || result1->actions[1] == BattleEmulator::HEAL_ENEMY) {
+            if (result1.actions[0] == BattleEmulator::HEAL_ENEMY || result1.actions[1] == BattleEmulator::HEAL_ENEMY) {
                 continue;
             }
 
