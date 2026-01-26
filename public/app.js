@@ -352,7 +352,7 @@ async function runSearch() {
     await Promise.all(clients.map((client) => client.ready()));
 
     const prepResults = await Promise.all(
-      clients.map((client) => client.call("prepare", { moduleUrl, input: inputActions }))
+        clients.map((client) => client.call("prepare", { moduleUrl, input: inputActions }))
     );
     const count = prepResults[0].count || 0;
     if (!count) {
@@ -365,16 +365,16 @@ async function runSearch() {
     }
 
     const brutePromises = clients.map((client, index) =>
-      client.call("bruteforce", {
-        moduleUrl,
-        resultIndex: 0,
-        startSeed: ranges[index].start.toString(),
-        endSeed: ranges[index].end.toString()
-      })
+        client.call("bruteforce", {
+          moduleUrl,
+          resultIndex: 0,
+          startSeed: ranges[index].start.toString(),
+          endSeed: ranges[index].end.toString()
+        })
     );
 
     const tracked = brutePromises.map((promise, index) =>
-      promise.then((result) => ({ index, result }))
+        promise.then((result) => ({ index, result }))
     );
 
     const pending = new Set(tracked);
@@ -396,7 +396,7 @@ async function runSearch() {
         const elapsedMs = BigInt(next.result.elapsedMs || 1);
         const speed = (turns * 1000n) / (elapsedMs * 10000n);
         appendLog(
-          `worker ${next.index + 1} turns=${turns} elapsed=${elapsedMs}ms speed=${speed} (m turns/s)`
+            `worker ${next.index + 1} turns=${turns} elapsed=${elapsedMs}ms speed=${speed} (m turns/s)`
         );
         if (!bestSpeed || speed > bestSpeed) {
           bestSpeed = speed;
@@ -414,7 +414,7 @@ async function runSearch() {
       }
     }
 
-    if (!foundSeed) {
+    if (!foundSeed || totalFound !== 1) {
       setSeedState("notFound", totalFound);
       if (totalFound > 1) {
         appendLog("multiple seeds found");
