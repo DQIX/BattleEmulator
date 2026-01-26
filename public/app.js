@@ -13,7 +13,8 @@ const ui = {
   dumpOutput: document.getElementById("dumpOutput"),
   logOutput: document.getElementById("logOutput"),
   themeSelect: document.getElementById("themeSelect"),
-  langSelect: document.getElementById("langSelect")
+  langSelect: document.getElementById("langSelect"),
+  preloadToggle: document.getElementById("preloadToggle")
 };
 
 const state = {
@@ -22,7 +23,9 @@ const state = {
   running: false,
   lang: document.documentElement.dataset.lang || "ja",
   theme: document.documentElement.dataset.theme || "lightSepia",
-  emulatorStatusKey: "idle"
+  emulatorStatusKey: "idle",
+  preload: localStorage.getItem("dq9Preload") === "1",
+  preloadQueue: Promise.resolve()
 };
 
 const logLines = [];
@@ -100,6 +103,34 @@ function splitRange(start, end, threads) {
     }
   }
   return ranges;
+}
+
+function enqueuePreload(task) {
+  state.preloadQueue = state.preloadQueue.then(task).catch(() => {});
+  return state.preloadQueue;
+}
+
+function getWasmUrl(moduleUrl) {
+  if (moduleUrl.endsWith(".js")) {
+    return moduleUrl.replace(/\.js$/, ".wasm");
+  }
+  return `${moduleUrl}.wasm`;
+}
+
+function preloadModule(moduleUrl) {
+  return enqueuePreload(async () => {
+    if (!state.preload) {
+      return;
+    }
+    try {
+      await fetch("worker.js", { cache: "force-cache" });
+      await fetch(moduleUrl, { cache: "force-cache" });
+      await fetch(getWasmUrl(moduleUrl), { cache: "force-cache" });
+      appendLog(`preloaded ${moduleUrl}`);
+    } catch (err) {
+      appendLog("preload failed");
+    }
+  });
 }
 
 function createWorkerClient() {
@@ -180,6 +211,10 @@ function setActiveEmulator(index) {
   ui.emulatorMeta.textContent = `${emulator.branch} :: ${emulator.module}`;
   ui.threads.value = emulator.defaultThreads || 4;
   appendLog(`selected emulator ${emulator.label}`);
+  if (state.preload) {
+    const moduleUrl = new URL(emulator.module, window.location.href).toString();
+    preloadModule(moduleUrl);
+  }
 }
 
 function parseInput(text) {
@@ -240,6 +275,7 @@ function initSettings() {
   });
   ui.themeSelect.value = state.theme;
   ui.langSelect.value = state.lang;
+  ui.preloadToggle.checked = state.preload;
   applyLanguage(state.lang);
   applyTheme(state.theme);
 }
@@ -277,6 +313,9 @@ async function runSearch() {
   appendLog(`range ${start} -> ${end} using ${ranges.length} workers`);
 
   const moduleUrl = new URL(state.active.module, window.location.href).toString();
+  if (state.preload) {
+    preloadModule(moduleUrl);
+  }
   const clients = ranges.map(() => createWorkerClient());
   const inputActions = parsed.actions.join(" ");
 
@@ -321,9 +360,9 @@ async function runSearch() {
       if (next.result.turns) {
         const turns = BigInt(next.result.turns);
         const elapsedMs = BigInt(next.result.elapsedMs || 1);
-        const speed = (turns * 10000n * 1000n) / elapsedMs;
+        const speed = (turns * 1000n) / (elapsedMs * 10000n);
         appendLog(
-          `worker ${next.index + 1} turns=${turns} elapsed=${elapsedMs}ms speed=${speed} (x1/10k turns/s)`
+          `worker ${next.index + 1} turns=${turns} elapsed=${elapsedMs}ms speed=${speed} (m turns/s)`
         );
         if (!bestSpeed || speed > bestSpeed) {
           bestSpeed = speed;
@@ -411,6 +450,15 @@ ui.themeSelect.addEventListener("change", (event) => {
 
 ui.langSelect.addEventListener("change", (event) => {
   applyLanguage(event.target.value);
+});
+
+ui.preloadToggle.addEventListener("change", (event) => {
+  state.preload = event.target.checked;
+  localStorage.setItem("dq9Preload", state.preload ? "1" : "0");
+  if (state.preload && state.active) {
+    const moduleUrl = new URL(state.active.module, window.location.href).toString();
+    preloadModule(moduleUrl);
+  }
 });
 
 loadManifest();

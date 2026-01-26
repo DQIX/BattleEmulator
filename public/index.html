@@ -57,7 +57,8 @@
               seedHex: "Hex",
               seedDec: "Dec",
               speed: "Speed",
-              elapsed: "Elapsed"
+              elapsed: "Elapsed",
+              preload: "Preload"
             },
             ja: {
               title: "DQ9 Battle Emulator",
@@ -85,7 +86,8 @@
               seedHex: "Hex",
               seedDec: "Dec",
               speed: "速度",
-              elapsed: "経過"
+              elapsed: "経過",
+              preload: "プリロード"
             }
           }
         };
@@ -172,6 +174,13 @@
                 <option value="ja">日本語</option>
                 <option value="en">English</option>
               </select>
+            </label>
+            <label class="field field-inline">
+              <span data-i18n="preload">Preload</span>
+              <div class="toggle">
+                <input id="preloadToggle" type="checkbox" />
+                <div class="toggle-ui"></div>
+              </div>
             </label>
           </div>
         </section>
