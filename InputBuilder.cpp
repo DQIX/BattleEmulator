@@ -57,6 +57,10 @@ std::vector<ResultStructure> InputBuilder::makeStructure() {
     return results;
 }
 
+void InputBuilder::clear() {
+    inputs.clear();
+}
+
 void InputBuilder::generateCombinations(size_t index, ResultStructure current, std::vector<ResultStructure> &results) {
     if (index == inputs.size()) {
         results.push_back(current);
