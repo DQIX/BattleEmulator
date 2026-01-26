@@ -1,3 +1,7 @@
+/*
+  -sSINGLE_FILE=1なので、webassemblyを個別に読み込む必要はない。
+ */
+
 let moduleUrl = "";
 let moduleReady = null;
 
