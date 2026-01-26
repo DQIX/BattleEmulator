@@ -33,6 +33,12 @@ BRANCH_VARIANTS[bilyouma_new_arugo]="
 bilyouma_v6:-DBattleEmulatorLV15=1 -DMULTITHREADING=1
 "
 
+BRANCH_VARIANTS[reokonn_lv8_new_arugo]="
+reokonn_v6:-Dkbattle_v2_Normal=1 -DMULTITHREADING=1
+"
+
+
+
 #BRANCH_VARIANTS[webassembly]="
 #default:-DMULTITHREADING=0
 #"
