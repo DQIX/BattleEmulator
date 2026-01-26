@@ -800,12 +800,16 @@ namespace {
         foundSeeds = 0;
         FoundSeed = 0;
 
-        int totalSeconds = hours * 3600 + minutes * 60 + seconds;
-        totalSeconds = totalSeconds - 15;
-        auto time1 = static_cast<uint64_t>(floor((totalSeconds - 4.5) * (1 / 0.12515)));
+        int64_t totalSeconds = static_cast<int64_t>(hours) * 3600 +
+                               static_cast<int64_t>(minutes) * 60 +
+                               static_cast<int64_t>(seconds);
+        totalSeconds -= 15;
+        int64_t numerator1 = (2 * totalSeconds - 9) * 100000;
+        auto time1 = static_cast<uint64_t>(numerator1 / (2 * 12515));
         time1 = time1 << 16;
 
-        auto time2 = static_cast<uint64_t>(floor((totalSeconds + 4.5) * (1 / 0.125155)));
+        int64_t numerator2 = (2 * totalSeconds + 9) * 1000000;
+        auto time2 = static_cast<uint64_t>(numerator2 / (2 * 125155));
         time2 = time2 << 16;
         int32_t gene[350] = {0};
         for (int i = 0; i < 350; ++i) {
@@ -986,6 +990,7 @@ namespace {
     std::vector<ResultStructure> wasmResults;
     std::string wasmLastDump;
     std::string wasmLastError;
+    uint64_t wasmLastTurnProcessed = 0;
 
     std::vector<std::string> splitTokens(const char *input) {
         std::vector<std::string> tokens;
@@ -1151,11 +1156,16 @@ EMSCRIPTEN_KEEPALIVE uint64_t wasm_bruteforce_range(int resultIndex, uint64_t st
     foundSeeds = 0;
     FoundSeed = 0;
     BruteForceMainLoop(BasePlayers, startSeed, endSeed, result.AactionsCounter, aActions, damages);
+    wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
 
     if (foundSeeds == 1) {
         return FoundSeed;
     }
     return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE uint64_t wasm_get_turn_processed() {
+    return wasmLastTurnProcessed;
 }
 
 EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed, int numThreads, int dropbug) {

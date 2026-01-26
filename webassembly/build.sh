@@ -65,7 +65,7 @@ EMCC_FLAGS=(
   -sNO_EXIT_RUNTIME=1
   -sINVOKE_RUN=0
   -sFILESYSTEM=0
-  "-sEXPORTED_FUNCTIONS=['_wasm_prepare_input','_wasm_get_last_error','_wasm_bruteforce_range','_wasm_search_dump']"
+  "-sEXPORTED_FUNCTIONS=['_wasm_prepare_input','_wasm_get_last_error','_wasm_bruteforce_range','_wasm_get_turn_processed','_wasm_search_dump']"
   "-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','UTF8ToString']"
 )
 

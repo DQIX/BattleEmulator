@@ -50,11 +50,20 @@ self.onmessage = async (event) => {
     }
 
     if (type === "bruteforce") {
+      const startTime = performance.now();
       const start = BigInt(startSeed);
       const end = BigInt(endSeed);
       const seedResult = Module._wasm_bruteforce_range(resultIndex || 0, start, end);
+      const turns = Module._wasm_get_turn_processed();
+      const elapsedMs = Math.max(1, Math.round(performance.now() - startTime));
       const seedText = seedResult === 0n ? "" : seedResult.toString();
-      self.postMessage({ id, type: "bruteforce-done", seed: seedText });
+      self.postMessage({
+        id,
+        type: "bruteforce-done",
+        seed: seedText,
+        turns: turns.toString(),
+        elapsedMs
+      });
       return;
     }
 

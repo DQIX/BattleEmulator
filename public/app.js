@@ -2,26 +2,43 @@ const ui = {
   emulatorSelect: document.getElementById("emulatorSelect"),
   emulatorMeta: document.getElementById("emulatorMeta"),
   emulatorStatus: document.getElementById("emulatorStatus"),
-  hours: document.getElementById("hours"),
-  minutes: document.getElementById("minutes"),
-  seconds: document.getElementById("seconds"),
   threads: document.getElementById("threads"),
   actionInput: document.getElementById("actionInput"),
   runButton: document.getElementById("runButton"),
   seedHex: document.getElementById("seedHex"),
   seedDec: document.getElementById("seedDec"),
+  seedSpeed: document.getElementById("seedSpeed"),
+  seedElapsed: document.getElementById("seedElapsed"),
   seedState: document.getElementById("seedState"),
   dumpOutput: document.getElementById("dumpOutput"),
-  logOutput: document.getElementById("logOutput")
+  logOutput: document.getElementById("logOutput"),
+  themeSelect: document.getElementById("themeSelect"),
+  langSelect: document.getElementById("langSelect")
 };
 
 const state = {
   emulators: [],
   active: null,
-  running: false
+  running: false,
+  lang: document.documentElement.dataset.lang || "ja",
+  theme: document.documentElement.dataset.theme || "lightSepia",
+  emulatorStatusKey: "idle"
 };
 
 const logLines = [];
+
+function getDictionary() {
+  const config = window.APP_CONFIG || {};
+  return config.i18n ? config.i18n[state.lang] : null;
+}
+
+function t(key, fallback) {
+  const dict = getDictionary();
+  if (dict && dict[key]) {
+    return dict[key];
+  }
+  return fallback;
+}
 
 function appendLog(line) {
   const timestamp = new Date().toLocaleTimeString();
@@ -31,13 +48,15 @@ function appendLog(line) {
 }
 
 function setSeedState(text) {
-  ui.seedState.textContent = text;
+  ui.seedState.textContent = t(text, text);
 }
 
 function setSeedValues(seedText) {
   if (!seedText) {
     ui.seedHex.textContent = "-";
     ui.seedDec.textContent = "-";
+    ui.seedSpeed.textContent = "-";
+    ui.seedElapsed.textContent = "-";
     return;
   }
   const seed = BigInt(seedText);
@@ -57,12 +76,13 @@ function parseIntValue(el) {
 }
 
 function computeSeedRange(hours, minutes, seconds) {
-  const seedShift = 65536;
-  let totalSeconds = hours * 3600 + minutes * 60 + seconds;
-  totalSeconds -= 15;
-  const time1 = Math.floor((totalSeconds - 4.5) * (1 / 0.12515)) * seedShift;
-  const time2 = Math.floor((totalSeconds + 4.5) * (1 / 0.125155)) * seedShift;
-  return { start: time1, end: time2 };
+  const seedShift = 65536n;
+  const totalSeconds = BigInt(hours * 3600 + minutes * 60 + seconds);
+  const numerator1 = 2n * (totalSeconds - 15n) - 9n;
+  const time1 = (numerator1 * 100000n) / (2n * 12515n);
+  const numerator2 = 2n * (totalSeconds - 15n) + 9n;
+  const time2 = (numerator2 * 1000000n) / (2n * 125155n);
+  return { start: time1 * seedShift, end: time2 * seedShift };
 }
 
 function splitRange(start, end, threads) {
@@ -71,10 +91,10 @@ function splitRange(start, end, threads) {
     return ranges;
   }
   const length = end - start;
-  const chunk = Math.ceil(length / threads);
+  const chunk = (length + BigInt(threads) - 1n) / BigInt(threads);
   for (let i = 0; i < threads; i += 1) {
-    const rangeStart = start + chunk * i;
-    const rangeEnd = Math.min(rangeStart + chunk, end);
+    const rangeStart = start + chunk * BigInt(i);
+    const rangeEnd = rangeStart + chunk > end ? end : rangeStart + chunk;
     if (rangeStart < rangeEnd) {
       ranges.push({ start: rangeStart, end: rangeEnd });
     }
@@ -127,9 +147,11 @@ async function loadManifest() {
     }
     state.emulators = data;
     populateEmulators();
-    ui.emulatorStatus.textContent = "ready";
+    state.emulatorStatusKey = "ready";
+    ui.emulatorStatus.textContent = t("ready", "ready");
   } catch (err) {
-    ui.emulatorStatus.textContent = "missing";
+    state.emulatorStatusKey = "missing";
+    ui.emulatorStatus.textContent = t("missing", "missing");
     ui.emulatorSelect.innerHTML = "";
     ui.emulatorMeta.textContent = "emulators.json not available";
     ui.runButton.disabled = true;
@@ -160,14 +182,73 @@ function setActiveEmulator(index) {
   appendLog(`selected emulator ${emulator.label}`);
 }
 
+function parseInput(text) {
+  const tokens = text.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length < 4) {
+    return { error: "input needs time and actions" };
+  }
+  const hours = Number.parseInt(tokens[0], 10);
+  const minutes = Number.parseInt(tokens[1], 10);
+  const seconds = Number.parseInt(tokens[2], 10);
+  if (![hours, minutes, seconds].every(Number.isFinite)) {
+    return { error: "invalid time format" };
+  }
+  return {
+    hours,
+    minutes,
+    seconds,
+    actions: tokens.slice(3)
+  };
+}
+
+function applyLanguage(lang) {
+  const config = window.APP_CONFIG || {};
+  const dictionary = config.i18n ? config.i18n[lang] : null;
+  if (!dictionary) {
+    return;
+  }
+  document.querySelectorAll("[data-i18n]").forEach((node) => {
+    const key = node.getAttribute("data-i18n");
+    if (dictionary[key]) {
+      node.textContent = dictionary[key];
+    }
+  });
+  if (state.emulatorStatusKey) {
+    ui.emulatorStatus.textContent = dictionary[state.emulatorStatusKey] || state.emulatorStatusKey;
+  }
+  document.documentElement.dataset.lang = lang;
+  document.documentElement.lang = lang;
+  state.lang = lang;
+  localStorage.setItem("dq9Lang", lang);
+}
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  state.theme = theme;
+  localStorage.setItem("dq9Theme", theme);
+}
+
+function initSettings() {
+  const config = window.APP_CONFIG || {};
+  const themes = config.themes || [];
+  ui.themeSelect.innerHTML = "";
+  themes.forEach((themeName) => {
+    const option = document.createElement("option");
+    option.value = themeName;
+    option.textContent = themeName;
+    ui.themeSelect.appendChild(option);
+  });
+  ui.themeSelect.value = state.theme;
+  ui.langSelect.value = state.lang;
+  applyLanguage(state.lang);
+  applyTheme(state.theme);
+}
+
 async function runSearch() {
   if (state.running || !state.active) {
     return;
   }
 
-  const hours = parseIntValue(ui.hours);
-  const minutes = parseIntValue(ui.minutes);
-  const seconds = parseIntValue(ui.seconds);
   const threads = Math.max(1, Math.min(32, parseIntValue(ui.threads) || 4));
   const input = ui.actionInput.value.trim();
 
@@ -176,7 +257,13 @@ async function runSearch() {
     return;
   }
 
-  const { start, end } = computeSeedRange(hours, minutes, seconds);
+  const parsed = parseInput(input);
+  if (parsed.error) {
+    appendLog(parsed.error);
+    return;
+  }
+
+  const { start, end } = computeSeedRange(parsed.hours, parsed.minutes, parsed.seconds);
   const ranges = splitRange(start, end, threads);
   if (!ranges.length) {
     appendLog("invalid time range");
@@ -191,12 +278,13 @@ async function runSearch() {
 
   const moduleUrl = new URL(state.active.module, window.location.href).toString();
   const clients = ranges.map(() => createWorkerClient());
+  const inputActions = parsed.actions.join(" ");
 
   try {
     await Promise.all(clients.map((client) => client.call("load", { moduleUrl })));
 
     const prepResults = await Promise.all(
-      clients.map((client) => client.call("prepare", { moduleUrl, input }))
+      clients.map((client) => client.call("prepare", { moduleUrl, input: inputActions }))
     );
     const count = prepResults[0].count || 0;
     if (!count) {
@@ -212,8 +300,8 @@ async function runSearch() {
       client.call("bruteforce", {
         moduleUrl,
         resultIndex: 0,
-        startSeed: String(ranges[index].start),
-        endSeed: String(ranges[index].end)
+        startSeed: ranges[index].start.toString(),
+        endSeed: ranges[index].end.toString()
       })
     );
 
@@ -224,9 +312,25 @@ async function runSearch() {
     const pending = new Set(tracked);
     let foundSeed = "";
     let foundIndex = -1;
+    let bestSpeed = null;
+    let bestElapsed = null;
+    let bestTurns = null;
     while (pending.size) {
       const next = await Promise.race(Array.from(pending));
       pending.delete(tracked[next.index]);
+      if (next.result.turns) {
+        const turns = BigInt(next.result.turns);
+        const elapsedMs = BigInt(next.result.elapsedMs || 1);
+        const speed = (turns * 10000n * 1000n) / elapsedMs;
+        appendLog(
+          `worker ${next.index + 1} turns=${turns} elapsed=${elapsedMs}ms speed=${speed} (x1/10k turns/s)`
+        );
+        if (!bestSpeed || speed > bestSpeed) {
+          bestSpeed = speed;
+          bestElapsed = elapsedMs;
+          bestTurns = turns;
+        }
+      }
       if (next.result.seed) {
         foundSeed = next.result.seed;
         foundIndex = next.index;
@@ -235,7 +339,7 @@ async function runSearch() {
     }
 
     if (!foundSeed) {
-      setSeedState("not found");
+      setSeedState("notFound");
       appendLog("seed not found");
       return;
     }
@@ -243,6 +347,10 @@ async function runSearch() {
     setSeedValues(foundSeed);
     setSeedState("found");
     appendLog(`seed found ${foundSeed}`);
+    if (bestSpeed && bestElapsed && bestTurns) {
+      ui.seedSpeed.textContent = `${bestSpeed} (x1/10k turns/s)`;
+      ui.seedElapsed.textContent = `${bestElapsed} ms`;
+    }
 
     clients.forEach((client, index) => {
       if (index !== foundIndex) {
@@ -297,4 +405,13 @@ ui.actionInput.addEventListener("keydown", (event) => {
   }
 });
 
+ui.themeSelect.addEventListener("change", (event) => {
+  applyTheme(event.target.value);
+});
+
+ui.langSelect.addEventListener("change", (event) => {
+  applyLanguage(event.target.value);
+});
+
 loadManifest();
+initSettings();
