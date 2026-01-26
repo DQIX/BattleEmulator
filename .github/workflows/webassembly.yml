@@ -7,10 +7,6 @@ on:
         description: "Comma-separated branches to build"
         required: false
         default: "bilyouma_new_arugo"
-      emulators:
-        description: "Optional comma-separated emulator IDs"
-        required: false
-        default: ""
       ui_branch:
         description: "Branch to take public UI from (default current)"
         required: false
@@ -32,14 +28,12 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       branches_json: ${{ steps.prepare.outputs.branches_json }}
-      emulators: ${{ steps.prepare.outputs.emulators }}
       ui_branch: ${{ steps.prepare.outputs.ui_branch }}
     steps:
       - name: Prepare matrix
         id: prepare
         env:
           INPUT_BRANCHES: ${{ github.event.inputs.branches }}
-          INPUT_EMULATORS: ${{ github.event.inputs.emulators }}
           INPUT_UI_BRANCH: ${{ github.event.inputs.ui_branch }}
           REF_NAME: ${{ github.ref_name }}
         run: |
@@ -58,10 +52,8 @@ jobs:
           if ui_branch and ui_branch not in branches:
             branches.append(ui_branch)
 
-          emulators = (os.getenv("INPUT_EMULATORS") or "").strip()
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
             fh.write(f"branches_json={json.dumps(branches)}\n")
-            fh.write(f"emulators={emulators}\n")
             fh.write(f"ui_branch={ui_branch}\n")
           PY
 
@@ -87,7 +79,6 @@ jobs:
       - name: Build WebAssembly
         env:
           BRANCH_NAME: ${{ matrix.branch }}
-          EMULATORS: ${{ needs.prepare.outputs.emulators }}
           OUTPUT_DIR: ${{ github.workspace }}/dist
         run: |
           bash webassembly/build.sh
