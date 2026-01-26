@@ -937,7 +937,15 @@ namespace {
             argv.push_back(const_cast<char *>(arg.c_str()));
         }
 
-        if (!ProcessInputBuilder(static_cast<int>(argv.size()), argv.data())) {
+        const int MAX = 350;
+        // values[] はダメージやホイミ/味方行動マーカー、麻痺マーカー (-10) を格納する
+        int values[MAX] = {0};
+        // aActions[] は味方行動（ホイミ、味方攻撃、麻痺の場合は PARALYSIS）を格納する
+        int aActions[MAX] = {0};
+
+        int valuesIndex = 0; // values[] の書き込み位置
+
+        if (!ProcessInputBuilder(static_cast<int>(argv.size()), argv.data(), aActions, values, valuesIndex)) {
             wasmLastError = "input parse failed";
             return false;
         }
@@ -997,21 +1005,21 @@ namespace {
             return "SearchRequest failed: turn limit reached.";
         }
 
-        std::optional<BattleResult> result1;
+        BattleResult result1;
         result1 = BattleResult();
         Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
 
         auto *position = new int(1);
         auto *nowState = new uint64_t(0);
 
-        BattleEmulator::Main(position, 100, genome.actions, players, result1, seed, nullptr, nullptr, -1,
+        BattleEmulator::Main(position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
                              nowState);
 
         delete position;
         delete nowState;
 
         std::stringstream ss;
-        ss << dumpTable(result1.value(), genome.actions, foundTurn) << "\n";
+        ss << dumpTable(result1, genome.actions, foundTurn) << "\n";
         ss << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
         ss << "0x" << std::hex << seed << std::dec << "\n" << "actions: ";
         for (auto i = 0; i < 100; ++i) {
