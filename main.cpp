@@ -17,11 +17,6 @@
 #include "SimpleParameterOptimizer.h"
 #endif
 
-#ifdef __EMSCRIPTEN__
-#include <emscripten/emscripten.h>
-#endif
-
-
 #ifdef DEBUG
 
 #include <chrono>
@@ -986,6 +981,7 @@ namespace {
 }
 
 #ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
 namespace {
     std::vector<ResultStructure> wasmResults;
     std::string wasmLastDump;
