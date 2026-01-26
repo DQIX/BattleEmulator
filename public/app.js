@@ -127,27 +127,20 @@ async function ensureWorkerScript() {
   }
 }
 
-function getWasmUrl(moduleUrl) {
-  if (moduleUrl.endsWith(".js")) {
-    return moduleUrl.replace(/\.js$/, ".wasm");
-  }
-  return `${moduleUrl}.wasm`;
-}
-
 async function ensureModulePayload(moduleUrl) {
   if (state.moduleCache.has(moduleUrl)) {
     return state.moduleCache.get(moduleUrl);
   }
-  const [jsText, wasmBuffer] = await Promise.all([
-    fetch(moduleUrl, { cache: "force-cache" }).then((r) => r.text()),
-    fetch(getWasmUrl(moduleUrl), { cache: "force-cache" }).then((r) => r.arrayBuffer())
-  ]);
-  const wasmBlob = new Blob([wasmBuffer], { type: "application/wasm" });
-  const wasmUrl = URL.createObjectURL(wasmBlob);
-  const payload = { jsText, wasmBuffer, wasmUrl };
+
+  const jsText = await fetch(moduleUrl, {
+    cache: "force-cache",
+  }).then((r) => r.text());
+
+  const payload = { jsText };
   state.moduleCache.set(moduleUrl, payload);
   return payload;
 }
+
 
 function preloadModule(moduleUrl) {
   return enqueuePreload(async () => {
@@ -342,6 +335,7 @@ async function runSearch() {
   ui.runButton.disabled = true;
   setSeedState("running");
   appendLog(`range ${start} -> ${end} using ${ranges.length} workers`);
+  const inputActions = parsed.actions.join(" ");
 
   const moduleUrl = new URL(state.active.module, window.location.href).toString();
   if (state.preload) {
