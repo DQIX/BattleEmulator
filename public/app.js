@@ -368,15 +368,8 @@ async function runSearch() {
       })
     );
 
-    let seedHitCount = 0;
-
     const tracked = brutePromises.map((promise, index) =>
-        promise.then((result) => {
-          if (result.seed) {
-            seedHitCount++;
-          }
-          return { index, result };
-        })
+      promise.then((result) => ({ index, result }))
     );
 
     const pending = new Set(tracked);
@@ -402,13 +395,16 @@ async function runSearch() {
         }
       }
       if (next.result.seed) {
-        foundSeed = next.result.seed;
-        foundIndex = next.index;
-        break;
+        if (foundSeed) {
+          foundSeed = ""; // 複数ヒット検出
+        } else {
+          foundSeed = next.result.seed;
+          foundIndex = next.index;
+        }
       }
     }
 
-    if (!foundSeed || seedHitCount !== 1) {
+    if (!foundSeed) {
       setSeedState("notFound");
       appendLog("seed not found");
       return;
