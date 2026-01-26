@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUTPUT_DIR="${OUTPUT_DIR:-${ROOT}/dist}"
+OUTPUT_DIR="${OUTPUT_DIR:-${ROOT}/public}"
 BRANCH_NAME="${BRANCH_NAME:-local}"
 
 while [[ $# -gt 0 ]]; do
