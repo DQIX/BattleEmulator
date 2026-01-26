@@ -6,7 +6,7 @@ on:
       branches:
         description: "Comma-separated branches to build"
         required: false
-        default: "bilyouma_new_arugo"
+        default: "bilyouma_new_arugo,reokonn_lv8_new_arugo"
       ui_branch:
         description: "Branch to take public UI from (default current)"
         required: false

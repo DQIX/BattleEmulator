@@ -59,8 +59,18 @@ SRC_FILES=(
   EnhancedHashCalculator.cpp
   EnhancedHeapQueue.cpp
   InputBuilder.cpp
-  SimpleParameterOptimizer.cpp
 )
+
+OPTIONAL_FILES=(
+  setting.h
+  LinearIdPool.h
+)
+
+for f in "${OPTIONAL_FILES[@]}"; do
+  if [[ -f "${f}" ]]; then
+    SRC_FILES+=("${f}")
+  fi
+done
 
 EMCC_FLAGS=(
   -std=c++17
