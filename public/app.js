@@ -142,7 +142,9 @@ async function ensureModulePayload(moduleUrl) {
     fetch(moduleUrl, { cache: "force-cache" }).then((r) => r.text()),
     fetch(getWasmUrl(moduleUrl), { cache: "force-cache" }).then((r) => r.arrayBuffer())
   ]);
-  const payload = { jsText, wasmBuffer };
+  const wasmBlob = new Blob([wasmBuffer], { type: "application/wasm" });
+  const wasmUrl = URL.createObjectURL(wasmBlob);
+  const payload = { jsText, wasmBuffer, wasmUrl };
   state.moduleCache.set(moduleUrl, payload);
   return payload;
 }
@@ -192,7 +194,11 @@ function createWorkerClient(workerUrl, modulePayload) {
   let initPromise = Promise.resolve();
   if (modulePayload) {
     const wasmCopy = modulePayload.wasmBuffer.slice(0);
-    initPromise = call("init", { jsText: modulePayload.jsText, wasm: wasmCopy }, [wasmCopy]).then(() => {});
+    initPromise = call(
+      "init",
+      { jsText: modulePayload.jsText, wasm: wasmCopy, wasmUrl: modulePayload.wasmUrl },
+      [wasmCopy]
+    ).then(() => {});
   }
 
   return {

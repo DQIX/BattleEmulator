@@ -1,4 +1,5 @@
 let moduleUrl = "";
+let wasmUrlOverride = "";
 let moduleReady = null;
 let moduleReadyReject = null;
 let moduleReadyResolve = null;
@@ -8,17 +9,18 @@ function resolveWasmPath(path) {
   return new URL(path, base).toString();
 }
 
-function initModuleFromText(jsText, wasmBuffer) {
+function initModuleFromText(jsText, wasmBuffer, wasmUrl) {
   if (moduleReady) {
     return moduleReady;
   }
+  wasmUrlOverride = wasmUrl || "";
   moduleReady = new Promise((resolve, reject) => {
     moduleReadyResolve = resolve;
     moduleReadyReject = reject;
     self.Module = {
       wasmBinary: wasmBuffer,
       locateFile() {
-        return "";
+        return wasmUrlOverride || "";
       },
       onRuntimeInitialized() {
         resolve(self.Module);
@@ -62,8 +64,8 @@ self.onmessage = async (event) => {
     event.data;
   try {
     if (type === "init") {
-      const { jsText, wasm } = event.data;
-      await initModuleFromText(jsText, wasm);
+      const { jsText, wasm, wasmUrl } = event.data;
+      await initModuleFromText(jsText, wasm, wasmUrl);
       self.postMessage({ id, type: "ready" });
       return;
     }
