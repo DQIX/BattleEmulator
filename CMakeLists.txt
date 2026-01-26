@@ -58,6 +58,7 @@ set(SOURCES
         EnhancedHashCalculator.h
         EnhancedHeapQueue.h
         setting.h
+        LinearIdPool.h
 )
 
 # シングルスレッド版（multithreading = OFF）
