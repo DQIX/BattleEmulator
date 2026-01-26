@@ -23,8 +23,7 @@ function loadModule(url) {
 
 self.onmessage = async (event) => {
   const { id, type, moduleUrl: url, input, resultIndex, startSeed, endSeed, seed, numThreads, dropbug } =
-      event.data;
-
+    event.data;
   try {
     if (type === "load") {
       await loadModule(url);
@@ -47,16 +46,18 @@ self.onmessage = async (event) => {
     if (type === "bruteforce") {
       const startTime = performance.now();
       const seedResult = Module._wasm_bruteforce_range(
-          resultIndex || 0,
-          BigInt(startSeed),
-          BigInt(endSeed)
+        resultIndex || 0,
+        BigInt(startSeed),
+        BigInt(endSeed)
       );
       const turns = Module._wasm_get_turn_processed();
+      const found = Module._wasm_get_found_seeds ? Module._wasm_get_found_seeds() : 0;
       const elapsedMs = Math.max(1, Math.round(performance.now() - startTime));
       self.postMessage({
         id,
         type: "bruteforce-done",
         seed: seedResult ? seedResult.toString() : "",
+        found,
         turns: turns.toString(),
         elapsedMs
       });
@@ -65,10 +66,10 @@ self.onmessage = async (event) => {
 
     if (type === "search") {
       const ptr = Module._wasm_search_dump(
-          resultIndex || 0,
-          BigInt(seed),
-          numThreads || 1,
-          dropbug ? 1 : 0
+        resultIndex || 0,
+        BigInt(seed),
+        numThreads || 1,
+        dropbug ? 1 : 0
       );
       const output = Module.UTF8ToString(ptr);
       self.postMessage({ id, type: "search-done", output });

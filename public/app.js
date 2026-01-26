@@ -53,8 +53,13 @@ function appendLog(line) {
   ui.logOutput.scrollTop = ui.logOutput.scrollHeight;
 }
 
-function setSeedState(text) {
-  ui.seedState.textContent = t(text, text);
+function setSeedState(text, count) {
+  const label = t(text, text);
+  if (typeof count === "number") {
+    ui.seedState.textContent = `${label} (${count})`;
+  } else {
+    ui.seedState.textContent = label;
+  }
 }
 
 function setSeedValues(seedText) {
@@ -333,7 +338,7 @@ async function runSearch() {
   clearOutputs();
   state.running = true;
   ui.runButton.disabled = true;
-  setSeedState("running");
+  setSeedState("running", 0);
   appendLog(`range ${start} -> ${end} using ${ranges.length} workers`);
   const inputActions = parsed.actions.join(" ");
 
@@ -378,9 +383,14 @@ async function runSearch() {
     let bestSpeed = null;
     let bestElapsed = null;
     let bestTurns = null;
+    let totalFound = 0;
     while (pending.size) {
       const next = await Promise.race(Array.from(pending));
       pending.delete(tracked[next.index]);
+      if (typeof next.result.found === "number") {
+        totalFound += next.result.found;
+        setSeedState("running", totalFound);
+      }
       if (next.result.turns) {
         const turns = BigInt(next.result.turns);
         const elapsedMs = BigInt(next.result.elapsedMs || 1);
@@ -405,16 +415,19 @@ async function runSearch() {
     }
 
     if (!foundSeed) {
-      setSeedState("notFound");
+      setSeedState("notFound", totalFound);
+      if (totalFound > 1) {
+        appendLog("multiple seeds found");
+      }
       appendLog("seed not found");
       return;
     }
 
     setSeedValues(foundSeed);
-    setSeedState("found");
+    setSeedState("found", totalFound);
     appendLog(`seed found ${foundSeed}`);
     if (bestSpeed && bestElapsed && bestTurns) {
-      ui.seedSpeed.textContent = `${bestSpeed} (x1/10k turns/s)`;
+      ui.seedSpeed.textContent = `${bestSpeed} (m turns/s)`;
       ui.seedElapsed.textContent = `${bestElapsed} ms`;
     }
 

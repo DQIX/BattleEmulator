@@ -1164,6 +1164,10 @@ EMSCRIPTEN_KEEPALIVE uint64_t wasm_get_turn_processed() {
     return wasmLastTurnProcessed;
 }
 
+EMSCRIPTEN_KEEPALIVE int wasm_get_found_seeds() {
+    return foundSeeds;
+}
+
 EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed, int numThreads, int dropbug) {
     if (resultIndex < 0 || resultIndex >= static_cast<int>(wasmResults.size())) {
         wasmLastError = "invalid result index";
