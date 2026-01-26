@@ -25,7 +25,10 @@ const state = {
   theme: document.documentElement.dataset.theme || "lightSepia",
   emulatorStatusKey: "idle",
   preload: localStorage.getItem("dq9Preload") === "1",
-  preloadQueue: Promise.resolve()
+  preloadQueue: Promise.resolve(),
+  moduleCache: new Map(),
+  workerScriptText: "",
+  workerBlobUrl: ""
 };
 
 const logLines = [];
@@ -110,11 +113,38 @@ function enqueuePreload(task) {
   return state.preloadQueue;
 }
 
+async function ensureWorkerScript() {
+  if (state.workerScriptText) {
+    return;
+  }
+  try {
+    const response = await fetch("worker.js", { cache: "force-cache" });
+    state.workerScriptText = await response.text();
+    const blob = new Blob([state.workerScriptText], { type: "application/javascript" });
+    state.workerBlobUrl = URL.createObjectURL(blob);
+  } catch (err) {
+    appendLog("worker.js preload failed");
+  }
+}
+
 function getWasmUrl(moduleUrl) {
   if (moduleUrl.endsWith(".js")) {
     return moduleUrl.replace(/\.js$/, ".wasm");
   }
   return `${moduleUrl}.wasm`;
+}
+
+async function ensureModulePayload(moduleUrl) {
+  if (state.moduleCache.has(moduleUrl)) {
+    return state.moduleCache.get(moduleUrl);
+  }
+  const [jsText, wasmBuffer] = await Promise.all([
+    fetch(moduleUrl, { cache: "force-cache" }).then((r) => r.text()),
+    fetch(getWasmUrl(moduleUrl), { cache: "force-cache" }).then((r) => r.arrayBuffer())
+  ]);
+  const payload = { jsText, wasmBuffer };
+  state.moduleCache.set(moduleUrl, payload);
+  return payload;
 }
 
 function preloadModule(moduleUrl) {
@@ -123,9 +153,8 @@ function preloadModule(moduleUrl) {
       return;
     }
     try {
-      await fetch("worker.js", { cache: "force-cache" });
-      await fetch(moduleUrl, { cache: "force-cache" });
-      await fetch(getWasmUrl(moduleUrl), { cache: "force-cache" });
+      await ensureWorkerScript();
+      await ensureModulePayload(moduleUrl);
       appendLog(`preloaded ${moduleUrl}`);
     } catch (err) {
       appendLog("preload failed");
@@ -133,8 +162,8 @@ function preloadModule(moduleUrl) {
   });
 }
 
-function createWorkerClient() {
-  const worker = new Worker("worker.js");
+function createWorkerClient(workerUrl, modulePayload) {
+  const worker = new Worker(workerUrl || "worker.js");
   let counter = 0;
   const pending = new Map();
 
@@ -148,17 +177,28 @@ function createWorkerClient() {
     entry.resolve({ type, ...payload });
   };
 
-  function call(type, payload) {
+  function call(type, payload, transfer) {
     return new Promise((resolve, reject) => {
       const id = counter += 1;
       pending.set(id, { resolve, reject });
-      worker.postMessage({ id, type, ...payload });
+      if (transfer && transfer.length) {
+        worker.postMessage({ id, type, ...payload }, transfer);
+      } else {
+        worker.postMessage({ id, type, ...payload });
+      }
     });
+  }
+
+  let initPromise = Promise.resolve();
+  if (modulePayload) {
+    const wasmCopy = modulePayload.wasmBuffer.slice(0);
+    initPromise = call("init", { jsText: modulePayload.jsText, wasm: wasmCopy }, [wasmCopy]).then(() => {});
   }
 
   return {
     worker,
     call,
+    ready: () => initPromise,
     terminate() {
       worker.terminate();
       pending.clear();
@@ -316,11 +356,14 @@ async function runSearch() {
   if (state.preload) {
     preloadModule(moduleUrl);
   }
-  const clients = ranges.map(() => createWorkerClient());
+  await ensureWorkerScript();
+  const payload = await ensureModulePayload(moduleUrl);
+  const workerUrl = state.workerBlobUrl || "worker.js";
+  const clients = ranges.map(() => createWorkerClient(workerUrl, payload));
   const inputActions = parsed.actions.join(" ");
 
   try {
-    await Promise.all(clients.map((client) => client.call("load", { moduleUrl })));
+    await Promise.all(clients.map((client) => client.ready()));
 
     const prepResults = await Promise.all(
       clients.map((client) => client.call("prepare", { moduleUrl, input: inputActions }))

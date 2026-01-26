@@ -1,9 +1,37 @@
 let moduleUrl = "";
 let moduleReady = null;
+let moduleReadyReject = null;
+let moduleReadyResolve = null;
 
 function resolveWasmPath(path) {
   const base = moduleUrl.replace(/[^/]+$/, "");
   return new URL(path, base).toString();
+}
+
+function initModuleFromText(jsText, wasmBuffer) {
+  if (moduleReady) {
+    return moduleReady;
+  }
+  moduleReady = new Promise((resolve, reject) => {
+    moduleReadyResolve = resolve;
+    moduleReadyReject = reject;
+    self.Module = {
+      wasmBinary: wasmBuffer,
+      locateFile() {
+        return "";
+      },
+      onRuntimeInitialized() {
+        resolve(self.Module);
+      }
+    };
+    try {
+      const moduleFactory = new Function(jsText);
+      moduleFactory();
+    } catch (err) {
+      reject(err);
+    }
+  });
+  return moduleReady;
 }
 
 function loadModule(url) {
@@ -12,6 +40,8 @@ function loadModule(url) {
   }
   moduleUrl = url;
   moduleReady = new Promise((resolve, reject) => {
+    moduleReadyResolve = resolve;
+    moduleReadyReject = reject;
     self.Module = {
       locateFile: resolveWasmPath,
       onRuntimeInitialized() {
@@ -31,13 +61,19 @@ self.onmessage = async (event) => {
   const { id, type, moduleUrl: url, input, resultIndex, startSeed, endSeed, seed, numThreads, dropbug } =
     event.data;
   try {
+    if (type === "init") {
+      const { jsText, wasm } = event.data;
+      await initModuleFromText(jsText, wasm);
+      self.postMessage({ id, type: "ready" });
+      return;
+    }
     if (type === "load") {
       await loadModule(url);
       self.postMessage({ id, type: "loaded" });
       return;
     }
 
-    const Module = await loadModule(url);
+    const Module = moduleReady ? await moduleReady : await loadModule(url);
 
     if (type === "prepare") {
       const count = Module.ccall("wasm_prepare_input", "number", ["string"], [input || ""]);
