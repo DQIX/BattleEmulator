@@ -519,7 +519,7 @@ namespace {
 #if defined(MINGW_BUILD)
         dumpTableMain(result1, genome, seed, 0);
 #else
-        dumpTableMain(result1.value(), genome, seed, turns);
+        dumpTableMain(result1, genome, seed, turns);
 #endif
 
 #ifdef DEBUG
