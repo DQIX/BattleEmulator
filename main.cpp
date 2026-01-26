@@ -474,14 +474,13 @@ namespace {
             finalTurns++;
         }
         std::cout << std::endl << "t=" << (finalTurns - 1) << std::endl;
-        // // //
-        auto* result1 = new BattleResult();
+        BattleResult result1;
         BattleEmulator::Main(
             &testPos,
             finalTurns - 1,
             finalGene,
             testPlayers,
-            result1,
+            &result1,
             seed,
             nullptr,
             nullptr,
@@ -490,20 +489,7 @@ namespace {
             false
         );
 
-        dumpTableMain(*result1, finalGene, seed, prefixTurns);
-
-        delete result1;
-
-#if defined(MINGW_BUILD)
-        //std::cout << finalTurns << std::endl;
-#else
-        // if (result1.has_value()) {
-        //     // dumpTableMain は int[350] を受けるので変換
-        //     int printable[350];
-        //     for (int i = 0; i < 350; ++i) printable[i] = static_cast<int>(finalGene[i]);
-        //     dumpTableMain(result1.value(), printable, seed, prefixTurns);
-        // }
-#endif
+        dumpTableMain(result1, finalGene, seed, prefixTurns);
 
 #if defined(DEBUG)
         auto turnProcessed = BattleEmulator::getTurnProcessed();
