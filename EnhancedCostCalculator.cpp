@@ -39,29 +39,36 @@ double EnhancedCostCalculator::calculateHCost(const Genome &genome, double enemy
 }
 
 double EnhancedCostCalculator::getActionCost(int action) {
-    switch(action) {
+    switch (action) {
         case BattleEmulator::ATTACK_ALLY:
+            return 0.01;
         case BattleEmulator::DRAGON_SLASH:
-            return 0.0; // Offensive actions have no penalty
-            
+            return 0.01; // Offensive actions have no penalty
+
         case BattleEmulator::HEAL:
-            return 0.05; // Slight penalty for healing
-            
+            return 0.01; // Slight penalty for healing
+
         case BattleEmulator::MEDICINAL_HERBS:
             return 0.03; // Less penalty for item healing
-            
+
         case BattleEmulator::DEFENCE:
-            return 0.15; // Higher penalty for defensive actions
-            
+            return 0.05; // Higher penalty for defensive actions
+
         case BattleEmulator::FLEE_ALLY:
             return 0.1; // High penalty for fleeing
-            
+
         case BattleEmulator::CRACK_ALLY:
-            return 0.02; // Small penalty for buff spells
-            
+            return 0.05; // Small penalty for buff spells
+
         case BattleEmulator::ACROBATIC_STAR:
-            return 0.001; // Small penalty for special abilities
-            
+            return 0.0001; // Small penalty for special abilities
+
+        case BattleEmulator::SPECIAL_ANTIDOTE:
+            return 0.001000;
+        case BattleEmulator::SPECIAL_MEDICINE:
+            return 0.015;
+        case BattleEmulator::WOOSH_ALLY:
+            return 0.1;
         default:
             return 0.1; // Default moderate penalty
     }
