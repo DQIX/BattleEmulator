@@ -58,7 +58,7 @@ SRC_FILES=(
 )
 
 EMCC_FLAGS=(
-  -std=c++17
+  -std=c++20
   -O3
   -sALLOW_MEMORY_GROWTH=1
   -sENVIRONMENT=worker,web
