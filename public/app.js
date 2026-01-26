@@ -164,7 +164,7 @@ function preloadModule(moduleUrl) {
   });
 }
 
-function createWorkerClient(workerUrl, modulePayload) {
+function createWorkerClient(workerUrl) {
   const worker = new Worker(workerUrl || "worker.js");
   let counter = 0;
   const pending = new Map();
@@ -172,45 +172,30 @@ function createWorkerClient(workerUrl, modulePayload) {
   worker.onmessage = (event) => {
     const { id, type, ...payload } = event.data;
     const entry = pending.get(id);
-    if (!entry) {
-      return;
-    }
+    if (!entry) return;
     pending.delete(id);
     entry.resolve({ type, ...payload });
   };
 
-  function call(type, payload, transfer) {
-    return new Promise((resolve, reject) => {
-      const id = counter += 1;
-      pending.set(id, { resolve, reject });
-      if (transfer && transfer.length) {
-        worker.postMessage({ id, type, ...payload }, transfer);
-      } else {
-        worker.postMessage({ id, type, ...payload });
-      }
+  function call(type, payload) {
+    return new Promise((resolve) => {
+      const id = ++counter;
+      pending.set(id, { resolve });
+      worker.postMessage({ id, type, ...payload });
     });
-  }
-
-  let initPromise = Promise.resolve();
-  if (modulePayload) {
-    const wasmCopy = modulePayload.wasmBuffer.slice(0);
-    initPromise = call(
-      "init",
-      { jsText: modulePayload.jsText, wasm: wasmCopy, wasmUrl: modulePayload.wasmUrl },
-      [wasmCopy]
-    ).then(() => {});
   }
 
   return {
     worker,
     call,
-    ready: () => initPromise,
+    ready: () => Promise.resolve(),
     terminate() {
       worker.terminate();
       pending.clear();
     }
   };
 }
+
 
 async function loadManifest() {
   try {
@@ -362,11 +347,7 @@ async function runSearch() {
   if (state.preload) {
     preloadModule(moduleUrl);
   }
-  await ensureWorkerScript();
-  const payload = await ensureModulePayload(moduleUrl);
-  const workerUrl = state.workerBlobUrl || "worker.js";
-  const clients = ranges.map(() => createWorkerClient(workerUrl, payload));
-  const inputActions = parsed.actions.join(" ");
+  const clients = ranges.map(() => createWorkerClient("worker.js"));
 
   try {
     await Promise.all(clients.map((client) => client.ready()));

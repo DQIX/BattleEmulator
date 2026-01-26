@@ -60,14 +60,19 @@ EMCC_FLAGS=(
   -std=c++17
   -O3
   -sALLOW_MEMORY_GROWTH=1
-  -sENVIRONMENT=web
+  -sENVIRONMENT=worker,web
   -sWASM_BIGINT=1
   -sNO_EXIT_RUNTIME=1
   -sINVOKE_RUN=0
   -sFILESYSTEM=0
+
+  -sWASM_ASYNC_COMPILATION=0
+  -sSINGLE_FILE=1
+
   "-sEXPORTED_FUNCTIONS=['_wasm_prepare_input','_wasm_get_last_error','_wasm_bruteforce_range','_wasm_get_turn_processed','_wasm_search_dump']"
   "-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','UTF8ToString']"
 )
+
 
 variants="${BRANCH_VARIANTS[${BRANCH_NAME}]:-${DEFAULT_VARIANTS}}"
 
