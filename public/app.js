@@ -368,8 +368,15 @@ async function runSearch() {
       })
     );
 
+    let seedHitCount = 0;
+
     const tracked = brutePromises.map((promise, index) =>
-      promise.then((result) => ({ index, result }))
+        promise.then((result) => {
+          if (result.seed) {
+            seedHitCount++;
+          }
+          return { index, result };
+        })
     );
 
     const pending = new Set(tracked);
@@ -401,7 +408,7 @@ async function runSearch() {
       }
     }
 
-    if (!foundSeed) {
+    if (!foundSeed || seedHitCount !== 1) {
       setSeedState("notFound");
       appendLog("seed not found");
       return;
