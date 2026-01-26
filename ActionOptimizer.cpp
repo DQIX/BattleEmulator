@@ -303,3 +303,12 @@ void ActionOptimizer::updateCompromiseScore(Genome &genome) {
     // Enemy action penalty processing (unchanged)
 }
 
+std::pair<int, Genome> ActionOptimizer::RunAlgorithmAsync(const Player players[2], uint64_t seed, int turns,
+                                                          int maxGenerations, int actions[350], int numThreads,
+                                                          bool dropbug) {
+    (void)numThreads;
+    (void)dropbug;
+    auto genome = RunAlgorithm(players, seed, turns, maxGenerations, actions, 0);
+    return {0, genome};
+}
+

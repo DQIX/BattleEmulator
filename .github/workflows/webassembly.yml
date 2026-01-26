@@ -1,0 +1,144 @@
+name: Build WebAssembly and Deploy Pages
+
+on:
+  workflow_dispatch:
+    inputs:
+      branches:
+        description: "Comma-separated branches to build"
+        required: false
+        default: "bilyouma_new_arugo"
+      emulators:
+        description: "Optional comma-separated emulator IDs"
+        required: false
+        default: ""
+      ui_branch:
+        description: "Branch to take public UI from (default current)"
+        required: false
+        default: ""
+  push:
+    branches: ["webassembly"]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      branches_json: ${{ steps.prepare.outputs.branches_json }}
+      emulators: ${{ steps.prepare.outputs.emulators }}
+      ui_branch: ${{ steps.prepare.outputs.ui_branch }}
+    steps:
+      - name: Prepare matrix
+        id: prepare
+        env:
+          INPUT_BRANCHES: ${{ github.event.inputs.branches }}
+          INPUT_EMULATORS: ${{ github.event.inputs.emulators }}
+          INPUT_UI_BRANCH: ${{ github.event.inputs.ui_branch }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+
+          branches_raw = (os.getenv("INPUT_BRANCHES") or "").strip()
+          if not branches_raw:
+            branches_raw = (os.getenv("REF_NAME") or "").strip()
+          branches = [b.strip() for b in branches_raw.replace("\n", ",").split(",") if b.strip()]
+
+          ui_branch = (os.getenv("INPUT_UI_BRANCH") or "").strip()
+          if not ui_branch:
+            ui_branch = (os.getenv("REF_NAME") or "").strip()
+          if ui_branch and ui_branch not in branches:
+            branches.append(ui_branch)
+
+          emulators = (os.getenv("INPUT_EMULATORS") or "").strip()
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+            fh.write(f"branches_json={json.dumps(branches)}\n")
+            fh.write(f"emulators={emulators}\n")
+            fh.write(f"ui_branch={ui_branch}\n")
+          PY
+
+  build:
+    runs-on: ubuntu-latest
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: ${{ fromJSON(needs.prepare.outputs.branches_json) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.branch }}
+
+      - name: Install Emscripten
+        run: |
+          sudo apt update
+          sudo apt install -y emscripten
+          emcc -v
+
+      - name: Build WebAssembly
+        env:
+          BRANCH_NAME: ${{ matrix.branch }}
+          EMULATORS: ${{ needs.prepare.outputs.emulators }}
+          OUTPUT_DIR: ${{ github.workspace }}/dist
+        run: |
+          bash webassembly/build.sh
+
+      - name: Upload branch artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: webassembly-${{ matrix.branch }}
+          path: dist/branches/${{ matrix.branch }}
+
+  assemble:
+    runs-on: ubuntu-latest
+    needs: [prepare, build]
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout UI branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.ui_branch }}
+
+      - name: Download branch artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: public/branches
+
+      - name: Normalize artifact layout
+        run: |
+          shopt -s nullglob
+          for dir in public/branches/webassembly-*; do
+            if [ -d "${dir}" ]; then
+              branch_name=$(basename "${dir}" | sed "s/^webassembly-//")
+              mkdir -p "public/branches/${branch_name}"
+              cp -r "${dir}/." "public/branches/${branch_name}/"
+              rm -rf "${dir}"
+            fi
+          done
+
+      - name: Merge manifests
+        run: |
+          python webassembly/merge_manifests.py public/branches public/emulators.json
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "public"
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

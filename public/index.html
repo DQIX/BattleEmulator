@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DQ9 Battle Emulator - WebAssembly Console</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="hero">
+        <div class="hero-title">DQ9 Battle Emulator</div>
+        <div class="hero-subtitle">WebAssembly seed console for RTA analysis</div>
+      </header>
+
+      <main class="grid">
+        <section class="panel panel-emulator" style="--delay: 0ms">
+          <div class="panel-header">
+            <h2>Emulator</h2>
+            <span id="emulatorStatus" class="chip">idle</span>
+          </div>
+          <select id="emulatorSelect" class="emulator-select"></select>
+          <div id="emulatorMeta" class="meta-line">manifest not loaded</div>
+        </section>
+
+        <section class="panel panel-input" style="--delay: 80ms">
+          <div class="panel-header">
+            <h2>Input</h2>
+            <span class="hint">Enter runs, Shift+Enter adds a line</span>
+          </div>
+          <div class="field-row">
+            <label class="field">
+              <span>Hours</span>
+              <input id="hours" type="number" min="0" value="0" />
+            </label>
+            <label class="field">
+              <span>Minutes</span>
+              <input id="minutes" type="number" min="0" value="0" />
+            </label>
+            <label class="field">
+              <span>Seconds</span>
+              <input id="seconds" type="number" min="0" value="0" />
+            </label>
+          </div>
+          <div class="field-row">
+            <label class="field">
+              <span>Workers</span>
+              <input id="threads" type="number" min="1" max="32" value="4" />
+            </label>
+            <button id="runButton" class="run-button">Run Search</button>
+          </div>
+          <textarea
+            id="actionInput"
+            class="action-input"
+            placeholder="a17 a17 14 a17 12 15 h35"
+          ></textarea>
+        </section>
+
+        <section class="panel panel-seed" style="--delay: 120ms">
+          <div class="panel-header">
+            <h2>Seed</h2>
+            <span id="seedState" class="chip chip-accent">waiting</span>
+          </div>
+          <div class="seed-grid">
+            <div class="seed-label">Hex</div>
+            <div id="seedHex" class="seed-value">-</div>
+            <div class="seed-label">Dec</div>
+            <div id="seedDec" class="seed-value">-</div>
+          </div>
+        </section>
+
+        <section class="panel panel-dump" style="--delay: 160ms">
+          <div class="panel-header">
+            <h2>Dump Table</h2>
+            <span class="hint">C++ dumpTable output</span>
+          </div>
+          <textarea id="dumpOutput" class="dump-output" readonly></textarea>
+        </section>
+
+        <section class="panel panel-vision" style="--delay: 200ms">
+          <div class="panel-header">
+            <h2>Vision</h2>
+            <span class="chip chip-muted">reserved</span>
+          </div>
+          <div class="vision-placeholder">
+            Reserved for future video recognition. Layout space is fixed to avoid CLS.
+          </div>
+        </section>
+
+        <section class="panel panel-log" style="--delay: 240ms">
+          <div class="panel-header">
+            <h2>Log</h2>
+            <span class="hint">session output</span>
+          </div>
+          <textarea id="logOutput" class="log-output" readonly></textarea>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>
