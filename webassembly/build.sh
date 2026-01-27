@@ -48,11 +48,9 @@ SRC_FILES=(
   BattleEmulator.cpp
   camera.cpp
   debug.cpp
-  ActionOptimizer.cpp
-  EnhancedCostCalculator.cpp
-  EnhancedHashCalculator.cpp
-  EnhancedHeapQueue.cpp
   InputBuilder.cpp
+  ActionBruteForcer.cpp
+  ActionSearcher.cpp
 )
 
 EMCC_FLAGS=(
