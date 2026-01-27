@@ -1,62 +1,107 @@
 /*
-  -sSINGLE_FILE=1なので、webassemblyを個別に読み込む必要はない。
- */
+  worker.js
+  - Emscripten SINGLE_FILE 前提
+  - module.js は Document 側で fetch し、文字列として渡す
+  - worker からのネットワークリクエストは発生しない
+*/
 
-let moduleUrl = "";
 let moduleReady = null;
+let moduleKey = "";
 
-function loadModule(url) {
-  if (moduleReady && url === moduleUrl) {
+/**
+ * Emscripten module をコード文字列から初期化する
+ */
+function loadModuleFromSource(jsText, key) {
+  if (moduleReady && key === moduleKey) {
     return moduleReady;
   }
-  moduleUrl = url;
+
+  moduleKey = key;
   moduleReady = new Promise((resolve, reject) => {
     self.Module = {
       onRuntimeInitialized() {
         resolve(self.Module);
       }
     };
+
     try {
-      importScripts(moduleUrl);
+      // SINGLE_FILE 出力をそのまま評価
+      // worker 内限定用途なので問題なし
+      (0, eval)(jsText);
     } catch (err) {
       reject(err);
     }
   });
+
   return moduleReady;
 }
 
 self.onmessage = async (event) => {
-  const { id, type, moduleUrl: url, input, resultIndex, startSeed, endSeed, seed, numThreads, dropbug } =
-    event.data;
+  const {
+    id,
+    type,
+    moduleKey: key,
+    moduleSource,
+    input,
+    resultIndex,
+    startSeed,
+    endSeed,
+    seed,
+    numThreads,
+    dropbug
+  } = event.data;
+
   try {
+    // load / prepare のどちらでも Module を初期化
     if (type === "load") {
-      await loadModule(url);
+      await loadModuleFromSource(moduleSource, key);
       self.postMessage({ id, type: "loaded" });
       return;
     }
 
-    const Module = await loadModule(url);
+    const Module = await loadModuleFromSource(moduleSource, key);
 
     if (type === "prepare") {
-      const count = Module.ccall("wasm_prepare_input", "number", ["string"], [input || ""]);
+      const count = Module.ccall(
+          "wasm_prepare_input",
+          "number",
+          ["string"],
+          [input || ""]
+      );
+
       let error = "";
       if (!count) {
         error = Module.ccall("wasm_get_last_error", "string", [], []);
       }
-      self.postMessage({ id, type: "prepared", count, error });
+
+      self.postMessage({
+        id,
+        type: "prepared",
+        count,
+        error
+      });
       return;
     }
 
     if (type === "bruteforce") {
       const startTime = performance.now();
+
       const seedResult = Module._wasm_bruteforce_range(
-        resultIndex || 0,
-        BigInt(startSeed),
-        BigInt(endSeed)
+          resultIndex || 0,
+          BigInt(startSeed),
+          BigInt(endSeed)
       );
+
       const turns = Module._wasm_get_turn_processed();
-      const found = Module._wasm_get_found_seeds ? Module._wasm_get_found_seeds() : 0;
-      const elapsedMs = Math.max(1, Math.round(performance.now() - startTime));
+      const found = Module._wasm_get_found_seeds
+          ? Module._wasm_get_found_seeds()
+          : 0;
+
+      const elapsedMs = Math.max(
+          1,
+          Math.round(performance.now() - startTime)
+      );
+
       self.postMessage({
         id,
         type: "bruteforce-done",
@@ -70,15 +115,27 @@ self.onmessage = async (event) => {
 
     if (type === "search") {
       const ptr = Module._wasm_search_dump(
-        resultIndex || 0,
-        BigInt(seed),
-        numThreads || 1,
-        dropbug ? 1 : 0
+          resultIndex || 0,
+          BigInt(seed),
+          numThreads || 1,
+          dropbug ? 1 : 0
       );
+
       const output = Module.UTF8ToString(ptr);
-      self.postMessage({ id, type: "search-done", output });
+
+      self.postMessage({
+        id,
+        type: "search-done",
+        output
+      });
+      return;
     }
+
   } catch (err) {
-    self.postMessage({ id, type: "error", message: String(err) });
+    self.postMessage({
+      id,
+      type: "error",
+      message: String(err)
+    });
   }
 };

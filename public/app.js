@@ -186,7 +186,10 @@ function createWorkerClient(workerUrl) {
   return {
     worker,
     call,
+
+    // ここは将来拡張用に残すだけでOK
     ready: () => Promise.resolve(),
+
     terminate() {
       worker.terminate();
       pending.clear();
@@ -343,17 +346,24 @@ async function runSearch() {
   const inputActions = parsed.actions.join(" ");
 
   const moduleUrl = new URL(state.active.module, window.location.href).toString();
-  if (state.preload) {
-    preloadModule(moduleUrl);
-  }
+  const payload = await ensureModulePayload(moduleUrl);
+  await ensureWorkerScript();
   const clients = ranges.map(() => createWorkerClient("worker.js"));
 
   try {
     await Promise.all(clients.map((client) => client.ready()));
 
     const prepResults = await Promise.all(
-        clients.map((client) => client.call("prepare", { moduleUrl, input: inputActions }))
+        clients.map((client) =>
+            client.call("prepare", {
+              moduleKey: moduleUrl,
+              moduleSource: payload.jsText,
+              input: inputActions
+            })
+        )
     );
+
+
     const count = prepResults[0].count || 0;
     if (!count) {
       appendLog(prepResults[0].error || "input parse failed");
@@ -369,7 +379,9 @@ async function runSearch() {
           moduleUrl,
           resultIndex: 0,
           startSeed: ranges[index].start.toString(),
-          endSeed: ranges[index].end.toString()
+          endSeed: ranges[index].end.toString(),
+          moduleKey: moduleUrl,
+          moduleSource: payload.jsText,
         })
     );
 
@@ -443,7 +455,9 @@ async function runSearch() {
       resultIndex: 0,
       seed: foundSeed,
       numThreads: threads,
-      dropbug: true
+      dropbug: true,
+      moduleKey: moduleUrl,
+      moduleSource: payload.jsText,
     });
 
     if (searchResult.output.startsWith("SearchRequest failed")) {
@@ -452,7 +466,9 @@ async function runSearch() {
         resultIndex: 0,
         seed: foundSeed,
         numThreads: threads,
-        dropbug: false
+        dropbug: false,
+        moduleKey: moduleUrl,
+        moduleSource: payload.jsText,
       });
     }
 
