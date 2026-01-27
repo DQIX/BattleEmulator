@@ -41,6 +41,10 @@ void InputBuilder::push(int damage, const char prefix) {
     inputs.push_back(entry);
 }
 
+void InputBuilder::clear() {
+    inputs.clear();
+}
+
 std::vector<ResultStructure> InputBuilder::makeStructure() {
     int ambiguousCount = 0;
     for (const auto &entry: inputs) {

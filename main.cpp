@@ -21,6 +21,7 @@
 #include <chrono>
 #endif
 
+int foundTurn = 0;
 
 namespace {
     // MinGW/GCC用のnoinline属性
@@ -520,6 +521,7 @@ namespace {
                 std::cout << seed << std::endl;
                 FoundSeed = seed;
                 foundSeeds++;
+                foundTurn = turns;
             }
         }
         delete position;
@@ -879,3 +881,284 @@ BattleEmulator::ATTACK_ALLY,BattleEmulator::ATTACK_ALLY,BattleEmulator::ATTACK_A
 
     return exitCode;
 }
+#if defined(MINGW_BUILD)
+#define __EMSCRIPTEN__
+#define EMSCRIPTEN_KEEPALIVE
+#endif
+
+#ifdef __EMSCRIPTEN__
+#if !defined(MINGW_BUILD) && !defined(MSVC_BUILD)
+#include <emscripten/emscripten.h>
+#endif
+namespace {
+    std::vector<ResultStructure> wasmResults;
+    std::string wasmLastDump;
+    std::string wasmLastError;
+    uint64_t wasmLastTurnProcessed = 0;
+
+    std::vector<std::string> splitTokens(const char *input) {
+        std::vector<std::string> tokens;
+        if (!input) {
+            return tokens;
+        }
+        std::string current;
+        for (const char *p = input; *p != '\0'; ++p) {
+            if (std::isspace(static_cast<unsigned char>(*p))) {
+                if (!current.empty()) {
+                    tokens.push_back(current);
+                    current.clear();
+                }
+            } else {
+                current.push_back(*p);
+            }
+        }
+        if (!current.empty()) {
+            tokens.push_back(current);
+        }
+        return tokens;
+    }
+
+    bool buildResultsFromInput(const char *input) {
+        wasmLastError.clear();
+        if (input == nullptr) {
+            wasmLastError = "input is null";
+            return false;
+        }
+
+        builder.clear();
+        auto tokens = splitTokens(input);
+        std::vector<std::string> argvStorage;
+        argvStorage.reserve(tokens.size() + 4);
+        argvStorage.push_back("wasm");
+        argvStorage.push_back("0");
+        argvStorage.push_back("0");
+        argvStorage.push_back("0");
+        for (const auto &token : tokens) {
+            if (!token.empty()) {
+                argvStorage.push_back(token);
+            }
+        }
+
+        std::vector<char *> argv;
+        argv.reserve(argvStorage.size());
+        for (auto &arg : argvStorage) {
+            argv.push_back(const_cast<char *>(arg.c_str()));
+        }
+
+        if (!ProcessInputBuilder(static_cast<int>(argv.size()), argv.data())) {
+            wasmLastError = "input parse failed";
+            return false;
+        }
+
+        try {
+            wasmResults = builder.makeStructure();
+        } catch (const std::exception &e) {
+            wasmLastError = e.what();
+            return false;
+        }
+
+        builder.clear();
+        if (wasmResults.empty()) {
+            wasmLastError = "no input combinations";
+            return false;
+        }
+        return true;
+    }
+
+    void fillArraysFromResult(const ResultStructure &result, int aActions[350], int damages[350]) {
+        for (int i = 0; i < 350; ++i) {
+            aActions[i] = 0;
+            damages[i] = 0;
+        }
+        for (int i = 0; i < result.AactionsCounter; ++i) {
+            aActions[i] = result.Aactions[i];
+        }
+        aActions[result.AactionsCounter] = -1;
+        for (int i = 0; i < result.AII_damageCounter; ++i) {
+            damages[i] = result.AII_damage[i];
+        }
+        damages[result.AII_damageCounter] = -1;
+    }
+
+    std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed, const ResultStructure &result,
+                                int numThreads, bool dropbug) {
+        int32_t gene[350] = {0};
+        int turns = 0;
+        for (int i = 0; i < 349; ++i) {
+            if (i < result.AactionsCounter) {
+                gene[i] = result.Aactions[i];
+                turns++;
+                continue;
+            }
+            gene[i] = -1;
+            gene[i + 1] = -1;
+            break;
+        }
+        if (result.AactionsCounter >= 349) {
+            gene[349] = -1;
+        }
+
+
+                lcg::init(seed, true);
+
+        // --- prefix（既存入力）を gene にコピー（-1 終端） ---
+        int32_t prefixGene[350] = {};
+        int prefixTurns = 0;
+        for (int i = 0; i < 350; ++i) {
+            prefixGene[i] = gene[i];
+            if (gene[i] == -1) {
+                prefixGene[i] = -1;
+                if (i + 1 < 350) prefixGene[i + 1] = -1;
+                break;
+            }
+            ++prefixTurns;
+        }
+
+
+        // --- prefix を1回だけ実行して、探索の根状態を作る（従来の挙動を維持） ---
+        int rootPos = 1;
+        uint64_t rootNow = 0;
+        Player rootPlayers[2] = {copiedPlayers[0], copiedPlayers[1]};
+
+        BattleEmulator::Main(
+            &rootPos,
+            prefixTurns,
+            prefixGene,
+            rootPlayers,
+            nullptr,
+            seed,
+            nullptr,
+            nullptr,
+            -2,
+            &rootNow,
+            false
+        );
+        auto* search = new ActionSearcher(rootPlayers, rootNow, rootPos, 6);
+        search->Run();
+
+        SearchPlan Plan[ActionSearcher::BEST_LIMIT];
+        auto tmp = search->getBest(Plan);
+
+        delete search;   // ← 必須
+
+        auto best = Plan[0].depth;
+        SearchPlan bestPlan = Plan[0];
+        for (int i = 0; i < ActionSearcher::BEST_LIMIT; ++i) {
+            auto tmp1  = Plan[i].depth;
+            if (best > tmp1) {
+                best = tmp1;
+                bestPlan = Plan[i];
+            }
+        }
+        // テスト実行（BattleResult をちゃんと作って dump まで通す）
+        int finalGene[350] = {};
+
+        auto finalTurns = 0;
+
+        //copiedPlayersは初期状態のplayerなので合成する
+        for (int i = 0; i < 350; ++i) {
+            if (prefixGene[i] == -1 || prefixGene[i] == 0) {
+                break;
+            }
+            std::cout << prefixGene[i] << ",";
+            finalGene[finalTurns] = prefixGene[i];
+            finalTurns++;
+        }
+
+        for (int i = 0; i < 350; ++i) {
+            if (bestPlan.actions[i] == -1 || bestPlan.actions[i] == 0) {
+                finalGene[finalTurns++] = -1;
+                break;
+            }
+            std::cout << bestPlan.actions[i] << ",";
+            finalGene[finalTurns] = bestPlan.actions[i];
+            finalTurns++;
+        }
+
+        if (finalTurns >= 100) {
+            return "SearchRequest failed: turn limit reached.";
+        }
+
+        BattleResult result1;
+        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
+
+        auto *position = new int(1);
+        auto *nowState = new uint64_t(0);
+
+        BattleEmulator::Main(position, 100, finalGene, players, &result1, seed, nullptr, nullptr, -1,
+                             nowState);
+
+        delete position;
+        delete nowState;
+
+        std::stringstream ss;
+        ss << dumpTable(result1, finalGene, foundTurn) << "\n";
+        ss << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
+        ss << "0x" << std::hex << seed << std::dec << "\n" << "actions: ";
+        for (auto i = 0; i < 100; ++i) {
+            if (finalGene[i] == 0 || finalGene[i] == -1) {
+                break;
+            }
+            ss << finalGene[i] << ", ";
+        }
+        ss << "\n";
+        return ss.str();
+    }
+}
+
+extern "C" {
+EMSCRIPTEN_KEEPALIVE int wasm_prepare_input(const char *input) {
+    if (!buildResultsFromInput(input)) {
+        return 0;
+    }
+    return static_cast<int>(wasmResults.size());
+}
+
+EMSCRIPTEN_KEEPALIVE const char *wasm_get_last_error() {
+    return wasmLastError.c_str();
+}
+
+EMSCRIPTEN_KEEPALIVE uint64_t wasm_bruteforce_range(int resultIndex, uint64_t startSeed, uint64_t endSeed) {
+    if (resultIndex < 0 || resultIndex >= static_cast<int>(wasmResults.size())) {
+        wasmLastError = "invalid result index";
+        return 0;
+    }
+
+    int aActions[350] = {0};
+    int damages[350] = {0};
+    const auto &result = wasmResults[static_cast<size_t>(resultIndex)];
+    fillArraysFromResult(result, aActions, damages);
+
+    BattleEmulator::ResetTurnProcessed();
+    foundSeeds = 0;
+    FoundSeed = 0;
+    BruteForceMainLoop(BasePlayers, startSeed, endSeed, result.AactionsCounter, aActions, damages);
+    wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
+
+    if (foundSeeds == 1) {
+        return FoundSeed;
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE uint64_t wasm_get_turn_processed() {
+    return wasmLastTurnProcessed;
+}
+
+EMSCRIPTEN_KEEPALIVE int wasm_get_found_seeds() {
+    return foundSeeds;
+}
+
+EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed, int numThreads, int dropbug) {
+    if (resultIndex < 0 || resultIndex >= static_cast<int>(wasmResults.size())) {
+        wasmLastError = "invalid result index";
+        wasmLastDump.clear();
+        return wasmLastDump.c_str();
+    }
+
+    wasmLastDump = buildDumpOutput(BasePlayers, seed, wasmResults[static_cast<size_t>(resultIndex)], numThreads,
+                                   dropbug != 0);
+    return wasmLastDump.c_str();
+}
+}
+#endif
