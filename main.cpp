@@ -1019,7 +1019,7 @@ namespace {
         delete nowState;
 
         std::stringstream ss;
-        ss << dumpTable(result1, genome.actions, foundTurn) << "\n";
+        ss << dumpTable(result1, genome.actions, foundTurn + foundTurnOffset) << "\n";
         ss << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
         ss << "0x" << std::hex << seed << std::dec << "\n" << "actions: ";
         for (auto i = 0; i < 100; ++i) {
