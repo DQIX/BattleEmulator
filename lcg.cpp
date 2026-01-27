@@ -8,13 +8,23 @@
 #include <cstdint>
 #include <cmath>  // cmathヘッダーをインクルードする
 
+#if defined(OPTIMIZE_MODE)
 // Define the size of the array
 const int ARRAY_SIZE = 5000;
 
+thread_local uint32_t precalcTop32[ARRAY_SIZE]; // 固定メモリ
+thread_local int nowCounter = 1;
+thread_local uint64_t now_seed = 0;      // 現在のシード（逐次 or ジャンプ後）
+thread_local bool init_mode;         // true = 初期一括生成モード
+#else
+const int ARRAY_SIZE = 5000;
 uint32_t precalcTop32[ARRAY_SIZE]; // 固定メモリ
 int nowCounter = 1;
 uint64_t now_seed;      // 現在のシード（逐次 or ジャンプ後）
 bool init_mode;         // true = 初期一括生成モード
+#endif
+
+
 
 
 
@@ -41,11 +51,13 @@ void lcg::init(uint64_t seed, bool init) {
  * @param need 更新を必要とする配列のインデックス
  */
 void lcg::GenerateifNeed(int need) {
+    assert(now_seed != 0);
+    assert(need != 0);
     // 配列に値を再計算して格納する
     if(nowCounter > need){
         return;
     }
-    for (int i = nowCounter; i < need+2; ++i) {
+    for (int i = nowCounter; i < need; ++i) {
         now_seed = lcg_rand(now_seed);
         precalcTop32[++nowCounter] = static_cast<uint32_t>(now_seed >> 32);
     }
@@ -86,6 +98,16 @@ int lcg::calculatePercent(uint64_t input) {
     return static_cast<int>(output * 1000000 >> 32);
 }
 
+uint8_t lcg::getSeed(int *position) {
+    assert(position != nullptr);
+    assert((*position) < ARRAY_SIZE);
+    GenerateifNeed((*position));
+
+    const uint8_t result = precalcTop32[(*position)] & 1;
+    (*position)++;
+    return result;
+}
+
 
 int lcg::getPercent(int *position, int max) {
     // nullptrでないことを確認
@@ -122,6 +144,29 @@ double lcg::floatRand(int *position, double min, double max) {
     double u = (double)top * (1.0 / 4294967296.0);
 
     return min + u * (max - min);
+}
+
+double lcg::floatRand051_1(int *position) {
+    assert(position != nullptr);
+    assert((*position) < ARRAY_SIZE);
+    GenerateifNeed(*position);
+    uint32_t top = precalcTop32[*position];
+    (*position)++;
+
+    // u = top / 2^32
+    // 0.51 + 0.49*u
+    return 0.51 + static_cast<double>(top) * (0.49 / 4294967296.0);
+}
+
+
+double lcg::floatRandAttack(int *position) {
+    assert(position != nullptr);
+    assert((*position) < ARRAY_SIZE);
+    GenerateifNeed(*position);
+    uint32_t top = precalcTop32[*position];
+    (*position)++;
+
+    return -1.0 + static_cast<double>(top) * (1.0 / 2147483648.0); // [-1,1)
 }
 
 
