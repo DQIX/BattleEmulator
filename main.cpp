@@ -976,8 +976,15 @@ namespace {
     }
 }
 
+#if defined(MINGW_BUILD)
+#define __EMSCRIPTEN__
+#define EMSCRIPTEN_KEEPALIVE
+#endif
+
 #ifdef __EMSCRIPTEN__
+#if !defined(MINGW_BUILD) && !defined(MSVC_BUILD)
 #include <emscripten/emscripten.h>
+#endif
 namespace {
     std::vector<ResultStructure> wasmResults;
     std::string wasmLastDump;
