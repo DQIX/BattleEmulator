@@ -880,9 +880,17 @@ int main(int argc, char *argv[]) {
     return exitCode;
 }
 
+#if defined(MINGW_BUILD)
+#define __EMSCRIPTEN__
+#define EMSCRIPTEN_KEEPALIVE
+#endif
+
 #ifdef __EMSCRIPTEN__
+#if !defined(MINGW_BUILD) && !defined(MSVC_BUILD)
 #include <emscripten/emscripten.h>
+#endif
 namespace {
+    const int MAX = 350;
     int values[MAX] = {0};
     // aActions[] は味方行動（ホイミ、味方攻撃、麻痺の場合は PARALYSIS）を格納する
     int aActions[MAX] = {0};
@@ -941,7 +949,7 @@ namespace {
             argv.push_back(const_cast<char *>(arg.c_str()));
         }
 
-        const int MAX = 350;
+
         // values[] はダメージやホイミ/味方行動マーカー、麻痺マーカー (-10) を格納する
 
         int valuesIndex = 0; // values[] の書き込み位置
@@ -986,8 +994,8 @@ namespace {
         int32_t gene[350] = {0};
         int turns = 0;
         for (int i = 0; i < 349; ++i) {
-            if (i < result.AactionsCounter) {
-                gene[i] = result.Aactions[i];
+            if (aActions[i] != -1) {
+                gene[i] = aActions[i];
                 turns++;
                 continue;
             }
@@ -995,7 +1003,7 @@ namespace {
             gene[i + 1] = -1;
             break;
         }
-        if (result.AactionsCounter >= 349) {
+        if (turns >= 349) {
             gene[349] = -1;
         }
 
@@ -1036,6 +1044,8 @@ namespace {
 
 extern "C" {
 EMSCRIPTEN_KEEPALIVE int wasm_prepare_input(const char *input) {
+    memset(values, 0, sizeof(values));
+    memset(aActions, 0, sizeof(aActions));
     if (!buildResultsFromInput(input)) {
         return 0;
     }
@@ -1052,7 +1062,7 @@ EMSCRIPTEN_KEEPALIVE uint64_t wasm_bruteforce_range(int resultIndex, uint64_t st
         return 0;
     }
     const auto &result = wasmResults[static_cast<size_t>(resultIndex)];
-    fillArraysFromResult(result, aActions, damages);
+    //fillArraysFromResult(result, aActions, values);
 
     BattleEmulator::ResetTurnProcessed();
     foundSeeds = 0;
