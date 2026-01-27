@@ -13,7 +13,6 @@
  * また、記録されたデータを更新するためのメソッドを提供します。
  */
 class BattleResult {
-
 public:
     // 各メンバの内容を 0 にリセットする clear 関数
     void clear() {
@@ -22,27 +21,28 @@ public:
     }
 
     static void
-    add(std::optional<BattleResult> &obj1, int action, int damage, bool isEnemy, int BuffTurns, int PoisonTurns, int speedTurn, int turn,
-        bool player0_has_initiative, int ehp, int ahp, uint64_t nowState, int scTurn, int amp,bool defenseFlag) {
-        if (obj1.has_value()) {
-            BattleResult& obj = obj1.value();
-            obj.actions[obj.position] = action;
-            obj.damages[obj.position] = damage;
-            obj.isEnemy[obj.position] = isEnemy;
-            obj.BuffTurnss[obj.position] = BuffTurns;
-            obj.PoisonTurns[obj.position] = PoisonTurns;
-            obj.SpeedTurn[obj.position] = speedTurn;
-            obj.turns[obj.position] = turn;
-            obj.initiative[obj.position] = player0_has_initiative;
-            obj.ehp[obj.position] = ehp;
-            obj.ahp[obj.position] = ahp;
-            obj.state[obj.position] = nowState;
-            obj.scTurn[obj.position] = scTurn;
-            obj.amp[obj.position] = amp;
-            obj.defenseFlag[obj.position] = defenseFlag;
-            obj.turn = turn;
-            obj.position++;
-        }
+    add(BattleResult* obj, int action, int damage, bool isEnemy, int BuffTurns, int PoisonTurns,
+        int speedTurn, int turn,
+        bool player0_has_initiative, int ehp, int ahp, uint64_t nowState, int scTurn, int amp, bool defenseFlag) {
+        if (!obj) return; // ← これが最重要
+
+        const int pos = obj->position;
+        obj->actions[pos] = action;
+        obj->damages[pos] = damage;
+        obj->isEnemy[pos] = isEnemy;
+        obj->BuffTurnss[pos] = BuffTurns;
+        obj->PoisonTurns[pos] = PoisonTurns;
+        obj->SpeedTurn[pos] = speedTurn;
+        obj->turns[pos] = turn;
+        obj->initiative[pos] = player0_has_initiative;
+        obj->ehp[pos] = ehp;
+        obj->ahp[pos] = ahp;
+        obj->state[pos] = nowState;
+        obj->scTurn[pos] = scTurn;
+        obj->amp[pos] = amp;
+        obj->defenseFlag[pos] = defenseFlag;
+        obj->turn = turn;
+        obj->position = pos + 1;
     }
 
     int position = 0;

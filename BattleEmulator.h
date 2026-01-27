@@ -6,6 +6,9 @@
 #define NEWDIRECTORY_BATTLEEMULATOR_H
 
 
+#if defined(MULTITHREADING)
+#include <atomic>
+#endif
 #include <cstdint>
 #include <optional>
 #include "Player.h"
@@ -92,20 +95,27 @@ public:
     static constexpr int SPECIAL_ANTIDOTE = 55; //特毒消し草
     static constexpr int ACROBATIC_STAR = 56; //アクロバットスター
     static constexpr int CRACKLE = 57; //ヒャダルコ
-    static constexpr int WOOSH_ALLY = 58; //バギ
-    static constexpr int DRAGON_SLASH = 59; //ドラゴン切り
-    static constexpr int ITEM_USE = 60; //ドラゴン切り
-    static constexpr int CRACK_ALLY = 61;
 
     //病魔
     static constexpr int POISON_ATTACK = 65; // 毒攻撃
     static constexpr int DECELERATLE = 66; //ボミオス
     static constexpr int KASAP = 67; //ルカナン
-    static constexpr int SWEET_BREATH = 68; //あまいいき
+    static constexpr int SWEET_BREATH = 68; //ルカナン
+
+    static constexpr int DRAGON_SLASH = 59; //ドラゴン切り
+    static constexpr int ITEM_USE = 60; //ドラゴン切り
+    static constexpr int CRACK_ALLY = 61; //ドラゴン切り
 
     static constexpr int ACROBATSTAR_KAIHI = 69;
     static constexpr int COUNTER = 70;
-
+    static constexpr int TIDAL_WAVE = 71; // つなみ
+    static constexpr int MASSIVE_SWIPE = 72; // なぎはらい
+    static constexpr int VICTIMISER = 73;
+    static constexpr int PUFF_PUFF = 74;
+    static constexpr int CRACK_ENEMY = 75;
+    static constexpr int MANAZASHI = 76;
+    static constexpr int HP_HOOVER = 77;
+    static constexpr int WOOSH_ALLY = 78;
 
     static void ResetTurnProcessed();
 
@@ -115,10 +125,16 @@ public:
 
     static bool
     Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
-         std::optional<BattleResult> &result, uint64_t seed, const int eActions[350], const int damages[350], int mode,
-         uint64_t *NowState);
+        BattleResult* result, uint64_t seed, const int eActions[350], const int damages[350], int mode,
+         uint64_t *NowState, bool logicalTurnStart = false);
 
-    static const char *getActionName(int actionId);
+    static void resetCombo(uint64_t *NowState);
+
+    static double processCombo(int32_t Id, double damage, uint64_t *NowState);
+
+    static const char *getActionName(int actionid);
+
+    static int roundCustom(double value);
 
     static void resetStartTurn();
     static int getStartTurn();
@@ -126,7 +142,7 @@ public:
 private:
     static int ProcessMagicBurst(int *position);
 
-    static void ProcessRage(int *position, int baseDamage, Player *players, bool kaisinn);
+    static void ProcessRage(int *position, int baseDamage, Player players[2], bool kaisinn);
 
     static void RecalculateBuff(Player players[2]);
 
@@ -135,10 +151,6 @@ private:
     static int CalculateMidHealBase(Player players[2]);
 
     static int FUN_0208aecc(int *position, uint64_t *NowState);
-
-    static void resetCombo(uint64_t *NowState);
-
-    static double processCombo(int32_t Id, double damage, uint64_t *NowState);
 
     static int FUN_0207564c(int *position, int atk, int def);
 
@@ -154,6 +166,8 @@ private:
     static int ProcessEnemyRandomAction2A(int *position);
 
     static int ProcessEnemyRandomAction44(int *position);
+
+    static int ProcessEnemyRandomAction2B(int *position);
 
     static void process7A8(int *position, int baseDamage, Player players[2], int defender);
 };

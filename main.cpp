@@ -700,24 +700,20 @@ namespace {
             return false;
         }
 
-        std::optional<BattleResult> result1;
-        result1 = BattleResult();
+        BattleResult result1;
         Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
 
-        auto *position = new int(1);
-        auto *nowState = new uint64_t(0);
+        int position = 1;
+        uint64_t nowState = 0;
 
-        BattleEmulator::Main(position, 100, genome.actions, players, result1, seed, nullptr, nullptr, -1,
-                             nowState);
-
-        delete position;
-        delete nowState;
+        BattleEmulator::Main(&position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
+                             &nowState);
 
         std::cout << "foundTurn: " << foundTurn << ", " << turns << std::endl;
 #ifdef MINGW_BUILD
-        dumpTableMain(result1.value(), genome, seed, foundTurn);
+        dumpTableMain(result1, genome, seed, foundTurn);
 #else
-        dumpTableMain(result1.value(), genome, seed, foundTurn);
+        dumpTableMain(result1, genome, seed, foundTurn);
 #endif
 
         return true;
@@ -749,7 +745,7 @@ namespace {
             players[1] = copiedPlayers[1];
 
             bool resultBool = BattleEmulator::Main(position, 20, gene, players,
-                                                   (std::optional<BattleResult> &) std::nullopt, seed, nullptr, damages,
+                                                   nullptr, seed, nullptr, damages,
                                                    maxElement,
                                                    nowState);
             if (resultBool) {
@@ -1097,21 +1093,17 @@ namespace {
             return "SearchRequest failed: turn limit reached.";
         }
 
-        std::optional<BattleResult> result1;
-        result1 = BattleResult();
+        BattleResult result1;
         Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
 
-        auto *position = new int(1);
-        auto *nowState = new uint64_t(0);
+        int position = 1;
+        uint64_t nowState = 0;
 
-        BattleEmulator::Main(position, 100, genome.actions, players, result1, seed, nullptr, nullptr, -1,
-                             nowState);
-
-        delete position;
-        delete nowState;
+        BattleEmulator::Main(&position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
+                             &nowState);
 
         std::stringstream ss;
-        ss << dumpTable(result1.value(), genome.actions, foundTurn) << "\n";
+        ss << dumpTable(result1, genome.actions, foundTurn) << "\n";
         ss << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
         ss << "0x" << std::hex << seed << std::dec << "\n" << "actions: ";
         for (auto i = 0; i < 100; ++i) {
@@ -1282,17 +1274,16 @@ int main(int argc, char *argv[]) {
         //for (int i = 0; i < 10; ++i) {
         (*NowState) = 0;
         (*position1) = 1;
-        std::optional<BattleResult> dummy1;
-        dummy1 = BattleResult();
+        BattleResult dummy1;
         std::memcpy(players1, BasePlayers, sizeof(players1));
-        BattleEmulator::Main(position1, (counter == 0 ? 1000 : counter), gene1, players1, dummy1, time1, dummy, dummy, -1,
+        BattleEmulator::Main(position1, (counter == 0 ? 1000 : counter), gene1, players1, &dummy1, time1, dummy, dummy, -1,
                              NowState);
 
         std::stringstream ss1;
         ss1 << time1 << " ";
 
         if (dummy1.has_value()) {
-            std::cout << dumpTable(dummy1.value(), gene1, -1) << std::endl;
+            std::cout << dumpTable(dummy1, gene1, -1) << std::endl;
         }
         //}
         delete position1;

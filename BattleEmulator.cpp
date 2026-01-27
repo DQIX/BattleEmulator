@@ -334,9 +334,9 @@ inline void BattleEmulator::processTurn() {
  *   それ以外の場合はfalseを返します。（modeが -1 または -2の場合、常にfalse）
  */
 bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
-                          std::optional<BattleResult> &result,
+                          BattleResult* result,
                           uint64_t seed, const int eActions[350], const int damages[350], int mode,
-                          uint64_t *NowState) {
+                          uint64_t *NowState, bool logicalTurnStart) {
     resetCombo(NowState);
     bool player0_has_initiative = false;
     int genePosition = 0;
@@ -357,7 +357,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
     for (int counterJ = startPos; counterJ < RunCount; ++counterJ) {
         processTurn();
-        if (genePosition != -1) {
+        if (!logicalTurnStart && genePosition != -1) {
             genePosition = counterJ - 1;
         }
         //現在ターンを保存
@@ -485,6 +485,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             actionTable = ATTACK_ALLY;
         }
 
+        if (logicalTurnStart && genePosition != -1) {
+            genePosition++;
+        }
 
         if (actionTable == DEFENCE) {
             players[0].defence = 0.5;
