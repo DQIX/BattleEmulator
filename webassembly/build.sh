@@ -30,7 +30,7 @@ done
 declare -A BRANCH_VARIANTS
 
 BRANCH_VARIANTS[reokonn_lv8_new_arugo_v2]="
-#reokonn_v7:-Dkbattle_v2_Normal=1 -DMULTITHREADING=1
+reokonn_v7:-Dkbattle_v2_Normal=1 -DMULTITHREADING=1
 "
 
 #BRANCH_VARIANTS[webassembly]="
