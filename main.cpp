@@ -19,6 +19,8 @@
 
 #endif
 
+int foundTurn = 0;
+
 
 namespace {
     // MinGW/GCC用のnoinline属性
@@ -311,7 +313,8 @@ namespace {
         compiler = "msBuild";
 #endif
 
-#if defined(MULTITHREADING)
+#if __EMSCRIPTEN__
+# elif defined(MULTITHREADING)
         std::string multiThreading = ", multithreading is supported, -j " + std::to_string(THREAD_COUNT);
 #elif defined(NO_MULTITHREADING)
         std::string multiThreading = ", multithreading is disabled";
@@ -328,7 +331,6 @@ namespace {
                 ", " << buildTime << " UTC/GMT, Compiler: " << compiler << multiThreading << std::endl;
 #else
         std::cout << "dq9 Corvus battle emulator" << version << " (Unknown build configuration), Build date: " << buildDate << ", " << buildTime   << " UTC, Compiler: " << compiler << std::endl;
-        << ", " << buildTime << std::endl;
 #endif
     }
 
@@ -447,8 +449,6 @@ namespace {
                 "Performance: " << std::fixed << std::setprecision(2) << performance << " mann turns/s" << std::endl;
     }
 
-#if defined(MULTITHREADING)
-
     bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads) {
 #if defined(DEBUG)
 
@@ -482,108 +482,24 @@ namespace {
             return false;
         }
 
-        std::optional<BattleResult> result1;
-        result1 = BattleResult();
+        BattleResult result1;
         Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
 
-        auto *position = new int(1);
-        auto *nowState = new uint64_t(0);
+       int position = 1;
+        uint64_t nowState = 0;
 
-        BattleEmulator::Main(position, 100, genome.actions, players, result1, seed, nullptr, nullptr, -1,
-                             nowState);
-
-        delete position;
-        delete nowState;
-
+        BattleEmulator::Main(&position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
+                             &nowState);
 #if defined(MINGW_BUILD)
 
         std::cout << turns << std::endl;
-        dumpTableMain(result1.value(), genome, seed, 0);
+        dumpTableMain(result1, genome, seed, 0);
 #else
-        dumpTableMain(result1.value(), genome, seed, turns);
+        dumpTableMain(result1, genome, seed, turns);
 #endif
 
         return true;
     }
-#elif NO_MULTITHREADING
-
-    void SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads = 1) {
-#if defined(DEBUG)
-
-        auto t0 = std::chrono::high_resolution_clock::now();
-        BattleEmulator::ResetTurnProcessed();
-#endif
-
-        int32_t gene[350] = {0};
-        auto turns = 0;
-        for (int i = 0; i < 350; ++i) {
-            gene[i] = aActions[i];
-            if (aActions[i] == -1) {
-                gene[i] = -1;
-                gene[i + 1] = -1;
-                break;
-            }
-            turns++;
-        }
-
-        lcg::init(seed);
-
-        BattleResult bestResult;
-        Genome bestGenome;
-        int maxTurns = INT_MAX - 1;
-
-        std::optional<BattleResult> result1;
-        result1 = BattleResult();
-        Player players[2];
-
-        auto *position = new int(1);
-        auto *nowState = new uint64_t(0);
-
-        for (int i = 0; i < 1000; ++i) {
-            auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 1500, gene, i * 2);
-
-            players[0] = copiedPlayers[0];
-            players[1] = copiedPlayers[1];
-
-            (*position) = 1;
-            (*nowState) = 0;
-
-            result1->clear();
-            BattleEmulator::Main(position, turns + 100, genome.actions, players, result1, seed, nullptr, nullptr, -1,
-                                 nowState);
-
-            if (players[0].hp >= 0 && players[1].hp == 0) {
-                if (result1->turn < maxTurns) {
-                    maxTurns = result1->turn;
-                    bestResult = result1.value();
-                    bestGenome = genome;
-                }
-            }
-        }
-
-
-        delete position;
-        delete nowState;
-#if defined(MINGW_BUILD)
-
-        std::cout << turns << std::endl;
-        dumpTableMain(bestResult, bestGenome, seed, 0);
-#else
-        dumpTableMain(bestResult, bestGenome, seed, turns - 1);
-#endif
-
-#if defined(DEBUG)
-
-        auto turnProcessed = BattleEmulator::getTurnProcessed();
-        auto t3 = std::chrono::high_resolution_clock::now();
-        auto elapsed_time1 =
-                std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
-        PerformanceDebug("Searcher single", turnProcessed, static_cast<double>(elapsed_time1), 0);
-#endif
-    }
-
-#endif
-
     void BruteForceMainLoop(const Player copiedPlayers[2], uint64_t start, uint64_t end, int turns, int gene[350],
                             int damages[350]) {
         int *position = new int(1);
@@ -597,13 +513,14 @@ namespace {
 
 
             bool resultBool = BattleEmulator::Main(position, 20, gene, players,
-                                                   (std::optional<BattleResult> &) std::nullopt, seed, nullptr, damages,
+                                                  nullptr, seed, nullptr, damages,
                                                    maxElement,
                                                    nowState);
             if (resultBool) {
                 std::cout << seed << std::endl;
                 FoundSeed = seed;
                 foundSeeds++;
+                foundTurn = turns;
             }
         }
         delete position;
@@ -909,3 +826,211 @@ int main(int argc, char *argv[]) {
 
     return exitCode;
 }
+
+
+#if defined(MINGW_BUILD)
+#define __EMSCRIPTEN__
+#define EMSCRIPTEN_KEEPALIVE
+#endif
+
+#ifdef __EMSCRIPTEN__
+#if !defined(MINGW_BUILD) && !defined(MSVC_BUILD)
+#include <emscripten/emscripten.h>
+#endif
+
+namespace {
+    std::vector<ResultStructure> wasmResults;
+    std::string wasmLastDump;
+    std::string wasmLastError;
+    uint64_t wasmLastTurnProcessed = 0;
+
+    std::vector<std::string> splitTokens(const char *input) {
+        std::vector<std::string> tokens;
+        if (!input) {
+            return tokens;
+        }
+        std::string current;
+        for (const char *p = input; *p != '\0'; ++p) {
+            if (std::isspace(static_cast<unsigned char>(*p))) {
+                if (!current.empty()) {
+                    tokens.push_back(current);
+                    current.clear();
+                }
+            } else {
+                current.push_back(*p);
+            }
+        }
+        if (!current.empty()) {
+            tokens.push_back(current);
+        }
+        return tokens;
+    }
+
+    bool buildResultsFromInput(const char *input) {
+        wasmLastError.clear();
+        if (input == nullptr) {
+            wasmLastError = "input is null";
+            return false;
+        }
+
+        builder.clear();
+        auto tokens = splitTokens(input);
+        std::vector<std::string> argvStorage;
+        argvStorage.reserve(tokens.size() + 4);
+        argvStorage.push_back("wasm");
+        argvStorage.push_back("0");
+        argvStorage.push_back("0");
+        argvStorage.push_back("0");
+        for (const auto &token : tokens) {
+            if (!token.empty()) {
+                argvStorage.push_back(token);
+            }
+        }
+
+        std::vector<char *> argv;
+        argv.reserve(argvStorage.size());
+        for (auto &arg : argvStorage) {
+            argv.push_back(const_cast<char *>(arg.c_str()));
+        }
+
+        if (!ProcessInputBuilder(static_cast<int>(argv.size()), argv.data())) {
+            wasmLastError = "input parse failed";
+            return false;
+        }
+
+        try {
+            wasmResults = builder.makeStructure();
+        } catch (const std::exception &e) {
+            wasmLastError = e.what();
+            return false;
+        }
+
+        builder.clear();
+        if (wasmResults.empty()) {
+            wasmLastError = "no input combinations";
+            return false;
+        }
+        return true;
+    }
+
+    void fillArraysFromResult(const ResultStructure &result, int aActions[350], int damages[350]) {
+        for (int i = 0; i < 350; ++i) {
+            aActions[i] = 0;
+            damages[i] = 0;
+        }
+        for (int i = 0; i < result.AactionsCounter; ++i) {
+            aActions[i] = result.Aactions[i];
+        }
+        aActions[result.AactionsCounter] = -1;
+        for (int i = 0; i < result.AII_damageCounter; ++i) {
+            damages[i] = result.AII_damage[i];
+        }
+        damages[result.AII_damageCounter] = -1;
+    }
+
+    std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed, const ResultStructure &result,
+                                int numThreads, bool dropbug) {
+        int32_t gene[350] = {0};
+        int turns = 0;
+        for (int i = 0; i < 349; ++i) {
+            if (i < result.AactionsCounter) {
+                gene[i] = result.Aactions[i];
+                turns++;
+                continue;
+            }
+            gene[i] = -1;
+            gene[i + 1] = -1;
+            break;
+        }
+        if (result.AactionsCounter >= 349) {
+            gene[349] = -1;
+        }
+
+        auto genome =
+                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 8000, gene, 0);
+
+        if (genome.turn >= 100) {
+            return "SearchRequest failed: turn limit reached.";
+        }
+
+        BattleResult result1;
+        result1 = BattleResult();
+        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
+
+        int position = 1;
+        uint64_t nowState = 0;
+
+        BattleEmulator::Main(&position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
+                             &nowState);
+
+        std::stringstream ss;
+        ss << dumpTable(result1, genome.actions, foundTurn) << "\n";
+        ss << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
+        ss << "0x" << std::hex << seed << std::dec << "\n" << "actions: ";
+        for (auto i = 0; i < 100; ++i) {
+            if (genome.actions[i] == 0 || genome.actions[i] == -1) {
+                break;
+            }
+            ss << genome.actions[i] << ", ";
+        }
+        ss << "\n";
+        return ss.str();
+    }
+}
+
+extern "C" {
+EMSCRIPTEN_KEEPALIVE int wasm_prepare_input(const char *input) {
+    if (!buildResultsFromInput(input)) {
+        return 0;
+    }
+    return static_cast<int>(wasmResults.size());
+}
+
+EMSCRIPTEN_KEEPALIVE const char *wasm_get_last_error() {
+    return wasmLastError.c_str();
+}
+
+EMSCRIPTEN_KEEPALIVE uint64_t wasm_bruteforce_range(int resultIndex, uint64_t startSeed, uint64_t endSeed) {
+    if (resultIndex < 0 || resultIndex >= static_cast<int>(wasmResults.size())) {
+        wasmLastError = "invalid result index";
+        return 0;
+    }
+
+    int aActions[350] = {0};
+    int damages[350] = {0};
+    const auto &result = wasmResults[static_cast<size_t>(resultIndex)];
+    fillArraysFromResult(result, aActions, damages);
+
+    BattleEmulator::ResetTurnProcessed();
+    foundSeeds = 0;
+    FoundSeed = 0;
+    BruteForceMainLoop(BasePlayers, startSeed, endSeed, result.AactionsCounter, aActions, damages);
+    wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
+
+    if (foundSeeds == 1) {
+        return FoundSeed;
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE uint64_t wasm_get_turn_processed() {
+    return wasmLastTurnProcessed;
+}
+
+EMSCRIPTEN_KEEPALIVE int wasm_get_found_seeds() {
+    return foundSeeds;
+}
+
+EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed, int numThreads, int dropbug) {
+    if (resultIndex < 0 || resultIndex >= static_cast<int>(wasmResults.size())) {
+        wasmLastError = "invalid result index";
+        wasmLastDump.clear();
+        return wasmLastDump.c_str();
+    }
+
+    wasmLastDump = buildDumpOutput(BasePlayers, seed, wasmResults[static_cast<size_t>(resultIndex)], numThreads,
+                                   dropbug != 0);
+    return wasmLastDump.c_str();
+}
+}
+#endif

@@ -6,7 +6,6 @@
 #define NEWDIRECTORY_BATTLERESULT_H
 
 class BattleResult {
-
 public:
     // 各メンバの内容を 0 にリセットする clear 関数
     void clear() {
@@ -15,23 +14,23 @@ public:
     }
 
     static void
-    add(std::optional<BattleResult> &obj1, int action, int damage, bool isEnemy, int turn,
+    add(BattleResult *obj, int action, int damage, bool isEnemy, int turn,
         bool player0_has_initiative, int ehp, int ahp, uint64_t nowState, int scTurn, int amp) {
-        if (obj1.has_value()) {
-            BattleResult& obj = obj1.value();
-            obj.actions[obj.position] = action;
-            obj.damages[obj.position] = damage;
-            obj.isEnemy[obj.position] = isEnemy;
-            obj.turns[obj.position] = turn;
-            obj.initiative[obj.position] = player0_has_initiative;
-            obj.ehp[obj.position] = ehp;
-            obj.ahp[obj.position] = ahp;
-            obj.state[obj.position] = nowState;
-            obj.scTurn[obj.position] = scTurn;
-            obj.amp[obj.position] = amp;
-            obj.turn = turn;
-            obj.position++;
-        }
+        if (!obj) return; // ← これが最重要
+
+        const int pos = obj->position;
+        obj->actions[pos] = action;
+        obj->damages[pos] = damage;
+        obj->isEnemy[pos] = isEnemy;
+        obj->turns[pos] = turn;
+        obj->initiative[pos] = player0_has_initiative;
+        obj->ehp[pos] = ehp;
+        obj->ahp[pos] = ahp;
+        obj->state[pos] = nowState;
+        obj->scTurn[pos] = scTurn;
+        obj->amp[pos] = amp;
+        obj->turn = turn;
+        obj->position = pos + 1;
     }
 
     int position = 0;

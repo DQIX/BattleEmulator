@@ -47,7 +47,6 @@ set(SOURCES
         ActionOptimizer.cpp
         ActionOptimizer.h
         Genome.h
-        ActionBanManager.h
         InputBuilder.cpp
         InputBuilder.h
         ResultStructure.h

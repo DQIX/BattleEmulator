@@ -128,7 +128,7 @@ public:
 
     static bool
     Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
-         std::optional<BattleResult> &result, uint64_t seed, const int eActions[350], const int damages[350], int mode,
+         BattleResult* result, uint64_t seed, const int eActions[350], const int damages[350], int mode,
          uint64_t *NowState);
 
     static const char *getActionName(int actionId);
