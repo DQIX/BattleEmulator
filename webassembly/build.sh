@@ -99,7 +99,7 @@ while read -r line; do
     -o "${out_dir}/emulator.js"
 
   manifest_entries+=(
-    "{\"id\":\"${variant}\",\"label\":\"${BRANCH_NAME} ${variant}\",\"branch\":\"${BRANCH_NAME}\",\"module\":\"branches/${BRANCH_NAME}/${variant}/emulator.js\",\"defaultThreads\":4}"
+    "{\"id\":\"${variant}\",\"label\":\"${variant}\",\"branch\":\"${BRANCH_NAME}\",\"module\":\"branches/${BRANCH_NAME}/${variant}/emulator.js\",\"defaultThreads\":4}"
   )
 done <<< "${variants}"
 
