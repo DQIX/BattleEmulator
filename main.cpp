@@ -857,12 +857,6 @@ EMSCRIPTEN_KEEPALIVE int wasm_prepare_input(const char *input) {;
         return 0;
     }
 
-    std::cout << "\nbbb\naActions: ";
-    for (int i = 0; i < 350 && aActions1[i] != -1; ++i) std::cout << aActions1[i] << " ";
-    std::cout << "\ndamages: ";
-    for (int i = 0; i < 350 && values1[i] != -1; ++i) std::cout << values1[i] << " ";
-    std::cout << std::endl << "valuesIndex: "<< valuesIndex << std::endl;
-
     return 1;
 }
 
@@ -897,11 +891,6 @@ EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed
         wasmLastDump.clear();
         return wasmLastDump.c_str();
     }
-    std::cout << "\naaa\naActions: ";
-    for (int i = 0; i < 350 && aActions1[i] != -1; ++i) std::cout << aActions1[i] << " ";
-    std::cout << "\ndamages: ";
-    for (int i = 0; i < 350 && values1[i] != -1; ++i) std::cout << values1[i] << " ";
-    std::cout << std::endl << "valuesIndex: "<< valuesIndex << std::endl;
 
     wasmLastDump = buildDumpOutput(BasePlayers, seed, numThreads,
                                    dropbug != 0);
