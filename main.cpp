@@ -10,7 +10,6 @@
 #include "BattleEmulator.h"
 #include "debug.h"
 #include "ActionOptimizer.h"
-#include "InputBuilder.h"
 #include "setting.h"
 
 #ifdef DEBUG
@@ -76,7 +75,6 @@ namespace {
 
     constexpr int THREAD_COUNT = 1;
     // `InputBuilder` インスタンス作成
-    InputBuilder builder;
 
     // ヘッダーを出力する関数
     void printHeader(std::stringstream &ss) {
@@ -546,7 +544,7 @@ namespace {
                                                    maxElement,
                                                    &nowState);
             if (resultBool) {
-                std::cout << seed << std::endl;
+                //std::cout << seed << std::endl;
                 FoundSeed = seed;
                 foundSeeds++;
                 foundTurn = BattleEmulator::getStartTurn();
@@ -730,12 +728,12 @@ constexpr Player BasePlayers[2] = {
 #include <emscripten/emscripten.h>
 #endif
 namespace {
+    int valuesIndex = 0; // values[] の書き込み位置
     const int MAX = 350;
-    int values[MAX] = {0};
+    int values1[MAX] = {0};
     // aActions[] は味方行動（ホイミ、味方攻撃、麻痺の場合は PARALYSIS）を格納する
-    int aActions[MAX] = {0};
+    int aActions1[MAX] = {0};
 
-    std::vector<ResultStructure> wasmResults;
     std::string wasmLastDump;
     std::string wasmLastError;
     uint64_t wasmLastTurnProcessed = 0;
@@ -769,7 +767,6 @@ namespace {
             return false;
         }
 
-        builder.clear();
         auto tokens = splitTokens(input);
         std::vector<std::string> argvStorage;
         argvStorage.reserve(tokens.size() + 4);
@@ -792,50 +789,22 @@ namespace {
 
         // values[] はダメージやホイミ/味方行動マーカー、麻痺マーカー (-10) を格納する
 
-        int valuesIndex = 0; // values[] の書き込み位置
 
-        if (!ProcessInputBuilder(static_cast<int>(argv.size()), argv.data(), aActions, values, valuesIndex)) {
+
+        if (!ProcessInputBuilder(static_cast<int>(argv.size()), argv.data(), aActions1, values1, valuesIndex)) {
             wasmLastError = "input parse failed";
             return false;
         }
 
-        try {
-            wasmResults = builder.makeStructure();
-        } catch (const std::exception &e) {
-            wasmLastError = e.what();
-            return false;
-        }
-
-        builder.clear();
-        if (wasmResults.empty()) {
-            wasmLastError = "no input combinations";
-            return false;
-        }
         return true;
     }
 
-    void fillArraysFromResult(const ResultStructure &result, int aActions[350], int damages[350]) {
-        for (int i = 0; i < 350; ++i) {
-            aActions[i] = 0;
-            damages[i] = 0;
-        }
-        for (int i = 0; i < result.AactionsCounter; ++i) {
-            aActions[i] = result.Aactions[i];
-        }
-        aActions[result.AactionsCounter] = -1;
-        for (int i = 0; i < result.AII_damageCounter; ++i) {
-            damages[i] = result.AII_damage[i];
-        }
-        damages[result.AII_damageCounter] = -1;
-    }
-
-    std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed, const ResultStructure &result,
-                                int numThreads, bool dropbug) {
+    std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed, int numThreads, bool dropbug) {
         int32_t gene[350] = {0};
         int turns = 0;
         for (int i = 0; i < 349; ++i) {
-            if (aActions[i] != -1) {
-                gene[i] = aActions[i];
+            if (aActions1[i] != -1) {
+                gene[i] = aActions1[i];
                 turns++;
                 continue;
             }
@@ -883,13 +852,18 @@ namespace {
 }
 
 extern "C" {
-EMSCRIPTEN_KEEPALIVE int wasm_prepare_input(const char *input) {
-    memset(values, 0, sizeof(values));
-    memset(aActions, 0, sizeof(aActions));
+EMSCRIPTEN_KEEPALIVE int wasm_prepare_input(const char *input) {;
     if (!buildResultsFromInput(input)) {
         return 0;
     }
-    return static_cast<int>(wasmResults.size());
+
+    std::cout << "\nbbb\naActions: ";
+    for (int i = 0; i < 350 && aActions1[i] != -1; ++i) std::cout << aActions1[i] << " ";
+    std::cout << "\ndamages: ";
+    for (int i = 0; i < 350 && values1[i] != -1; ++i) std::cout << values1[i] << " ";
+    std::cout << std::endl << "valuesIndex: "<< valuesIndex << std::endl;
+
+    return 1;
 }
 
 EMSCRIPTEN_KEEPALIVE const char *wasm_get_last_error() {
@@ -897,17 +871,10 @@ EMSCRIPTEN_KEEPALIVE const char *wasm_get_last_error() {
 }
 
 EMSCRIPTEN_KEEPALIVE uint64_t wasm_bruteforce_range(int resultIndex, uint64_t startSeed, uint64_t endSeed) {
-    if (resultIndex < 0 || resultIndex >= static_cast<int>(wasmResults.size())) {
-        wasmLastError = "invalid result index";
-        return 0;
-    }
-    const auto &result = wasmResults[static_cast<size_t>(resultIndex)];
-    //fillArraysFromResult(result, aActions, values);
-
     BattleEmulator::ResetTurnProcessed();
     foundSeeds = 0;
     FoundSeed = 0;
-    BruteForceMainLoop(BasePlayers, startSeed, endSeed, result.AactionsCounter, aActions, values);
+    BruteForceMainLoop(BasePlayers, startSeed, endSeed, foundTurn + foundTurnOffset, aActions1, values1);
     wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
 
     if (foundSeeds == 1) {
@@ -925,13 +892,18 @@ EMSCRIPTEN_KEEPALIVE int wasm_get_found_seeds() {
 }
 
 EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed, int numThreads, int dropbug) {
-    if (resultIndex < 0 || resultIndex >= static_cast<int>(wasmResults.size())) {
+    if (resultIndex < 0) {
         wasmLastError = "invalid result index";
         wasmLastDump.clear();
         return wasmLastDump.c_str();
     }
+    std::cout << "\naaa\naActions: ";
+    for (int i = 0; i < 350 && aActions1[i] != -1; ++i) std::cout << aActions1[i] << " ";
+    std::cout << "\ndamages: ";
+    for (int i = 0; i < 350 && values1[i] != -1; ++i) std::cout << values1[i] << " ";
+    std::cout << std::endl << "valuesIndex: "<< valuesIndex << std::endl;
 
-    wasmLastDump = buildDumpOutput(BasePlayers, seed, wasmResults[static_cast<size_t>(resultIndex)], numThreads,
+    wasmLastDump = buildDumpOutput(BasePlayers, seed, numThreads,
                                    dropbug != 0);
     return wasmLastDump.c_str();
 }

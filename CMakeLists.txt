@@ -45,9 +45,6 @@ set(SOURCES
         debug.h
         BattleResult.h
         Genome.h
-        InputBuilder.cpp
-        InputBuilder.h
-        ResultStructure.h
         ActionOptimizer.cpp
         ActionOptimizer.h
         EnhancedCostCalculator.cpp
