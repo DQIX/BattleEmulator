@@ -66,7 +66,7 @@ jobs:
         branch: ${{ fromJSON(needs.prepare.outputs.branches_json) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ matrix.branch }}
 
@@ -84,7 +84,7 @@ jobs:
           bash webassembly/build.sh
 
       - name: Upload branch artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: webassembly-${{ matrix.branch }}
           path: dist/branches/${{ matrix.branch }}
@@ -97,12 +97,12 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout UI branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.prepare.outputs.ui_branch }}
 
       - name: Download branch artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: public/branches
 
@@ -126,7 +126,7 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: "public"
 
