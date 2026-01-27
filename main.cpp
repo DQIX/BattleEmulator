@@ -817,7 +817,7 @@ namespace {
         }
 
         auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
+                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 100000, gene, 0);
 
         if (genome.turn >= 100) {
             return "SearchRequest failed: turn limit reached.";
