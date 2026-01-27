@@ -883,6 +883,10 @@ int main(int argc, char *argv[]) {
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
 namespace {
+    int values[MAX] = {0};
+    // aActions[] は味方行動（ホイミ、味方攻撃、麻痺の場合は PARALYSIS）を格納する
+    int aActions[MAX] = {0};
+
     std::vector<ResultStructure> wasmResults;
     std::string wasmLastDump;
     std::string wasmLastError;
@@ -939,9 +943,6 @@ namespace {
 
         const int MAX = 350;
         // values[] はダメージやホイミ/味方行動マーカー、麻痺マーカー (-10) を格納する
-        int values[MAX] = {0};
-        // aActions[] は味方行動（ホイミ、味方攻撃、麻痺の場合は PARALYSIS）を格納する
-        int aActions[MAX] = {0};
 
         int valuesIndex = 0; // values[] の書き込み位置
 
@@ -1050,16 +1051,13 @@ EMSCRIPTEN_KEEPALIVE uint64_t wasm_bruteforce_range(int resultIndex, uint64_t st
         wasmLastError = "invalid result index";
         return 0;
     }
-
-    int aActions[350] = {0};
-    int damages[350] = {0};
     const auto &result = wasmResults[static_cast<size_t>(resultIndex)];
     fillArraysFromResult(result, aActions, damages);
 
     BattleEmulator::ResetTurnProcessed();
     foundSeeds = 0;
     FoundSeed = 0;
-    BruteForceMainLoop(BasePlayers, startSeed, endSeed, result.AactionsCounter, aActions, damages);
+    BruteForceMainLoop(BasePlayers, startSeed, endSeed, result.AactionsCounter, aActions, values);
     wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
 
     if (foundSeeds == 1) {
