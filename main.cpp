@@ -263,7 +263,8 @@ namespace {
 #elif defined(NO_MULTITHREADING)
         std::string multiThreading = ", multithreading is disabled";
 #endif
-#if defined(OPTIMIZATION_O3_ENABLED)
+#if __EMSCRIPTEN__
+# elif defined(OPTIMIZATION_O3_ENABLED)
         std::cout << "dq9 Wight Knight battle emulator " << version << " (Optimized for O3), Build date: " <<
                 buildDate
                 << ", " <<
@@ -274,7 +275,6 @@ namespace {
         std::cout << "dq9 Wight Knight battle emulator " << version << " (No optimization), Build date: " << buildDate << ", " << buildTime   << " UTC/GMT, Compiler: " << compiler << multiThreading << std::endl;
 #else
         std::cout << "dq9 Corvus battle emulator" << version << " (Unknown build configuration), Build date: " << buildDate << ", " << buildTime   << " UTC, Compiler: " << compiler << std::endl;
-        << ", " << buildTime << std::endl;
 #endif
     }
 
