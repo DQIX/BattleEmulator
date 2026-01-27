@@ -720,166 +720,6 @@ constexpr Player BasePlayers[2] = {
 };
 
 
-
-int main(int argc, char *argv[]) {
-    showHeader();
-#ifdef DEBUG
-    auto t0 = std::chrono::high_resolution_clock::now();
-#endif
-
-
-    //https://zenn.dev/reputeless/books/standard-cpp-for-competitive-programming/viewer/library-ios-iomanip#3.1-c-%E8%A8%80%E8%AA%9E%E3%81%AE%E5%85%A5%E5%87%BA%E5%8A%9B%E3%82%B9%E3%83%88%E3%83%AA%E3%83%BC%E3%83%A0%E3%81%A8%E3%81%AE%E5%90%8C%E6%9C%9F%E3%82%92%E7%84%A1%E5%8A%B9%E3%81%AB%E3%81%99%E3%82%8B
-    //std::cin.tie(0)->sync_with_stdio(0);
-
-#if defined(OPTIMIZE_MODE)
-
-    int act[350] = {0};
-    int counter = 0;
-    act[counter++] = BattleEmulator::ATTACK_ALLY;
-    act[counter++] = -1;
-    SimpleParameterOptimizer::optimize(BasePlayers, 139924927+2, act, 1000, counter);
-
-    return 0;
-#endif
-
-
-
-
-#ifdef DEBUG2
-    uint64_t time1 = 0x3cc2e2c;
-
-    int dummy[100];
-    lcg::init(time1, false);
-    int *position1 = new int(1);
-
-    //ver: v4.0.3_vW_aa, seed: 0x3cc2e2c, actions: 25, 25, 25, 25, 26, 25, 59, 25, 27, 27, 59, 59, 23, 61, 27, 23, 59, 59, 61, 59, 23, 25, 25, 23, 25, 59, 25, 25, 61,
-
-    /*
-        *NowStateの各ビットの使用状況は下記の通りである。
-        +-+-+-+-+-+-+-+-+- (* NowState) -+-+-+-+-+-+-+-+-+
-           |            Name            |     size      |
-        0  | Current Rotation Table     |     4bit      |
-        4  | Rotation Internal State    |     4bit      |
-        8  | Free Camera State          |     4bit      |
-        12 | Turn Count Processed       |     20bit     |
-        32 | Combo Previous Attack Id   |     2byte     |
-        40 | Combo Counter              |     1byte     |
-        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-                                     合計 6Byte
-    */
-
-    auto *NowState = new uint64_t(0); //エミュレーターの内部ステートを表すint
-
-    Player players1[2];
-
-    int32_t gene1[350] = {
-        25, 25, 25, 25, 26, 25, 59, 25, 27, 27, 59, 59, 23, 61, 27, 23, 59, 59, 61, 59, 23, 25, 25, 23, 25, 59, 25, 25, 61,
-        BattleEmulator::ATTACK_ALLY};
-    //0x22e2dbaf:
-    //0x44dbafa: 25, 25, 25, 50, 54, 25, 50, 54, 56, 54, 25, 54, 53, 53, 25, 50, 25, 56, 54, 25, 54,
-    //ver: v4.0.3_vS_aa, seed: 0x3e5f51b, actions: 25, 22, 22, 25, 25, 26, 25, 25, 59, 61, 25, 59, 23, 56, 25, 61, 61, 23, 61, 25, 56, 61, 59, 25,
-    // int32_t gene1[350] = {
-    //     25, 25, 25, 26, 25, 24, 25, 61, 23, 59, 61, 61, 23, 25, 23, 25, 59, 61, 61, 23, 25, 56, 25, 59, 59, 59, 25,
-    //     BattleEmulator::ATTACK_ALLY};
-    //gene1[19-1] = BattleEmulator::DEFENCE;
-    int counter = 0;
-    // int32_t gene1[350] = {0};
-    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-    // //
-
-
-    //
-    // gene1[counter++] = BattleEmulator::MIRACLE_SLASH;
-    // gene1[counter++] = BattleEmulator::MIRACLE_SLASH;
-    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-    // gene1[counter++] = BattleEmulator::CRACKLE;
-    // gene1[counter++] = BattleEmulator::CRACKLE;
-    // gene1[counter++] = BattleEmulator::CRACKLE;
-    // gene1[counter++] = BattleEmulator::CRACKLE;
-    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-    // gene1[counter++] = BattleEmulator::MIRACLE_SLASH;
-    // gene1[counter++] = BattleEmulator::MIRACLE_SLASH;
-    // gene1[counter++] = BattleEmulator::MIRACLE_SLASH;
-    // gene1[counter++] = BattleEmulator::MIRACLE_SLASH;
-    // gene1[counter++] = BattleEmulator::MIRACLE_SLASH;
-    // gene1[counter++] = BattleEmulator::MIRACLE_SLASH;
-
-    //for (int i = 0; i < 10; ++i) {
-    (*NowState) = 0;
-    (*position1) = 1;
-    std::optional<BattleResult> dummy1;
-    dummy1 = BattleResult();
-    std::memcpy(players1, BasePlayers, sizeof(players1));
-    BattleEmulator::Main(position1, (counter == 0 ? 1000 : counter), gene1, players1, dummy1, time1, dummy, dummy, -1,
-                         NowState);
-
-    std::stringstream ss1;
-    ss1 << time1 << " ";
-
-    if (dummy1.has_value()) {
-        std::cout << dumpTable(dummy1.value(), gene1, -1) << std::endl;
-    }
-    //}
-    delete position1;
-    delete NowState;
-
-    return 0;
-#endif
-
-#ifdef DEBUG3
-    uint64_t seed = 139924927+8;
-
-    int actions[350] = {
-        25, -1,
-        //25, 25, 26, 25, 22, 25, 25, -1
-        //        25, 25, 26, 25, 22, 25, 25, -1
-    };
-    Player Player5[2] = {BasePlayers[0], BasePlayers[1]};
-    SearchRequest(Player5, seed, actions, 1);
-
-    std::cout << performanceLogger.rdbuf() << std::endl;
-
-    return 0;
-#endif
-
-    if (argc < 5) {
-        help(argv[0]);
-        return 1;
-    }
-
-    // 戦闘発生時間の取得
-    const int hours = toint(argv[1]);
-    const int minutes = toint(argv[2]);
-    const int seconds = toint(argv[3]);
-
-    if (hours < 0 || minutes < 0 || seconds < 0) {
-        std::cerr << "Invalid time parameters" << std::endl;
-        return 1;
-    }
-
-    Player players2[2] = {BasePlayers[0], BasePlayers[1]};
-
-    auto exitCode = ProgramMain(players2, hours, minutes, seconds, argc, argv);
-    std::cout << performanceLogger.rdbuf();
-#ifdef DEBUG
-    auto t1 = std::chrono::high_resolution_clock::now();
-    auto elapsed_time =
-            std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
-    std::cout << "elapsed time: " << double(elapsed_time) / 1000 << " ms" << std::endl;
-#endif
-
-    return exitCode;
-}
-
 #if defined(MINGW_BUILD)
 #define __EMSCRIPTEN__
 #define EMSCRIPTEN_KEEPALIVE
@@ -1097,3 +937,162 @@ EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed
 }
 }
 #endif
+
+
+
+int main(int argc, char *argv[]) {
+    showHeader();
+#ifdef DEBUG
+    auto t0 = std::chrono::high_resolution_clock::now();
+#endif
+    //https://zenn.dev/reputeless/books/standard-cpp-for-competitive-programming/viewer/library-ios-iomanip#3.1-c-%E8%A8%80%E8%AA%9E%E3%81%AE%E5%85%A5%E5%87%BA%E5%8A%9B%E3%82%B9%E3%83%88%E3%83%AA%E3%83%BC%E3%83%A0%E3%81%A8%E3%81%AE%E5%90%8C%E6%9C%9F%E3%82%92%E7%84%A1%E5%8A%B9%E3%81%AB%E3%81%99%E3%82%8B
+    //std::cin.tie(0)->sync_with_stdio(0);
+
+#if defined(OPTIMIZE_MODE)
+
+    int act[350] = {0};
+    int counter = 0;
+    act[counter++] = BattleEmulator::ATTACK_ALLY;
+    act[counter++] = -1;
+    SimpleParameterOptimizer::optimize(BasePlayers, 139924927+2, act, 1000, counter);
+
+    return 0;
+#endif
+
+
+
+
+#ifdef DEBUG2
+    uint64_t time1 = 0x3cc2e2c;
+
+    int dummy[100];
+    lcg::init(time1, false);
+    int *position1 = new int(1);
+
+    //ver: v4.0.3_vW_aa, seed: 0x3cc2e2c, actions: 25, 25, 25, 25, 26, 25, 59, 25, 27, 27, 59, 59, 23, 61, 27, 23, 59, 59, 61, 59, 23, 25, 25, 23, 25, 59, 25, 25, 61,
+
+    /*
+        *NowStateの各ビットの使用状況は下記の通りである。
+        +-+-+-+-+-+-+-+-+- (* NowState) -+-+-+-+-+-+-+-+-+
+           |            Name            |     size      |
+        0  | Current Rotation Table     |     4bit      |
+        4  | Rotation Internal State    |     4bit      |
+        8  | Free Camera State          |     4bit      |
+        12 | Turn Count Processed       |     20bit     |
+        32 | Combo Previous Attack Id   |     2byte     |
+        40 | Combo Counter              |     1byte     |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                                     合計 6Byte
+    */
+
+    auto *NowState = new uint64_t(0); //エミュレーターの内部ステートを表すint
+
+    Player players1[2];
+
+    int32_t gene1[350] = {
+        25, 25, 25, 25, 26, 25, 59, 25, 27, 27, 59, 59, 23, 61, 27, 23, 59, 59, 61, 59, 23, 25, 25, 23, 25, 59, 25, 25, 61,
+        BattleEmulator::ATTACK_ALLY};
+    //0x22e2dbaf:
+    //0x44dbafa: 25, 25, 25, 50, 54, 25, 50, 54, 56, 54, 25, 54, 53, 53, 25, 50, 25, 56, 54, 25, 54,
+    //ver: v4.0.3_vS_aa, seed: 0x3e5f51b, actions: 25, 22, 22, 25, 25, 26, 25, 25, 59, 61, 25, 59, 23, 56, 25, 61, 61, 23, 61, 25, 56, 61, 59, 25,
+    // int32_t gene1[350] = {
+    //     25, 25, 25, 26, 25, 24, 25, 61, 23, 59, 61, 61, 23, 25, 23, 25, 59, 61, 61, 23, 25, 56, 25, 59, 59, 59, 25,
+    //     BattleEmulator::ATTACK_ALLY};
+    //gene1[19-1] = BattleEmulator::DEFENCE;
+    int counter = 0;
+    // int32_t gene1[350] = {0};
+    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    // //
+
+
+    //
+    // gene1[counter++] = BattleEmulator::MIRACLE_SLASH;
+    // gene1[counter++] = BattleEmulator::MIRACLE_SLASH;
+    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    // gene1[counter++] = BattleEmulator::CRACKLE;
+    // gene1[counter++] = BattleEmulator::CRACKLE;
+    // gene1[counter++] = BattleEmulator::CRACKLE;
+    // gene1[counter++] = BattleEmulator::CRACKLE;
+    // gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    // gene1[counter++] = BattleEmulator::MIRACLE_SLASH;
+    // gene1[counter++] = BattleEmulator::MIRACLE_SLASH;
+    // gene1[counter++] = BattleEmulator::MIRACLE_SLASH;
+    // gene1[counter++] = BattleEmulator::MIRACLE_SLASH;
+    // gene1[counter++] = BattleEmulator::MIRACLE_SLASH;
+    // gene1[counter++] = BattleEmulator::MIRACLE_SLASH;
+
+    //for (int i = 0; i < 10; ++i) {
+    (*NowState) = 0;
+    (*position1) = 1;
+    std::optional<BattleResult> dummy1;
+    dummy1 = BattleResult();
+    std::memcpy(players1, BasePlayers, sizeof(players1));
+    BattleEmulator::Main(position1, (counter == 0 ? 1000 : counter), gene1, players1, dummy1, time1, dummy, dummy, -1,
+                         NowState);
+
+    std::stringstream ss1;
+    ss1 << time1 << " ";
+
+    if (dummy1.has_value()) {
+        std::cout << dumpTable(dummy1.value(), gene1, -1) << std::endl;
+    }
+    //}
+    delete position1;
+    delete NowState;
+
+    return 0;
+#endif
+
+#ifdef DEBUG3
+    uint64_t seed = 139924927+8;
+
+    int actions[350] = {
+        25, -1,
+        //25, 25, 26, 25, 22, 25, 25, -1
+        //        25, 25, 26, 25, 22, 25, 25, -1
+    };
+    Player Player5[2] = {BasePlayers[0], BasePlayers[1]};
+    SearchRequest(Player5, seed, actions, 1);
+
+    std::cout << performanceLogger.rdbuf() << std::endl;
+
+    return 0;
+#endif
+
+    if (argc < 5) {
+        help(argv[0]);
+        return 1;
+    }
+
+    // 戦闘発生時間の取得
+    const int hours = toint(argv[1]);
+    const int minutes = toint(argv[2]);
+    const int seconds = toint(argv[3]);
+
+    if (hours < 0 || minutes < 0 || seconds < 0) {
+        std::cerr << "Invalid time parameters" << std::endl;
+        return 1;
+    }
+
+    Player players2[2] = {BasePlayers[0], BasePlayers[1]};
+
+    auto exitCode = ProgramMain(players2, hours, minutes, seconds, argc, argv);
+    std::cout << performanceLogger.rdbuf();
+#ifdef DEBUG
+    auto t1 = std::chrono::high_resolution_clock::now();
+    auto elapsed_time =
+            std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    std::cout << "elapsed time: " << double(elapsed_time) / 1000 << " ms" << std::endl;
+#endif
+
+    return exitCode;
+}
