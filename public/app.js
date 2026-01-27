@@ -123,7 +123,7 @@ async function ensureWorkerScript() {
     return;
   }
   try {
-    const response = await fetch("worker.js", { cache: "force-cache" });
+    const response = await fetch("worker.js");
     state.workerScriptText = await response.text();
     const blob = new Blob([state.workerScriptText], { type: "application/javascript" });
     state.workerBlobUrl = URL.createObjectURL(blob);
@@ -137,9 +137,7 @@ async function ensureModulePayload(moduleUrl) {
     return state.moduleCache.get(moduleUrl);
   }
 
-  const jsText = await fetch(moduleUrl, {
-    cache: "force-cache",
-  }).then((r) => r.text());
+  const jsText = await fetch(moduleUrl).then((r) => r.text());
 
   const payload = { jsText };
   state.moduleCache.set(moduleUrl, payload);
