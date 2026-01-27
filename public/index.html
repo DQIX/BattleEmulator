@@ -86,7 +86,7 @@
               input: "入力",
               inputHint: "Enterで実行、Shift+Enterで改行",
               seed: "シード",
-              dump: "Dump Table",
+              dump: "出力",
               dumpHint: "C++ dumpTableの出力",
               settings: "設定",
               settingsHint: "テーマと言語",
@@ -157,7 +157,12 @@
             <h2 data-i18n="dump">Dump Table</h2>
             <span id="seedState" class="chip chip-accent" data-i18n="waiting">waiting</span>
           </div>
-          <textarea id="dumpOutput" class="dump-output" readonly></textarea>
+          <textarea
+                  id="dumpOutput"
+                  class="dump-output"
+                  readonly
+                  wrap="off"
+          ></textarea>
         </section>
 
         <section class="panel panel-settings" style="--delay: 200ms">
