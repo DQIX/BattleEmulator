@@ -114,6 +114,7 @@ self.onmessage = async (event) => {
     }
 
     if (type === "search") {
+      const startTime = performance.now();
       const ptr = Module._wasm_search_dump(
           resultIndex || 0,
           BigInt(seed),
@@ -122,11 +123,19 @@ self.onmessage = async (event) => {
       );
 
       const output = Module.UTF8ToString(ptr);
+      const turns = Module._wasm_get_turn_processed();
+
+      const elapsedMs = Math.max(
+          1,
+          Math.round(performance.now() - startTime)
+      );
 
       self.postMessage({
         id,
         type: "search-done",
-        output
+        output,
+        turns: turns.toString(),
+        elapsedMs
       });
       return;
     }
