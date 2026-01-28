@@ -339,6 +339,10 @@ body::before {
 
 .hero {
   padding: 12px 8px 24px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
 }
 
 .hero-title {
@@ -354,11 +358,15 @@ body::before {
 }
 
 .hero-links {
-  margin-top: 8px;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 4px;
+  text-align: right;
+}
+
+.hero-left {
+  text-align: left;
 }
 
 .hero-link {
@@ -373,7 +381,7 @@ body::before {
 
 .hero-note {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .grid {
@@ -627,6 +635,17 @@ h2 {
 @media (max-width: 980px) {
   .grid {
     grid-template-columns: 1fr;
+  }
+
+  .hero {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .hero-links {
+    align-items: flex-start;
+    text-align: left;
   }
 
   .panel-dump {
