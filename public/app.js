@@ -476,7 +476,7 @@ async function runSearch() {
     const elapsedMs = BigInt(searchResult.elapsedMs || 1);
     const speed = (turns * 1000n) / (elapsedMs * 10000n);
     appendLog(
-        `searcher worker ${searchResult.id + 1} turns=${turns} elapsed=${elapsedMs}ms speed=${speed} (m turns/s)`
+        `searcher worker turns=${turns} elapsed=${elapsedMs}ms speed=${speed} (m turns/s)`
     );
 
     appendLog("dump table ready");
