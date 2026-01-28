@@ -10,7 +10,6 @@
 #include "lcg.h"
 #include "BattleEmulator.h"
 #include "debug.h"
-#include "InputBuilder.h"
 #include "setting.h"
 
 #ifdef DEBUG
@@ -76,7 +75,6 @@ namespace {
 
     constexpr int THREAD_COUNT = 1;
     // `InputBuilder` インスタンス作成
-    InputBuilder builder;
 
     // ヘッダーを出力する関数
     void printHeader(std::stringstream &ss) {
@@ -260,7 +258,8 @@ namespace {
 #elif defined(NO_MULTITHREADING)
         std::string multiThreading = ", multithreading is disabled";
 #endif
-#if defined(OPTIMIZATION_O3_ENABLED)
+#if __EMSCRIPTEN__
+# elif  defined(OPTIMIZATION_O3_ENABLED)
         std::cout << "dq9 Morag battle emulator " << version << " (Optimized for O3), Build date: " <<
                 buildDate
                 << ", " <<
@@ -272,7 +271,6 @@ namespace {
                 buildDate << ", " << buildTime << " UTC/GMT, Compiler: " << compiler << multiThreading << std::endl;
 #else
         std::cout << "dq9 Corvus battle emulator" << version << " (Unknown build configuration), Build date: " << buildDate << ", " << buildTime   << " UTC, Compiler: " << compiler << std::endl;
-        << ", " << buildTime << std::endl;
 #endif
     }
 
@@ -945,3 +943,245 @@ int main(int argc, char *argv[]) {
 
     return exitCode;
 }
+
+#if defined(MINGW_BUILD)
+#define __EMSCRIPTEN__
+#define EMSCRIPTEN_KEEPALIVE
+#endif
+
+#ifdef __EMSCRIPTEN__
+#if !defined(MINGW_BUILD) && !defined(MSVC_BUILD)
+#include <emscripten/emscripten.h>
+#endif
+namespace {
+    int valuesIndex = 0; // values[] の書き込み位置
+    const int MAX = 350;
+    int values1[MAX] = {0};
+    // aActions[] は味方行動（ホイミ、味方攻撃、麻痺の場合は PARALYSIS）を格納する
+    int aActions1[MAX] = {0};
+
+    std::string wasmLastDump;
+    std::string wasmLastError;
+    uint64_t wasmLastTurnProcessed = 0;
+
+    std::vector<std::string> splitTokens(const char *input) {
+        std::vector<std::string> tokens;
+        if (!input) {
+            return tokens;
+        }
+        std::string current;
+        for (const char *p = input; *p != '\0'; ++p) {
+            if (std::isspace(static_cast<unsigned char>(*p))) {
+                if (!current.empty()) {
+                    tokens.push_back(current);
+                    current.clear();
+                }
+            } else {
+                current.push_back(*p);
+            }
+        }
+        if (!current.empty()) {
+            tokens.push_back(current);
+        }
+        return tokens;
+    }
+
+    bool buildResultsFromInput(const char *input) {
+        wasmLastError.clear();
+        if (input == nullptr) {
+            wasmLastError = "input is null";
+            return false;
+        }
+
+        auto tokens = splitTokens(input);
+        std::vector<std::string> argvStorage;
+        argvStorage.reserve(tokens.size() + 4);
+        argvStorage.push_back("wasm");
+        argvStorage.push_back("0");
+        argvStorage.push_back("0");
+        argvStorage.push_back("0");
+        for (const auto &token : tokens) {
+            if (!token.empty()) {
+                argvStorage.push_back(token);
+            }
+        }
+
+        std::vector<char *> argv;
+        argv.reserve(argvStorage.size());
+        for (auto &arg : argvStorage) {
+            argv.push_back(const_cast<char *>(arg.c_str()));
+        }
+
+
+        // values[] はダメージやホイミ/味方行動マーカー、麻痺マーカー (-10) を格納する
+
+
+
+        if (!ProcessInputBuilder(static_cast<int>(argv.size()), argv.data(), aActions1, values1, valuesIndex)) {
+            wasmLastError = "input parse failed";
+            return false;
+        }
+
+        return true;
+    }
+
+    std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed, int numThreads, bool dropbug) {
+        lcg::init(seed, true);
+
+        BattleEmulator::ResetTurnProcessed();
+
+        // --- prefix（既存入力）を gene にコピー（-1 終端） ---
+        int32_t prefixGene[350] = {};
+        int prefixTurns = 0;
+        for (int i = 0; i < 350; ++i) {
+            prefixGene[i] = aActions1[i];
+            if (aActions1[i] == -1) {
+                prefixGene[i] = -1;
+                if (i + 1 < 350) prefixGene[i + 1] = -1;
+                break;
+            }
+            ++prefixTurns;
+        }
+
+
+        // --- prefix を1回だけ実行して、探索の根状態を作る（従来の挙動を維持） ---
+        int rootPos = 1;
+        uint64_t rootNow = 0;
+        Player rootPlayers[2] = {copiedPlayers[0], copiedPlayers[1]};
+
+        BattleEmulator::Main(
+            &rootPos,
+            prefixTurns,
+            prefixGene,
+            rootPlayers,
+            nullptr,
+            seed,
+            nullptr,
+            nullptr,
+            -2,
+            &rootNow,
+            false
+        );
+        auto* search = new ActionSearcher(rootPlayers, rootNow, rootPos, 6);
+        search->Run();
+
+        SearchPlan Plan[ActionSearcher::BEST_LIMIT];
+        auto tmp = search->getBest(Plan);
+
+        delete search;   // ← 必須
+
+        auto best = Plan[0].depth;
+        SearchPlan bestPlan = Plan[0];
+        for (int i = 0; i < ActionSearcher::BEST_LIMIT; ++i) {
+            auto tmp1  = Plan[i].depth;
+            if (best > tmp1) {
+                best = tmp1;
+                bestPlan = Plan[i];
+            }
+        }
+        // テスト実行（BattleResult をちゃんと作って dump まで通す）
+        int finalGene[350] = {};
+
+        auto finalTurns = 0;
+
+        //copiedPlayersは初期状態のplayerなので合成する
+        for (int i = 0; i < 350; ++i) {
+            if (prefixGene[i] == -1 || prefixGene[i] == 0) {
+                break;
+            }
+            std::cout << prefixGene[i] << ",";
+            finalGene[finalTurns] = prefixGene[i];
+            finalTurns++;
+        }
+
+        for (int i = 0; i < 350; ++i) {
+            if (bestPlan.actions[i] == -1 || bestPlan.actions[i] == 0) {
+                finalGene[finalTurns++] = -1;
+                break;
+            }
+            std::cout << bestPlan.actions[i] << ",";
+            finalGene[finalTurns] = bestPlan.actions[i];
+            finalTurns++;
+        }
+
+        if (finalTurns >= 100) {
+            return "SearchRequest failed: turn limit reached.";
+        }
+
+        BattleResult result1;
+        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
+
+        auto *position = new int(1);
+        auto *nowState = new uint64_t(0);
+
+        BattleEmulator::Main(position, 100, finalGene, players, &result1, seed, nullptr, nullptr, -1,
+                             nowState);
+
+        delete position;
+        delete nowState;
+
+        std::stringstream ss;
+        ss << dumpTable(result1, finalGene, foundTurn) << "\n";
+        ss << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
+        ss << "0x" << std::hex << seed << std::dec << "\n" << "actions: ";
+        for (auto i = 0; i < 100; ++i) {
+            if (finalGene[i] == 0 || finalGene[i] == -1) {
+                break;
+            }
+            ss << finalGene[i] << ", ";
+        }
+        ss << "\n";
+        wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
+        return ss.str();
+    }
+}
+
+extern "C" {
+EMSCRIPTEN_KEEPALIVE int wasm_prepare_input(const char *input) {;
+    if (!buildResultsFromInput(input)) {
+        return 0;
+    }
+
+    return 1;
+}
+
+EMSCRIPTEN_KEEPALIVE const char *wasm_get_last_error() {
+    return wasmLastError.c_str();
+}
+
+EMSCRIPTEN_KEEPALIVE uint64_t wasm_bruteforce_range(int resultIndex, uint64_t startSeed, uint64_t endSeed) {
+    BattleEmulator::ResetTurnProcessed();
+    foundSeeds = 0;
+    FoundSeed = 0;
+    BruteForceMainLoop(BasePlayers, startSeed, endSeed, foundTurn + foundTurnOffset, aActions1, values1);
+    wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
+
+    if (foundSeeds == 1) {
+        return FoundSeed;
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE uint64_t wasm_get_turn_processed() {
+    return wasmLastTurnProcessed;
+}
+
+EMSCRIPTEN_KEEPALIVE int wasm_get_found_seeds() {
+    return foundSeeds;
+}
+
+EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed, int numThreads, int dropbug) {
+    BattleEmulator::ResetTurnProcessed();
+    if (resultIndex < 0) {
+        wasmLastError = "invalid result index";
+        wasmLastDump.clear();
+        return wasmLastDump.c_str();
+    }
+
+    wasmLastDump = buildDumpOutput(BasePlayers, seed, numThreads,
+                                   dropbug != 0);
+    wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
+    return wasmLastDump.c_str();
+}
+}
+#endif

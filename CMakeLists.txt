@@ -44,9 +44,6 @@ set(SOURCES
         debug.cpp
         debug.h
         BattleResult.h
-        InputBuilder.cpp
-        InputBuilder.h
-        ResultStructure.h
         setting.h
         ActionBruteForcer.cpp
         ActionBruteForcer.h
