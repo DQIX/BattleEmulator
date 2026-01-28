@@ -2,6 +2,7 @@ const ui = {
   emulatorSelect: document.getElementById("emulatorSelect"),
   emulatorMeta: document.getElementById("emulatorMeta"),
   emulatorStatus: document.getElementById("emulatorStatus"),
+  offsetSeconds: document.getElementById("offsetSeconds"),
   threads: document.getElementById("threads"),
   actionInput: document.getElementById("actionInput"),
   runButton: document.getElementById("runButton"),
@@ -17,6 +18,9 @@ const ui = {
   preloadToggle: document.getElementById("preloadToggle")
 };
 
+const DEFAULT_OFFSET_SECONDS = 15;
+const OFFSET_STORAGE_KEY = "dq9OffsetSeconds";
+
 const state = {
   emulators: [],
   active: null,
@@ -25,6 +29,7 @@ const state = {
   theme: document.documentElement.dataset.theme || "lightSepia",
   emulatorStatusKey: "idle",
   preload: localStorage.getItem("dq9Preload") === "1",
+  offsetSeconds: DEFAULT_OFFSET_SECONDS,
   preloadQueue: Promise.resolve(),
   moduleCache: new Map(),
   workerScriptText: "",
@@ -86,12 +91,35 @@ function parseIntValue(el) {
   return Number.isFinite(value) ? value : 0;
 }
 
-function computeSeedRange(hours, minutes, seconds) {
+function normalizeOffsetSeconds(value) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return DEFAULT_OFFSET_SECONDS;
+  }
+  return parsed;
+}
+
+function loadOffsetSeconds() {
+  const stored = localStorage.getItem(OFFSET_STORAGE_KEY);
+  return normalizeOffsetSeconds(stored);
+}
+
+function setOffsetSeconds(value) {
+  const normalized = normalizeOffsetSeconds(value);
+  state.offsetSeconds = normalized;
+  if (ui.offsetSeconds) {
+    ui.offsetSeconds.value = String(normalized);
+  }
+  localStorage.setItem(OFFSET_STORAGE_KEY, String(normalized));
+}
+
+function computeSeedRange(hours, minutes, seconds, offsetSeconds) {
   const seedShift = 65536n;
   const totalSeconds = BigInt(hours * 3600 + minutes * 60 + seconds);
-  const numerator1 = 2n * (totalSeconds - 15n) - 9n;
+  const offset = BigInt(normalizeOffsetSeconds(offsetSeconds));
+  const numerator1 = 2n * (totalSeconds - offset) - 9n;
   const time1 = (numerator1 * 100000n) / (2n * 12515n);
-  const numerator2 = 2n * (totalSeconds - 15n) + 9n;
+  const numerator2 = 2n * (totalSeconds - offset) + 9n;
   const time2 = (numerator2 * 1000000n) / (2n * 125155n);
   return { start: time1 * seedShift, end: time2 * seedShift };
 }
@@ -307,6 +335,7 @@ function initSettings() {
   ui.preloadToggle.checked = state.preload;
   applyLanguage(state.lang);
   applyTheme(state.theme);
+  setOffsetSeconds(loadOffsetSeconds());
 }
 
 async function runSearch() {
@@ -328,7 +357,12 @@ async function runSearch() {
     return;
   }
 
-  const { start, end } = computeSeedRange(parsed.hours, parsed.minutes, parsed.seconds);
+  const { start, end } = computeSeedRange(
+    parsed.hours,
+    parsed.minutes,
+    parsed.seconds,
+    state.offsetSeconds
+  );
   const ranges = splitRange(start, end, threads);
   if (!ranges.length) {
     appendLog("invalid time range");
@@ -521,6 +555,12 @@ ui.preloadToggle.addEventListener("change", (event) => {
     preloadModule(moduleUrl);
   }
 });
+
+if (ui.offsetSeconds) {
+  ui.offsetSeconds.addEventListener("change", (event) => {
+    setOffsetSeconds(event.target.value);
+  });
+}
 
 loadManifest();
 initSettings();
