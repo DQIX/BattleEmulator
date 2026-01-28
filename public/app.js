@@ -239,7 +239,6 @@ function setActiveEmulator(index) {
   }
   state.active = emulator;
   ui.emulatorMeta.textContent = `${emulator.branch} :: ${emulator.module}`;
-  ui.threads.value = emulator.defaultThreads || 4;
   appendLog(`selected emulator ${emulator.label}`);
   if (state.preload) {
     const moduleUrl = new URL(emulator.module, window.location.href).toString();
