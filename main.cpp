@@ -886,6 +886,7 @@ EMSCRIPTEN_KEEPALIVE int wasm_get_found_seeds() {
 }
 
 EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed, int numThreads, int dropbug) {
+    BattleEmulator::ResetTurnProcessed();
     if (resultIndex < 0) {
         wasmLastError = "invalid result index";
         wasmLastDump.clear();
@@ -894,6 +895,7 @@ EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed
 
     wasmLastDump = buildDumpOutput(BasePlayers, seed, numThreads,
                                    dropbug != 0);
+    wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
     return wasmLastDump.c_str();
 }
 }
