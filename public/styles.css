@@ -557,7 +557,7 @@ h2 {
   border: 1px solid var(--border);
   padding: 12px;
   font-family: var(--font-mono);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.5;
   color: color-mix(in srgb, var(--fg) 70%, var(--muted));
   background: color-mix(in srgb, var(--input-bg) 94%, var(--panel));
