@@ -603,7 +603,7 @@ h2 {
 
 .memo-grid {
   width: 100%;
-  min-width: 620px;
+  min-width: 760px;
   table-layout: fixed;
   border-collapse: collapse;
   font-family: var(--font-mono);

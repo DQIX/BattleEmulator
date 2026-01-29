@@ -77,6 +77,31 @@ function formatInputTime(parsed) {
   return `${pad2(parsed.hours)}:${pad2(parsed.minutes)}:${pad2(parsed.seconds)}`;
 }
 
+function formatDatePartsUTC(date) {
+  const year = date.getUTCFullYear();
+  const month = pad2(date.getUTCMonth() + 1);
+  const day = pad2(date.getUTCDate());
+  const hours = pad2(date.getUTCHours());
+  const minutes = pad2(date.getUTCMinutes());
+  const seconds = pad2(date.getUTCSeconds());
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
+function formatRealTimeDisplay(savedAt) {
+  if (!savedAt) {
+    return "-";
+  }
+  const base = new Date(savedAt);
+  if (Number.isNaN(base.getTime())) {
+    return "-";
+  }
+  if (state.lang === "ja") {
+    const jstDate = new Date(base.getTime() + 9 * 60 * 60 * 1000);
+    return `${formatDatePartsUTC(jstDate)} JST`;
+  }
+  return `${formatDatePartsUTC(base)} UTC`;
+}
+
 function hashString(text) {
   let hash = 5381;
   for (let i = 0; i < text.length; i += 1) {
@@ -180,6 +205,9 @@ function renderSeedMemos(list) {
     const cellTime = document.createElement("td");
     cellTime.textContent = entry.timeText;
 
+    const cellRealTime = document.createElement("td");
+    cellRealTime.textContent = formatRealTimeDisplay(entry.savedAt);
+
     const cellEmu = document.createElement("td");
     cellEmu.textContent = entry.emulatorLabel;
 
@@ -211,6 +239,7 @@ function renderSeedMemos(list) {
     cellUrl.appendChild(copyUrl);
 
     row.appendChild(cellTime);
+    row.appendChild(cellRealTime);
     row.appendChild(cellEmu);
     row.appendChild(cellOffset);
     row.appendChild(cellRange);
@@ -246,9 +275,10 @@ function recordSeedMemo(parsed, inputText) {
 }
 
 function memoToMarkdown(list) {
-  const header = ["Time", "Emu", "Offset", "Range", "Input"];
+  const header = ["Time", "Real", "Emu", "Offset", "Range", "Input"];
   const rows = list.map((entry) => [
     entry.timeText,
+    formatRealTimeDisplay(entry.savedAt),
     entry.emulatorLabel,
     entry.offsetSeconds,
     entry.searchRangeSeconds,
@@ -264,9 +294,10 @@ function memoToMarkdown(list) {
 
 function memoToCsv(list) {
   const escapeField = (value) => `"${String(value).replace(/"/g, '""')}"`;
-  const header = ["Time", "Emu", "Offset", "Range", "Input"];
+  const header = ["Time", "Real", "Emu", "Offset", "Range", "Input"];
   const rows = list.map((entry) => [
     entry.timeText,
+    formatRealTimeDisplay(entry.savedAt),
     entry.emulatorLabel,
     entry.offsetSeconds,
     entry.searchRangeSeconds,
