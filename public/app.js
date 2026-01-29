@@ -21,12 +21,7 @@ const ui = {
   memoEmpty: document.getElementById("memoEmpty"),
   memoScroll: document.getElementById("memoScroll"),
   memoCopyMarkdown: document.getElementById("memoCopyMarkdown"),
-  memoCopyCsv: document.getElementById("memoCopyCsv"),
-  urlOverrideStatus: document.getElementById("urlOverrideStatus"),
-  urlOverridePreview: document.getElementById("urlOverridePreview"),
-  applyUrlOverrides: document.getElementById("applyUrlOverrides"),
-  memoCount: document.getElementById("memoCount"),
-  memoLatest: document.getElementById("memoLatest")
+  memoCopyCsv: document.getElementById("memoCopyCsv")
 };
 
 const DEFAULT_OFFSET_SECONDS = 15;
@@ -54,8 +49,9 @@ const state = {
   workerScriptText: "",
   workerBlobUrl: "",
   memoList: [],
-  pendingOverrides: null,
-  appliedOverrides: false
+  urlOverrides: null,
+  urlOverridesAppliedNonEmu: false,
+  urlOverridesAppliedEmu: false
 };
 
 const logLines = [];
@@ -164,15 +160,6 @@ function setSeedState(text, count) {
   }
 }
 
-function updateMemoStats(list) {
-  if (ui.memoCount) {
-    ui.memoCount.textContent = String(list.length);
-  }
-  if (ui.memoLatest) {
-    ui.memoLatest.textContent = list.length ? list[0].timeText : "-";
-  }
-}
-
 function renderSeedMemos(list) {
   if (!ui.memoTableBody || !ui.memoEmpty || !ui.memoScroll) {
     return;
@@ -181,7 +168,6 @@ function renderSeedMemos(list) {
   if (!list.length) {
     ui.memoEmpty.hidden = false;
     ui.memoScroll.hidden = true;
-    updateMemoStats(list);
     return;
   }
   ui.memoEmpty.hidden = true;
@@ -232,8 +218,6 @@ function renderSeedMemos(list) {
     row.appendChild(cellUrl);
     ui.memoTableBody.appendChild(row);
   });
-
-  updateMemoStats(list);
 }
 
 function recordSeedMemo(parsed, inputText) {
@@ -316,67 +300,35 @@ function parseUrlOverrides() {
   return Object.keys(overrides).length ? overrides : null;
 }
 
-function updateUrlOverridePanel() {
-  if (!ui.urlOverrideStatus || !ui.urlOverridePreview || !ui.applyUrlOverrides) {
-    return;
-  }
-  const overrides = state.pendingOverrides;
-  if (!overrides) {
-    ui.urlOverrideStatus.textContent = t("memoNoUrl", "No URL overrides");
-    ui.urlOverridePreview.textContent = "";
-    ui.applyUrlOverrides.classList.add("is-disabled");
-    ui.applyUrlOverrides.setAttribute("aria-disabled", "true");
-    return;
-  }
-  ui.urlOverrideStatus.textContent = state.appliedOverrides
-    ? t("memoAppliedUrl", "URL applied")
-    : t("memoPendingUrl", "URL overrides pending");
-
-  const previewLines = [];
-  if (overrides.emu) {
-    previewLines.push(`emu: ${overrides.emu}`);
-  }
-  if (typeof overrides.offsetSeconds === "number") {
-    previewLines.push(`offset: ${overrides.offsetSeconds}`);
-  }
-  if (typeof overrides.searchRangeSeconds === "number") {
-    previewLines.push(`range: ${overrides.searchRangeSeconds}`);
-  }
-  if (overrides.actionInput) {
-    previewLines.push(`input: ${overrides.actionInput}`);
-  }
-  ui.urlOverridePreview.textContent = previewLines.join("\n");
-  ui.applyUrlOverrides.classList.remove("is-disabled");
-  ui.applyUrlOverrides.removeAttribute("aria-disabled");
-}
-
 function findEmulatorIndexByLabel(label) {
   return state.emulators.findIndex((emu) => emu.label === label);
 }
 
-function applyUrlOverrides() {
-  const overrides = state.pendingOverrides;
+function applyUrlOverrides(applyEmu) {
+  const overrides = state.urlOverrides;
   if (!overrides) {
     return;
   }
-  if (overrides.emu) {
+  if (!state.urlOverridesAppliedNonEmu) {
+    if (typeof overrides.offsetSeconds === "number") {
+      setOffsetSeconds(overrides.offsetSeconds);
+    }
+    if (typeof overrides.searchRangeSeconds === "number") {
+      setSearchRangeSeconds(overrides.searchRangeSeconds);
+    }
+    if (overrides.actionInput && ui.actionInput) {
+      ui.actionInput.value = overrides.actionInput;
+    }
+    state.urlOverridesAppliedNonEmu = true;
+  }
+  if (applyEmu && overrides.emu && !state.urlOverridesAppliedEmu) {
     const index = findEmulatorIndexByLabel(overrides.emu);
     if (index >= 0) {
       ui.emulatorSelect.selectedIndex = index;
       setActiveEmulator(index);
+      state.urlOverridesAppliedEmu = true;
     }
   }
-  if (typeof overrides.offsetSeconds === "number") {
-    setOffsetSeconds(overrides.offsetSeconds);
-  }
-  if (typeof overrides.searchRangeSeconds === "number") {
-    setSearchRangeSeconds(overrides.searchRangeSeconds);
-  }
-  if (overrides.actionInput && ui.actionInput) {
-    ui.actionInput.value = overrides.actionInput;
-  }
-  state.appliedOverrides = true;
-  updateUrlOverridePanel();
 }
 
 function formatScaledSeconds(scaledValue, scale) {
@@ -476,9 +428,10 @@ function setSearchRangeSeconds(value) {
 function initMemoLedger() {
   state.memoList = loadSeedMemos();
   renderSeedMemos(state.memoList);
-  state.pendingOverrides = parseUrlOverrides();
-  state.appliedOverrides = false;
-  updateUrlOverridePanel();
+  state.urlOverrides = parseUrlOverrides();
+  state.urlOverridesAppliedNonEmu = false;
+  state.urlOverridesAppliedEmu = false;
+  applyUrlOverrides(false);
 }
 
 function computeSeedRange(hours, minutes, seconds, offsetSeconds) {
@@ -605,6 +558,7 @@ async function loadManifest() {
     }
     state.emulators = data;
     populateEmulators();
+    applyUrlOverrides(true);
     state.emulatorStatusKey = "ready";
     ui.emulatorStatus.textContent = t("ready", "ready");
   } catch (err) {
@@ -682,7 +636,6 @@ function applyLanguage(lang) {
   state.lang = lang;
   localStorage.setItem("dq9Lang", lang);
   renderSeedMemos(state.memoList);
-  updateUrlOverridePanel();
 }
 
 function applyTheme(theme) {
@@ -976,13 +929,6 @@ if (ui.memoTableBody) {
       copyText(buildOverrideUrl(entry));
       appendLog("memo url copied");
     }
-  });
-}
-
-if (ui.applyUrlOverrides) {
-  ui.applyUrlOverrides.addEventListener("click", (event) => {
-    event.preventDefault();
-    applyUrlOverrides();
   });
 }
 
