@@ -146,9 +146,9 @@ function computeSeedRange(hours, minutes, seconds, offsetSeconds) {
   const seedShift = 65536n;
   const totalSeconds = BigInt(hours * 3600 + minutes * 60 + seconds);
   const offset = BigInt(normalizeOffsetSeconds(offsetSeconds));
-  const numerator1 = 2n * (totalSeconds - offset) - 4n;
+  const numerator1 = 2n * (totalSeconds - offset) - 6n;
   const time1 = (numerator1 * 100000n) / (2n * 12515n);
-  const numerator2 = 2n * (totalSeconds - offset) + 4n;
+  const numerator2 = 2n * (totalSeconds - offset) + 6n;
   const time2 = (numerator2 * 1000000n) / (2n * 125155n);
   return { start: time1 * seedShift, end: time2 * seedShift };
 }
