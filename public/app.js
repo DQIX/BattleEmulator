@@ -7,9 +7,9 @@ const ui = {
   actionInput: document.getElementById("actionInput"),
   runButton: document.getElementById("runButton"),
   seedHex: document.getElementById("seedHex"),
-  seedDec: document.getElementById("seedDec"),
   seedSpeed: document.getElementById("seedSpeed"),
   seedElapsed: document.getElementById("seedElapsed"),
+  seedDrift: document.getElementById("seedDrift"),
   seedState: document.getElementById("seedState"),
   dumpOutput: document.getElementById("dumpOutput"),
   logOutput: document.getElementById("logOutput"),
@@ -20,6 +20,9 @@ const ui = {
 
 const DEFAULT_OFFSET_SECONDS = 15;
 const OFFSET_STORAGE_KEY = "dq9OffsetSeconds";
+const SEED_TIME_SCALE = 100n;
+const SEED_SECONDS_NUMERATOR = 10000n;
+const SEED_SECONDS_DIVISOR = 799n;
 
 const state = {
   emulators: [],
@@ -67,17 +70,43 @@ function setSeedState(text, count) {
   }
 }
 
-function setSeedValues(seedText) {
+function formatScaledSeconds(scaledValue, scale) {
+  const digits = scale.toString().length - 1;
+  const sign = scaledValue < 0n ? "-" : "";
+  const absValue = scaledValue < 0n ? -scaledValue : scaledValue;
+  const whole = absValue / scale;
+  const fraction = absValue % scale;
+  return `${sign}${whole.toString()}.${fraction.toString().padStart(digits, "0")}`;
+}
+
+function computeSeedSecondsScaled(seed) {
+  const shifted = seed >> 16n;
+  return (shifted * SEED_SECONDS_NUMERATOR) / SEED_SECONDS_DIVISOR;
+}
+
+function computeRealSecondsScaled(parsed) {
+  const totalSeconds = parsed.hours * 3600 + parsed.minutes * 60 + parsed.seconds;
+  return BigInt(totalSeconds) * SEED_TIME_SCALE;
+}
+
+function computeSeedDriftText(seed, parsed) {
+  const seedSecondsScaled = computeSeedSecondsScaled(seed);
+  const realSecondsScaled = computeRealSecondsScaled(parsed);
+  const driftScaled = realSecondsScaled - seedSecondsScaled;
+  return formatScaledSeconds(driftScaled, SEED_TIME_SCALE);
+}
+
+function setSeedValues(seedText, parsedTime) {
   if (!seedText) {
     ui.seedHex.textContent = "-";
-    ui.seedDec.textContent = "-";
     ui.seedSpeed.textContent = "-";
     ui.seedElapsed.textContent = "-";
+    ui.seedDrift.textContent = "-";
     return;
   }
   const seed = BigInt(seedText);
   ui.seedHex.textContent = `0x${seed.toString(16)}`;
-  ui.seedDec.textContent = seed.toString(10);
+  ui.seedDrift.textContent = parsedTime ? computeSeedDriftText(seed, parsedTime) : "-";
 }
 
 function clearOutputs() {
@@ -117,9 +146,9 @@ function computeSeedRange(hours, minutes, seconds, offsetSeconds) {
   const seedShift = 65536n;
   const totalSeconds = BigInt(hours * 3600 + minutes * 60 + seconds);
   const offset = BigInt(normalizeOffsetSeconds(offsetSeconds));
-  const numerator1 = 2n * (totalSeconds - offset) - 9n;
+  const numerator1 = 2n * (totalSeconds - offset) - 4n;
   const time1 = (numerator1 * 100000n) / (2n * 12515n);
-  const numerator2 = 2n * (totalSeconds - offset) + 9n;
+  const numerator2 = 2n * (totalSeconds - offset) + 4n;
   const time2 = (numerator2 * 1000000n) / (2n * 125155n);
   return { start: time1 * seedShift, end: time2 * seedShift };
 }
@@ -466,7 +495,7 @@ async function runSearch() {
       return;
     }
 
-    setSeedValues(foundSeed);
+    setSeedValues(foundSeed, parsed);
     setSeedState("found", totalFound);
     appendLog(`seed found ${foundSeed}`);
     if (bestSpeed && bestElapsed && bestTurns) {
