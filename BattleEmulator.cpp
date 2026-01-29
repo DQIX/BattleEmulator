@@ -348,7 +348,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             genePosition++;
         }
 
-        if (actionTable == DEFENCE && players[0].paralysis) {
+        if (actionTable == DEFENCE && (players[0].paralysis || players[0].inactive)) {
             actionTable = ATTACK_ALLY;
         }
 
