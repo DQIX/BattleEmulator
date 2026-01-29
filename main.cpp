@@ -926,7 +926,7 @@ int main(int argc, char *argv[]) {
 
 
 #ifdef DEBUG2
-    uint64_t time1 = 0x3cc2e2c;
+    uint64_t time1 = 0x409337df;
 
     int dummy[100];
     lcg::init(time1, false);
@@ -953,7 +953,7 @@ int main(int argc, char *argv[]) {
     Player players1[2];
 
     int32_t gene1[350] = {
-        25, 25, 25, 25, 26, 25, 59, 25, 27, 27, 59, 59, 23, 61, 27, 23, 59, 59, 61, 59, 23, 25, 25, 23, 25, 59, 25, 25, 61,
+        22, 25, 25, 26, 23, 61, 61, 25, 25, 59, 25, 27, 25, 25, 23, 25, 59, 56, 25, 26, 25, 59, 59,
         BattleEmulator::ATTACK_ALLY};
     //0x22e2dbaf:
     //0x44dbafa: 25, 25, 25, 50, 54, 25, 50, 54, 56, 54, 25, 54, 53, 53, 25, 50, 25, 56, 54, 25, 54,
@@ -996,18 +996,15 @@ int main(int argc, char *argv[]) {
     //for (int i = 0; i < 10; ++i) {
     (*NowState) = 0;
     (*position1) = 1;
-    std::optional<BattleResult> dummy1;
-    dummy1 = BattleResult();
+    BattleResult dummy1;
     std::memcpy(players1, BasePlayers, sizeof(players1));
-    BattleEmulator::Main(position1, (counter == 0 ? 1000 : counter), gene1, players1, dummy1, time1, dummy, dummy, -1,
+    BattleEmulator::Main(position1, (counter == 0 ? 1000 : counter), gene1, players1, &dummy1, time1, dummy, dummy, -1,
                          NowState);
 
     std::stringstream ss1;
     ss1 << time1 << " ";
 
-    if (dummy1.has_value()) {
-        std::cout << dumpTable(dummy1.value(), gene1, -1) << std::endl;
-    }
+    std::cout << dumpTable(dummy1, gene1, -1) << std::endl;
     //}
     delete position1;
     delete NowState;
