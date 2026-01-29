@@ -132,6 +132,7 @@ function buildMemoFingerprint(entry) {
     emulatorLabel: entry.emulatorLabel,
     input: entry.input,
     timeText: entry.timeText,
+    driftText: entry.driftText || "",
     offsetSeconds: entry.offsetSeconds,
     searchRangeSeconds: entry.searchRangeSeconds
   };
@@ -199,6 +200,7 @@ function renderSeedMemos(list) {
   ui.memoScroll.hidden = false;
 
   list.forEach((entry) => {
+    entry.memo = entry.memo || "";
     const row = document.createElement("tr");
     row.className = "memo-row";
 
@@ -217,6 +219,9 @@ function renderSeedMemos(list) {
     const cellRange = document.createElement("td");
     cellRange.textContent = String(entry.searchRangeSeconds);
 
+    const cellDrift = document.createElement("td");
+    cellDrift.textContent = entry.driftText || "-";
+
     const cellInput = document.createElement("td");
     cellInput.className = "memo-input";
     const inputText = document.createElement("span");
@@ -229,6 +234,14 @@ function renderSeedMemos(list) {
     copyInput.textContent = t("memoCopyInput", "Copy input");
     cellInput.appendChild(inputText);
     cellInput.appendChild(copyInput);
+
+    const cellNote = document.createElement("td");
+    const noteInput = document.createElement("input");
+    noteInput.type = "text";
+    noteInput.className = "memo-note-input";
+    noteInput.value = entry.memo;
+    noteInput.dataset.memoId = entry.id;
+    cellNote.appendChild(noteInput);
 
     const cellUrl = document.createElement("td");
     const copyUrl = document.createElement("a");
@@ -243,13 +256,15 @@ function renderSeedMemos(list) {
     row.appendChild(cellEmu);
     row.appendChild(cellOffset);
     row.appendChild(cellRange);
+    row.appendChild(cellDrift);
     row.appendChild(cellInput);
+    row.appendChild(cellNote);
     row.appendChild(cellUrl);
     ui.memoTableBody.appendChild(row);
   });
 }
 
-function recordSeedMemo(parsed, inputText) {
+function recordSeedMemo(parsed, inputText, driftText) {
   if (!state.active || !parsed) {
     return;
   }
@@ -257,6 +272,7 @@ function recordSeedMemo(parsed, inputText) {
     emulatorLabel: state.active.label,
     input: inputText,
     timeText: formatInputTime(parsed),
+    driftText: driftText || "",
     offsetSeconds: state.offsetSeconds,
     searchRangeSeconds: state.searchRangeSeconds,
     savedAt: new Date().toISOString()
@@ -275,14 +291,16 @@ function recordSeedMemo(parsed, inputText) {
 }
 
 function memoToMarkdown(list) {
-  const header = ["Time", "Real", "Emu", "Offset", "Range", "Input"];
+  const header = ["Time", "Real", "Emu", "Offset", "Range", "Drift", "Input", "Memo"];
   const rows = list.map((entry) => [
     entry.timeText,
     formatRealTimeDisplay(entry.savedAt),
     entry.emulatorLabel,
     entry.offsetSeconds,
     entry.searchRangeSeconds,
-    entry.input.replace(/\n/g, " ")
+    entry.driftText || "-",
+    entry.input.replace(/\n/g, " "),
+    entry.memo || ""
   ]);
   const lines = [
     `| ${header.join(" | ")} |`,
@@ -294,14 +312,16 @@ function memoToMarkdown(list) {
 
 function memoToCsv(list) {
   const escapeField = (value) => `"${String(value).replace(/"/g, '""')}"`;
-  const header = ["Time", "Real", "Emu", "Offset", "Range", "Input"];
+  const header = ["Time", "Real", "Emu", "Offset", "Range", "Drift", "Input", "Memo"];
   const rows = list.map((entry) => [
     entry.timeText,
     formatRealTimeDisplay(entry.savedAt),
     entry.emulatorLabel,
     entry.offsetSeconds,
     entry.searchRangeSeconds,
-    entry.input.replace(/\n/g, " ")
+    entry.driftText || "-",
+    entry.input.replace(/\n/g, " "),
+    entry.memo || ""
   ]);
   return [header, ...rows].map((row) => row.map(escapeField).join(",")).join("\n");
 }
@@ -825,7 +845,8 @@ async function runSearch() {
     setSeedValues(foundSeed, parsed);
     setSeedState("found", totalFound);
     if (totalFound === 1) {
-      recordSeedMemo(parsed, input);
+      const driftText = computeSeedDriftText(BigInt(foundSeed), parsed);
+      recordSeedMemo(parsed, input, driftText);
     }
     appendLog(`seed found ${foundSeed}`);
     if (bestSpeed && bestElapsed && bestTurns) {
@@ -960,6 +981,20 @@ if (ui.memoTableBody) {
       copyText(buildOverrideUrl(entry));
       appendLog("memo url copied");
     }
+  });
+
+  ui.memoTableBody.addEventListener("input", (event) => {
+    const target = event.target;
+    if (!target.classList.contains("memo-note-input")) {
+      return;
+    }
+    const entryId = target.dataset.memoId;
+    const entry = state.memoList.find((item) => item.id === entryId);
+    if (!entry) {
+      return;
+    }
+    entry.memo = target.value;
+    saveSeedMemos(state.memoList);
   });
 }
 
