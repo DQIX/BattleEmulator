@@ -3,6 +3,7 @@ const ui = {
   emulatorMeta: document.getElementById("emulatorMeta"),
   emulatorStatus: document.getElementById("emulatorStatus"),
   offsetSeconds: document.getElementById("offsetSeconds"),
+  searchRangeSeconds: document.getElementById("searchRangeSeconds"),
   threads: document.getElementById("threads"),
   actionInput: document.getElementById("actionInput"),
   runButton: document.getElementById("runButton"),
@@ -20,6 +21,8 @@ const ui = {
 
 const DEFAULT_OFFSET_SECONDS = 15;
 const OFFSET_STORAGE_KEY = "dq9OffsetSeconds";
+const DEFAULT_SEARCH_RANGE_SECONDS = 6;
+const SEARCH_RANGE_STORAGE_KEY = "dq9SearchRangeSeconds";
 const SEED_TIME_SCALE = 100n;
 const SEED_SECONDS_NUMERATOR = 10000n;
 const SEED_SECONDS_DIVISOR = 799n;
@@ -33,6 +36,7 @@ const state = {
   emulatorStatusKey: "idle",
   preload: localStorage.getItem("dq9Preload") === "1",
   offsetSeconds: DEFAULT_OFFSET_SECONDS,
+  searchRangeSeconds: DEFAULT_SEARCH_RANGE_SECONDS,
   preloadQueue: Promise.resolve(),
   moduleCache: new Map(),
   workerScriptText: "",
@@ -128,6 +132,14 @@ function normalizeOffsetSeconds(value) {
   return parsed;
 }
 
+function normalizeSearchRangeSeconds(value) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_SEARCH_RANGE_SECONDS;
+  }
+  return Math.min(15, Math.max(2, parsed));
+}
+
 function loadOffsetSeconds() {
   const stored = localStorage.getItem(OFFSET_STORAGE_KEY);
   return normalizeOffsetSeconds(stored);
@@ -142,13 +154,28 @@ function setOffsetSeconds(value) {
   localStorage.setItem(OFFSET_STORAGE_KEY, String(normalized));
 }
 
+function loadSearchRangeSeconds() {
+  const stored = localStorage.getItem(SEARCH_RANGE_STORAGE_KEY);
+  return normalizeSearchRangeSeconds(stored);
+}
+
+function setSearchRangeSeconds(value) {
+  const normalized = normalizeSearchRangeSeconds(value);
+  state.searchRangeSeconds = normalized;
+  if (ui.searchRangeSeconds) {
+    ui.searchRangeSeconds.value = String(normalized);
+  }
+  localStorage.setItem(SEARCH_RANGE_STORAGE_KEY, String(normalized));
+}
+
 function computeSeedRange(hours, minutes, seconds, offsetSeconds) {
   const seedShift = 65536n;
   const totalSeconds = BigInt(hours * 3600 + minutes * 60 + seconds);
   const offset = BigInt(normalizeOffsetSeconds(offsetSeconds));
-  const numerator1 = 2n * (totalSeconds - offset) - 6n;
+  const range = BigInt(normalizeSearchRangeSeconds(state.searchRangeSeconds));
+  const numerator1 = 2n * (totalSeconds - offset) - range;
   const time1 = (numerator1 * 100000n) / (2n * 12515n);
-  const numerator2 = 2n * (totalSeconds - offset) + 6n;
+  const numerator2 = 2n * (totalSeconds - offset) + range;
   const time2 = (numerator2 * 1000000n) / (2n * 125155n);
   return { start: time1 * seedShift, end: time2 * seedShift };
 }
@@ -365,6 +392,7 @@ function initSettings() {
   applyLanguage(state.lang);
   applyTheme(state.theme);
   setOffsetSeconds(loadOffsetSeconds());
+  setSearchRangeSeconds(loadSearchRangeSeconds());
 }
 
 async function runSearch() {
@@ -588,6 +616,12 @@ ui.preloadToggle.addEventListener("change", (event) => {
 if (ui.offsetSeconds) {
   ui.offsetSeconds.addEventListener("change", (event) => {
     setOffsetSeconds(event.target.value);
+  });
+}
+
+if (ui.searchRangeSeconds) {
+  ui.searchRangeSeconds.addEventListener("change", (event) => {
+    setSearchRangeSeconds(event.target.value);
   });
 }
 

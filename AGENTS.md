@@ -8,3 +8,16 @@
 - .interface-design/.claude/commands/init.md
 - .interface-design/.claude/skills/interface-design/SKILL.md
 を読むこと。
+
+# フロントエンドコード
+- publicから探すこと。
+
+public/app.js
+public/index.html
+
+# テーマ
+- フロントエンドの新uiは、テーマに沿うこと
+
+# 言語設定
+- public/index.htmlの言語コンフィグは追加時に適切に変更すること。
+
