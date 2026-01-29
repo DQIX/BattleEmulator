@@ -84,7 +84,32 @@
               seedDrift: "Drift",
               speed: "Speed",
               elapsed: "Elapsed",
-              preload: "Preload"
+              preload: "Preload",
+              memoTable: "Seed Memo",
+              memoHint: "Saved when a single seed is found",
+              memoTools: "Export",
+              memoToolsHint: "Copy memo as markdown/csv",
+              memoUrl: "URL Override",
+              memoUrlHint: "Apply only when you choose",
+              memoStats: "Status",
+              memoStatsHint: "Local memo snapshot",
+              memoEmpty: "No memo entries yet",
+              memoTime: "Time",
+              memoEmu: "Emu",
+              memoOffset: "Offset",
+              memoRange: "Range",
+              memoInput: "Input",
+              memoUrlCol: "URL",
+              memoCopyMd: "Copy Markdown",
+              memoCopyCsv: "Copy CSV",
+              memoCopyUrl: "Copy URL",
+              memoCopyInput: "Copy input",
+              memoApplyUrl: "Apply URL",
+              memoNoUrl: "No URL overrides",
+              memoPendingUrl: "URL overrides pending",
+              memoAppliedUrl: "URL applied",
+              memoCount: "Entries",
+              memoLatest: "Latest"
             },
             ja: {
               title: "DQ9 Battle Emulator",
@@ -114,7 +139,32 @@
               seedDrift: "誤差",
               speed: "速度",
               elapsed: "経過",
-              preload: "プリロード"
+              preload: "プリロード",
+              memoTable: "シードメモ",
+              memoHint: "シードが1件のときのみ保存",
+              memoTools: "出力",
+              memoToolsHint: "Markdown/CSVをコピー",
+              memoUrl: "URL上書き",
+              memoUrlHint: "手動で反映",
+              memoStats: "状態",
+              memoStatsHint: "ローカルメモの概要",
+              memoEmpty: "メモがありません",
+              memoTime: "時間",
+              memoEmu: "Emu",
+              memoOffset: "Offset",
+              memoRange: "Range",
+              memoInput: "Input",
+              memoUrlCol: "URL",
+              memoCopyMd: "Markdownコピー",
+              memoCopyCsv: "CSVコピー",
+              memoCopyUrl: "URLコピー",
+              memoCopyInput: "Inputコピー",
+              memoApplyUrl: "URL反映",
+              memoNoUrl: "URL上書きなし",
+              memoPendingUrl: "URL上書きあり",
+              memoAppliedUrl: "URL反映済み",
+              memoCount: "件数",
+              memoLatest: "最新"
             }
           }
         };
@@ -254,6 +304,79 @@
             <span class="hint" data-i18n="logHint">session output</span>
           </div>
           <textarea id="logOutput" class="log-output" aria-labelledby="logTitle ログ" readonly></textarea>
+        </section>
+
+        <section class="panel panel-ledger-table" style="--delay: 280ms">
+          <div class="panel-header">
+            <h2 data-i18n="memoTable">Seed Memo</h2>
+            <span class="hint" data-i18n="memoHint">Saved when a single seed is found</span>
+          </div>
+          <div class="memo-table">
+            <div id="memoEmpty" class="memo-empty" data-i18n="memoEmpty">No memo entries yet</div>
+            <div id="memoScroll" class="memo-scroll" hidden>
+              <table class="memo-grid">
+                <colgroup>
+                  <col style="width: 80px" />
+                  <col style="width: 140px" />
+                  <col style="width: 70px" />
+                  <col style="width: 70px" />
+                  <col style="width: 320px" />
+                  <col style="width: 80px" />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th data-i18n="memoTime">Time</th>
+                    <th data-i18n="memoEmu">Emu</th>
+                    <th data-i18n="memoOffset">Offset</th>
+                    <th data-i18n="memoRange">Range</th>
+                    <th data-i18n="memoInput">Input</th>
+                    <th data-i18n="memoUrlCol">URL</th>
+                  </tr>
+                </thead>
+                <tbody id="memoTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel panel-ledger-tools" style="--delay: 300ms">
+          <div class="panel-header">
+            <h2 data-i18n="memoTools">Export</h2>
+            <span class="hint" data-i18n="memoToolsHint">Copy memo as markdown/csv</span>
+          </div>
+          <div class="memo-actions">
+            <a id="memoCopyMarkdown" class="chip chip-muted" href="#" data-i18n="memoCopyMd">Copy Markdown</a>
+            <a id="memoCopyCsv" class="chip chip-muted" href="#" data-i18n="memoCopyCsv">Copy CSV</a>
+          </div>
+        </section>
+
+        <section class="panel panel-ledger-url" style="--delay: 320ms">
+          <div class="panel-header">
+            <h2 data-i18n="memoUrl">URL Override</h2>
+            <span class="hint" data-i18n="memoUrlHint">Apply only when you choose</span>
+          </div>
+          <div class="memo-url">
+            <div id="urlOverrideStatus" class="memo-url-status" data-i18n="memoNoUrl">No URL overrides</div>
+            <div id="urlOverridePreview" class="memo-url-preview"></div>
+            <a id="applyUrlOverrides" class="chip chip-accent" href="#" data-i18n="memoApplyUrl">Apply URL</a>
+          </div>
+        </section>
+
+        <section class="panel panel-ledger-stats" style="--delay: 340ms">
+          <div class="panel-header">
+            <h2 data-i18n="memoStats">Status</h2>
+            <span class="hint" data-i18n="memoStatsHint">Local memo snapshot</span>
+          </div>
+          <div class="memo-stats">
+            <div class="memo-stat">
+              <span data-i18n="memoCount">Entries</span>
+              <strong id="memoCount">0</strong>
+            </div>
+            <div class="memo-stat">
+              <span data-i18n="memoLatest">Latest</span>
+              <strong id="memoLatest">-</strong>
+            </div>
+          </div>
         </section>
       </main>
     </div>

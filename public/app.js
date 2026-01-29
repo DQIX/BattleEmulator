@@ -16,13 +16,25 @@ const ui = {
   logOutput: document.getElementById("logOutput"),
   themeSelect: document.getElementById("themeSelect"),
   langSelect: document.getElementById("langSelect"),
-  preloadToggle: document.getElementById("preloadToggle")
+  preloadToggle: document.getElementById("preloadToggle"),
+  memoTableBody: document.getElementById("memoTableBody"),
+  memoEmpty: document.getElementById("memoEmpty"),
+  memoScroll: document.getElementById("memoScroll"),
+  memoCopyMarkdown: document.getElementById("memoCopyMarkdown"),
+  memoCopyCsv: document.getElementById("memoCopyCsv"),
+  urlOverrideStatus: document.getElementById("urlOverrideStatus"),
+  urlOverridePreview: document.getElementById("urlOverridePreview"),
+  applyUrlOverrides: document.getElementById("applyUrlOverrides"),
+  memoCount: document.getElementById("memoCount"),
+  memoLatest: document.getElementById("memoLatest")
 };
 
 const DEFAULT_OFFSET_SECONDS = 15;
 const OFFSET_STORAGE_KEY = "dq9OffsetSeconds";
 const DEFAULT_SEARCH_RANGE_SECONDS = 6;
 const SEARCH_RANGE_STORAGE_KEY = "dq9SearchRangeSeconds";
+const SEED_MEMO_STORAGE_KEY = "dq9SeedMemoList";
+const SEED_MEMO_LIMIT = 200;
 const SEED_TIME_SCALE = 100n;
 const SEED_SECONDS_NUMERATOR = 10000n;
 const SEED_SECONDS_DIVISOR = 799n;
@@ -40,7 +52,10 @@ const state = {
   preloadQueue: Promise.resolve(),
   moduleCache: new Map(),
   workerScriptText: "",
-  workerBlobUrl: ""
+  workerBlobUrl: "",
+  memoList: [],
+  pendingOverrides: null,
+  appliedOverrides: false
 };
 
 const logLines = [];
@@ -58,6 +73,81 @@ function t(key, fallback) {
   return fallback;
 }
 
+function pad2(value) {
+  return String(value).padStart(2, "0");
+}
+
+function formatInputTime(parsed) {
+  return `${pad2(parsed.hours)}:${pad2(parsed.minutes)}:${pad2(parsed.seconds)}`;
+}
+
+function hashString(text) {
+  let hash = 5381;
+  for (let i = 0; i < text.length; i += 1) {
+    hash = (hash * 33) ^ text.charCodeAt(i);
+  }
+  return `m${(hash >>> 0).toString(36)}`;
+}
+
+function loadSeedMemos() {
+  const stored = localStorage.getItem(SEED_MEMO_STORAGE_KEY);
+  if (!stored) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    return [];
+  }
+}
+
+function saveSeedMemos(list) {
+  localStorage.setItem(SEED_MEMO_STORAGE_KEY, JSON.stringify(list));
+}
+
+function buildMemoFingerprint(entry) {
+  const payload = {
+    emulatorLabel: entry.emulatorLabel,
+    input: entry.input,
+    timeText: entry.timeText,
+    offsetSeconds: entry.offsetSeconds,
+    searchRangeSeconds: entry.searchRangeSeconds
+  };
+  return hashString(JSON.stringify(payload));
+}
+
+function buildOverrideUrl(entry) {
+  const url = new URL(window.location.href);
+  url.search = "";
+  url.searchParams.set("emu", entry.emulatorLabel);
+  url.searchParams.set("offset", String(entry.offsetSeconds));
+  url.searchParams.set("range", String(entry.searchRangeSeconds));
+  url.searchParams.set("input", entry.input);
+  return url.toString();
+}
+
+function copyText(text) {
+  if (!text) {
+    return;
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).catch(() => {});
+    return;
+  }
+  const temp = document.createElement("textarea");
+  temp.value = text;
+  temp.style.position = "fixed";
+  temp.style.opacity = "0";
+  document.body.appendChild(temp);
+  temp.focus();
+  temp.select();
+  try {
+    document.execCommand("copy");
+  } catch (err) {}
+  document.body.removeChild(temp);
+}
+
 function appendLog(line) {
   const timestamp = new Date().toLocaleTimeString();
   logLines.push(`[${timestamp}] ${line}`);
@@ -72,6 +162,221 @@ function setSeedState(text, count) {
   } else {
     ui.seedState.textContent = label;
   }
+}
+
+function updateMemoStats(list) {
+  if (ui.memoCount) {
+    ui.memoCount.textContent = String(list.length);
+  }
+  if (ui.memoLatest) {
+    ui.memoLatest.textContent = list.length ? list[0].timeText : "-";
+  }
+}
+
+function renderSeedMemos(list) {
+  if (!ui.memoTableBody || !ui.memoEmpty || !ui.memoScroll) {
+    return;
+  }
+  ui.memoTableBody.innerHTML = "";
+  if (!list.length) {
+    ui.memoEmpty.hidden = false;
+    ui.memoScroll.hidden = true;
+    updateMemoStats(list);
+    return;
+  }
+  ui.memoEmpty.hidden = true;
+  ui.memoScroll.hidden = false;
+
+  list.forEach((entry) => {
+    const row = document.createElement("tr");
+    row.className = "memo-row";
+
+    const cellTime = document.createElement("td");
+    cellTime.textContent = entry.timeText;
+
+    const cellEmu = document.createElement("td");
+    cellEmu.textContent = entry.emulatorLabel;
+
+    const cellOffset = document.createElement("td");
+    cellOffset.textContent = String(entry.offsetSeconds);
+
+    const cellRange = document.createElement("td");
+    cellRange.textContent = String(entry.searchRangeSeconds);
+
+    const cellInput = document.createElement("td");
+    cellInput.className = "memo-input";
+    const inputText = document.createElement("span");
+    inputText.textContent = entry.input;
+    inputText.title = entry.input;
+    const copyInput = document.createElement("a");
+    copyInput.href = "#";
+    copyInput.className = "memo-copy";
+    copyInput.dataset.copyInput = entry.id;
+    copyInput.textContent = t("memoCopyInput", "Copy input");
+    cellInput.appendChild(inputText);
+    cellInput.appendChild(copyInput);
+
+    const cellUrl = document.createElement("td");
+    const copyUrl = document.createElement("a");
+    copyUrl.href = buildOverrideUrl(entry);
+    copyUrl.className = "memo-link";
+    copyUrl.dataset.copyUrl = entry.id;
+    copyUrl.textContent = t("memoCopyUrl", "Copy URL");
+    cellUrl.appendChild(copyUrl);
+
+    row.appendChild(cellTime);
+    row.appendChild(cellEmu);
+    row.appendChild(cellOffset);
+    row.appendChild(cellRange);
+    row.appendChild(cellInput);
+    row.appendChild(cellUrl);
+    ui.memoTableBody.appendChild(row);
+  });
+
+  updateMemoStats(list);
+}
+
+function recordSeedMemo(parsed, inputText) {
+  if (!state.active || !parsed) {
+    return;
+  }
+  const entry = {
+    emulatorLabel: state.active.label,
+    input: inputText,
+    timeText: formatInputTime(parsed),
+    offsetSeconds: state.offsetSeconds,
+    searchRangeSeconds: state.searchRangeSeconds,
+    savedAt: new Date().toISOString()
+  };
+  entry.id = buildMemoFingerprint(entry);
+  const exists = state.memoList.some((item) => item.id === entry.id);
+  if (exists) {
+    return;
+  }
+  state.memoList.unshift(entry);
+  if (state.memoList.length > SEED_MEMO_LIMIT) {
+    state.memoList.length = SEED_MEMO_LIMIT;
+  }
+  saveSeedMemos(state.memoList);
+  renderSeedMemos(state.memoList);
+}
+
+function memoToMarkdown(list) {
+  const header = ["Time", "Emu", "Offset", "Range", "Input"];
+  const rows = list.map((entry) => [
+    entry.timeText,
+    entry.emulatorLabel,
+    entry.offsetSeconds,
+    entry.searchRangeSeconds,
+    entry.input.replace(/\n/g, " ")
+  ]);
+  const lines = [
+    `| ${header.join(" | ")} |`,
+    `| ${header.map(() => "---").join(" | ")} |`,
+    ...rows.map((row) => `| ${row.join(" | ")} |`)
+  ];
+  return lines.join("\n");
+}
+
+function memoToCsv(list) {
+  const escapeField = (value) => `"${String(value).replace(/"/g, '""')}"`;
+  const header = ["Time", "Emu", "Offset", "Range", "Input"];
+  const rows = list.map((entry) => [
+    entry.timeText,
+    entry.emulatorLabel,
+    entry.offsetSeconds,
+    entry.searchRangeSeconds,
+    entry.input.replace(/\n/g, " ")
+  ]);
+  return [header, ...rows].map((row) => row.map(escapeField).join(",")).join("\n");
+}
+
+function parseUrlOverrides() {
+  const url = new URL(window.location.href);
+  const params = url.searchParams;
+  const overrides = {};
+  if (params.has("emu")) {
+    const emu = params.get("emu").trim();
+    if (emu) {
+      overrides.emu = emu;
+    }
+  }
+  if (params.has("offset")) {
+    overrides.offsetSeconds = normalizeOffsetSeconds(params.get("offset"));
+  }
+  if (params.has("range")) {
+    overrides.searchRangeSeconds = normalizeSearchRangeSeconds(params.get("range"));
+  }
+  if (params.has("input")) {
+    const input = params.get("input").trim();
+    if (input) {
+      overrides.actionInput = input;
+    }
+  }
+  return Object.keys(overrides).length ? overrides : null;
+}
+
+function updateUrlOverridePanel() {
+  if (!ui.urlOverrideStatus || !ui.urlOverridePreview || !ui.applyUrlOverrides) {
+    return;
+  }
+  const overrides = state.pendingOverrides;
+  if (!overrides) {
+    ui.urlOverrideStatus.textContent = t("memoNoUrl", "No URL overrides");
+    ui.urlOverridePreview.textContent = "";
+    ui.applyUrlOverrides.classList.add("is-disabled");
+    ui.applyUrlOverrides.setAttribute("aria-disabled", "true");
+    return;
+  }
+  ui.urlOverrideStatus.textContent = state.appliedOverrides
+    ? t("memoAppliedUrl", "URL applied")
+    : t("memoPendingUrl", "URL overrides pending");
+
+  const previewLines = [];
+  if (overrides.emu) {
+    previewLines.push(`emu: ${overrides.emu}`);
+  }
+  if (typeof overrides.offsetSeconds === "number") {
+    previewLines.push(`offset: ${overrides.offsetSeconds}`);
+  }
+  if (typeof overrides.searchRangeSeconds === "number") {
+    previewLines.push(`range: ${overrides.searchRangeSeconds}`);
+  }
+  if (overrides.actionInput) {
+    previewLines.push(`input: ${overrides.actionInput}`);
+  }
+  ui.urlOverridePreview.textContent = previewLines.join("\n");
+  ui.applyUrlOverrides.classList.remove("is-disabled");
+  ui.applyUrlOverrides.removeAttribute("aria-disabled");
+}
+
+function findEmulatorIndexByLabel(label) {
+  return state.emulators.findIndex((emu) => emu.label === label);
+}
+
+function applyUrlOverrides() {
+  const overrides = state.pendingOverrides;
+  if (!overrides) {
+    return;
+  }
+  if (overrides.emu) {
+    const index = findEmulatorIndexByLabel(overrides.emu);
+    if (index >= 0) {
+      ui.emulatorSelect.selectedIndex = index;
+      setActiveEmulator(index);
+    }
+  }
+  if (typeof overrides.offsetSeconds === "number") {
+    setOffsetSeconds(overrides.offsetSeconds);
+  }
+  if (typeof overrides.searchRangeSeconds === "number") {
+    setSearchRangeSeconds(overrides.searchRangeSeconds);
+  }
+  if (overrides.actionInput && ui.actionInput) {
+    ui.actionInput.value = overrides.actionInput;
+  }
+  state.appliedOverrides = true;
+  updateUrlOverridePanel();
 }
 
 function formatScaledSeconds(scaledValue, scale) {
@@ -166,6 +471,14 @@ function setSearchRangeSeconds(value) {
     ui.searchRangeSeconds.value = String(normalized);
   }
   localStorage.setItem(SEARCH_RANGE_STORAGE_KEY, String(normalized));
+}
+
+function initMemoLedger() {
+  state.memoList = loadSeedMemos();
+  renderSeedMemos(state.memoList);
+  state.pendingOverrides = parseUrlOverrides();
+  state.appliedOverrides = false;
+  updateUrlOverridePanel();
 }
 
 function computeSeedRange(hours, minutes, seconds, offsetSeconds) {
@@ -368,6 +681,8 @@ function applyLanguage(lang) {
   document.documentElement.lang = lang;
   state.lang = lang;
   localStorage.setItem("dq9Lang", lang);
+  renderSeedMemos(state.memoList);
+  updateUrlOverridePanel();
 }
 
 function applyTheme(theme) {
@@ -525,6 +840,9 @@ async function runSearch() {
 
     setSeedValues(foundSeed, parsed);
     setSeedState("found", totalFound);
+    if (totalFound === 1) {
+      recordSeedMemo(parsed, input);
+    }
     appendLog(`seed found ${foundSeed}`);
     if (bestSpeed && bestElapsed && bestTurns) {
       ui.seedSpeed.textContent = `${bestSpeed} (m turns/s)`;
@@ -613,6 +931,61 @@ ui.preloadToggle.addEventListener("change", (event) => {
   }
 });
 
+if (ui.memoCopyMarkdown) {
+  ui.memoCopyMarkdown.addEventListener("click", (event) => {
+    event.preventDefault();
+    if (!state.memoList.length) {
+      return;
+    }
+    copyText(memoToMarkdown(state.memoList));
+    appendLog("memo markdown copied");
+  });
+}
+
+if (ui.memoCopyCsv) {
+  ui.memoCopyCsv.addEventListener("click", (event) => {
+    event.preventDefault();
+    if (!state.memoList.length) {
+      return;
+    }
+    copyText(memoToCsv(state.memoList));
+    appendLog("memo csv copied");
+  });
+}
+
+if (ui.memoTableBody) {
+  ui.memoTableBody.addEventListener("click", (event) => {
+    const target = event.target.closest("a");
+    if (!target) {
+      return;
+    }
+    const inputId = target.dataset.copyInput;
+    const urlId = target.dataset.copyUrl;
+    if (!inputId && !urlId) {
+      return;
+    }
+    event.preventDefault();
+    const entry = state.memoList.find((item) => item.id === (inputId || urlId));
+    if (!entry) {
+      return;
+    }
+    if (inputId) {
+      copyText(entry.input);
+      appendLog("memo input copied");
+    } else if (urlId) {
+      copyText(buildOverrideUrl(entry));
+      appendLog("memo url copied");
+    }
+  });
+}
+
+if (ui.applyUrlOverrides) {
+  ui.applyUrlOverrides.addEventListener("click", (event) => {
+    event.preventDefault();
+    applyUrlOverrides();
+  });
+}
+
 if (ui.offsetSeconds) {
   ui.offsetSeconds.addEventListener("change", (event) => {
     setOffsetSeconds(event.target.value);
@@ -627,3 +1000,4 @@ if (ui.searchRangeSeconds) {
 
 loadManifest();
 initSettings();
+initMemoLedger();
