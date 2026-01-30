@@ -102,13 +102,13 @@ function formatRealTimeDisplay(savedAt) {
   return `${formatDatePartsUTC(base)} UTC`;
 }
 
-function hashString(text) {
-  let hash = 5381;
-  for (let i = 0; i < text.length; i += 1) {
-    hash = (hash * 33) ^ text.charCodeAt(i);
-  }
-  return `m${(hash >>> 0).toString(36)}`;
+async function hashStringSHA256(text) {
+  const data = new TextEncoder().encode(text);
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(buf));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
 }
+
 
 function loadSeedMemos() {
   const stored = localStorage.getItem(SEED_MEMO_STORAGE_KEY);
@@ -127,16 +127,15 @@ function saveSeedMemos(list) {
   localStorage.setItem(SEED_MEMO_STORAGE_KEY, JSON.stringify(list));
 }
 
-function buildMemoFingerprint(entry) {
+async function buildMemoFingerprint(entry) {
   const payload = {
-    emulatorLabel: entry.emulatorLabel,
     input: entry.input,
     timeText: entry.timeText,
     driftText: entry.driftText || "",
     offsetSeconds: entry.offsetSeconds,
     searchRangeSeconds: entry.searchRangeSeconds
   };
-  return hashString(JSON.stringify(payload));
+  return await hashStringSHA256(JSON.stringify(payload));
 }
 
 function buildOverrideUrl(entry) {
@@ -264,7 +263,7 @@ function renderSeedMemos(list) {
   });
 }
 
-function recordSeedMemo(parsed, inputText, driftText) {
+async function recordSeedMemo(parsed, inputText, driftText) {
   if (!state.active || !parsed) {
     return;
   }
@@ -277,7 +276,7 @@ function recordSeedMemo(parsed, inputText, driftText) {
     searchRangeSeconds: state.searchRangeSeconds,
     savedAt: new Date().toISOString()
   };
-  entry.id = buildMemoFingerprint(entry);
+  entry.id = await buildMemoFingerprint(entry);
   const exists = state.memoList.some((item) => item.id === entry.id);
   if (exists) {
     return;
