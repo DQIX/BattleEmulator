@@ -1037,3 +1037,43 @@ if (ui.searchRangeSeconds) {
 loadManifest();
 initSettings();
 initMemoLedger();
+
+
+  let composing = false;
+
+  const vowelMap = {
+  "あ": "a",
+  "い": "i",
+  "う": "u",
+  "え": "e",
+  "お": "o",
+  "ア": "a",
+  "イ": "i",
+  "ウ": "u",
+  "エ": "e",
+  "オ": "o"
+};
+
+  function normalizeActionInput(value) {
+  // 1. 全角英数字などを半角へ
+  let v = value.normalize("NFKC");
+
+  // 2. 母音だけ名指し変換
+  v = v.replace(/[あいうえおアイウエオ]/g, ch => vowelMap[ch]);
+
+  return v;
+}
+
+  ui.actionInput.addEventListener("compositionstart", () => {
+  composing = true;
+});
+
+  ui.actionInput.addEventListener("compositionend", () => {
+  composing = false;
+  ui.actionInput.value = normalizeActionInput(ui.actionInput.value);
+});
+
+  ui.actionInput.addEventListener("input", () => {
+  if (composing) return;
+  ui.actionInput.value = normalizeActionInput(ui.actionInput.value);
+});
