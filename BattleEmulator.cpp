@@ -283,7 +283,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
 #ifdef DEBUG2
         std::cout << "c: " << counterJ << ", " << (*position) << std::endl;
-        if ((*position) == 609) {
+        if ((*position) == 434) {
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -1231,7 +1231,6 @@ void BattleEmulator::ProcessRage(int *position, int baseDamage, Player *players)
             if (!players[1].rage) {
                 (*position)++;
                 players[1].rage = true;
-                players[1].rageTurns = lcg::intRangeRand(position, 2, 4);
                 players[1].rageTurns = lcg::intRangeRand(position, 2, 4);
             } else {
                 (*position)++;
