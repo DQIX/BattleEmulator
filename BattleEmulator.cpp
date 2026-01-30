@@ -283,7 +283,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
 #ifdef DEBUG2
         std::cout << "c: " << counterJ << ", " << (*position) << std::endl;
-        if ((*position) == 735) {
+        if ((*position) == 609) {
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -391,7 +391,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         (*position)++;
                         (*position)++;
                     } else {
-                        if (!players[0].rage) {
+                        if (!players[1].rage) {
                             //攻撃先決定の乱数消費がなくなる
                             (*position)++;
                         }
@@ -447,10 +447,10 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     break;
                 }
 
-                if (players[0].rage) {
-                    players[0].rageTurns--;
-                    if (players[0].rageTurns <= 0) {
-                        players[0].rage = false;
+                if (players[1].rage) {
+                    players[1].rageTurns--;
+                    if (players[1].rageTurns <= 0) {
+                        players[1].rage = false;
                     }
                 }
                 //--------end_FUN_021594bc-------
@@ -603,7 +603,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
 #ifdef DEBUG2
         //DEBUG_COUT2((*position));
-        if ((*position) == 735) {
+        if ((*position) == 609) {
             //std::cout << "!!" << std::endl;
         }
 #endif
@@ -873,12 +873,12 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 (*position)++; //関係ない
             }
         //0x021eb8c8, randIntRange: 0x021eb8f0 怒り狂っている場合←の消費が発生しない。
-            if (!players[0].rage) {
+            if (!players[1].rage) {
                 (*position)++;
             }
             (*position)++; //?
             if (kaisinn) {
-                if (!players[0].rage) {
+                if (!players[1].rage) {
                     (*position)++; //会心時特殊処理　0x021e54fc
                     (*position)++; //会心時特殊処理　0x021eb8c8
                 } else {
@@ -1051,7 +1051,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 baseDamage = 0;
             }
             if (kaisinn) {
-                if (!players[0].rage) {
+                if (!players[1].rage) {
                     (*position)++; //会心時特殊処理　0x021e54fc
                     (*position)++; //会心時特殊処理　0x021eb8c8
                 } else {
@@ -1230,8 +1230,9 @@ void BattleEmulator::ProcessRage(int *position, int baseDamage, Player *players)
         if (hp_before * 2 >= maxHp) {
             if (!players[1].rage) {
                 (*position)++;
-                players[0].rage = true;
-                players[0].rageTurns = lcg::intRangeRand(position, 2, 4);
+                players[1].rage = true;
+                players[1].rageTurns = lcg::intRangeRand(position, 2, 4);
+                players[1].rageTurns = lcg::intRangeRand(position, 2, 4);
             } else {
                 (*position)++;
             }
