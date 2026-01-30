@@ -782,3 +782,11 @@ h2 {
     animation: none;
   }
 }
+
+.panel-copyright {
+  grid-column: span 2;
+  grid-row: span 1;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}
