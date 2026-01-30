@@ -329,26 +329,51 @@ function parseUrlOverrides() {
   const url = new URL(window.location.href);
   const params = url.searchParams;
   const overrides = {};
+  let changed = false;
+
   if (params.has("emu")) {
     const emu = params.get("emu").trim();
     if (emu) {
       overrides.emu = emu;
+      params.delete("emu");
+      changed = true;
     }
   }
+
   if (params.has("offset")) {
-    overrides.offsetSeconds = normalizeOffsetSeconds(params.get("offset"));
+    const v = normalizeOffsetSeconds(params.get("offset"));
+    if (v !== null) {
+      overrides.offsetSeconds = v;
+      params.delete("offset");
+      changed = true;
+    }
   }
+
   if (params.has("range")) {
-    overrides.searchRangeSeconds = normalizeSearchRangeSeconds(params.get("range"));
+    const v = normalizeSearchRangeSeconds(params.get("range"));
+    if (v !== null) {
+      overrides.searchRangeSeconds = v;
+      params.delete("range");
+      changed = true;
+    }
   }
+
   if (params.has("input")) {
     const input = params.get("input").trim();
     if (input) {
       overrides.actionInput = input;
+      params.delete("input");
+      changed = true;
     }
   }
+
+  if (changed) {
+    history.replaceState(null, "", url.toString());
+  }
+
   return Object.keys(overrides).length ? overrides : null;
 }
+
 
 function findEmulatorIndexByLabel(label) {
   return state.emulators.findIndex((emu) => emu.label === label);
