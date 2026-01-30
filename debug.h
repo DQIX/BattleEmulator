@@ -24,7 +24,7 @@
 #define DEBUG_COUT1(x)
 #endif
 
-#define DEBUG2 1
+//#define DEBUG2 1
 
 #ifdef DEBUG2
 #define DEBUG_COUT2(x) std::cout << x << std::endl
