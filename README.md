@@ -3,8 +3,15 @@
 - Highly optimized, algorithmic combinatorial optimization
 - Written in C++
 - 100% open source
+- MIT License
 - Individual management with git branches
 - For RTA Players
+
+# Disclaimer
+This project does not distribute or include any copyrighted game data.<br>
+Our battle emulator is designed to avoid including any copyrighted data.<br>
+The terms and conditions for avoiding conflicts on the Battle Emulator can be [viewed here](https://www.dropbox.com/scl/fi/ljf4ij06fux9s2527dnyp/DQ9_BattleEmu_Readme.txt?rlkey=o5xmzegriye8krmni3ma7zg82&st=1x0aowuh&dl=0) (Japanese)
+
 
 ## What is our goal?
 Our goal is to create a fully debugged battle emulator with many story bosses, and we will continue to move forward with this goal.  
@@ -72,12 +79,12 @@ Note that v6 🔍⚡ is better than v7 💥🐎 and abandons
 
 ## Optimization Algorithms
 
-|    ver    |       used        | description                                                                                        |
-|:---------:|:-----------------:|----------------------------------------------------------------------------------------------------|
-|   v2 🦍   | Best-first search | Used by Corvus for compatibility with older battle emulators                                       |
+|    ver    |       used        | description                                                                           |
+|:---------:|:-----------------:|---------------------------------------------------------------------------------------|
+|   v2 🦍   | Best-first search | Used by Corvus for compatibility with older battle emulators                          |
 |   v4 🔍   |   A* algorithm    | Much better than v2. Maintenance costs are quite high when porting. Maximum 2 million |
-|  v6 🔍⚡   |   A* algorithm+   | A* algorithm with reduced maintenance costs                                                        |
-|  v7 💥🐎  | Brute force+beam  | 5-turn brute force-based + beam search algorithm. Discontinued because it lost to v6.              |
+|  v6 🔍⚡   |   A* algorithm+   | A* algorithm with reduced maintenance costs                                           |
+|  v7 💥🐎  | Brute force+beam  | 5-turn brute force-based + beam search algorithm. Discontinued because it lost to v6. |
 
 ## Benchmark
 
@@ -210,7 +217,10 @@ In v7, the search algorithm switched to brute force, allowing it to achieve 17 m
 The Battle Emulator started out in an incomplete state, gradually incorporating various techniques and ergonomic APIs, and since it's not possible to deploy ideas to each branch at the same time, differences in implementation arise.<br>
 
 ### Why one boss per branch?
-Why is there one boss per branch?<br>
 Although many battle mechanics are shared and could technically be combined into a single executable, doing so would require externalizing a large number of battle-dependent parameters. A fully generalized and complete decompilation of the battle system would significantly increase code size and blur the separation between the emulator and the original game logic.<br>
 By isolating one boss per branch, each boss can maintain its own constexpr values, constants, action selection logic, and argument parser independently. Each branch effectively becomes a self-contained black box. This separation greatly simplifies maintenance, reduces unintended cross-effects between bosses, and allows boss-specific optimizations without increasing overall structural complexity.<br>
 The emulator focuses strictly on precise RNG position tracking and damage calculation. By ignoring unrelated game systems, it preserves both compactness and execution speed.<br>
+
+## Official image rules for this repository
+> このページで利用している株式会社スクウェア・エニックスを代表とする共同著作者が権利を所有する画像の転載・配布は禁止いたします。
+> © 2009 ARMOR PROJECT/BIRD STUDIO/LEVEL-5/SQUARE ENIX All Rights Reserved.
