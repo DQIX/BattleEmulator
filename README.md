@@ -7,7 +7,7 @@
 - Individual management with git branches
 - For RTA Players
 
-# Disclaimer
+## Disclaimer
 This project does not distribute or include any copyrighted game data.<br>
 Our battle emulator is designed to avoid including any copyrighted data.<br>
 The terms and conditions for avoiding conflicts on the Battle Emulator can be [viewed here](https://www.dropbox.com/scl/fi/ljf4ij06fux9s2527dnyp/DQ9_BattleEmu_Readme.txt?rlkey=o5xmzegriye8krmni3ma7zg82&st=1x0aowuh&dl=0) (Japanese)
