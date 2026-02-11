@@ -11,15 +11,15 @@ Our team dedicates significant time to debugging to ensure the battle emulator p
 
 ## Try Online!
 
-|               emu               |      Bosses      |                                   url                                    | example                                                                                                                                  |
-|:-------------------------------:|:----------------:|:------------------------------------------------------------------------:|------------------------------------------------------------------------------------------------------------------------------------------|
-|    reokonn_lv8_new_arugo_v2     |   Wight Knight   |      [link](https://dqix.github.io/BattleEmulator/?emu=reokonn_v6)       | [example](https://dqix.github.io/BattleEmulator/?emu=reokonn_v6&offset=15&range=4&input=0+1+33+b+7+20+a14+16+h34+14+a58)                 |
+|               emu               |      Bosses      |                                   url                                    |                                                                 example                                                                  |
+|:-------------------------------:|:----------------:|:------------------------------------------------------------------------:|:----------------------------------------------------------------------------------------------------------------------------------------:|
+|    reokonn_lv8_new_arugo_v2     |   Wight Knight   |      [link](https://dqix.github.io/BattleEmulator/?emu=reokonn_v6)       |         [example](https://dqix.github.io/BattleEmulator/?emu=reokonn_v6&offset=15&range=4&input=0+1+33+b+7+20+a14+16+h34+14+a58)         |
 |      yo2_lv5_algorithm_v4       |      Morag       |     [link](https://dqix.github.io/BattleEmulator/?emu=isilyudaru_v6)     | [example](https://dqix.github.io/BattleEmulator/?emu=isilyudaru_v6&offset=15&range=2&input=0+2+23+a16+10+a16+11+a16+11+a16+h32+y+11+a16) |
-|       bilyouma_new_arugo        | Ragin' Contagion |      [link](https://dqix.github.io/BattleEmulator/?emu=bilyouma_v6)      |                                                                                                                                          |
-|  zilyadama_new_arugo_tamahane   | Master of Nu'un  | [link](https://dqix.github.io/BattleEmulator/?emu=zilyadama_v6_tamahane) |                                                                                                                                          |
-|   zilyadama_new_arugo_hagane    | Master of Nu'un  |  [link](https://dqix.github.io/BattleEmulator/?emu=zilyadama_v6_hagane)  |                                                                                                                                          |
-| nusisama1_v2_new_arugo_tamahane |    Lleviathan    | [link](https://dqix.github.io/BattleEmulator/?emu=nusisama1_v6_tamahane) |                                                                                                                                          |
-|  nusisama1_v2_new_arugo_hagane  |    Lleviathan    | [link](https://dqix.github.io/BattleEmulator/?emu=nusisama1_v6_hagane )  |                                                                                                                                          |
+|       bilyouma_new_arugo        | Ragin' Contagion |      [link](https://dqix.github.io/BattleEmulator/?emu=bilyouma_v6)      |      [example](https://dqix.github.io/BattleEmulator/?emu=bilyouma_v6&offset=15&range=2&input=0+5+45+a24+b+11+a25+12+13+a23+10+11)       |
+|  zilyadama_new_arugo_tamahane   | Master of Nu'un  | [link](https://dqix.github.io/BattleEmulator/?emu=zilyadama_v6_tamahane) | [example](https://dqix.github.io/BattleEmulator/?emu=zilyadama_v6_tamahane&offset=15&range=4&input=0+2+19+a42+s+18+a31+29+a30+m+17+12+h) |
+|   zilyadama_new_arugo_hagane    | Master of Nu'un  |  [link](https://dqix.github.io/BattleEmulator/?emu=zilyadama_v6_hagane)  |                                                                   n/a                                                                    |
+| nusisama1_v2_new_arugo_tamahane |    Lleviathan    | [link](https://dqix.github.io/BattleEmulator/?emu=nusisama1_v6_tamahane) |     [example](https://dqix.github.io/BattleEmulator/?emu=nusisama1_v6_tamahane&offset=15&range=4&input=0+15+27+a40+t33+a40+t30+h+0)      |
+|  nusisama1_v2_new_arugo_hagane  |    Lleviathan    | [link](https://dqix.github.io/BattleEmulator/?emu=nusisama1_v6_hagane )  |                                                                   n/a                                                                    |
 
 
 ## Contribution
