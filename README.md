@@ -97,40 +97,50 @@ It is thanks to C++ that the brute force can be completed in 1 seconds<br>
 ### How can you manage a 48-bit brute force in 1 second?
 The initial seed of the C table in DQ9 is based on a timer that starts when the game launches.<br>  
 This results in $`2^{48}`$ possible combinations, and it increments approximately 520,000 times per second.<br>
-<br>
 The 48-bit counter is structured as follows:<br>
-<br>
 - The lower 16 bits come from CPU Timer 1.<br>
 - The upper 32 bits come from a software timer.<br>
+The upper 32-bit software timer increases about 7.920 times per second in practice.<br>
+However, for simplicity, this can be approximated as exactly 8.0000 increments per second:<br>
+<br>
 
-It is known that the upper 32-bit software timer increases approximately 7.920 times per second.<br>
-Since the full 48-bit value is formed by combining the upper 32 bits and the lower 16 bits, the effective increment rate of the complete counter becomes:<br>
+```math
+\frac{1}{8.0000} = 0.125
+````
+
+<br>
+The measured value 7.920 can be interpreted as the real-world effective frequency when accounting for human timing error and practical measurement conditions.<br>
+<br>
+Since the full 48-bit value combines the upper 32 bits and lower 16 bits, the total increment rate becomes:<br>
+<br>
+Using the idealized value:<br>
+<br>
+
+```math
+8.0000 \times 2^{16} = 524{,}288
+```
+<br>
+Using the observed value:<br>
+<br>
 
 ```math
 7.920 \times 2^{16} = 519{,}045.12
 ```
-
-This explains the previously mentioned increment rate of roughly 520,000 times per second.<br>
-
-From this structure, the conversion factor used in the approximation formula can be derived.<br>
-The mysterious constant `0.12515` is effectively the reciprocal of the upper 32-bit timer frequency:<br>
-
-```math
-\frac{1}{7.920} \approx 0.12626
-```
-
-Therefore, the approximate current seed can be expressed as:<br>
+<br>
+Both results are close to the previously mentioned figure of roughly 520,000 increments per second.<br>
+<br>
+Under the simplified 8.0000 assumption, the approximate current seed can therefore be written as:<br>
+<br>
 
 ```math
-\left\lfloor \text{totalSeconds} \times (7.920 \times 2^{16}) \right\rfloor
+\left\lfloor \text{totalSeconds} \times (8.0000 \times 2^{16}) \right\rfloor
 ```
-
-or equivalently,<br>
+<br>
+or equivalently:<br>
+<br>
 
 ```math
-\left\lfloor \text{totalSeconds} \times 519{,}045.12 \right\rfloor
+\left\lfloor \text{totalSeconds} \times 524{,}288 \right\rfloor
 ```
-
-The small difference between 0.12515 and the theoretical reciprocal suggests either rounding, hardware timing granularity, or empirical calibration.<br>
-
-
+<br>
+This approximation makes the constant 0.125 a clean reciprocal representation of the upper timer frequency, while 7.920 represents the empirically observed effective rate in real conditions.<br>
