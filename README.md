@@ -104,20 +104,6 @@ Note that v6 🔍⚡ is better than v7 💥🐎 and abandons
 |  zilyadama_new_arugo   | Master of Nu'un |       182.46       |    3,196.70     |         296.44          |       3,913.04       |
 | nusisama1_v2_new_arugo |   Lleviathan    |       193.32       |    3,076.08     |         292.21          |       3,846.15       |
 
-
-
-## Benchmark
-* x86_64: i7 14700F 4.5Ghz, windows11 25h2, with msbuild -O3
-* webassembly: Brave -O3
-
-|         Branch         |     Bosses      |              BruteForcer x86_64              |                searcher x86_64                |           BruteForcer Webassembly            |             searcher Webassembly              |
-|:----------------------:|:---------------:|:--------------------------------------------:|:---------------------------------------------:|:--------------------------------------------:|:---------------------------------------------:|
-| reokonn_lv8_new_arugo  |  Wight Knight   | 17,074,700 (263.55 cycles/turn) | 2,544,600 (1,768.45 cycles/turn) | 16,350,000 (275.23 cycles/turn) | 1,830,000 (2,459.02 cycles/turn) |
-|  yo2_lv5_algorithm_v4  |      Morag      | 19,800,800 (227.26 cycles/turn) | 1,187,300 (3,790.11 cycles/turn) | 15,310,000 (293.93 cycles/turn) |  840,000 (5,357.14 cycles/turn)  |
-|   bilyouma_new_arugo   | Ragin' Contagio | 14,676,800 (306.61 cycles/turn) | 1,963,200 (2,292.18 cycles/turn) | 13,340,000 (337.33 cycles/turn) | 1,710,000 (2,631.58 cycles/turn) |
-|  zilyadama_new_arugo   | Master of Nu'un | 24,663,100 (182.46 cycles/turn) | 1,407,700 (3,196.70 cycles/turn) | 15,180,000 (296.44 cycles/turn) | 1,150,000 (3,913.04 cycles/turn) |
-| nusisama1_v2_new_arugo |   Lleviathan    | 23,277,000 (193.32 cycles/turn) | 1,462,900 (3,076.08 cycles/turn) | 15,400,000 (292.21 cycles/turn) | 1,170,000 (3,846.15 cycles/turn) |
-
 ## Known Issues
 ### The random number scaling in the Battle Emulator is not mathematically exact.
 
