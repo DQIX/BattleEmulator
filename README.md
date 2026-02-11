@@ -75,9 +75,36 @@ Note that v6 🔍⚡ is better than v7 💥🐎 and abandons
 |    ver    |       used        | description                                                                                        |
 |:---------:|:-----------------:|----------------------------------------------------------------------------------------------------|
 |   v2 🦍   | Best-first search | Used by Corvus for compatibility with older battle emulators                                       |
-|   v4 🔍   |   A* algorithm    | Much better than v2. Maintenance costs are quite high when porting. Maximum 2 million turns/second |
+|   v4 🔍   |   A* algorithm    | Much better than v2. Maintenance costs are quite high when porting. Maximum 2 million |
 |  v6 🔍⚡   |   A* algorithm+   | A* algorithm with reduced maintenance costs                                                        |
 |  v7 💥🐎  | Brute force+beam  | 5-turn brute force-based + beam search algorithm. Discontinued because it lost to v6.              |
+
+## Benchmark
+
+* x86_64: i7 14700F 4.5Ghz, windows11 25h2, with msbuild -O3
+* webassembly: Brave -O3
+
+## Turns per Second
+
+|         Branch         |     Bosses      | BruteForcer x86_64 | searcher x86_64 | BruteForcer Webassembly | searcher Webassembly |
+|:----------------------:|:---------------:|:------------------:|:---------------:|:-----------------------:|:--------------------:|
+| reokonn_lv8_new_arugo  |  Wight Knight   |     17,074,700     |    2,544,600    |       16,350,000        |      1,830,000       |
+|  yo2_lv5_algorithm_v4  |      Morag      |     19,800,800     |    1,187,300    |       15,310,000        |       840,000        |
+|   bilyouma_new_arugo   | Ragin' Contagio |     14,676,800     |    1,963,200    |       13,340,000        |      1,710,000       |
+|  zilyadama_new_arugo   | Master of Nu'un |     24,663,100     |    1,407,700    |       15,180,000        |      1,150,000       |
+| nusisama1_v2_new_arugo |   Lleviathan    |     23,277,000     |    1,462,900    |       15,400,000        |      1,170,000       |
+
+## Cycles per Turn
+
+|         Branch         |     Bosses      | BruteForcer x86_64 | searcher x86_64 | BruteForcer Webassembly | searcher Webassembly |
+|:----------------------:|:---------------:|:------------------:|:---------------:|:-----------------------:|:--------------------:|
+| reokonn_lv8_new_arugo  |  Wight Knight   |       263.55       |    1,768.45     |         275.23          |       2,459.02       |
+|  yo2_lv5_algorithm_v4  |      Morag      |       227.26       |    3,790.11     |         293.93          |       5,357.14       |
+|   bilyouma_new_arugo   | Ragin' Contagio |       306.61       |    2,292.18     |         337.33          |       2,631.58       |
+|  zilyadama_new_arugo   | Master of Nu'un |       182.46       |    3,196.70     |         296.44          |       3,913.04       |
+| nusisama1_v2_new_arugo |   Lleviathan    |       193.32       |    3,076.08     |         292.21          |       3,846.15       |
+
+
 
 ## Benchmark
 * x86_64: i7 14700F 4.5Ghz, windows11 25h2, with msbuild -O3
@@ -85,11 +112,11 @@ Note that v6 🔍⚡ is better than v7 💥🐎 and abandons
 
 |         Branch         |     Bosses      |              BruteForcer x86_64              |                searcher x86_64                |           BruteForcer Webassembly            |             searcher Webassembly              |
 |:----------------------:|:---------------:|:--------------------------------------------:|:---------------------------------------------:|:--------------------------------------------:|:---------------------------------------------:|
-| reokonn_lv8_new_arugo  |  Wight Knight   | 17,074,700 turns/second (263.55 cycles/turn) | 2,544,600 turns/second (1,768.45 cycles/turn) | 16,350,000 turns/second (275.23 cycles/turn) | 1,830,000 turns/second (2,459.02 cycles/turn) |
-|  yo2_lv5_algorithm_v4  |      Morag      | 19,800,800 turns/second (227.26 cycles/turn) | 1,187,300 turns/second (3,790.11 cycles/turn) | 15,310,000 turns/second (293.93 cycles/turn) |  840,000 turns/second (5,357.14 cycles/turn)  |
-|   bilyouma_new_arugo   | Ragin' Contagio | 14,676,800 turns/second (306.61 cycles/turn) | 1,963,200 turns/second (2,292.18 cycles/turn) | 13,340,000 turns/second (337.33 cycles/turn) | 1,710,000 turns/second (2,631.58 cycles/turn) |
-|  zilyadama_new_arugo   | Master of Nu'un | 24,663,100 turns/second (182.46 cycles/turn) | 1,407,700 turns/second (3,196.70 cycles/turn) | 15,180,000 turns/second (296.44 cycles/turn) | 1,150,000 turns/second (3,913.04 cycles/turn) |
-| nusisama1_v2_new_arugo |   Lleviathan    | 23,277,000 turns/second (193.32 cycles/turn) | 1,462,900 turns/second (3,076.08 cycles/turn) | 15,400,000 turns/second (292.21 cycles/turn) | 1,170,000 turns/second (3,846.15 cycles/turn) |
+| reokonn_lv8_new_arugo  |  Wight Knight   | 17,074,700 (263.55 cycles/turn) | 2,544,600 (1,768.45 cycles/turn) | 16,350,000 (275.23 cycles/turn) | 1,830,000 (2,459.02 cycles/turn) |
+|  yo2_lv5_algorithm_v4  |      Morag      | 19,800,800 (227.26 cycles/turn) | 1,187,300 (3,790.11 cycles/turn) | 15,310,000 (293.93 cycles/turn) |  840,000 (5,357.14 cycles/turn)  |
+|   bilyouma_new_arugo   | Ragin' Contagio | 14,676,800 (306.61 cycles/turn) | 1,963,200 (2,292.18 cycles/turn) | 13,340,000 (337.33 cycles/turn) | 1,710,000 (2,631.58 cycles/turn) |
+|  zilyadama_new_arugo   | Master of Nu'un | 24,663,100 (182.46 cycles/turn) | 1,407,700 (3,196.70 cycles/turn) | 15,180,000 (296.44 cycles/turn) | 1,150,000 (3,913.04 cycles/turn) |
+| nusisama1_v2_new_arugo |   Lleviathan    | 23,277,000 (193.32 cycles/turn) | 1,462,900 (3,076.08 cycles/turn) | 15,400,000 (292.21 cycles/turn) | 1,170,000 (3,846.15 cycles/turn) |
 
 ## Known Issues
 ### The random number scaling in the Battle Emulator is not mathematically exact.
