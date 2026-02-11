@@ -4,12 +4,19 @@
 - Written in C++
 - 100% open source
 - Individual management with git branches
+- For RTA Players
 
 ## What is our goal?
 Our goal is to create a fully debugged battle emulator with many story bosses, and we will continue to move forward with this goal.  
 Our team dedicates significant time to debugging to ensure the battle emulator perfectly matches actual gameplay on the hardware.　　
 
+## RTA chart and input method for argument parser
+https://note.com/zeppeki0711/n/neac461916cc8
+
+# Quick Start
 ## Try Online!
+
+Run the battle emulator on your CPU in your browser!<br>
 
 |               emu               |      Bosses      |                                   url                                    |                                                                 example                                                                  |
 |:-------------------------------:|:----------------:|:------------------------------------------------------------------------:|:----------------------------------------------------------------------------------------------------------------------------------------:|
@@ -21,6 +28,13 @@ Our team dedicates significant time to debugging to ensure the battle emulator p
 | nusisama1_v2_new_arugo_tamahane |    Lleviathan    | [link](https://dqix.github.io/BattleEmulator/?emu=nusisama1_v6_tamahane) |     [example](https://dqix.github.io/BattleEmulator/?emu=nusisama1_v6_tamahane&offset=15&range=4&input=0+15+27+a40+t33+a40+t30+h+0)      |
 |  nusisama1_v2_new_arugo_hagane  |    Lleviathan    | [link](https://dqix.github.io/BattleEmulator/?emu=nusisama1_v6_hagane )  |                                                                   n/a                                                                    |
 
+## with Clion windows
+
+1. Clone the project
+2. Open the project in Clion
+3. switch branch
+4. Run the project with Arguments
+5. Enjoy!
 
 ## Contribution
 ### What you need
@@ -65,6 +79,17 @@ Note that v6 🔍⚡ is better than v7 💥🐎 and abandons
 |  v6 🔍⚡   |   A* algorithm+   | A* algorithm with reduced maintenance costs                                                        |
 |  v7 💥🐎  | Brute force+beam  | 5-turn brute force-based + beam search algorithm. Discontinued because it lost to v6.              |
 
+## Benchmark
+* x86_64: i7 14700F 4.5Ghz, windows11 25h2, with msbuild -O3
+* webassembly: Brave -O3
+
+|         Branch         |     Bosses      |              BruteForcer x86_64              |                searcher x86_64                |           BruteForcer Webassembly            |             searcher Webassembly              |
+|:----------------------:|:---------------:|:--------------------------------------------:|:---------------------------------------------:|:--------------------------------------------:|:---------------------------------------------:|
+| reokonn_lv8_new_arugo  |  Wight Knight   | 17,074,700 turns/second (263.55 cycles/turn) | 2,544,600 turns/second (1,768.45 cycles/turn) | 16,350,000 turns/second (275.23 cycles/turn) | 1,830,000 turns/second (2,459.02 cycles/turn) |
+|  yo2_lv5_algorithm_v4  |      Morag      | 19,800,800 turns/second (227.26 cycles/turn) | 1,187,300 turns/second (3,790.11 cycles/turn) | 15,310,000 turns/second (293.93 cycles/turn) |  840,000 turns/second (5,357.14 cycles/turn)  |
+|   bilyouma_new_arugo   | Ragin' Contagio | 14,676,800 turns/second (306.61 cycles/turn) | 1,963,200 turns/second (2,292.18 cycles/turn) | 13,340,000 turns/second (337.33 cycles/turn) | 1,710,000 turns/second (2,631.58 cycles/turn) |
+|  zilyadama_new_arugo   | Master of Nu'un | 24,663,100 turns/second (182.46 cycles/turn) | 1,407,700 turns/second (3,196.70 cycles/turn) | 15,180,000 turns/second (296.44 cycles/turn) | 1,150,000 turns/second (3,913.04 cycles/turn) |
+| nusisama1_v2_new_arugo |   Lleviathan    | 23,277,000 turns/second (193.32 cycles/turn) | 1,462,900 turns/second (3,076.08 cycles/turn) | 15,400,000 turns/second (292.21 cycles/turn) | 1,170,000 turns/second (3,846.15 cycles/turn) |
 
 ## Known Issues
 ### The random number scaling in the Battle Emulator is not mathematically exact.
@@ -95,6 +120,11 @@ Battle emulators are effectively snapshots of the latest implementation at the t
 For example, [erugiosu](https://github.com/DQIX/BattleEmulator/tree/erugiosu) is significantly outdated and does not support the latest algorithms. Even within the _new_arugo series, multiple internal versions exist.  
 
 In general, newer versions tend to have improved processing speed and more refined algorithms. When the gap between versions becomes too large, a reimplementation is sometimes performed to bridge the differences between versions.  
+
+## help wanted
+- [ ] An algorithm that always outputs the optimal solution without using heuristics
+- [ ] Accurate implementation of more story boss battle emulators
+- [ ] Those who can spare a lot of time and manpower for debugging
 
 ## Q&A
 ### What regions does Battle Emulator target?
@@ -157,3 +187,17 @@ or equivalently:<br>
 ```
 <br>
 This approximation makes the constant 0.125 a clean reciprocal representation of the upper timer frequency, while 7.920 represents the empirically observed effective rate in real conditions.<br>
+
+### Why is the brute force algorithm so slow?
+The Battle Emulator can execute 13 to 17 million times per second, but the v4 and v6 brute force algorithms are based on a very slow priority queue.<br>
+Even with optimizations such as malloc and fixed memory allocation using LinearIdPool.h, which is present in some of the source code, the extremely slow speed cannot be overcome.<br>
+In v7, the search algorithm switched to brute force, allowing it to achieve 17 million turns per second, but since it used heuristics it could not exceed A*(v6), so it was abandoned.<br>
+
+### Why does the API for each battle emulator differ?
+The Battle Emulator started out in an incomplete state, gradually incorporating various techniques and ergonomic APIs, and since it's not possible to deploy ideas to each branch at the same time, differences in implementation arise.<br>
+
+### Why one boss per branch?
+Why is there one boss per branch?<br>
+Although many battle mechanics are shared and could technically be combined into a single executable, doing so would require externalizing a large number of battle-dependent parameters. A fully generalized and complete decompilation of the battle system would significantly increase code size and blur the separation between the emulator and the original game logic.<br>
+By isolating one boss per branch, each boss can maintain its own constexpr values, constants, action selection logic, and argument parser independently. Each branch effectively becomes a self-contained black box. This separation greatly simplifies maintenance, reduces unintended cross-effects between bosses, and allows boss-specific optimizations without increasing overall structural complexity.<br>
+The emulator focuses strictly on precise RNG position tracking and damage calculation. By ignoring unrelated game systems, it preserves both compactness and execution speed.<br>
