@@ -218,7 +218,8 @@ The Battle Emulator started out in an incomplete state, gradually incorporating 
 
 ### Why one boss per branch?
 Although many battle mechanics are shared and could technically be combined into a single executable, doing so would require externalizing a large number of battle-dependent parameters. A fully generalized and complete decompilation of the battle system would significantly increase code size and blur the separation between the emulator and the original game logic.<br>
-By isolating one boss per branch, each boss can maintain its own constexpr values, constants, action selection logic, and argument parser independently. Each branch effectively becomes a self-contained black box. This separation greatly simplifies maintenance, reduces unintended cross-effects between bosses, and allows boss-specific optimizations without increasing overall structural complexity.<br>
+By isolating one boss per branch, each boss can maintain its own constexpr values, constants, action selection logic, and argument parser independently. Each branch effectively becomes a self-contained black box.<br>
+This separation greatly simplifies maintenance, reduces unintended cross-effects between bosses, and allows boss-specific optimizations without increasing overall structural complexity.<br>
 The emulator focuses strictly on precise RNG position tracking and damage calculation. By ignoring unrelated game systems, it preserves both compactness and execution speed.<br>
 
 ## Official image rules for this repository
