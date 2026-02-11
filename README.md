@@ -84,7 +84,7 @@ Note that v6 🔍⚡ is better than v7 💥🐎 and abandons
 * x86_64: i7 14700F 4.5Ghz, windows11 25h2, with msbuild -O3
 * webassembly: Brave -O3
 
-## Turns per Second
+### Turns per Second
 
 |         Branch         |     Bosses      | BruteForcer x86_64 | searcher x86_64 | BruteForcer Webassembly | searcher Webassembly |
 |:----------------------:|:---------------:|:------------------:|:---------------:|:-----------------------:|:--------------------:|
@@ -94,7 +94,7 @@ Note that v6 🔍⚡ is better than v7 💥🐎 and abandons
 |  zilyadama_new_arugo   | Master of Nu'un |     24,663,100     |    1,407,700    |       15,180,000        |      1,150,000       |
 | nusisama1_v2_new_arugo |   Lleviathan    |     23,277,000     |    1,462,900    |       15,400,000        |      1,170,000       |
 
-## Cycles per Turn
+### Cycles per Turn
 
 |         Branch         |     Bosses      | BruteForcer x86_64 | searcher x86_64 | BruteForcer Webassembly | searcher Webassembly |
 |:----------------------:|:---------------:|:------------------:|:---------------:|:-----------------------:|:--------------------:|
