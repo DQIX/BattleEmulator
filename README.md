@@ -91,46 +91,46 @@ Targeted and tested only in JP
 It's available for free thanks to volunteers who have dedicated significant amounts of their personal time and money to making the Battle Emulator accurate
 
 ### Why c++?
-C++ was chosen because it is the fastest language and allows for highly optimized algorithms
-It is thanks to C++ that the brute force can be completed in 1 seconds
+C++ was chosen because it is the fastest language and allows for highly optimized algorithms<br>
+It is thanks to C++ that the brute force can be completed in 1 seconds<br>
 
 ### How can you manage a 48-bit brute force in 1 second?
-The initial seed of the C table in DQ9 is based on a timer that starts when the game launches.  
-This results in $`2^{48}`$ possible combinations, and it increments approximately 520,000 times per second.
+The initial seed of the C table in DQ9 is based on a timer that starts when the game launches.<br>  
+This results in $`2^{48}`$ possible combinations, and it increments approximately 520,000 times per second.<br>
+<br>
+The 48-bit counter is structured as follows:<br>
+<br>
+- The lower 16 bits come from CPU Timer 1.<br>
+- The upper 32 bits come from a software timer.<br>
 
-The 48-bit counter is structured as follows:
-
-- The lower 16 bits come from CPU Timer 1.
-- The upper 32 bits come from a software timer.
-
-It is known that the upper 32-bit software timer increases approximately 7.920 times per second.  
-Since the full 48-bit value is formed by combining the upper 32 bits and the lower 16 bits, the effective increment rate of the complete counter becomes:
+It is known that the upper 32-bit software timer increases approximately 7.920 times per second.<br>
+Since the full 48-bit value is formed by combining the upper 32 bits and the lower 16 bits, the effective increment rate of the complete counter becomes:<br>
 
 ```math
 7.920 \times 2^{16} = 519{,}045.12
 ```
 
-This explains the previously mentioned increment rate of roughly 520,000 times per second.
+This explains the previously mentioned increment rate of roughly 520,000 times per second.<br>
 
-From this structure, the conversion factor used in the approximation formula can be derived.  
-The mysterious constant `0.12515` is effectively the reciprocal of the upper 32-bit timer frequency:
+From this structure, the conversion factor used in the approximation formula can be derived.<br>
+The mysterious constant `0.12515` is effectively the reciprocal of the upper 32-bit timer frequency:<br>
 
 ```math
 \frac{1}{7.920} \approx 0.12626
 ```
 
-Therefore, the approximate current seed can be expressed as:
+Therefore, the approximate current seed can be expressed as:<br>
 
 ```math
 \left\lfloor \text{totalSeconds} \times (7.920 \times 2^{16}) \right\rfloor
 ```
 
-or equivalently,
+or equivalently,<br>
 
 ```math
 \left\lfloor \text{totalSeconds} \times 519{,}045.12 \right\rfloor
 ```
 
-The small difference between 0.12515 and the theoretical reciprocal suggests either rounding, hardware timing granularity, or empirical calibration.
+The small difference between 0.12515 and the theoretical reciprocal suggests either rounding, hardware timing granularity, or empirical calibration.<br>
 
 
