@@ -9,11 +9,25 @@
 Our goal is to create a fully debugged battle emulator with many story bosses, and we will continue to move forward with this goal.  
 Our team dedicates significant time to debugging to ensure the battle emulator perfectly matches actual gameplay on the hardware.　　
 
+## Contribution
+### What you need
+- JetBrains Clion(Free!) or virtual studio code 2026 c++ mode
+- DeSmuME Nightly with Lua scripting
+- lua51.dll
+- git
+- [Ghidra](https://github.com/DQIX/dqix-functions/issues/2)
+- [Ctable_jp.lua](https://github.com/DQIX/desmume-scripts/blob/main/jpn/Ctable_jp.lua)
+- DQ9 Japanese ROM
+- Boss Save Data
+
+Interested in contributing? Hit us up on Twitter!  
+
+https://x.com/Daisuke76897125
 
 ## branches
-This repository manages the battle emulator in branches.　　
-
-
+This repository manages the battle emulator in branches<br>
+Note that v6 🔍⚡ is better than v7 💥🐎 and abandons    
+  
 |                                              Branch                                              |              Bosses               | Target                                                                                                               　       | Optimizer |
 |:------------------------------------------------------------------------------------------------:|:---------------------------------:|------------------------------------------------------------------------------------------------------------------------------|-----------|
 |    [reokonn_lv8_new_arugo](https://github.com/DQIX/BattleEmulator/tree/reokonn_lv8_new_arugo)    |           Wight Knight            | [Minstrel lv8](https://github.com/DQIX/BattleEmulator/blob/reokonn_lv8_new_arugo/image/reokonn_lv8_v3.png)                   | v6 🔍⚡    |
@@ -31,12 +45,12 @@ This repository manages the battle emulator in branches.　　
 
 ## Optimization Algorithms
 
-|   ver   |       used        | description                                                                                        |
-|:-------:|:-----------------:|----------------------------------------------------------------------------------------------------|
-|  v2 🦍  | Best-first search | Used by Corvus for compatibility with older battle emulators                                       |
-|  v4 🔍  |   A* algorithm    | Much better than v2. Maintenance costs are quite high when porting. Maximum 2 million turns/second |
-| v6 🔍⚡  |   A* algorithm+   | A* algorithm with reduced maintenance costs                                                        |
-| v7 💥🐎 | Brute force+beam  | 5-turn brute force-based + beam search algorithm. Discontinued because it lost to v6.              |
+|    ver    |       used        | description                                                                                        |
+|:---------:|:-----------------:|----------------------------------------------------------------------------------------------------|
+|   v2 🦍   | Best-first search | Used by Corvus for compatibility with older battle emulators                                       |
+|   v4 🔍   |   A* algorithm    | Much better than v2. Maintenance costs are quite high when porting. Maximum 2 million turns/second |
+|  v6 🔍⚡   |   A* algorithm+   | A* algorithm with reduced maintenance costs                                                        |
+|  v7 💥🐎  | Brute force+beam  | 5-turn brute force-based + beam search algorithm. Discontinued because it lost to v6.              |
 
 
 ## Known Issues
