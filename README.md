@@ -9,6 +9,19 @@
 Our goal is to create a fully debugged battle emulator with many story bosses, and we will continue to move forward with this goal.  
 Our team dedicates significant time to debugging to ensure the battle emulator perfectly matches actual gameplay on the hardware.　　
 
+## Try Online!
+
+|               emu               |      Bosses      |                                   url                                    | example                                                                                                                                  |
+|:-------------------------------:|:----------------:|:------------------------------------------------------------------------:|------------------------------------------------------------------------------------------------------------------------------------------|
+|    reokonn_lv8_new_arugo_v2     |   Wight Knight   |      [link](https://dqix.github.io/BattleEmulator/?emu=reokonn_v6)       | [example](https://dqix.github.io/BattleEmulator/?emu=reokonn_v6&offset=15&range=4&input=0+1+33+b+7+20+a14+16+h34+14+a58)                 |
+|      yo2_lv5_algorithm_v4       |      Morag       |     [link](https://dqix.github.io/BattleEmulator/?emu=isilyudaru_v6)     | [example](https://dqix.github.io/BattleEmulator/?emu=isilyudaru_v6&offset=15&range=2&input=0+2+23+a16+10+a16+11+a16+11+a16+h32+y+11+a16) |
+|       bilyouma_new_arugo        | Ragin' Contagion |      [link](https://dqix.github.io/BattleEmulator/?emu=bilyouma_v6)      |                                                                                                                                          |
+|  zilyadama_new_arugo_tamahane   | Master of Nu'un  | [link](https://dqix.github.io/BattleEmulator/?emu=zilyadama_v6_tamahane) |                                                                                                                                          |
+|   zilyadama_new_arugo_hagane    | Master of Nu'un  |  [link](https://dqix.github.io/BattleEmulator/?emu=zilyadama_v6_hagane)  |                                                                                                                                          |
+| nusisama1_v2_new_arugo_tamahane |    Lleviathan    | [link](https://dqix.github.io/BattleEmulator/?emu=nusisama1_v6_tamahane) |                                                                                                                                          |
+|  nusisama1_v2_new_arugo_hagane  |    Lleviathan    | [link](https://dqix.github.io/BattleEmulator/?emu=nusisama1_v6_hagane )  |                                                                                                                                          |
+
+
 ## Contribution
 ### What you need
 - JetBrains Clion(Free!) or virtual studio code 2026 c++ mode
