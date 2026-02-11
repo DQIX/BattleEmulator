@@ -35,7 +35,7 @@ Run the battle emulator on your CPU in your browser!<br>
 | nusisama1_v2_new_arugo_tamahane |    Lleviathan    | [link](https://dqix.github.io/BattleEmulator/?emu=nusisama1_v6_tamahane) |     [example](https://dqix.github.io/BattleEmulator/?emu=nusisama1_v6_tamahane&offset=15&range=4&input=0+15+27+a40+t33+a40+t30+h+0)      |
 |  nusisama1_v2_new_arugo_hagane  |    Lleviathan    | [link](https://dqix.github.io/BattleEmulator/?emu=nusisama1_v6_hagane )  |                                                                   n/a                                                                    |
 
-## with Clion windows
+## Clion with Windows11
 
 1. Clone the project
 2. Open the project in Clion
