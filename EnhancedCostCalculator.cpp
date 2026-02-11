@@ -147,7 +147,7 @@ double EnhancedCostCalculator::calculateHCost(const Genome &genome, double enemy
     double hCost = 0.0;
 
     // Primary heuristic: enemy HP ratio (scaled down for better granularity)
-    hCost = (genome.EnemyPlayer.hp / enemyMaxHp) * 30.0;
+    hCost = (genome.EnemyPlayer.hp / enemyMaxHp) * 40.0;
     // Player HP consideration (more granular than original)
     double playerHpRatio = genome.AllyPlayer.hp / playerMaxHp;
     hCost += (1.0 - playerHpRatio) * 2.0;
@@ -217,7 +217,7 @@ double EnhancedCostCalculator::calculateStatusEffectCost(const Genome &genome) {
 
     // Special abilities
     if (genome.AllyPlayer.acrobaticStar) statusCost -= 0.2;
-    if (genome.AllyPlayer.specialCharge) statusCost -= 0.1;
+    if (genome.AllyPlayer.specialCharge) statusCost -= 0.0;
 
     return statusCost;
 }
@@ -232,7 +232,7 @@ double EnhancedCostCalculator::calculateResourceCost(const Genome &genome) {
     }
 
     // Item count considerations (rough estimates)
-    if (genome.AllyPlayer.SpecialMedicineCount <= 1 && genome.AllyPlayer.SpecialAntidoteCount <= 1) {
+    if (genome.AllyPlayer.SpecialMedicineCount <= 1) {
         resourceCost += 0.2; // Penalty for low healing items
     }
 

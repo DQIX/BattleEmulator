@@ -183,17 +183,17 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
                 possibleActions.push_back(BattleEmulator::HEAL);
             }
             if (currentGenome.AllyPlayer.mp >= 3) {
-                //possibleActions.push_back(BattleEmulator::CRACK_ALLY);
+                possibleActions.push_back(BattleEmulator::CRACK_ALLY);
                 possibleActions.push_back(BattleEmulator::WOOSH_ALLY);
             }
 
             if (currentGenome.AllyPlayer.mp >= 8) {
-                //possibleActions.push_back(BattleEmulator::CRACKLE);
+                possibleActions.push_back(BattleEmulator::CRACKLE);
             }
-            // if (currentGenome.AllyPlayer.specialCharge == true &&
-            //     currentGenome.AllyPlayer.specialChargeTurn != 0) {
-            //     possibleActions.push_back(BattleEmulator::ACROBATIC_STAR);
-            //     }
+            if (currentGenome.AllyPlayer.specialCharge == true &&
+                currentGenome.AllyPlayer.specialChargeTurn != 0) {
+                possibleActions.push_back(BattleEmulator::ACROBATIC_STAR);
+            }
 
             // Execute each action and generate new nodes
             for (int action: possibleActions) {
