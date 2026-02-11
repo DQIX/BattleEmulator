@@ -222,6 +222,20 @@ By isolating one boss per branch, each boss can maintain its own constexpr value
 This separation greatly simplifies maintenance, reduces unintended cross-effects between bosses, and allows boss-specific optimizations without increasing overall structural complexity.<br>
 The emulator focuses strictly on precise RNG position tracking and damage calculation. By ignoring unrelated game systems, it preserves both compactness and execution speed.<br>
 
+## Glossary
+
+### LCG
+
+https://en.wikipedia.org/wiki/Linear_congruential_generator
+
+### CTable
+This is the third random number in the game and shares processing with the second random number, table B
+The update formula looks like this:
+
+```math
+\text{前の乱数} \times \text{0x5d588b656c078965} + \text{0x269ec3}\mod 2^{64}
+```
+
 ## Official image rules for this repository
 > このページで利用している株式会社スクウェア・エニックスを代表とする共同著作者が権利を所有する画像の転載・配布は禁止いたします。  
 > © 2009 ARMOR PROJECT/BIRD STUDIO/LEVEL-5/SQUARE ENIX All Rights Reserved.  
