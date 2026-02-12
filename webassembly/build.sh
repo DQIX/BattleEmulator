@@ -80,6 +80,7 @@ EMCC_FLAGS=(
 
 EMCC_FLAGS+=(
   -sSAFE_HEAP=1
+  -sASSERTIONS=1
 )
 
 
