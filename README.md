@@ -208,8 +208,8 @@ or equivalently:<br>
 <br>
 This approximation makes the constant 0.125 a clean reciprocal representation of the upper timer frequency, while 7.920 represents the empirically observed effective rate in real conditions.<br>
 
-### Why is the brute force algorithm so slow?
-The Battle Emulator can execute 13 to 17 million times per second, but the v4 and v6 brute force algorithms are based on a very slow priority queue.<br>
+### Why is the searcher algorithm so slow?
+The Battle Emulator can execute 13 to 17 million times per second, but the v4 and v6 searcher algorithms are based on a very slow priority queue.<br>
 Even with optimizations such as malloc and fixed memory allocation using LinearIdPool.h, which is present in some of the source code, the extremely slow speed cannot be overcome.<br>
 In v7, the search algorithm switched to brute force, allowing it to achieve 17 million turns per second, but since it used heuristics it could not exceed A*(v6), so it was abandoned.<br>
 
