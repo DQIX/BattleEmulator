@@ -895,6 +895,11 @@ async function runSearch() {
       moduleSource: payload.jsText,
     });
 
+    if(searchResult.type === "error"){
+      console.info(searchResult.message);
+      throw new Error(searchResult.message);
+    }
+
     if (searchResult.output.startsWith("SearchRequest failed")) {
       searchResult = await searchClient.call("search", {
         moduleUrl,
