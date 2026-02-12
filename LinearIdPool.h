@@ -39,7 +39,11 @@ public:
 private:
     void grow() {
         // 最初の grow だけ遅いが、その後は安定
+#ifdef __EMSCRIPTEN__
+        size_t newCap = capacity_ + (65536 * 2); // 固定増分
+#else
         size_t newCap = capacity_ * 2;
+#endif
         T* newData = static_cast<T*>(
             std::realloc(data_, sizeof(T) * newCap)
         );
