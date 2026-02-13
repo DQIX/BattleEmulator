@@ -104,12 +104,12 @@ elseif(MSVC)
     target_compile_options(rbe_lv15_sp22_v2 PRIVATE /W4 /MP)  # `/MP` で並列コンパイル
 
     #target_link_options(rbe_single PRIVATE /INCREMENTAL:NO /DEBUG)
-    target_link_options(rbe_multi_lv18_sp35 PRIVATE /INCREMENTAL:NO /DEBUG:FULL)
-    target_link_options(rbe_multi_lv13_sp13 PRIVATE /INCREMENTAL:NO /DEBUG:FULL)
-    target_link_options(rbe_lv15_sp22_v2 PRIVATE /INCREMENTAL:NO /DEBUG:FULL)
+    target_link_options(rbe_multi_lv18_sp35 PRIVATE /INCREMENTAL:NO /DEBUG)
+    target_link_options(rbe_multi_lv13_sp13 PRIVATE /INCREMENTAL:NO /DEBUG)
+    target_link_options(rbe_lv15_sp22_v2 PRIVATE /INCREMENTAL:NO /DEBUG)
 
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi /O2")
-    set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG:FULL /OPT:REF /OPT:ICF")
+    set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
 endif()
 
 # MinGWの最適化フラグに応じたマクロ設定
