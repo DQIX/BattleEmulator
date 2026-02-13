@@ -1429,12 +1429,7 @@ int BattleEmulator::FUN_0207564c(int *position, int atk, int def) {
     [[assume(atk >= 0)]];
     [[assume(def >= 0)]];
     double result;
-    double atk1;
-    {
-        double tmpAtk = atk * 0.5;
-        double tmpDef = def * 0.25;
-        atk1 = tmpAtk - tmpDef;
-    }
+    const double atk1 = (2*atk - def) * 0.25;
     if (atk1 <= 0) [[unlikely]] {
         return 0;
     }
