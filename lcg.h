@@ -14,6 +14,8 @@ private:
 
     static uint64_t lcg_rand(uint64_t seed);
 
+    static uint64_t nextTop32NoCache(int position);
+
     static int calculatePercent(uint64_t input);
 
 public:
