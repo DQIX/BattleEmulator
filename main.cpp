@@ -1225,11 +1225,11 @@ int main(int argc, char *argv[]) {
             */
 
     //AI Warning: This is code related to debug2
-    uint64_t time1 = 0x416d71f;
+    uint64_t time1 = 0x3767098;
 
     int dummy[100];
     lcg::init(time1, false);
-    int *position1 = new int(1);
+    int position1 = 1;
 
     //ver: v5.0.6_vE_aa, atk: 82, def: 90, seed: 0x416d71f, actions: 25, 25, 50, 25, 25, 61, 50, 61, 61, 27, 27, 25, 50, 25, 61, 25, 56, 61, 25, 61, 50, 53, 25,
 
@@ -1249,7 +1249,7 @@ int main(int argc, char *argv[]) {
                                      合計 6Byte
     */
 
-        auto *NowState = new uint64_t(0); //エミュレーターの内部ステートを表すint
+        uint64_t NowState = 0; //エミュレーターの内部ステートを表すint
 
         Player players1[2];
         //int32_t gene1[350] = {0};
@@ -1257,7 +1257,7 @@ int main(int argc, char *argv[]) {
 
     //AI Warning: This is code related to debug2
         int32_t gene1[350] = {
-            25, 25, 50, 25, 25, 61, 50, 61, 61, 27, 27, 25, 50, 25, 61, 25, 56, 61, 25, 61, 50, 53, 25,
+            25, 25, 25, 50, 25, 50, 25, 78, 59, 56, 59, 53, 25, 53, 78, 25, 59,
             BattleEmulator::ATTACK_ALLY};
         //gene1[19-1] = BattleEmulator::DEFENCE;
         int counter = 0;
@@ -1281,22 +1281,15 @@ int main(int argc, char *argv[]) {
         // gene1[counter++] = BattleEmulator::MIRACLE_SLASH;
 
         //for (int i = 0; i < 10; ++i) {
-        (*NowState) = 0;
-        (*position1) = 1;
         BattleResult dummy1;
         std::memcpy(players1, BasePlayers, sizeof(players1));
-        BattleEmulator::Main(position1, (counter == 0 ? 1000 : counter), gene1, players1, &dummy1, time1, dummy, dummy, -1,
-                             NowState);
+        BattleEmulator::Main(&position1, (counter == 0 ? 1000 : counter), gene1, players1, &dummy1, time1, dummy, dummy, -1,
+                             &NowState);
 
         std::stringstream ss1;
         ss1 << time1 << " ";
 
-        if (dummy1.has_value()) {
-            std::cout << dumpTable(dummy1, gene1, -1) << std::endl;
-        }
-        //}
-        delete position1;
-        delete NowState;
+        std::cout << dumpTable(dummy1, gene1, -1) << std::endl;
 
         return 0;
 #endif
