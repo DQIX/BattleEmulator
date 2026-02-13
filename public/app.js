@@ -1082,3 +1082,61 @@ initMemoLedger();
   if (composing) return;
   ui.actionInput.value = normalizeActionInput(ui.actionInput.value);
 });
+
+// テキスト選択は許可したまま、テキストのD&D（ドラッグで文字が移動/外部へD&D/ドロップで置換）だけ無効化する
+function disableTextDnDForElement(el) {
+  if (!el) return;
+
+  // 既存機能を壊さないため、対象要素にだけ局所的に適用する
+  el.addEventListener("dragstart", (event) => {
+    // selection drag による「文字が移動する」挙動を止める
+    event.preventDefault();
+    event.stopPropagation();
+  });
+
+  // ドロップでtextareaの内容が置き換わる/挿入されるのを止める
+  el.addEventListener("drop", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  });
+
+  // drop を許可しない場合、dragover 側でも preventDefault しておくと安定する
+  el.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  });
+}
+
+function initDisableTextDnD() {
+  // 主要な textarea 類
+  disableTextDnDForElement(ui.actionInput);
+  disableTextDnDForElement(ui.dumpOutput);
+  disableTextDnDForElement(ui.logOutput);
+
+  // Seed Memo のメモ入力欄（動的生成）も対象にする（既存の input イベントとは競合しない）
+  if (ui.memoTableBody) {
+    ui.memoTableBody.addEventListener("dragstart", (event) => {
+      const target = event.target;
+      if (target && target.classList && target.classList.contains("memo-note-input")) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    });
+    ui.memoTableBody.addEventListener("drop", (event) => {
+      const target = event.target;
+      if (target && target.classList && target.classList.contains("memo-note-input")) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    });
+    ui.memoTableBody.addEventListener("dragover", (event) => {
+      const target = event.target;
+      if (target && target.classList && target.classList.contains("memo-note-input")) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    });
+  }
+}
+
+initDisableTextDnD();
