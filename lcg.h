@@ -32,6 +32,8 @@ public:
     static int intRangeRand(int *position, int min, int max);
 
     static uint8_t getSeed(int * position);
+
+    static int32_t getTop32(int *position);
 };
 
 

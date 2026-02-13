@@ -131,6 +131,22 @@ uint8_t lcg::getSeed(int *position) {
     return result;
 }
 
+int32_t lcg::getTop32(int *position) {
+    assert(position != nullptr);
+    assert((*position) < ARRAY_SIZE);
+
+    if (!init_mode) {
+        const auto top = nextTop32NoCache(*position);
+        (*position)++;
+        return top;
+    }
+
+    GenerateifNeed((*position));
+    const auto result = precalcTop32[(*position)];
+    (*position)++;
+    return result;
+}
+
 int lcg::getPercent(int *position, int max) {
     assert(position != nullptr);
     assert((*position) < ARRAY_SIZE);

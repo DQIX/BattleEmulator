@@ -1424,6 +1424,59 @@ int BattleEmulator::FUN_021e8458_typeD(int *position, double difference, double 
     return static_cast<int>(result);
 }
 
+#if !defined(__EMSCRIPTEN__)
+
+#if defined(_MSC_VER) && !defined(__clang__)
+#include <__msvc_int128.hpp>
+using u128 = std::_Unsigned128;
+#else
+using u128 = unsigned __int128;
+#endif
+
+
+int BattleEmulator::FUN_0207564c(int *position, int atk, int def) {
+    [[assume(atk >= 0)]];
+    [[assume(def >= 0)]];
+    int base = 2 * atk - def;
+    if (base <= 0) [[unlikely]] {
+        return 0;
+    }
+
+    int64_t atk1_fp = static_cast<int64_t>(base) << 30;
+    int64_t atk2_fp = static_cast<int64_t>(atk) << 28; // atk * 1/16
+
+    int64_t result_fp;
+
+    if (atk1_fp > atk2_fp) [[likely]] {
+        int64_t atk4_fp = atk1_fp >> 4; // /16
+
+        // floatRand(-atk4, atk4): -atk4 + top/2^32 * (2*atk4)
+        uint32_t r1 = lcg::getTop32(position);
+        auto spread_u = static_cast<uint64_t>(
+            (static_cast<u128>(r1) * static_cast<u128>(static_cast<uint64_t>(atk4_fp))) >> 31);
+        int64_t spread = static_cast<int64_t>(spread_u) - atk4_fp;
+
+        // floatRandAttack(-1, 1): -1 + top/2^31
+        uint32_t r2 = lcg::getTop32(position);
+        int64_t attack = (static_cast<int64_t>(r2) << 1) - (1ll << 32);
+
+        result_fp = atk1_fp + spread + attack;
+    } else {
+        // floatRand(0, atk2)
+        uint32_t r = lcg::getTop32(position);
+        auto result_u = static_cast<uint64_t>(
+            (static_cast<u128>(r) * static_cast<u128>(static_cast<uint64_t>(atk2_fp))) >> 32);
+        result_fp = static_cast<int64_t>(result_u);
+    }
+
+    if (result_fp <= 0) [[unlikely]] {
+        return 0;
+    }
+
+    return static_cast<int>(result_fp >> 32);
+}
+
+#else
 
 int BattleEmulator::FUN_0207564c(int *position, int atk, int def) {
     [[assume(atk >= 0)]];
@@ -1447,6 +1500,8 @@ int BattleEmulator::FUN_0207564c(int *position, int atk, int def) {
     return static_cast<int>((result));
     //return 0;
 }
+
+#endif
 
 
 void BattleEmulator::process7A8(int *position, int baseDamage, Player players[2], int defender) {
