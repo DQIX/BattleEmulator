@@ -23,7 +23,7 @@ public:
     static void
     add(BattleResult* obj, int action, int damage, bool isEnemy, int BuffTurns, int PoisonTurns,
         int speedTurn, int turn,
-        bool player0_has_initiative, int ehp, int ahp, uint64_t nowState, int scTurn, int amp, bool defenseFlag) {
+        bool player0_has_initiative, int ehp, int ahp, uint64_t nowState, int scTurn, int amp, bool defenseFlag, bool sleepFlag) {
         if (!obj) return; // ← これが最重要
 
         const int pos = obj->position;
@@ -41,6 +41,7 @@ public:
         obj->scTurn[pos] = scTurn;
         obj->amp[pos] = amp;
         obj->defenseFlag[pos] = defenseFlag;
+        obj->sleepFlag[pos] = sleepFlag;
         obj->turn = turn;
         obj->position = pos + 1;
     }
@@ -61,6 +62,7 @@ public:
     int amp[1000] = {};
     uint64_t state[1000] = {};
     bool defenseFlag[1000] = {};
+    bool sleepFlag[1000] = {};
 };
 
 #endif //NEWDIRECTORY_BATTLERESULT_H

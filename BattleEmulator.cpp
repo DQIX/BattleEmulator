@@ -554,7 +554,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         BattleResult::add(result, c, basedamage, true,
                                           def1, poi, agl, counterJ - 1,
                                           player0_has_initiative, ehp,
-                                          ahp, tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag);
+                                          ahp, tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag, players[0].sleeping);
                     } else if (mode != -1 && mode != -2) {
                         if (
                             c == ATTACK_ENEMY ||
@@ -667,7 +667,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         BattleResult::add(result, action, basedamage, false,
                                           def1, poi, agl, counterJ - 1,
                                           player0_has_initiative, ehp, ahp,
-                                          tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag);
+                                          tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag, players[0].sleeping);
                     }
                     if (action == HEAL || action == MORE_HEAL || action == MIDHEAL ||
                         action == FULLHEAL || action == SPECIAL_MEDICINE || action == GOSPEL_SONG || action ==
@@ -773,7 +773,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         BattleResult::add(result, action, 0, false,
                                           def1, poi, agl, counterJ - 1,
                                           player0_has_initiative, ehp, ahp,
-                                          tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag);
+                                          tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag, players[0].sleeping);
                     }
                 }
             }

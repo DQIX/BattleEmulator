@@ -196,7 +196,7 @@ namespace {
         printHeader(ss6);
         int currentTurn = -1;
         int eDamage[2] = {-1, -1}, aDamage = -1;
-        bool initiative_tmp, def_f = false;
+        bool initiative_tmp = false;
         std::string eAction[2], aAction, sp, tmpState, ATKTurn1, DEFTurn1, magicMirrorTurn1, specialChargeTurn1, amp1,
                 ahp2,
                 ehp2, amp2, poisonTurn1, SpeedTurn1;
@@ -216,6 +216,7 @@ namespace {
             auto poisonTurn = result.PoisonTurns[i];
             auto SpeedTurn = result.SpeedTurn[i];
             auto defenseFlag = result.defenseFlag[i];
+            auto sleep = result.sleepFlag[i];
             int amp = -1;
             if (i >= 1) {
                 amp = result.amp[i - 1];
@@ -279,6 +280,9 @@ namespace {
             // 敵か味方の行動を適切な変数に格納
             if (isEnemy) {
                 eAction[counter] = BattleEmulator::getActionName(action);
+                if (sleep) {
+                    eAction[counter] = "!sle " + eAction[counter];
+                }
                 eDamage[counter] = damage;
                 counter++;
                 ahp2 = std::to_string(ahp1);
