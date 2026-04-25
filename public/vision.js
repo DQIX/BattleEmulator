@@ -47,6 +47,7 @@
     const TEMPLATE_ALPHA_THRESHOLD = 0.05;
     const MATCH_SLOT_KEYS = ["main", "sub", "ally", "target"];
     const overlayContext = ui.overlay.getContext("2d");
+    overlayContext.imageSmoothingEnabled = false; // ★ 追加
     const processingCanvas = document.createElement("canvas");
     processingCanvas.width = BASE_WIDTH;
     processingCanvas.height = BASE_HEIGHT;
@@ -813,6 +814,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         const rect = computeSourceRect(source);
         state.captureRect = rect;
         processingContext.clearRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
+        processingContext.imageSmoothingEnabled = false; // ★ 追加
         processingContext.drawImage(
             source,
             rect.sourceX,
@@ -1069,6 +1071,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     function drawOverlay(matches, damageReadings) {
         overlayContext.clearRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
+        overlayContext.imageSmoothingEnabled = false; // ★ 追加
         overlayContext.drawImage(processingCanvas, 0, 0, BASE_WIDTH, BASE_HEIGHT);
         overlayContext.lineWidth = 3;
         overlayContext.font = "18px Bahnschrift, sans-serif";
@@ -1502,7 +1505,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             ui.historyBody.appendChild(row);
         });
         const el = ui.historyScroll;
-        const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 12;
+        const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
         if (isAtBottom) {
             el.scrollTop = el.scrollHeight;
         }
