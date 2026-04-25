@@ -36,12 +36,18 @@
     const WHITE_THRESHOLD = 0.72;
     const ACTION_THRESHOLD = 0.48;
     const NUMBER_THRESHOLD = 0.9;
+    const MATCH_PENALTY_WEIGHT = 0.0;
+    const MATCH_WHITE_WEIGHT = 1.0;
+    const MATCH_CONTRAST = 1.28;
+    const MATCH_BIAS = 0.03;
+    const TEMPLATE_ALPHA_THRESHOLD = 0.05;
     const MATCH_SLOT_KEYS = ["main", "sub", "ally", "target"];
     const overlayContext = ui.overlay.getContext("2d");
     const processingCanvas = document.createElement("canvas");
     processingCanvas.width = BASE_WIDTH;
     processingCanvas.height = BASE_HEIGHT;
     const processingContext = processingCanvas.getContext("2d", {willReadFrequently: true});
+    processingContext.imageSmoothingEnabled = false;
 
     const ROI_DEFS = {
         main: {x: 78, y: 645, width: 160, height: 70, label: "main"},
@@ -420,7 +426,9 @@ struct Params {
   threshold: f32,
   penaltyWeight: f32,
   whiteWeight: f32,
-  pad: f32,
+  contrast: f32,
+  bias: f32,
+  alphaThreshold: f32,
 };
 
 @group(0) @binding(0) var frameTex: texture_2d<f32>;
@@ -430,6 +438,11 @@ struct Params {
 
 fn luminance(rgb: vec3<f32>) -> f32 {
   return dot(rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+}
+
+fn preprocess(sample: vec4<f32>) -> f32 {
+  let boosted = clamp((luminance(sample.rgb) - 0.5) * params.contrast + 0.5 + params.bias, 0.0, 1.0);
+  return select(0.0, boosted, sample.a >= params.alphaThreshold);
 }
 
 @compute @workgroup_size(8, 8, 1)
@@ -446,8 +459,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     for (var x: u32 = 0u; x < params.templateWidth; x = x + 1u) {
       let framePos = vec2<i32>(i32(params.roiX + gid.x + x), i32(params.roiY + gid.y + y));
       let templatePos = vec2<i32>(i32(x), i32(y));
-      let frameL = luminance(textureLoad(frameTex, framePos, 0).rgb);
-      let templateL = luminance(textureLoad(templateTex, templatePos, 0).rgb);
+      let frameL = preprocess(textureLoad(frameTex, framePos, 0));
+      let templateL = preprocess(textureLoad(templateTex, templatePos, 0));
       let frameWhitePixel = select(0.0, 1.0, frameL >= params.threshold);
       let templateWhitePixel = select(0.0, 1.0, templateL >= params.threshold);
       overlap = overlap + min(frameWhitePixel, templateWhitePixel);
@@ -532,7 +545,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 size: scoreCount * 4,
                 usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
             });
-            const paramsBuffer = new ArrayBuffer(48);
+            const paramsBuffer = new ArrayBuffer(56);
             const paramsView = new DataView(paramsBuffer);
             paramsView.setUint32(0, roi.x, true);
             paramsView.setUint32(4, roi.y, true);
@@ -543,9 +556,11 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             paramsView.setUint32(24, scoreWidth, true);
             paramsView.setUint32(28, scoreHeight, true);
             paramsView.setFloat32(32, WHITE_THRESHOLD, true);
-            paramsView.setFloat32(36, 0.35, true);
-            paramsView.setFloat32(40, 1.0, true);
-            paramsView.setFloat32(44, 0, true);
+            paramsView.setFloat32(36, MATCH_PENALTY_WEIGHT, true);
+            paramsView.setFloat32(40, MATCH_WHITE_WEIGHT, true);
+            paramsView.setFloat32(44, MATCH_CONTRAST, true);
+            paramsView.setFloat32(48, MATCH_BIAS, true);
+            paramsView.setFloat32(52, TEMPLATE_ALPHA_THRESHOLD, true);
             const uniformBuffer = this.device.createBuffer({
                 size: paramsBuffer.byteLength,
                 usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
@@ -604,6 +619,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             this.frameCanvas.width = BASE_WIDTH;
             this.frameCanvas.height = BASE_HEIGHT;
             this.frameContext = this.frameCanvas.getContext("2d", {willReadFrequently: true});
+            this.frameContext.imageSmoothingEnabled = false;
         }
 
         async init() {
@@ -614,6 +630,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             canvas.width = template.width;
             canvas.height = template.height;
             const context = canvas.getContext("2d", {willReadFrequently: true});
+            context.imageSmoothingEnabled = false;
             context.drawImage(template.bitmap, 0, 0);
             return {
                 ...template,
@@ -662,11 +679,28 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         const data = imageData.data;
         for (let index = 0; index < mask.length; index += 1) {
             const offset = index * 4;
-            const luminance =
-                (data[offset] * 0.2126 + data[offset + 1] * 0.7152 + data[offset + 2] * 0.0722) / 255;
-            mask[index] = luminance >= WHITE_THRESHOLD ? 1 : 0;
+            mask[index] = isWhitePixel(
+                data[offset],
+                data[offset + 1],
+                data[offset + 2],
+                data[offset + 3],
+                WHITE_THRESHOLD,
+                TEMPLATE_ALPHA_THRESHOLD
+            ) ? 1 : 0;
         }
         return mask;
+    }
+
+    function preprocessLuminance(r, g, b) {
+        const luminance = (r * 0.2126 + g * 0.7152 + b * 0.0722) / 255;
+        return Math.max(0, Math.min(1, (luminance - 0.5) * MATCH_CONTRAST + 0.5 + MATCH_BIAS));
+    }
+
+    function isWhitePixel(r, g, b, a, threshold, alphaThreshold) {
+        if (a / 255 < alphaThreshold) {
+            return false;
+        }
+        return preprocessLuminance(r, g, b) >= threshold;
     }
 
     function compareMask(frame, templateMask, x, y, width, height) {
@@ -677,9 +711,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         for (let row = 0; row < height; row += 1) {
             for (let col = 0; col < width; col += 1) {
                 const frameIndex = ((y + row) * frame.width + (x + col)) * 4;
-                const pixel =
-                    (data[frameIndex] * 0.2126 + data[frameIndex + 1] * 0.7152 + data[frameIndex + 2] * 0.0722) / 255;
-                const frameWhite = pixel >= WHITE_THRESHOLD ? 1 : 0;
+                const frameWhite = isWhitePixel(
+                    data[frameIndex],
+                    data[frameIndex + 1],
+                    data[frameIndex + 2],
+                    data[frameIndex + 3],
+                    WHITE_THRESHOLD,
+                    0
+                ) ? 1 : 0;
                 const templateWhitePixel = templateMask[row * width + col];
                 if (templateWhitePixel) {
                     templateWhiteCount += 1;
@@ -697,7 +736,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             return 0;
         }
         const penalty = Math.max(0, frameWhiteCount - overlap);
-        return Math.max(0, (overlap - penalty * 0.35) / union);
+        return Math.max(0, (overlap * MATCH_WHITE_WEIGHT - penalty * MATCH_PENALTY_WEIGHT) / union);
     }
 
     function computeSourceRect(source) {
@@ -1608,6 +1647,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             canvas.width = template.width;
             canvas.height = template.height;
             const context = canvas.getContext("2d", {willReadFrequently: true});
+            context.imageSmoothingEnabled = false;
             context.drawImage(template.bitmap, 0, 0);
             templates.push({
                 file,
