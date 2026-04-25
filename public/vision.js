@@ -36,7 +36,7 @@
     const RESET_LATCH_CLEAR_SCORE = 0.6;
     const WHITE_THRESHOLD = 0.72;
     const ACTION_THRESHOLD = 0.45;
-    const NUMBER_THRESHOLD = 0.7;
+    const NUMBER_THRESHOLD = 0.80;
     const MATCH_PENALTY_WEIGHT = 0.0;
     const MATCH_WHITE_WEIGHT = 1.0;
     const MATCH_CONTRAST = 1.28;
@@ -1045,27 +1045,40 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 overlayContext.fillText(valueLabel, config.x + 6, valueLabelY);
 
                 // 桁ごとのactionArea枠
+                // 桁ごとのactionArea枠
                 config.actionAreas.forEach((area, index) => {
                     const digit = reading.digits[index];
                     const score = reading.scores ? reading.scores[index] : null;
                     const absX = config.x + area.x;
                     const absY = config.y + area.y;
 
-                    // 認識成功=緑、失敗=赤
-                    overlayContext.strokeStyle = digit !== -1
-                        ? "rgba(80, 255, 120, 0.85)"
-                        : "rgba(255, 80, 80, 0.75)";
-                    overlayContext.lineWidth = 1.5;
-                    overlayContext.strokeRect(absX, absY, area.width, area.height);
+                    if (digit !== -1) {
+                        overlayContext.strokeStyle = "rgba(80, 255, 120, 0.85)";
+                        overlayContext.lineWidth = 1.5;
+                        overlayContext.strokeRect(absX, absY, area.width, area.height);
 
-                    // 桁ラベル
-                    const digitLabel = digit !== -1
-                        ? (score !== null ? `${digit} (${(score * 100).toFixed(0)}%)` : `${digit}`)
-                        : "?";
-                    overlayContext.fillStyle = digit !== -1
-                        ? "rgba(80, 255, 120, 0.95)"
-                        : "rgba(255, 100, 100, 0.9)";
-                    overlayContext.fillText(digitLabel, absX + 2, absY + area.height - 4);
+                        const digitLabel = score !== null
+                            ? `${digit} (${(score * 100).toFixed(0)}%)`
+                            : `${digit}`;
+
+// 偶数=枠の下側内側、奇数=枠の上側内側に交互配置
+                        const labelAbove = index % 2 === 1;
+                        const labelY = labelAbove
+                            ? absY + 11                  // 枠の上側内側（上から11px）
+                            : absY + area.height - 3;   // 枠の下側内側（下端から3px）
+
+                        const labelWidth = overlayContext.measureText(digitLabel).width;
+                        overlayContext.fillStyle = "rgba(10, 30, 10, 0.72)";
+                        overlayContext.fillRect(
+                            absX + 1,
+                            labelAbove ? absY + 1 : absY + area.height - 14,
+                            labelWidth + 6,
+                            13
+                        );
+
+                        overlayContext.fillStyle = "rgba(80, 255, 120, 0.95)";
+                        overlayContext.fillText(digitLabel, absX + 3, labelY);
+                    }
                 });
             }
         }
