@@ -6,6 +6,7 @@
         permissionButton: document.getElementById("visionPermissionButton"),
         connectButton: document.getElementById("visionConnectButton"),
         resetButton: document.getElementById("visionResetButton"),
+        debugExportButton: document.getElementById("visionDebugExportButton"),
         video: document.getElementById("visionVideo"),
         overlay: document.getElementById("visionOverlay"),
         fpsValue: document.getElementById("visionFpsValue"),
@@ -31,10 +32,10 @@
     const SOURCE_1080P = {width: 1920, height: 1080};
     const SOURCE_720P = {width: 1280, height: 720};
     const RESOURCE_BASES = ["resource", "../erugiosu2/resource"];
-    const TEMPLATE_THRESHOLD = 0.48;
+    const TEMPLATE_THRESHOLD = 0.45;
     const RESET_LATCH_CLEAR_SCORE = 0.6;
     const WHITE_THRESHOLD = 0.72;
-    const ACTION_THRESHOLD = 0.48;
+    const ACTION_THRESHOLD = 0.45;
     const NUMBER_THRESHOLD = 0.9;
     const MATCH_PENALTY_WEIGHT = 0.0;
     const MATCH_WHITE_WEIGHT = 1.0;
@@ -328,6 +329,7 @@
         processedFrames: 0,
         history: [],
         numberTemplates: [],
+        lastMatches: Object.create(null),
         turnIndex: 1,
         actionIndex: 0,
         preAction: -1,
@@ -1036,6 +1038,63 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 overlayContext.fillText(label, match.x + 8, labelY);
             }
         }
+    }
+
+    function createMonochromeCropCanvas(match) {
+        const canvas = document.createElement("canvas");
+        canvas.width = match.width;
+        canvas.height = match.height;
+        const context = canvas.getContext("2d", {willReadFrequently: true});
+        context.imageSmoothingEnabled = false;
+        context.drawImage(
+            processingCanvas,
+            match.x,
+            match.y,
+            match.width,
+            match.height,
+            0,
+            0,
+            match.width,
+            match.height
+        );
+        const imageData = context.getImageData(0, 0, match.width, match.height);
+        const data = imageData.data;
+        for (let index = 0; index < data.length; index += 4) {
+            const monochrome = Math.round(
+                data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114
+            );
+            data[index] = monochrome;
+            data[index + 1] = monochrome;
+            data[index + 2] = monochrome;
+        }
+        context.putImageData(imageData, 0, 0);
+        return canvas;
+    }
+
+    function downloadCanvas(canvas, fileName) {
+        const link = document.createElement("a");
+        link.download = fileName;
+        link.href = canvas.toDataURL("image/png");
+        link.rel = "noopener";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    }
+
+    function downloadRecognizedMatchCrops() {
+        const matches = state.lastMatches || {};
+        let downloaded = 0;
+        for (const slot of MATCH_SLOT_KEYS) {
+            const match = matches[slot];
+            if (!match || !match.file || match.score < TEMPLATE_THRESHOLD) {
+                continue;
+            }
+            const canvas = createMonochromeCropCanvas(match);
+            const safeFile = match.file.replace(/[^a-zA-Z0-9._-]/g, "_");
+            downloadCanvas(canvas, `${slot}-${safeFile}-mono.png`);
+            downloaded += 1;
+        }
+        return downloaded;
     }
 
     function emptyTurnRow(turn) {
@@ -1774,6 +1833,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 state.lastFrameAt = now;
                 drawProcessingFrame(ui.video);
                 const matches = await state.matcher.match(processingCanvas, state.templatesBySlot);
+                state.lastMatches = matches;
                 const damageReadings = {
                     damage1: recognizeDamageValue("damage1"),
                     damage2: recognizeDamageValue("damage2")
@@ -1836,6 +1896,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         });
         ui.resetButton.addEventListener("click", () => {
             openResetDialog();
+        });
+        ui.debugExportButton.addEventListener("click", () => {
+            downloadRecognizedMatchCrops();
         });
         ui.resetCancel.addEventListener("click", () => {
             closeResetDialog();
