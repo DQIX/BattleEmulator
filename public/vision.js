@@ -255,6 +255,7 @@
         1: {names: {ja: "攻撃(敵)", en: "Attack (enemy)"}, ally: false, damage: true},
         2: {names: {ja: "超高速連打", en: "Ultra High Speed Combo"}, ally: false, damage: true},
         5: {names: {ja: "ジゴスパ", en: "Lightning Storm"}, ally: false, damage: true},
+        6: {names: {ja: "痛恨", en: "Critical Attack"}, ally: false, damage: true},
         8: {names: {ja: "上空から攻撃", en: "Sky Attack"}, ally: false, damage: true},
         9: {names: {ja: "メラゾーマ", en: "Kafrizzle"}, ally: false, damage: true},
         10: {names: {ja: "凍える吹雪", en: "Freezing Blizzard"}, ally: false, damage: true},
@@ -1377,22 +1378,29 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             return {kind: "action", actionId: 35, detail: "sleeping2", score: main.score};
         }
 
-        // WakeUp系: Sleeping中かつslept未設定
+        // WakeUp系: Sleeping中かつ ActionIndex != 0 かつ slept未設定 → ターンスキップ
         if (
             state.sleeping &&
             !state.slept &&
             (main.file === "WakeUp.png" || main.file === "WakeUp2.png" || main.file === "WakeUp3.png") &&
             sub.file !== "inori.png" &&
-            main.score >= TEMPLATE_THRESHOLD
+            main.score >= TEMPLATE_THRESHOLD &&
+            state.actionIndex !== 0 &&
+            !state.actionTaken
         ) {
-            // ActionIndex != 0 かつ ActionTaken未設定 → ターンスキップ
-            // ActionIndex == 0 かつ ActionTaken未設定 → 眠り回復
-            if (state.actionIndex !== 0 && !state.actionTaken) {
-                return {kind: "action", actionId: 46, detail: main.file, score: main.score};
-            }
-            if (state.actionIndex === 0 && !state.actionTaken) {
-                return {kind: "action", actionId: 40, detail: main.file, score: main.score};
-            }
+            return {kind: "action", actionId: 46, detail: main.file, score: main.score};
+        }
+
+        // WakeUp系: Sleeping中かつ ActionIndex == 0 → 眠り回復（sleptは問わない）
+        if (
+            state.sleeping &&
+            (main.file === "WakeUp.png" || main.file === "WakeUp2.png" || main.file === "WakeUp3.png") &&
+            sub.file !== "inori.png" &&
+            main.score >= TEMPLATE_THRESHOLD &&
+            state.actionIndex === 0 &&
+            !state.actionTaken
+        ) {
+            return {kind: "action", actionId: 40, detail: main.file, score: main.score};
         }
 
         // ためる
@@ -1493,6 +1501,11 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             });
             ui.historyBody.appendChild(row);
         });
+        const el = ui.historyScroll;
+        const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 12;
+        if (isAtBottom) {
+            el.scrollTop = el.scrollHeight;
+        }
     }
 
     function buildConsoleCommand() {
@@ -1557,6 +1570,22 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         const turn = encodedIndex & 0xfff;
         const slotIndex = (encodedIndex >> 12) & 0xf;
         updateHistoryDamage(turn + 1, slotIndex, damage);
+
+        // C#のUpdateDamage内の処理を移植:
+        // 攻撃系ダメージ確定時、Act3(slotIndex==2)またはActionTaken済みならSleepingを解除
+        if (damage > 0 && state.sleeping) {
+            const entry = state.history.find(
+                (item) => item.turn === turn + 1 && item.slot === slotIndex + 1
+            );
+            if (entry) {
+                const sleepBreakActions = [1, 6, 5, 2, 8]; // ATTACK_ENEMY, CRITICAL_ATTACK, LIGHTNING_STORM, ULTRA_HIGH_SPEED_COMBO, SKY_ATTACK
+                if (sleepBreakActions.includes(entry.actionId)) {
+                    if (state.actionTaken || slotIndex === 2) {
+                        state.sleeping = false;
+                    }
+                }
+            }
+        }
     }
 
     function handlePendingDamages(matches, damageReadings) {
