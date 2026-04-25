@@ -550,9 +550,7 @@ h2 {
 }
 
 .vision-preview-shell {
-  position: relative;
   width: 100%;
-  aspect-ratio: 958 / 718;
   border-radius: 16px;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -567,19 +565,17 @@ h2 {
 
 .vision-video,
 .vision-overlay {
-  position: absolute;
-  inset: 0;
   width: 100%;
-  height: 100%;
 }
 
 .vision-video {
   object-fit: cover;
   background: color-mix(in srgb, var(--panel) 75%, var(--fg) 8%);
-  object-position: right center;
 }
 
 .vision-overlay {
+  display: block;
+  height: auto;
   pointer-events: none;
 }
 

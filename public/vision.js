@@ -697,22 +697,15 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   function computeSourceRect(source) {
     const sourceWidth = source.videoWidth || source.naturalWidth || source.width || BASE_WIDTH;
     const sourceHeight = source.videoHeight || source.naturalHeight || source.height || BASE_HEIGHT;
-    const is1080Like = sourceHeight >= 900 || sourceWidth >= 1600;
-    const reference = is1080Like ? SOURCE_1080P : SOURCE_720P;
-    const scaleX = sourceWidth / reference.width;
-    const scaleY = sourceHeight / reference.height;
-    const sourceCropWidth = Math.max(1, Math.min(sourceWidth, Math.round(BASE_WIDTH * scaleX)));
-    const sourceCropHeight = Math.max(1, Math.min(sourceHeight, Math.round(BASE_HEIGHT * scaleY)));
     return {
       sourceWidth,
       sourceHeight,
-      sourceX: Math.max(0, sourceWidth - sourceCropWidth),
+      sourceX: 0,
       sourceY: 0,
-      sourceCropWidth,
-      sourceCropHeight
+      sourceCropWidth: BASE_WIDTH,
+      sourceCropHeight: BASE_HEIGHT
     };
   }
-
   function drawProcessingFrame(source) {
     const rect = computeSourceRect(source);
     state.captureRect = rect;
@@ -990,7 +983,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         overlayContext.fillStyle = "rgba(17, 22, 27, 0.78)";
         const label = `${slot}: ${match.file} ${(match.score * 100).toFixed(1)}%`;
         const textWidth = overlayContext.measureText(label).width;
-        const labelY = Math.max(26, match.y - 10);
+        // match.yが上端付近のときはラベルをROI枠の下に出す
+        const labelY = match.y >= 26 ? match.y - 10 : match.y + match.height + 20;
         overlayContext.fillRect(match.x, labelY - 18, textWidth + 16, 24);
         overlayContext.fillStyle = "rgba(255, 248, 236, 0.96)";
         overlayContext.fillText(label, match.x + 8, labelY);
@@ -1577,8 +1571,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
       const constraints = {
         audio: false,
         video: deviceId
-          ? { deviceId: { exact: deviceId }, width: { ideal: BASE_WIDTH }, height: { ideal: BASE_HEIGHT } }
-          : { width: { ideal: BASE_WIDTH }, height: { ideal: BASE_HEIGHT } }
+            ? { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+            : { width: { ideal: 1920 }, height: { ideal: 1080 } }
       };
       if (state.stream) {
         state.stream.getTracks().forEach((track) => track.stop());
