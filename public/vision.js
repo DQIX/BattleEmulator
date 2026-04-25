@@ -31,7 +31,7 @@
     const BASE_HEIGHT = 718;
     const SOURCE_1080P = {width: 1920, height: 1080};
     const SOURCE_720P = {width: 1280, height: 720};
-    const RESOURCE_BASES = ["resource", "../erugiosu2/resource"];
+    const VISION_ASSET_PACK_URL = "vision-assets.json";
     const TEMPLATE_THRESHOLD = 0.45;
     const RESET_LATCH_CLEAR_SCORE = 0.6;
     const WHITE_THRESHOLD = 0.72;
@@ -435,7 +435,7 @@ struct Params {
 };
 
 @group(0) @binding(0) var frameTex: texture_2d<f32>;
-@group(0) @binding(1) var templateTex: texture_2d<f32>;
+@group(0) @binding(1) var templateMaskTex: texture_2d<f32>;
 @group(0) @binding(2) var<storage, read_write> scores: array<f32>;
 @group(0) @binding(3) var<uniform> params: Params;
 
@@ -463,9 +463,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
       let framePos = vec2<i32>(i32(params.roiX + gid.x + x), i32(params.roiY + gid.y + y));
       let templatePos = vec2<i32>(i32(x), i32(y));
       let frameL = preprocess(textureLoad(frameTex, framePos, 0));
-      let templateL = preprocess(textureLoad(templateTex, templatePos, 0));
       let frameWhitePixel = select(0.0, 1.0, frameL >= params.threshold);
-      let templateWhitePixel = select(0.0, 1.0, templateL >= params.threshold);
+      let templateWhitePixel = select(0.0, 1.0, textureLoad(templateMaskTex, templatePos, 0).r > 0.0);
       overlap = overlap + min(frameWhitePixel, templateWhitePixel);
       templateWhiteCount = templateWhiteCount + templateWhitePixel;
       frameWhiteCount = frameWhiteCount + frameWhitePixel;
@@ -491,14 +490,28 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         async createTemplate(template) {
             const texture = this.device.createTexture({
                 size: [template.width, template.height, 1],
-                format: "rgba8unorm",
-                usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT
+                format: template.maskBytes ? "r8unorm" : "rgba8unorm",
+                usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.TEXTURE_BINDING
             });
-            this.queue.copyExternalImageToTexture(
-                {source: template.bitmap},
-                {texture},
-                [template.width, template.height]
-            );
+            if (template.maskBytes) {
+                const packed = packTextureBytes(template.maskBytes, template.width, template.height, 1);
+                this.queue.writeTexture(
+                    {texture},
+                    packed.data,
+                    {
+                        offset: 0,
+                        bytesPerRow: packed.bytesPerRow,
+                        rowsPerImage: template.height
+                    },
+                    [template.width, template.height, 1]
+                );
+            } else {
+                this.queue.copyExternalImageToTexture(
+                    {source: template.bitmap},
+                    {texture},
+                    [template.width, template.height]
+                );
+            }
             return {
                 ...template,
                 texture
@@ -629,6 +642,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
 
         async createTemplate(template) {
+            if (template.maskBytes) {
+                return {
+                    ...template,
+                    mask: template.maskBytes
+                };
+            }
             const canvas = document.createElement("canvas");
             canvas.width = template.width;
             canvas.height = template.height;
@@ -753,6 +772,21 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             sourceCropWidth: BASE_WIDTH,
             sourceCropHeight: BASE_HEIGHT
         };
+    }
+
+    function packTextureBytes(bytes, width, height, bytesPerPixel) {
+        const unalignedBytesPerRow = width * bytesPerPixel;
+        const bytesPerRow = Math.ceil(unalignedBytesPerRow / 256) * 256;
+        if (bytesPerRow === unalignedBytesPerRow) {
+            return {data: bytes, bytesPerRow};
+        }
+        const packed = new Uint8Array(bytesPerRow * height);
+        for (let row = 0; row < height; row += 1) {
+            const srcOffset = row * unalignedBytesPerRow;
+            const dstOffset = row * bytesPerRow;
+            packed.set(bytes.subarray(srcOffset, srcOffset + unalignedBytesPerRow), dstOffset);
+        }
+        return {data: packed, bytesPerRow};
     }
 
     function drawProcessingFrame(source) {
@@ -1212,7 +1246,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function pickCandidate(matches) {
-        console.log("matches", matches);
         const main = matches.main || emptyMatch("main");
         const sub = matches.sub || emptyMatch("sub");
         const ally = matches.ally || emptyMatch("ally");
@@ -1739,64 +1772,68 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return output;
     }
 
-    async function loadBitmap(path) {
-        const response = await fetch(path, {cache: "force-cache"});
+    function decodeBase64Bytes(value) {
+        // URL-safe Base64 を標準形式へ変換
+        let normalized = value
+            .replace(/-/g, "+")
+            .replace(/_/g, "/")
+            .replace(/\s+/g, "");
+
+        // パディング補完
+        while (normalized.length % 4 !== 0) {
+            normalized += "=";
+        }
+
+        const binary = atob(normalized);
+        const bytes = new Uint8Array(binary.length);
+
+        for (let index = 0; index < binary.length; index++) {
+            bytes[index] = binary.charCodeAt(index);
+        }
+
+        return bytes;
+    }
+
+    async function loadPackedVisionAssets() {
+        const response = await fetch(VISION_ASSET_PACK_URL, {cache: "no-store"});
         if (!response.ok) {
-            throw new Error(path);
+            throw new Error(`asset pack missing: ${VISION_ASSET_PACK_URL}`);
         }
-        const blob = await response.blob();
-        return createImageBitmap(blob);
+        return response.json();
     }
 
-    async function loadTemplateFile(group, file) {
-        for (const base of RESOURCE_BASES) {
-            const url = `${base}/${group.directory}/${file}`;
-            try {
-                const bitmap = await loadBitmap(url);
-                return {
-                    slot: group.slot,
-                    file,
-                    path: url,
-                    bitmap,
-                    width: bitmap.width,
-                    height: bitmap.height
-                };
-            } catch (error) {
-            }
-        }
-        throw new Error(`template missing: ${group.directory}/${file}`);
+    function normalizePackedTemplate(entry) {
+        return {
+            slot: entry.slot,
+            file: entry.file,
+            width: entry.width,
+            height: entry.height,
+            maskBytes: decodeBase64Bytes(entry.mask)
+        };
     }
 
-    async function loadTemplates(matcher) {
+    async function loadTemplates(matcher, assetPack) {
         const templatesBySlot = new Map();
-        for (const group of TEMPLATE_GROUPS) {
-            const templates = [];
-            for (const file of group.files) {
-                const template = await loadTemplateFile(group, file);
-                templates.push(await matcher.createTemplate(template));
+        for (const entry of assetPack.templates || []) {
+            const template = await matcher.createTemplate(normalizePackedTemplate(entry));
+            if (!templatesBySlot.has(template.slot)) {
+                templatesBySlot.set(template.slot, []);
             }
-            templatesBySlot.set(group.slot, templates);
+            templatesBySlot.get(template.slot).push(template);
         }
         return templatesBySlot;
     }
 
-    async function loadNumberTemplates() {
-        const templates = [];
-        for (const file of NUMBER_TEMPLATE_FILES) {
-            const template = await loadTemplateFile({slot: "numbers", directory: "numbers"}, file);
-            const canvas = document.createElement("canvas");
-            canvas.width = template.width;
-            canvas.height = template.height;
-            const context = canvas.getContext("2d", {willReadFrequently: true});
-            context.imageSmoothingEnabled = false;
-            context.drawImage(template.bitmap, 0, 0);
-            templates.push({
-                file,
-                digit: normalizeDigitFileName(file),
-                mask: buildWhiteMask(context.getImageData(0, 0, template.width, template.height))
-            });
-        }
-        return templates;
+    function loadNumberTemplates(assetPack) {
+        return (assetPack.numberTemplates || []).map((entry) => ({
+            file: entry.file,
+            digit: typeof entry.digit === "number" ? entry.digit : normalizeDigitFileName(entry.file),
+            mask: {
+                width: entry.width,
+                height: entry.height,
+                mask: decodeBase64Bytes(entry.mask)
+            }
+        }));
     }
 
     async function createMatcher() {
@@ -1886,8 +1923,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             await populateCameras();
             if (!state.matcher) {
                 state.matcher = await createMatcher();
-                state.templatesBySlot = await loadTemplates(state.matcher);
-                state.numberTemplates = await loadNumberTemplates();
+                const assetPack = await loadPackedVisionAssets();
+                state.templatesBySlot = await loadTemplates(state.matcher, assetPack);
+                state.numberTemplates = loadNumberTemplates(assetPack);
             }
             state.lastFrameAt = 0;
             state.lastFpsAt = 0;
