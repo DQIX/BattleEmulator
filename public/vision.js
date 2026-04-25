@@ -31,10 +31,10 @@
     const SOURCE_1080P = {width: 1920, height: 1080};
     const SOURCE_720P = {width: 1280, height: 720};
     const RESOURCE_BASES = ["resource", "../erugiosu2/resource"];
-    const TEMPLATE_THRESHOLD = 0.56;
+    const TEMPLATE_THRESHOLD = 0.48;
     const RESET_LATCH_CLEAR_SCORE = 0.6;
     const WHITE_THRESHOLD = 0.72;
-    const ACTION_THRESHOLD = 0.65;
+    const ACTION_THRESHOLD = 0.48;
     const NUMBER_THRESHOLD = 0.9;
     const MATCH_SLOT_KEYS = ["main", "sub", "ally", "target"];
     const overlayContext = ui.overlay.getContext("2d");
@@ -242,43 +242,44 @@
     ];
 
     const ACTIONS = {
-        1: {names: {ja: "攻撃(敵)", en: "Attack (enemy)"}, ally: false, damage: true},
-        2: {names: {ja: "超高速連打", en: "Ultra High Speed Combo"}, ally: false, damage: true},
-        5: {names: {ja: "ジゴスパ", en: "Lightning Storm"}, ally: false, damage: true},
-        8: {names: {ja: "上空から攻撃", en: "Sky Attack"}, ally: false, damage: true},
-        9: {names: {ja: "メラゾーマ", en: "Kafrizzle"}, ally: false, damage: true},
-        10: {names: {ja: "凍える吹雪", en: "Freezing Blizzard"}, ally: false, damage: true},
-        12: {names: {ja: "あやしいひとみ", en: "Lullab-Eye"}, ally: false, damage: false},
-        15: {names: {ja: "笑い", en: "Laugh"}, ally: false, damage: false},
-        16: {names: {ja: "凍てつく波動", en: "Disruptive Wave"}, ally: false, damage: false},
-        17: {names: {ja: "やけつくいき", en: "Burning Breath"}, ally: false, damage: false},
-        18: {names: {ja: "黒輝く息", en: "Dark Breath"}, ally: false, damage: true},
-        24: {names: {ja: "麻痺で動けない", en: "Paralysis"}, ally: true, damage: false},
-        25: {names: {ja: "攻撃(味方)", en: "Attack (ally)"}, ally: true, damage: true},
-        28: {names: {ja: "麻痺回復", en: "Cure Paralysis"}, ally: true, damage: false},
-        30: {names: {ja: "スカラ", en: "Buff"}, ally: true, damage: false},
-        31: {names: {ja: "ミラーシールド", en: "Magic Mirror"}, ally: true, damage: false},
-        32: {names: {ja: "ベホイム", en: "Moreheal"}, ally: true, damage: false},
-        33: {names: {ja: "すてみ", en: "Double Up"}, ally: true, damage: false},
-        34: {names: {ja: "さみだれ", en: "Multithrust"}, ally: true, damage: true},
-        35: {names: {ja: "眠っている！", en: "Sleeping"}, ally: true, damage: false},
-        37: {names: {ja: "ベホマ", en: "Fullheal"}, ally: true, damage: false},
-        38: {names: {ja: "大防御", en: "Defending Champion"}, ally: true, damage: false},
-        39: {names: {ja: "ためる(敵)", en: "Psyche Up (enemy)"}, ally: false, damage: false},
-        41: {names: {ja: "瞑想", en: "Meditation"}, ally: false, damage: false},
-        42: {names: {ja: "マダンテ", en: "Magic Burst"}, ally: false, damage: true},
-        43: {names: {ja: "祈り", en: "Restore MP"}, ally: false, damage: false},
-        44: {names: {ja: "しっぷう突き", en: "Mercurial Thrust"}, ally: true, damage: true},
-        47: {names: {ja: "賢者聖水", en: "Sage's Elixir"}, ally: true, damage: false},
-        48: {names: {ja: "エルフののみぐすり", en: "Elfin Elixir"}, ally: true, damage: false},
-        49: {names: {ja: "まほうのせいすい", en: "Magic Water"}, ally: true, damage: false},
-        50: {names: {ja: "特薬草", en: "Special Medicine"}, ally: true, damage: false},
-        51: {names: {ja: "しんでしまった！", en: "Dead"}, ally: true, damage: false},
-        52: {names: {ja: "ゴスペルソング", en: "Gospel Song"}, ally: true, damage: false},
-        53: {names: {ja: "逃げる", en: "Flee"}, ally: true, damage: false},
-        62: {names: {ja: "ためる(味方)", en: "Psyche Up (ally)"}, ally: true, damage: false}
+        1: { names: { ja: "攻撃(敵)", en: "Attack (enemy)" }, ally: false, damage: true },
+        2: { names: { ja: "超高速連打", en: "Ultra High Speed Combo" }, ally: false, damage: true },
+        5: { names: { ja: "ジゴスパ", en: "Lightning Storm" }, ally: false, damage: true },
+        8: { names: { ja: "上空から攻撃", en: "Sky Attack" }, ally: false, damage: true },
+        9: { names: { ja: "メラゾーマ", en: "Kafrizzle" }, ally: false, damage: true },
+        10: { names: { ja: "凍える吹雪", en: "Freezing Blizzard" }, ally: false, damage: true },
+        12: { names: { ja: "あやしいひとみ", en: "Lullab-Eye" }, ally: false, damage: false },
+        15: { names: { ja: "笑い", en: "Laugh" }, ally: false, damage: false },
+        16: { names: { ja: "凍てつく波動", en: "Disruptive Wave" }, ally: false, damage: false },
+        17: { names: { ja: "やけつくいき", en: "Burning Breath" }, ally: false, damage: false },
+        18: { names: { ja: "黒輝く息", en: "Dark Breath" }, ally: false, damage: true },
+        24: { names: { ja: "麻痺で動けない", en: "Paralysis" }, ally: true, damage: false },
+        25: { names: { ja: "攻撃(味方)", en: "Attack (ally)" }, ally: true, damage: true },
+        28: { names: { ja: "麻痺回復", en: "Cure Paralysis" }, ally: true, damage: false },
+        30: { names: { ja: "スカラ", en: "Buff" }, ally: true, damage: false },
+        31: { names: { ja: "ミラーシールド", en: "Magic Mirror" }, ally: true, damage: false },
+        32: { names: { ja: "ベホイム", en: "Moreheal" }, ally: true, damage: false },
+        33: { names: { ja: "すてみ", en: "Double Up" }, ally: true, damage: false },
+        34: { names: { ja: "さみだれ", en: "Multithrust" }, ally: true, damage: true },
+        35: { names: { ja: "眠っている！", en: "Sleeping" }, ally: true, damage: false },
+        37: { names: { ja: "ベホマ", en: "Fullheal" }, ally: true, damage: false },
+        38: { names: { ja: "大防御", en: "Defending Champion" }, ally: true, damage: false },
+        39: { names: { ja: "ためる(敵)", en: "Psyche Up (enemy)" }, ally: false, damage: false },
+        40: { names: { ja: "起きた", en: "Cure Sleeping" }, ally: true, damage: false },
+        41: { names: { ja: "瞑想", en: "Meditation" }, ally: false, damage: false },
+        42: { names: { ja: "マダンテ", en: "Magic Burst" }, ally: false, damage: true },
+        43: { names: { ja: "祈り", en: "Restore MP" }, ally: false, damage: false },
+        44: { names: { ja: "しっぷう突き", en: "Mercurial Thrust" }, ally: true, damage: true },
+        46: { names: { ja: "ターンスキップ", en: "Turn Skipped" }, ally: true, damage: false },
+        47: { names: { ja: "賢者聖水", en: "Sage's Elixir" }, ally: true, damage: false },
+        48: { names: { ja: "エルフののみぐすり", en: "Elfin Elixir" }, ally: true, damage: false },
+        49: { names: { ja: "まほうのせいすい", en: "Magic Water" }, ally: true, damage: false },
+        50: { names: { ja: "特薬草", en: "Special Medicine" }, ally: true, damage: false },
+        51: { names: { ja: "しんでしまった！", en: "Dead" }, ally: true, damage: false },
+        52: { names: { ja: "ゴスペルソング", en: "Gospel Song" }, ally: true, damage: false },
+        53: { names: { ja: "逃げる", en: "Flee" }, ally: true, damage: false },
+        62: { names: { ja: "ためる(味方)", en: "Psyche Up (ally)" }, ally: true, damage: false }
     };
-
     const DIRECT_MAIN_RULES = new Map([
         ["sukara.png", 30],
         ["hadou.png", 16],
@@ -335,6 +336,11 @@
         lastDamage1: -1,
         lastDamage2: -1,
         maybeCritical: -1,
+        // 以下追加
+        actionTaken: false,   // C#のActionTaken相当
+        sleeping: false,      // C#のSleeping相当
+        slept: false,         // C#のslept相当
+        daibougilyo: false,   // C#のdaibougilyo相当
         captureRect: {
             sourceWidth: BASE_WIDTH,
             sourceHeight: BASE_HEIGHT,
@@ -344,7 +350,6 @@
             sourceCropHeight: BASE_HEIGHT
         }
     };
-
     class BattleEmulatorBridge {
         send(snapshot) {
             const payload = {
@@ -1046,110 +1051,135 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function pickCandidate(matches) {
+        console.log("matches", matches);
         const main = matches.main || emptyMatch("main");
         const sub = matches.sub || emptyMatch("sub");
         const ally = matches.ally || emptyMatch("ally");
         const target = matches.target || emptyMatch("target");
         const erugioMain = isErugio(main.file);
 
+        // reset
         if (erugioMain && sub.file === "reset.png" && main.score >= TEMPLATE_THRESHOLD && sub.score >= TEMPLATE_THRESHOLD) {
-            return {kind: "reset", score: Math.min(main.score, sub.score), detail: `${main.file} + reset.png`};
+            return { kind: "reset", score: Math.min(main.score, sub.score), detail: `${main.file} + reset.png` };
         }
+
+        // 攻撃(敵) = erugio + attack
         if (erugioMain && sub.file === "attack.png" && main.score >= TEMPLATE_THRESHOLD && sub.score >= TEMPLATE_THRESHOLD) {
-            return {
-                kind: "action",
-                actionId: 1,
-                detail: `${main.file} + attack.png`,
-                score: Math.min(main.score, sub.score)
-            };
+            return { kind: "action", actionId: 1, detail: `${main.file} + attack.png`, score: Math.min(main.score, sub.score) };
         }
+
+        // 超高速連打 = erugio + uhsc
         if (erugioMain && sub.file === "uhsc.png" && main.score >= TEMPLATE_THRESHOLD && sub.score >= TEMPLATE_THRESHOLD) {
-            return {
-                kind: "action",
-                actionId: 2,
-                detail: `${main.file} + uhsc.png`,
-                score: Math.min(main.score, sub.score)
-            };
+            return { kind: "action", actionId: 2, detail: `${main.file} + uhsc.png`, score: Math.min(main.score, sub.score) };
         }
+
+        // 攻撃(味方) = a_attack.png、ActionTaken未設定かつguardなし
         if (
+            !state.actionTaken &&
             ally.file === "a_attack.png" &&
             ally.score >= TEMPLATE_THRESHOLD &&
             sub.file !== "uhsc.png" &&
             main.file !== "guard.png"
         ) {
-            return {
-                kind: "action",
-                actionId: 25,
-                detail: `a_attack.png (${main.file || "-"})`,
-                score: ally.score
-            };
+            return { kind: "action", actionId: 25, detail: `a_attack.png (${main.file || "-"})`, score: ally.score };
         }
+
+        // 大防御 combo
         if (
             main.file === "defense_champion.png" &&
             sub.file === "defense_champion2.png" &&
             main.score >= TEMPLATE_THRESHOLD &&
             sub.score >= TEMPLATE_THRESHOLD
         ) {
-            return {
-                kind: "action",
-                actionId: 38,
-                detail: "defense_champion combo",
-                score: Math.min(main.score, sub.score)
-            };
+            return { kind: "action", actionId: 38, detail: "defense_champion combo", score: Math.min(main.score, sub.score) };
         }
-        if (main.file === "Paralysis.png" && ally.file === "CareParalysis.png" && ally.score >= TEMPLATE_THRESHOLD) {
-            return {
-                kind: "action",
-                actionId: 28,
-                detail: "Paralysis + CareParalysis",
-                score: Math.min(main.score, ally.score)
-            };
+
+        // daibougilyo: マダンテ後のsleeping2は大防御
+        if (state.daibougilyo && main.file === "sleeping2.png" && main.score >= TEMPLATE_THRESHOLD) {
+            return { kind: "action", actionId: 38, detail: "madannte -> sleeping2 (daibougilyo)", score: main.score };
         }
+
+        // 麻痺回復 = Paralysis + CareParalysis
         if (
+            !state.slept &&
+            main.file === "Paralysis.png" &&
+            ally.file === "CareParalysis.png" &&
+            ally.score >= TEMPLATE_THRESHOLD
+        ) {
+            return { kind: "action", actionId: 28, detail: "Paralysis + CareParalysis", score: Math.min(main.score, ally.score) };
+        }
+
+        // 麻痺で動けない = Paralysis単体（Paralysis2なし）
+        if (
+            !state.slept &&
             main.file === "Paralysis.png" &&
             main.score >= TEMPLATE_THRESHOLD &&
             (!sub.file || sub.file !== "Paralysis2.png" || sub.score < TEMPLATE_THRESHOLD)
         ) {
-            return {
-                kind: "action",
-                actionId: 24,
-                detail: "Paralysis",
-                score: main.score
-            };
+            return { kind: "action", actionId: 24, detail: "Paralysis", score: main.score };
         }
-        if (main.file === "sleeping2.png" && (ally.file === "dead.png" || ally.file === "dead2.png") && ally.score >= TEMPLATE_THRESHOLD) {
-            return {
-                kind: "action",
-                actionId: 51,
-                detail: `sleeping2 + ${ally.file}`,
-                score: Math.min(main.score, ally.score)
-            };
+
+        // しんでしまった = sleeping2 + dead/dead2
+        if (
+            !state.actionTaken &&
+            main.file === "sleeping2.png" &&
+            (ally.file === "dead.png" || ally.file === "dead2.png") &&
+            ally.score >= TEMPLATE_THRESHOLD
+        ) {
+            return { kind: "action", actionId: 51, detail: `sleeping2 + ${ally.file}`, score: Math.min(main.score, ally.score) };
         }
-        if (main.file === "sleeping2.png" && main.score >= TEMPLATE_THRESHOLD) {
-            return {
-                kind: "action",
-                actionId: 35,
-                detail: "sleeping2",
-                score: main.score
-            };
+
+        // 眠っている！ = sleeping2単体（slept未設定）
+        if (
+            !state.slept &&
+            main.file === "sleeping2.png" &&
+            main.score >= TEMPLATE_THRESHOLD &&
+            (!ally.file || (ally.file !== "dead.png" && ally.file !== "dead2.png") || ally.score < TEMPLATE_THRESHOLD)
+        ) {
+            return { kind: "action", actionId: 35, detail: "sleeping2", score: main.score };
         }
+
+        // WakeUp系: Sleeping中かつslept未設定
+        if (
+            state.sleeping &&
+            !state.slept &&
+            (main.file === "WakeUp.png" || main.file === "WakeUp2.png" || main.file === "WakeUp3.png") &&
+            sub.file !== "inori.png" &&
+            main.score >= TEMPLATE_THRESHOLD
+        ) {
+            // ActionIndex != 0 かつ ActionTaken未設定 → ターンスキップ
+            // ActionIndex == 0 かつ ActionTaken未設定 → 眠り回復
+            if (state.actionIndex !== 0 && !state.actionTaken) {
+                return { kind: "action", actionId: 46, detail: main.file, score: main.score };
+            }
+            if (state.actionIndex === 0 && !state.actionTaken) {
+                return { kind: "action", actionId: 40, detail: main.file, score: main.score };
+            }
+        }
+
+        // ためる
         if (main.file === "tameru.png" && main.score >= TEMPLATE_THRESHOLD) {
-            return {
-                kind: "action",
-                actionId: target.file === "aha.png" && target.score >= TEMPLATE_THRESHOLD ? 62 : 39,
-                detail: target.file === "aha.png" ? "tameru + aha" : "tameru",
-                score: Math.min(main.score, target.score || 1)
-            };
+            if (target.file === "aha.png" && target.score >= TEMPLATE_THRESHOLD && !state.actionTaken) {
+                return { kind: "action", actionId: 62, detail: "tameru + aha", score: Math.min(main.score, target.score) };
+            }
+            return { kind: "action", actionId: 39, detail: "tameru", score: main.score };
         }
+
+        if (main.file === "sukara.png" && main.score >= TEMPLATE_THRESHOLD){
+            return { kind: "action", actionId: 30, detail: "tameru", score: main.score };
+        }
+
+        // ano.png: action記録なし、状態リセットのみ
+        if (main.file === "ano.png" && main.score >= TEMPLATE_THRESHOLD) {
+            return { kind: "ano" };
+        }
+
+        // DIRECT_MAIN_RULES
         const directAction = DIRECT_MAIN_RULES.get(main.file);
         if (directAction && main.score >= TEMPLATE_THRESHOLD) {
-            return {
-                kind: "action",
-                actionId: directAction,
-                detail: main.file,
-                score: main.score
-            };
+            return { kind: "action", actionId: directAction, detail: main.file, score: main.score };
         }
+
         return null;
     }
 
@@ -1184,6 +1214,11 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         state.lastDamage1 = -1;
         state.lastDamage2 = -1;
         state.maybeCritical = -1;
+        // 追加
+        state.actionTaken = false;
+        state.sleeping = false;
+        state.slept = false;
+        state.daibougilyo = false;
         renderHistory();
         updateTurnChip();
         setBridgeStatus("visionBridgeReady", "");
@@ -1286,6 +1321,22 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         const damage1 = damageReadings.damage1.value;
         const damage2 = damageReadings.damage2.value;
 
+        // maybeCritical: critical.png検出時に攻撃(敵)→痛恨(6)に上書き
+        if (state.maybeCritical !== -1) {
+            if (main.file === "critical.png" && main.score >= TEMPLATE_THRESHOLD) {
+                const turn = (state.maybeCritical & 0xfff) + 1;
+                const slotIndex = (state.maybeCritical >> 12) & 0xf;
+                updateHistoryDamage(turn, slotIndex, -2); // -2は「action上書き」シグナル用
+                // 実際はダメージではなくactionIdを上書きする必要があるため別途処理
+                const entry = state.history.find((item) => item.turn === turn && item.slot === slotIndex + 1);
+                if (entry) {
+                    entry.actionId = 6; // CRITICAL_ATTACK
+                    renderHistory();
+                }
+                state.maybeCritical = -1;
+            }
+        }
+
         if ((state.pendingDamage1 !== -1 && state.pendingDamage1Enabled) || state.lastDamage1 < damage1) {
             if (["guard.png", "miss.png", "miss2.png", "mikawasi.png"].includes(main.file)) {
                 state.pendingDamage1Enabled = false;
@@ -1336,18 +1387,37 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function acceptCandidate(candidate) {
+        // ano.png: preActionリセット、actionTaken=true、slept=false のみ
+        if (candidate && candidate.kind === "ano") {
+            state.preAction = -1;
+            state.actionTaken = true;
+            state.slept = false;
+            return;
+        }
+
         if (!candidate || candidate.kind !== "action") {
             if (Date.now() - state.lastDetectionAt > 5000) {
                 state.preAction = -1;
             }
+            // C#: else節でActionIndex==0ならActionTakenリセット
+            if (state.actionIndex === 0) {
+                state.actionTaken = false;
+            }
             return;
         }
+
         if (candidate.actionId === state.preAction) {
             state.lastDetectionAt = Date.now();
+            // C#: action==preActionのとき ActionIndex==0ならActionTakenリセット
+            if (state.actionIndex === 0) {
+                state.actionTaken = false;
+            }
             return;
         }
+
         state.preAction = candidate.actionId;
         state.lastDetectionAt = Date.now();
+
         const pendingSlotRef = (state.actionIndex << 12) | (state.turnIndex - 1);
         const damageChannel = getDamageChannel(candidate.actionId);
         state.pendingDamage1 = damageChannel === 1 ? pendingSlotRef : -1;
@@ -1356,6 +1426,50 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         state.pendingDamage2Enabled = damageChannel === 2;
         state.lastDamage1 = -1;
         state.lastDamage2 = -1;
+
+        // maybeCritical: 攻撃(敵)のとき記録
+        if (candidate.actionId === 1) {
+            state.maybeCritical = pendingSlotRef;
+        } else if (!candidate.detail?.includes("attack.png")) {
+            state.maybeCritical = -1;
+        }
+
+        // daibougilyo: マダンテかつActionTaken未設定のとき設定
+        if (candidate.actionId === 42 && !state.actionTaken) {
+            state.daibougilyo = true;
+        }
+        // 大防御確定でdaibougilyoリセット
+        if (candidate.actionId === 38) {
+            state.daibougilyo = false;
+        }
+
+        // Sleeping状態の設定
+        if (candidate.actionId === 12) { // あやしいひとみ
+            state.sleeping = true;
+        }
+        if (candidate.actionId === 35) { // 眠っている！
+            state.sleeping = true;
+            state.slept = true;
+        }
+        if (candidate.actionId === 40 || candidate.actionId === 46) { // 眠り回復/ターンスキップ
+            state.sleeping = false;
+            state.slept = true;
+        }
+
+        // 麻痺系slept
+        if (candidate.actionId === 24 || candidate.actionId === 28) {
+            state.slept = true;
+        }
+
+        // ActionTaken設定が必要なaction
+        const setsActionTaken = [
+            30, 31, 33, 34, 37, 40, 46, 47, 48, 49, 50, 52, 53, // buff/mirror/doubleup/multithrust/fullheal/cure_sleeping/turn_skipped/elixirs/song/flee
+            24, 28, 25, 35, 51                                    // paralysis/cure_paralysis/attack_ally/sleeping/dead
+        ];
+        if (setsActionTaken.includes(candidate.actionId)) {
+            state.actionTaken = true;
+        }
+
         const entry = {
             turn: state.turnIndex,
             slot: state.actionIndex + 1,
@@ -1365,12 +1479,17 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             damage: damageChannel ? -1 : 0
         };
         state.history.push(entry);
+
         if (state.actionIndex === 2) {
             state.actionIndex = 0;
             state.turnIndex += 1;
+            state.actionTaken = false;
+            state.daibougilyo = false;
+            state.slept = false;
         } else {
             state.actionIndex += 1;
         }
+
         renderHistory();
         updateTurnChip();
         const bridge = new BattleEmulatorBridge();
@@ -1389,7 +1508,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         });
         setBridgeStatus(sync.key, sync.encoded);
     }
-
     function encodeBridgePayload(payload) {
         const json = JSON.stringify(payload);
         const bytes = utf8Encode(json);
