@@ -28,10 +28,14 @@
 
   const BASE_WIDTH = 958;
   const BASE_HEIGHT = 718;
+  const SOURCE_1080P = { width: 1920, height: 1080 };
+  const SOURCE_720P = { width: 1280, height: 720 };
   const RESOURCE_BASES = ["resource", "../erugiosu2/resource"];
-  const TEMPLATE_THRESHOLD = 0.82;
+  const TEMPLATE_THRESHOLD = 0.65;
   const RESET_LATCH_CLEAR_SCORE = 0.6;
   const WHITE_THRESHOLD = 0.72;
+  const ACTION_THRESHOLD = 0.65;
+  const NUMBER_THRESHOLD = 0.9;
   const MATCH_SLOT_KEYS = ["main", "sub", "ally", "target"];
   const overlayContext = ui.overlay.getContext("2d");
   const processingCanvas = document.createElement("canvas");
@@ -44,6 +48,123 @@
     ally: { x: 179, y: 645, width: 160, height: 60, label: "ally" },
     sub: { x: 518, y: 619, width: 100, height: 90, label: "sub" },
     target: { x: 78, y: 578, width: 140, height: 65, label: "target" }
+  };
+
+  const NUMBER_TEMPLATE_FILES = [
+    "0.png",
+    "0_2.png",
+    "0_3.png",
+    "0_4.png",
+    "0_zep1.png",
+    "0_zpe2.png",
+    "1.png",
+    "1_1.png",
+    "1_10.png",
+    "1_11.png",
+    "1_12.png",
+    "1_2.png",
+    "1_3.png",
+    "1_4.png",
+    "1_5.png",
+    "1_6.png",
+    "1_7.png",
+    "1_8.png",
+    "1_9.png",
+    "1_zep1.png",
+    "1_zepp1.png",
+    "1_zepp13.png",
+    "1_zepp14.png",
+    "1_zepp16.png",
+    "1_zepp17.png",
+    "2.png",
+    "2_1.png",
+    "2_2.png",
+    "2_3.png",
+    "2_4.png",
+    "2_5.png",
+    "2_zep1.png",
+    "2_zep2.png",
+    "2_zep4.png",
+    "2_zepp2.png",
+    "3.png",
+    "3_1.png",
+    "3_2.png",
+    "3_3.png",
+    "3_4.png",
+    "3_5.png",
+    "3_6.png",
+    "3_7.png",
+    "3_zep1.png",
+    "3_zep3.png",
+    "4.png",
+    "4_1.png",
+    "4_2.png",
+    "4_3.png",
+    "4_4.png",
+    "4_5.png",
+    "4_6.png",
+    "4_zep1.png",
+    "4_zep2.png",
+    "4_zep4.png",
+    "4_zep5.png",
+    "4_zpp5.png",
+    "5.png",
+    "5_2.png",
+    "5_zep1.png",
+    "5_zep5.png",
+    "5_zepp1.png",
+    "6.png",
+    "6_1.png",
+    "6_12.png",
+    "6_zep2.png",
+    "6_zepp1.png",
+    "6_zepppp.png",
+    "7.png",
+    "7_2.png",
+    "7_3.png",
+    "7_4.png",
+    "7_zep1.png",
+    "7_zeppp.png",
+    "7_zpe2.png",
+    "8.png",
+    "8_1.png",
+    "8_3.png",
+    "8_4.png",
+    "8_5.png",
+    "8_6.png",
+    "8_zep1.png",
+    "8_zep7.png",
+    "8_zepp.png",
+    "9.png",
+    "9_2.png",
+    "9_zep1.png",
+    "9_zep2.png",
+    "9_zepp.png"
+  ];
+
+  const DAMAGE_ROIS = {
+    damage1: {
+      x: 78,
+      y: 645,
+      width: 160,
+      height: 70,
+      actionAreas: [
+        { x: 0, y: 0, width: 60, height: 60 },
+        { x: 55, y: 0, width: 60, height: 60 },
+        { x: 105, y: 0, width: 60, height: 60 }
+      ]
+    },
+    damage2: {
+      x: 179,
+      y: 645,
+      width: 160,
+      height: 60,
+      actionAreas: [
+        { x: 0, y: 0, width: 60, height: 60 },
+        { x: 43, y: 0, width: 60, height: 60 },
+        { x: 87, y: 0, width: 60, height: 60 }
+      ]
+    }
   };
 
   const TEMPLATE_GROUPS = [
@@ -199,13 +320,29 @@
     lastFpsAt: 0,
     processedFrames: 0,
     history: [],
+    numberTemplates: [],
     turnIndex: 1,
     actionIndex: 0,
     preAction: -1,
     lastDetectionAt: 0,
     resetLatched: false,
     becameActive: false,
-    movementTimer: null
+    movementTimer: null,
+    pendingDamage1: -1,
+    pendingDamage1Enabled: false,
+    pendingDamage2: -1,
+    pendingDamage2Enabled: false,
+    lastDamage1: -1,
+    lastDamage2: -1,
+    maybeCritical: -1,
+    captureRect: {
+      sourceWidth: BASE_WIDTH,
+      sourceHeight: BASE_HEIGHT,
+      sourceX: 0,
+      sourceY: 0,
+      sourceCropWidth: BASE_WIDTH,
+      sourceCropHeight: BASE_HEIGHT
+    }
   };
 
   class BattleEmulatorBridge {
@@ -262,7 +399,7 @@
       this.frameTexture = device.createTexture({
         size: [BASE_WIDTH, BASE_HEIGHT, 1],
         format: "rgba8unorm",
-        usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.TEXTURE_BINDING
+        usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT
       });
       const shader = device.createShaderModule({
         code: `
@@ -276,8 +413,8 @@ struct Params {
   scoreWidth: u32,
   scoreHeight: u32,
   threshold: f32,
+  penaltyWeight: f32,
   whiteWeight: f32,
-  darkWeight: f32,
   pad: f32,
 };
 
@@ -296,8 +433,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     return;
   }
 
-  var score = 0.0;
-  var total = 0.0;
+  var overlap = 0.0;
+  var templateWhiteCount = 0.0;
+  var frameWhiteCount = 0.0;
 
   for (var y: u32 = 0u; y < params.templateHeight; y = y + 1u) {
     for (var x: u32 = 0u; x < params.templateWidth; x = x + 1u) {
@@ -305,18 +443,18 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
       let templatePos = vec2<i32>(i32(x), i32(y));
       let frameL = luminance(textureLoad(frameTex, framePos, 0).rgb);
       let templateL = luminance(textureLoad(templateTex, templatePos, 0).rgb);
-      let frameWhite = select(0.0, 1.0, frameL >= params.threshold);
-      let templateWhite = select(0.0, 1.0, templateL >= params.threshold);
-      let weight = select(params.darkWeight, params.whiteWeight, templateWhite > 0.5);
-      total = total + weight;
-      if (abs(frameWhite - templateWhite) < 0.1) {
-        score = score + weight;
-      }
+      let frameWhitePixel = select(0.0, 1.0, frameL >= params.threshold);
+      let templateWhitePixel = select(0.0, 1.0, templateL >= params.threshold);
+      overlap = overlap + min(frameWhitePixel, templateWhitePixel);
+      templateWhiteCount = templateWhiteCount + templateWhitePixel;
+      frameWhiteCount = frameWhiteCount + frameWhitePixel;
     }
   }
 
+  let unionWhite = max(templateWhiteCount + frameWhiteCount - overlap, 1.0);
+  let penalty = max(frameWhiteCount - overlap, 0.0);
   let index = gid.y * params.scoreWidth + gid.x;
-  scores[index] = select(0.0, score / total, total > 0.0);
+  scores[index] = max(0.0, (overlap * params.whiteWeight - penalty * params.penaltyWeight) / unionWhite);
 }
 `
       });
@@ -333,7 +471,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
       const texture = this.device.createTexture({
         size: [template.width, template.height, 1],
         format: "rgba8unorm",
-        usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.TEXTURE_BINDING
+        usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT
       });
       this.queue.copyExternalImageToTexture(
         { source: template.bitmap },
@@ -400,7 +538,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
       paramsView.setUint32(24, scoreWidth, true);
       paramsView.setUint32(28, scoreHeight, true);
       paramsView.setFloat32(32, WHITE_THRESHOLD, true);
-      paramsView.setFloat32(36, 2.2, true);
+      paramsView.setFloat32(36, 0.35, true);
       paramsView.setFloat32(40, 1.0, true);
       paramsView.setFloat32(44, 0, true);
       const uniformBuffer = this.device.createBuffer({
@@ -527,23 +665,218 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
   function compareMask(frame, templateMask, x, y, width, height) {
     const data = frame.data;
-    let score = 0;
-    let total = 0;
+    let overlap = 0;
+    let templateWhiteCount = 0;
+    let frameWhiteCount = 0;
     for (let row = 0; row < height; row += 1) {
       for (let col = 0; col < width; col += 1) {
         const frameIndex = ((y + row) * frame.width + (x + col)) * 4;
         const pixel =
           (data[frameIndex] * 0.2126 + data[frameIndex + 1] * 0.7152 + data[frameIndex + 2] * 0.0722) / 255;
         const frameWhite = pixel >= WHITE_THRESHOLD ? 1 : 0;
-        const templateWhite = templateMask[row * width + col];
-        const weight = templateWhite ? 2.2 : 1;
-        total += weight;
-        if (frameWhite === templateWhite) {
-          score += weight;
+        const templateWhitePixel = templateMask[row * width + col];
+        if (templateWhitePixel) {
+          templateWhiteCount += 1;
+        }
+        if (frameWhite) {
+          frameWhiteCount += 1;
+        }
+        if (frameWhite && templateWhitePixel) {
+          overlap += 1;
         }
       }
     }
-    return total ? score / total : 0;
+    const union = templateWhiteCount + frameWhiteCount - overlap;
+    if (!union) {
+      return 0;
+    }
+    const penalty = Math.max(0, frameWhiteCount - overlap);
+    return Math.max(0, (overlap - penalty * 0.35) / union);
+  }
+
+  function computeSourceRect(source) {
+    const sourceWidth = source.videoWidth || source.naturalWidth || source.width || BASE_WIDTH;
+    const sourceHeight = source.videoHeight || source.naturalHeight || source.height || BASE_HEIGHT;
+    const is1080Like = sourceHeight >= 900 || sourceWidth >= 1600;
+    const reference = is1080Like ? SOURCE_1080P : SOURCE_720P;
+    const scaleX = sourceWidth / reference.width;
+    const scaleY = sourceHeight / reference.height;
+    const sourceCropWidth = Math.max(1, Math.min(sourceWidth, Math.round(BASE_WIDTH * scaleX)));
+    const sourceCropHeight = Math.max(1, Math.min(sourceHeight, Math.round(BASE_HEIGHT * scaleY)));
+    return {
+      sourceWidth,
+      sourceHeight,
+      sourceX: 0,
+      sourceY: 0,
+      sourceCropWidth,
+      sourceCropHeight
+    };
+  }
+
+  function drawProcessingFrame(source) {
+    const rect = computeSourceRect(source);
+    state.captureRect = rect;
+    processingContext.clearRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
+    processingContext.drawImage(
+      source,
+      rect.sourceX,
+      rect.sourceY,
+      rect.sourceCropWidth,
+      rect.sourceCropHeight,
+      0,
+      0,
+      BASE_WIDTH,
+      BASE_HEIGHT
+    );
+  }
+
+  function buildWhiteMask(imageData) {
+    const mask = new Uint8Array(imageData.width * imageData.height);
+    const data = imageData.data;
+    for (let index = 0; index < mask.length; index += 1) {
+      const offset = index * 4;
+      const luminance =
+        (data[offset] * 0.2126 + data[offset + 1] * 0.7152 + data[offset + 2] * 0.0722) / 255;
+      mask[index] = luminance >= 140 / 255 ? 1 : 0;
+    }
+    return {
+      width: imageData.width,
+      height: imageData.height,
+      mask
+    };
+  }
+
+  function cropMask(binary, area) {
+    const width = Math.min(area.width, binary.width - area.x);
+    const height = Math.min(area.height, binary.height - area.y);
+    const mask = new Uint8Array(width * height);
+    for (let row = 0; row < height; row += 1) {
+      const srcOffset = (area.y + row) * binary.width + area.x;
+      const dstOffset = row * width;
+      mask.set(binary.mask.subarray(srcOffset, srcOffset + width), dstOffset);
+    }
+    return { width, height, mask };
+  }
+
+  function trimFirstPixel(binary, targetWidth, targetHeight) {
+    let foundX = -1;
+    let foundY = -1;
+    for (let row = 0; row < binary.height; row += 1) {
+      for (let col = 0; col < binary.width - 1; col += 1) {
+        const index = row * binary.width + col;
+        if (binary.mask[index] && binary.mask[index + 1]) {
+          foundX = col;
+          foundY = row;
+          break;
+        }
+      }
+      if (foundX !== -1) {
+        break;
+      }
+    }
+    if (foundX === -1) {
+      return binary;
+    }
+    for (let col = 0; col < binary.width - 1; col += 1) {
+      let columnFound = false;
+      for (let row = 0; row < binary.height; row += 1) {
+        const index = row * binary.width + col;
+        if (binary.mask[index] && binary.mask[index + 1]) {
+          foundX = Math.min(foundX, col);
+          foundY = Math.min(foundY, row);
+          columnFound = true;
+          break;
+        }
+      }
+      if (columnFound) {
+        break;
+      }
+    }
+    const width = Math.min(targetWidth, binary.width - foundX);
+    const height = Math.min(targetHeight, binary.height - foundY);
+    const mask = new Uint8Array(width * height);
+    for (let row = 0; row < height; row += 1) {
+      const srcOffset = (foundY + row) * binary.width + foundX;
+      const dstOffset = row * width;
+      mask.set(binary.mask.subarray(srcOffset, srcOffset + width), dstOffset);
+    }
+    return { width, height, mask };
+  }
+
+  function compareBinaryImages(frameMask, templateMask) {
+    if (frameMask.width !== templateMask.width || frameMask.height !== templateMask.height) {
+      return 0;
+    }
+    let overlap = 0;
+    let frameWhite = 0;
+    let templateWhite = 0;
+    for (let index = 0; index < frameMask.mask.length; index += 1) {
+      const framePixel = frameMask.mask[index];
+      const templatePixel = templateMask.mask[index];
+      if (framePixel) {
+        frameWhite += 1;
+      }
+      if (templatePixel) {
+        templateWhite += 1;
+      }
+      if (framePixel && templatePixel) {
+        overlap += 1;
+      }
+    }
+    const union = frameWhite + templateWhite - overlap;
+    if (!union) {
+      return 0;
+    }
+    return overlap / union;
+  }
+
+  function normalizeDigitFileName(file) {
+    return Number.parseInt(file.split("_")[0], 10);
+  }
+
+  function convertMatchResults(digits) {
+    if (!digits.length || digits[0] === -1) {
+      return -1;
+    }
+    if (digits[1] === -1 && digits[2] !== -1) {
+      return -1;
+    }
+    let value = 0;
+    let found = false;
+    digits.forEach((digit) => {
+      if (digit !== -1) {
+        value = value * 10 + digit;
+        found = true;
+      }
+    });
+    return found ? value : -1;
+  }
+
+  function recognizeDamageValue(key) {
+    const config = DAMAGE_ROIS[key];
+    const cropped = processingContext.getImageData(config.x, config.y, config.width, config.height);
+    const binary = buildWhiteMask(cropped);
+    const digits = config.actionAreas.map((area) => {
+      const trimmed = trimFirstPixel(cropMask(binary, area), 26, 40);
+      if (trimmed.width !== 26 || trimmed.height !== 40) {
+        return { digit: -1, score: 0 };
+      }
+      let bestDigit = -1;
+      let bestScore = 0;
+      state.numberTemplates.forEach((template) => {
+        const score = compareBinaryImages(trimmed, template.mask);
+        if (score >= NUMBER_THRESHOLD && score >= bestScore) {
+          bestDigit = template.digit;
+          bestScore = score;
+        }
+      });
+      return { digit: bestDigit, score: bestScore };
+    });
+    return {
+      digits: digits.map((item) => item.digit),
+      score: digits.reduce((max, item) => Math.max(max, item.score), 0),
+      value: convertMatchResults(digits.map((item) => item.digit))
+    };
   }
 
   function emptyMatch(slot) {
@@ -643,6 +976,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
   function drawOverlay(matches) {
     overlayContext.clearRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
+    overlayContext.drawImage(processingCanvas, 0, 0, BASE_WIDTH, BASE_HEIGHT);
     overlayContext.lineWidth = 3;
     overlayContext.font = "18px Bahnschrift, sans-serif";
     for (const slot of MATCH_SLOT_KEYS) {
@@ -662,6 +996,34 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         overlayContext.fillText(label, match.x + 8, labelY);
       }
     }
+  }
+
+  function emptyTurnRow(turn) {
+    return {
+      turn,
+      slots: [
+        { actionId: null, detail: "", score: null, damage: null },
+        { actionId: null, detail: "", score: null, damage: null },
+        { actionId: null, detail: "", score: null, damage: null }
+      ]
+    };
+  }
+
+  function getTurnRows() {
+    const rows = [];
+    state.history.forEach((entry) => {
+      const index = Math.max(0, entry.turn - 1);
+      if (!rows[index]) {
+        rows[index] = emptyTurnRow(entry.turn);
+      }
+      rows[index].slots[entry.slot - 1] = {
+        actionId: entry.actionId,
+        detail: entry.detail,
+        score: entry.score,
+        damage: entry.damage
+      };
+    });
+    return rows.filter(Boolean);
   }
 
   function getScaledFpsTarget() {
@@ -819,6 +1181,13 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     state.actionIndex = 0;
     state.preAction = -1;
     state.lastDetectionAt = 0;
+    state.pendingDamage1 = -1;
+    state.pendingDamage1Enabled = false;
+    state.pendingDamage2 = -1;
+    state.pendingDamage2Enabled = false;
+    state.lastDamage1 = -1;
+    state.lastDamage2 = -1;
+    state.maybeCritical = -1;
     renderHistory();
     updateTurnChip();
     setBridgeStatus("visionBridgeReady", "");
@@ -826,26 +1195,28 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
   function renderHistory() {
     ui.historyBody.innerHTML = "";
-    if (!state.history.length) {
+    const rows = getTurnRows();
+    if (!rows.length) {
       ui.historyEmpty.hidden = false;
       ui.historyScroll.hidden = true;
       return;
     }
     ui.historyEmpty.hidden = true;
     ui.historyScroll.hidden = false;
-    state.history.forEach((entry) => {
+    rows.forEach((rowData) => {
       const row = document.createElement("tr");
       const turnCell = document.createElement("td");
-      turnCell.textContent = `T${entry.turn}`;
-      const slotCell = document.createElement("td");
-      slotCell.textContent = `A${entry.slot}`;
-      const actionCell = document.createElement("td");
-      actionCell.textContent = getActionLabel(entry.actionId);
-      const detailCell = document.createElement("td");
-      detailCell.textContent = entry.detail;
-      const scoreCell = document.createElement("td");
-      scoreCell.textContent = `${(entry.score * 100).toFixed(1)}%`;
-      row.append(turnCell, slotCell, actionCell, detailCell, scoreCell);
+      turnCell.textContent = `T${rowData.turn}`;
+      row.appendChild(turnCell);
+      rowData.slots.forEach((slot) => {
+        const actionCell = document.createElement("td");
+        actionCell.textContent = slot.actionId ? getActionLabel(slot.actionId) : "-";
+        actionCell.title = slot.detail || "";
+        const damageCell = document.createElement("td");
+        damageCell.textContent =
+          typeof slot.damage === "number" && slot.damage >= 0 ? String(slot.damage) : slot.actionId ? "..." : "-";
+        row.append(actionCell, damageCell);
+      });
       ui.historyBody.appendChild(row);
     });
   }
@@ -856,7 +1227,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     const damages = [];
     state.history.forEach((entry) => {
       const action = ACTIONS[entry.actionId];
-      if (!action) {
+      if (!action || entry.damage === -1) {
         return;
       }
       if (action.ally) {
@@ -865,10 +1236,107 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         enemyActions.push(entry.actionId);
       }
       if (action.damage) {
-        damages.push(0);
+        damages.push(entry.damage);
       }
     });
     return `b 0 0 0 ${Math.max(0, state.turnIndex - 1)} ${enemyActions.join(" ")}-${allyActions.join(" ")}-${damages.join(" ")}-`;
+  }
+
+  function getDamageChannel(actionId) {
+    if (actionId === 2 || actionId === 34) {
+      return 2;
+    }
+    if ([1, 5, 8, 9, 10, 18, 25, 42, 44].includes(actionId)) {
+      return 1;
+    }
+    return 0;
+  }
+
+  function updateHistoryDamage(turn, slotIndex, damage) {
+    const entry = state.history.find((item) => item.turn === turn && item.slot === slotIndex + 1);
+    if (!entry) {
+      return;
+    }
+    entry.damage = damage;
+    renderHistory();
+    const bridge = new BattleEmulatorBridge();
+    const sync = bridge.send({
+      currentTurn: state.turnIndex,
+      currentSlot: state.actionIndex + 1,
+      command: buildConsoleCommand(),
+      history: state.history.map((item) => ({
+        turn: item.turn,
+        slot: item.slot,
+        actionId: item.actionId,
+        actionLabel: getActionLabel(item.actionId),
+        detail: item.detail,
+        damage: item.damage
+      }))
+    });
+    setBridgeStatus(sync.key, sync.encoded);
+  }
+
+  function resolvePendingDamage(encodedIndex, damage) {
+    if (encodedIndex < 0) {
+      return;
+    }
+    const turn = encodedIndex & 0xfff;
+    const slotIndex = (encodedIndex >> 12) & 0xf;
+    updateHistoryDamage(turn + 1, slotIndex, damage);
+  }
+
+  function handlePendingDamages(matches, damageReadings) {
+    const main = matches.main || emptyMatch("main");
+    const damage1 = damageReadings.damage1.value;
+    const damage2 = damageReadings.damage2.value;
+
+    if ((state.pendingDamage1 !== -1 && state.pendingDamage1Enabled) || state.lastDamage1 < damage1) {
+      if (["guard.png", "miss.png", "miss2.png", "mikawasi.png"].includes(main.file)) {
+        state.pendingDamage1Enabled = false;
+        state.maybeCritical = -1;
+        resolvePendingDamage(state.pendingDamage1, 0);
+        state.preAction = -1;
+        return true;
+      }
+      if (damage1 !== -1) {
+        state.lastDamage1 = damage1;
+        state.pendingDamage1Enabled = false;
+        resolvePendingDamage(state.pendingDamage1, damage1);
+        state.preAction = -1;
+        return true;
+      }
+      if (damage2 !== -1 && damage1 < damage2) {
+        state.lastDamage1 = damage2;
+        state.pendingDamage1Enabled = false;
+        resolvePendingDamage(state.pendingDamage1, damage2);
+        state.preAction = -1;
+        return true;
+      }
+    } else if ((state.pendingDamage2 !== -1 && state.pendingDamage2Enabled) || state.lastDamage2 < damage2) {
+      if (["guard.png", "miss.png", "miss2.png", "mikawasi.png"].includes(main.file)) {
+        state.pendingDamage2Enabled = false;
+        state.maybeCritical = -1;
+        state.lastDamage2 = -1;
+        resolvePendingDamage(state.pendingDamage2, 0);
+        state.preAction = -1;
+        return true;
+      }
+      if (damage2 !== -1) {
+        state.pendingDamage2Enabled = false;
+        state.lastDamage2 = damage2;
+        resolvePendingDamage(state.pendingDamage2, damage2);
+        state.preAction = -1;
+        return true;
+      }
+      if (damage1 !== -1 && damage2 < damage1) {
+        state.pendingDamage2Enabled = false;
+        state.lastDamage2 = damage1;
+        resolvePendingDamage(state.pendingDamage2, damage1);
+        state.preAction = -1;
+        return true;
+      }
+    }
+    return false;
   }
 
   function acceptCandidate(candidate) {
@@ -884,12 +1352,21 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
     state.preAction = candidate.actionId;
     state.lastDetectionAt = Date.now();
+    const pendingSlotRef = (state.actionIndex << 12) | (state.turnIndex - 1);
+    const damageChannel = getDamageChannel(candidate.actionId);
+    state.pendingDamage1 = damageChannel === 1 ? pendingSlotRef : -1;
+    state.pendingDamage2 = damageChannel === 2 ? pendingSlotRef : -1;
+    state.pendingDamage1Enabled = damageChannel === 1;
+    state.pendingDamage2Enabled = damageChannel === 2;
+    state.lastDamage1 = -1;
+    state.lastDamage2 = -1;
     const entry = {
       turn: state.turnIndex,
       slot: state.actionIndex + 1,
       actionId: candidate.actionId,
       detail: candidate.detail,
-      score: candidate.score
+      score: candidate.score,
+      damage: damageChannel ? -1 : 0
     };
     state.history.push(entry);
     if (state.actionIndex === 2) {
@@ -910,7 +1387,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         slot: item.slot,
         actionId: item.actionId,
         actionLabel: getActionLabel(item.actionId),
-        detail: item.detail
+        detail: item.detail,
+        damage: item.damage
       }))
     });
     setBridgeStatus(sync.key, sync.encoded);
@@ -1007,20 +1485,41 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     return templatesBySlot;
   }
 
-  async function createMatcher() {
-    try {
-      const matcher = new WebGpuTemplateMatcher();
-      await matcher.init();
-      ui.engine.textContent = "WebGPU";
-      setStatus("visionStatusReady");
-      return matcher;
-    } catch (error) {
-      const matcher = new CpuTemplateMatcher();
-      await matcher.init();
-      ui.engine.textContent = "CPU fallback";
-      setStatus("visionStatusFallback");
-      return matcher;
+  async function loadNumberTemplates() {
+    const templates = [];
+    for (const file of NUMBER_TEMPLATE_FILES) {
+      const template = await loadTemplateFile({ slot: "numbers", directory: "numbers" }, file);
+      const canvas = document.createElement("canvas");
+      canvas.width = template.width;
+      canvas.height = template.height;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      context.drawImage(template.bitmap, 0, 0);
+      templates.push({
+        file,
+        digit: normalizeDigitFileName(file),
+        mask: buildWhiteMask(context.getImageData(0, 0, template.width, template.height))
+      });
     }
+    return templates;
+  }
+
+  async function createMatcher() {
+    if (navigator.gpu) {
+      try {
+        const matcher = new WebGpuTemplateMatcher();
+        await matcher.init();
+        ui.engine.textContent = "WebGPU";
+        setStatus("visionStatusReady");
+        return matcher;
+      } catch (error) {
+        console.warn("WebGPU matcher unavailable, falling back to CPU:", error);
+      }
+    }
+    const matcher = new CpuTemplateMatcher();
+    await matcher.init();
+    ui.engine.textContent = "CPU";
+    setStatus("visionStatusFallback");
+    return matcher;
   }
 
   async function populateCameras() {
@@ -1092,6 +1591,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
       if (!state.matcher) {
         state.matcher = await createMatcher();
         state.templatesBySlot = await loadTemplates(state.matcher);
+        state.numberTemplates = await loadNumberTemplates();
       }
       state.lastFrameAt = 0;
       state.lastFpsAt = 0;
@@ -1117,11 +1617,25 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
       const targetInterval = 1000 / getScaledFpsTarget();
       if (!state.lastFrameAt || now - state.lastFrameAt >= targetInterval) {
         state.lastFrameAt = now;
-        processingContext.drawImage(ui.video, 0, 0, BASE_WIDTH, BASE_HEIGHT);
+        drawProcessingFrame(ui.video);
         const matches = await state.matcher.match(processingCanvas, state.templatesBySlot);
+        const damageReadings = {
+          damage1: recognizeDamageValue("damage1"),
+          damage2: recognizeDamageValue("damage2")
+        };
         updateMatchCards(matches);
         drawOverlay(matches);
+        if (handlePendingDamages(matches, damageReadings)) {
+          updateFps(now);
+          queueLoop(runFrame);
+          return;
+        }
         const candidate = pickCandidate(matches);
+        if (candidate && candidate.score < ACTION_THRESHOLD) {
+          updateFps(now);
+          queueLoop(runFrame);
+          return;
+        }
         if (!maybeResetFromCombo(candidate)) {
           acceptCandidate(candidate);
         }
