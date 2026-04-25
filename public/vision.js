@@ -36,7 +36,7 @@
     const RESET_LATCH_CLEAR_SCORE = 0.6;
     const WHITE_THRESHOLD = 0.72;
     const ACTION_THRESHOLD = 0.45;
-    const NUMBER_THRESHOLD = 0.9;
+    const NUMBER_THRESHOLD = 0.7;
     const MATCH_PENALTY_WEIGHT = 0.0;
     const MATCH_WHITE_WEIGHT = 1.0;
     const MATCH_CONTRAST = 1.28;
@@ -249,43 +249,43 @@
     ];
 
     const ACTIONS = {
-        1: { names: { ja: "攻撃(敵)", en: "Attack (enemy)" }, ally: false, damage: true },
-        2: { names: { ja: "超高速連打", en: "Ultra High Speed Combo" }, ally: false, damage: true },
-        5: { names: { ja: "ジゴスパ", en: "Lightning Storm" }, ally: false, damage: true },
-        8: { names: { ja: "上空から攻撃", en: "Sky Attack" }, ally: false, damage: true },
-        9: { names: { ja: "メラゾーマ", en: "Kafrizzle" }, ally: false, damage: true },
-        10: { names: { ja: "凍える吹雪", en: "Freezing Blizzard" }, ally: false, damage: true },
-        12: { names: { ja: "あやしいひとみ", en: "Lullab-Eye" }, ally: false, damage: false },
-        15: { names: { ja: "笑い", en: "Laugh" }, ally: false, damage: false },
-        16: { names: { ja: "凍てつく波動", en: "Disruptive Wave" }, ally: false, damage: false },
-        17: { names: { ja: "やけつくいき", en: "Burning Breath" }, ally: false, damage: false },
-        18: { names: { ja: "黒輝く息", en: "Dark Breath" }, ally: false, damage: true },
-        24: { names: { ja: "麻痺で動けない", en: "Paralysis" }, ally: true, damage: false },
-        25: { names: { ja: "攻撃(味方)", en: "Attack (ally)" }, ally: true, damage: true },
-        28: { names: { ja: "麻痺回復", en: "Cure Paralysis" }, ally: true, damage: false },
-        30: { names: { ja: "スカラ", en: "Buff" }, ally: true, damage: false },
-        31: { names: { ja: "ミラーシールド", en: "Magic Mirror" }, ally: true, damage: false },
-        32: { names: { ja: "ベホイム", en: "Moreheal" }, ally: true, damage: false },
-        33: { names: { ja: "すてみ", en: "Double Up" }, ally: true, damage: false },
-        34: { names: { ja: "さみだれ", en: "Multithrust" }, ally: true, damage: true },
-        35: { names: { ja: "眠っている！", en: "Sleeping" }, ally: true, damage: false },
-        37: { names: { ja: "ベホマ", en: "Fullheal" }, ally: true, damage: false },
-        38: { names: { ja: "大防御", en: "Defending Champion" }, ally: true, damage: false },
-        39: { names: { ja: "ためる(敵)", en: "Psyche Up (enemy)" }, ally: false, damage: false },
-        40: { names: { ja: "起きた", en: "Cure Sleeping" }, ally: true, damage: false },
-        41: { names: { ja: "瞑想", en: "Meditation" }, ally: false, damage: false },
-        42: { names: { ja: "マダンテ", en: "Magic Burst" }, ally: false, damage: true },
-        43: { names: { ja: "祈り", en: "Restore MP" }, ally: false, damage: false },
-        44: { names: { ja: "しっぷう突き", en: "Mercurial Thrust" }, ally: true, damage: true },
-        46: { names: { ja: "ターンスキップ", en: "Turn Skipped" }, ally: true, damage: false },
-        47: { names: { ja: "賢者聖水", en: "Sage's Elixir" }, ally: true, damage: false },
-        48: { names: { ja: "エルフののみぐすり", en: "Elfin Elixir" }, ally: true, damage: false },
-        49: { names: { ja: "まほうのせいすい", en: "Magic Water" }, ally: true, damage: false },
-        50: { names: { ja: "特薬草", en: "Special Medicine" }, ally: true, damage: false },
-        51: { names: { ja: "しんでしまった！", en: "Dead" }, ally: true, damage: false },
-        52: { names: { ja: "ゴスペルソング", en: "Gospel Song" }, ally: true, damage: false },
-        53: { names: { ja: "逃げる", en: "Flee" }, ally: true, damage: false },
-        62: { names: { ja: "ためる(味方)", en: "Psyche Up (ally)" }, ally: true, damage: false }
+        1: {names: {ja: "攻撃(敵)", en: "Attack (enemy)"}, ally: false, damage: true},
+        2: {names: {ja: "超高速連打", en: "Ultra High Speed Combo"}, ally: false, damage: true},
+        5: {names: {ja: "ジゴスパ", en: "Lightning Storm"}, ally: false, damage: true},
+        8: {names: {ja: "上空から攻撃", en: "Sky Attack"}, ally: false, damage: true},
+        9: {names: {ja: "メラゾーマ", en: "Kafrizzle"}, ally: false, damage: true},
+        10: {names: {ja: "凍える吹雪", en: "Freezing Blizzard"}, ally: false, damage: true},
+        12: {names: {ja: "あやしいひとみ", en: "Lullab-Eye"}, ally: false, damage: false},
+        15: {names: {ja: "笑い", en: "Laugh"}, ally: false, damage: false},
+        16: {names: {ja: "凍てつく波動", en: "Disruptive Wave"}, ally: false, damage: false},
+        17: {names: {ja: "やけつくいき", en: "Burning Breath"}, ally: false, damage: false},
+        18: {names: {ja: "黒輝く息", en: "Dark Breath"}, ally: false, damage: true},
+        24: {names: {ja: "麻痺で動けない", en: "Paralysis"}, ally: true, damage: false},
+        25: {names: {ja: "攻撃(味方)", en: "Attack (ally)"}, ally: true, damage: true},
+        28: {names: {ja: "麻痺回復", en: "Cure Paralysis"}, ally: true, damage: false},
+        30: {names: {ja: "スカラ", en: "Buff"}, ally: true, damage: false},
+        31: {names: {ja: "ミラーシールド", en: "Magic Mirror"}, ally: true, damage: false},
+        32: {names: {ja: "ベホイム", en: "Moreheal"}, ally: true, damage: false},
+        33: {names: {ja: "すてみ", en: "Double Up"}, ally: true, damage: false},
+        34: {names: {ja: "さみだれ", en: "Multithrust"}, ally: true, damage: true},
+        35: {names: {ja: "眠っている！", en: "Sleeping"}, ally: true, damage: false},
+        37: {names: {ja: "ベホマ", en: "Fullheal"}, ally: true, damage: false},
+        38: {names: {ja: "大防御", en: "Defending Champion"}, ally: true, damage: false},
+        39: {names: {ja: "ためる(敵)", en: "Psyche Up (enemy)"}, ally: false, damage: false},
+        40: {names: {ja: "起きた", en: "Cure Sleeping"}, ally: true, damage: false},
+        41: {names: {ja: "瞑想", en: "Meditation"}, ally: false, damage: false},
+        42: {names: {ja: "マダンテ", en: "Magic Burst"}, ally: false, damage: true},
+        43: {names: {ja: "祈り", en: "Restore MP"}, ally: false, damage: false},
+        44: {names: {ja: "しっぷう突き", en: "Mercurial Thrust"}, ally: true, damage: true},
+        46: {names: {ja: "ターンスキップ", en: "Turn Skipped"}, ally: true, damage: false},
+        47: {names: {ja: "賢者聖水", en: "Sage's Elixir"}, ally: true, damage: false},
+        48: {names: {ja: "エルフののみぐすり", en: "Elfin Elixir"}, ally: true, damage: false},
+        49: {names: {ja: "まほうのせいすい", en: "Magic Water"}, ally: true, damage: false},
+        50: {names: {ja: "特薬草", en: "Special Medicine"}, ally: true, damage: false},
+        51: {names: {ja: "しんでしまった！", en: "Dead"}, ally: true, damage: false},
+        52: {names: {ja: "ゴスペルソング", en: "Gospel Song"}, ally: true, damage: false},
+        53: {names: {ja: "逃げる", en: "Flee"}, ally: true, damage: false},
+        62: {names: {ja: "ためる(味方)", en: "Psyche Up (ally)"}, ally: true, damage: false}
     };
     const DIRECT_MAIN_RULES = new Map([
         ["sukara.png", 30],
@@ -358,6 +358,7 @@
             sourceCropHeight: BASE_HEIGHT
         }
     };
+
     class BattleEmulatorBridge {
         send(snapshot) {
             const payload = {
@@ -803,7 +804,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         let foundX = -1;
         let foundY = -1;
 
-        // フェーズ1: 行方向に走査して最初の白ピクセルペアを探す
+        // フェーズ1: 行方向に走査
         for (let row = 0; row < binary.height; row += 1) {
             for (let col = 0; col < binary.width - 1; col += 1) {
                 const index = row * binary.width + col;
@@ -813,31 +814,26 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                     break;
                 }
             }
-            if (foundX !== -1) {
-                break;
-            }
+            if (foundX !== -1) break;
         }
 
-        if (foundX === -1) {
-            return binary;
-        }
+        if (foundX === -1) return binary;
 
-        // フェーズ2: 列方向に走査してfoundXの最小値を絞り込む（C#と同じく全列スキャン）
+        // フェーズ2: foundXだけ絞り込む（foundYは変更しない）
         for (let col = 0; col < foundX; col += 1) {
             for (let row = 0; row < binary.height; row += 1) {
                 const index = row * binary.width + col;
                 if (binary.mask[index] && binary.mask[index + 1]) {
                     foundX = Math.min(foundX, col);
-                    foundY = Math.min(foundY, row);
+                    // ← foundY の更新を削除
                     break;
                 }
             }
         }
 
-        // foundXから targetWidth分切り取る（サイズ不足でも切り取れる分だけ返す）
         const width = Math.min(targetWidth, binary.width - foundX);
         const height = Math.min(targetHeight, binary.height - foundY);
-        const mask = new Uint8Array(targetWidth * targetHeight); // テンプレートサイズで固定、足りない分は0埋め
+        const mask = new Uint8Array(targetWidth * targetHeight);
         for (let row = 0; row < height; row += 1) {
             const srcOffset = (foundY + row) * binary.width + foundX;
             const dstOffset = row * targetWidth;
@@ -895,30 +891,32 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return found ? value : -1;
     }
 
-  function recognizeDamageValue(key) {
-    const config = DAMAGE_ROIS[key];
-    const cropped = processingContext.getImageData(config.x, config.y, config.width, config.height);
-    const binary = buildWhiteMask(cropped);
-    const digits = config.actionAreas.map((area) => {
-      const trimmed = trimFirstPixel(cropMask(binary, area), 26, 40);
-      // サイズチェックを撤廃（trimFirstPixelが常にtargetWidth×targetHeightを返すため）
-      let bestDigit = -1;
-      let bestScore = 0;
-      state.numberTemplates.forEach((template) => {
-        const score = compareBinaryImages(trimmed, template.mask);
-        if (score >= NUMBER_THRESHOLD && score >= bestScore) {
-          bestDigit = template.digit;
-          bestScore = score;
-        }
-      });
-      return { digit: bestDigit, score: bestScore };
-    });
-    return {
-      digits: digits.map((item) => item.digit),
-      score: digits.reduce((max, item) => Math.max(max, item.score), 0),
-      value: convertMatchResults(digits.map((item) => item.digit))
-    };
-  }
+    function recognizeDamageValue(key) {
+        const config = DAMAGE_ROIS[key];
+        const cropped = processingContext.getImageData(config.x, config.y, config.width, config.height);
+        const binary = buildWhiteMask(cropped);
+        const digits = config.actionAreas.map((area) => {
+            const trimmed = trimFirstPixel(cropMask(binary, area), 26, 40);
+            // サイズチェックを撤廃（trimFirstPixelが常にtargetWidth×targetHeightを返すため）
+            let bestDigit = -1;
+            let bestScore = 0;
+            state.numberTemplates.forEach((template) => {
+                const score = compareBinaryImages(trimmed, template.mask);
+                if (score >= NUMBER_THRESHOLD && score >= bestScore) {
+                    bestDigit = template.digit;
+                    bestScore = score;
+                }
+            });
+            return {digit: bestDigit, score: bestScore};
+        });
+// recognizeDamageValue の return を変更
+        return {
+            digits: digits.map((item) => item.digit),
+            scores: digits.map((item) => item.score),   // ← 追加
+            score: digits.reduce((max, item) => Math.max(max, item.score), 0),
+            value: convertMatchResults(digits.map((item) => item.digit))
+        };
+    }
 
     function emptyMatch(slot) {
         const roi = ROI_DEFS[slot];
@@ -1015,11 +1013,64 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         });
     }
 
-    function drawOverlay(matches) {
+    function drawOverlay(matches, damageReadings) {
         overlayContext.clearRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
         overlayContext.drawImage(processingCanvas, 0, 0, BASE_WIDTH, BASE_HEIGHT);
         overlayContext.lineWidth = 3;
         overlayContext.font = "18px Bahnschrift, sans-serif";
+
+
+
+        // --- 追加: 数字認識枠 ---
+        if (damageReadings) {
+            overlayContext.font = "13px Bahnschrift, sans-serif";
+            for (const [key, reading] of Object.entries(damageReadings)) {
+                const config = DAMAGE_ROIS[key];
+                if (!config) continue;
+
+                // ROI全体枠（薄い水色）
+                overlayContext.strokeStyle = "rgba(100, 210, 255, 0.55)";
+                overlayContext.lineWidth = 2;
+                overlayContext.strokeRect(config.x, config.y, config.width, config.height);
+
+                // 認識値ラベル（ROI上部）
+                const valueLabel = reading.value !== -1 ? `${key}: ${reading.value}` : `${key}: --`;
+                const valueLabelWidth = overlayContext.measureText(valueLabel).width;
+                const valueLabelY = config.y >= 20 ? config.y - 4 : config.y + config.height + 16;
+                overlayContext.fillStyle = "rgba(10, 30, 50, 0.75)";
+                overlayContext.fillRect(config.x, valueLabelY - 14, valueLabelWidth + 12, 18);
+                overlayContext.fillStyle = reading.value !== -1
+                    ? "rgba(100, 230, 255, 0.96)"
+                    : "rgba(180, 180, 180, 0.7)";
+                overlayContext.fillText(valueLabel, config.x + 6, valueLabelY);
+
+                // 桁ごとのactionArea枠
+                config.actionAreas.forEach((area, index) => {
+                    const digit = reading.digits[index];
+                    const score = reading.scores ? reading.scores[index] : null;
+                    const absX = config.x + area.x;
+                    const absY = config.y + area.y;
+
+                    // 認識成功=緑、失敗=赤
+                    overlayContext.strokeStyle = digit !== -1
+                        ? "rgba(80, 255, 120, 0.85)"
+                        : "rgba(255, 80, 80, 0.75)";
+                    overlayContext.lineWidth = 1.5;
+                    overlayContext.strokeRect(absX, absY, area.width, area.height);
+
+                    // 桁ラベル
+                    const digitLabel = digit !== -1
+                        ? (score !== null ? `${digit} (${(score * 100).toFixed(0)}%)` : `${digit}`)
+                        : "?";
+                    overlayContext.fillStyle = digit !== -1
+                        ? "rgba(80, 255, 120, 0.95)"
+                        : "rgba(255, 100, 100, 0.9)";
+                    overlayContext.fillText(digitLabel, absX + 2, absY + area.height - 4);
+                });
+            }
+        }
+
+        // --- 既存: テンプレートマッチング枠 ---
         for (const slot of MATCH_SLOT_KEYS) {
             const roi = ROI_DEFS[slot];
             const match = matches[slot] || emptyMatch(slot);
@@ -1031,7 +1082,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 overlayContext.fillStyle = "rgba(17, 22, 27, 0.78)";
                 const label = `${slot}: ${match.file} ${(match.score * 100).toFixed(1)}%`;
                 const textWidth = overlayContext.measureText(label).width;
-                // match.yが上端付近のときはラベルをROI枠の下に出す
                 const labelY = match.y >= 26 ? match.y - 10 : match.y + match.height + 20;
                 overlayContext.fillRect(match.x, labelY - 18, textWidth + 16, 24);
                 overlayContext.fillStyle = "rgba(255, 248, 236, 0.96)";
@@ -1157,18 +1207,28 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         const erugioMain = isErugio(main.file);
 
         // reset
-        if (erugioMain && sub.file === "reset.png" && main.score >= TEMPLATE_THRESHOLD && sub.score >= TEMPLATE_THRESHOLD) {
-            return { kind: "reset", score: Math.min(main.score, sub.score), detail: `${main.file} + reset.png` };
+        if (erugioMain && sub.file === "reset.png" && main.score >= 0.6 && sub.score >= 0.6) {
+            return {kind: "reset", score: Math.min(main.score, sub.score), detail: `${main.file} + reset.png`};
         }
 
         // 攻撃(敵) = erugio + attack
         if (erugioMain && sub.file === "attack.png" && main.score >= TEMPLATE_THRESHOLD && sub.score >= TEMPLATE_THRESHOLD) {
-            return { kind: "action", actionId: 1, detail: `${main.file} + attack.png`, score: Math.min(main.score, sub.score) };
+            return {
+                kind: "action",
+                actionId: 1,
+                detail: `${main.file} + attack.png`,
+                score: Math.min(main.score, sub.score)
+            };
         }
 
         // 超高速連打 = erugio + uhsc
         if (erugioMain && sub.file === "uhsc.png" && main.score >= TEMPLATE_THRESHOLD && sub.score >= TEMPLATE_THRESHOLD) {
-            return { kind: "action", actionId: 2, detail: `${main.file} + uhsc.png`, score: Math.min(main.score, sub.score) };
+            return {
+                kind: "action",
+                actionId: 2,
+                detail: `${main.file} + uhsc.png`,
+                score: Math.min(main.score, sub.score)
+            };
         }
 
         // 攻撃(味方) = a_attack.png、ActionTaken未設定かつguardなし
@@ -1179,7 +1239,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             sub.file !== "uhsc.png" &&
             main.file !== "guard.png"
         ) {
-            return { kind: "action", actionId: 25, detail: `a_attack.png (${main.file || "-"})`, score: ally.score };
+            return {kind: "action", actionId: 25, detail: `a_attack.png (${main.file || "-"})`, score: ally.score};
         }
 
         // 大防御 combo
@@ -1189,12 +1249,17 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             main.score >= TEMPLATE_THRESHOLD &&
             sub.score >= TEMPLATE_THRESHOLD
         ) {
-            return { kind: "action", actionId: 38, detail: "defense_champion combo", score: Math.min(main.score, sub.score) };
+            return {
+                kind: "action",
+                actionId: 38,
+                detail: "defense_champion combo",
+                score: Math.min(main.score, sub.score)
+            };
         }
 
         // daibougilyo: マダンテ後のsleeping2は大防御
         if (state.daibougilyo && main.file === "sleeping2.png" && main.score >= TEMPLATE_THRESHOLD) {
-            return { kind: "action", actionId: 38, detail: "madannte -> sleeping2 (daibougilyo)", score: main.score };
+            return {kind: "action", actionId: 38, detail: "madannte -> sleeping2 (daibougilyo)", score: main.score};
         }
 
         // 麻痺回復 = Paralysis + CareParalysis
@@ -1204,7 +1269,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             ally.file === "CareParalysis.png" &&
             ally.score >= TEMPLATE_THRESHOLD
         ) {
-            return { kind: "action", actionId: 28, detail: "Paralysis + CareParalysis", score: Math.min(main.score, ally.score) };
+            return {
+                kind: "action",
+                actionId: 28,
+                detail: "Paralysis + CareParalysis",
+                score: Math.min(main.score, ally.score)
+            };
         }
 
         // 麻痺で動けない = Paralysis単体（Paralysis2なし）
@@ -1214,7 +1284,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             main.score >= TEMPLATE_THRESHOLD &&
             (!sub.file || sub.file !== "Paralysis2.png" || sub.score < TEMPLATE_THRESHOLD)
         ) {
-            return { kind: "action", actionId: 24, detail: "Paralysis", score: main.score };
+            return {kind: "action", actionId: 24, detail: "Paralysis", score: main.score};
         }
 
         // しんでしまった = sleeping2 + dead/dead2
@@ -1224,7 +1294,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             (ally.file === "dead.png" || ally.file === "dead2.png") &&
             ally.score >= TEMPLATE_THRESHOLD
         ) {
-            return { kind: "action", actionId: 51, detail: `sleeping2 + ${ally.file}`, score: Math.min(main.score, ally.score) };
+            return {
+                kind: "action",
+                actionId: 51,
+                detail: `sleeping2 + ${ally.file}`,
+                score: Math.min(main.score, ally.score)
+            };
         }
 
         // 眠っている！ = sleeping2単体（slept未設定）
@@ -1234,7 +1309,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             main.score >= TEMPLATE_THRESHOLD &&
             (!ally.file || (ally.file !== "dead.png" && ally.file !== "dead2.png") || ally.score < TEMPLATE_THRESHOLD)
         ) {
-            return { kind: "action", actionId: 35, detail: "sleeping2", score: main.score };
+            return {kind: "action", actionId: 35, detail: "sleeping2", score: main.score};
         }
 
         // WakeUp系: Sleeping中かつslept未設定
@@ -1248,34 +1323,39 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             // ActionIndex != 0 かつ ActionTaken未設定 → ターンスキップ
             // ActionIndex == 0 かつ ActionTaken未設定 → 眠り回復
             if (state.actionIndex !== 0 && !state.actionTaken) {
-                return { kind: "action", actionId: 46, detail: main.file, score: main.score };
+                return {kind: "action", actionId: 46, detail: main.file, score: main.score};
             }
             if (state.actionIndex === 0 && !state.actionTaken) {
-                return { kind: "action", actionId: 40, detail: main.file, score: main.score };
+                return {kind: "action", actionId: 40, detail: main.file, score: main.score};
             }
         }
 
         // ためる
         if (main.file === "tameru.png" && main.score >= TEMPLATE_THRESHOLD) {
             if (target.file === "aha.png" && target.score >= TEMPLATE_THRESHOLD && !state.actionTaken) {
-                return { kind: "action", actionId: 62, detail: "tameru + aha", score: Math.min(main.score, target.score) };
+                return {
+                    kind: "action",
+                    actionId: 62,
+                    detail: "tameru + aha",
+                    score: Math.min(main.score, target.score)
+                };
             }
-            return { kind: "action", actionId: 39, detail: "tameru", score: main.score };
+            return {kind: "action", actionId: 39, detail: "tameru", score: main.score};
         }
 
-        if (main.file === "sukara.png" && main.score >= TEMPLATE_THRESHOLD){
-            return { kind: "action", actionId: 30, detail: "tameru", score: main.score };
+        if (main.file === "sukara.png" && main.score >= TEMPLATE_THRESHOLD) {
+            return {kind: "action", actionId: 30, detail: "tameru", score: main.score};
         }
 
         // ano.png: action記録なし、状態リセットのみ
         if (main.file === "ano.png" && main.score >= TEMPLATE_THRESHOLD) {
-            return { kind: "ano" };
+            return {kind: "ano"};
         }
 
         // DIRECT_MAIN_RULES
         const directAction = DIRECT_MAIN_RULES.get(main.file);
         if (directAction && main.score >= TEMPLATE_THRESHOLD) {
-            return { kind: "action", actionId: directAction, detail: main.file, score: main.score };
+            return {kind: "action", actionId: directAction, detail: main.file, score: main.score};
         }
 
         return null;
@@ -1418,6 +1498,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         const main = matches.main || emptyMatch("main");
         const damage1 = damageReadings.damage1.value;
         const damage2 = damageReadings.damage2.value;
+        const candidateDamage1 = Math.max(damage1, damage2);
+        const candidateDamage2 = Math.max(damage2, damage1);
 
         // maybeCritical: critical.png検出時に攻撃(敵)→痛恨(6)に上書き
         if (state.maybeCritical !== -1) {
@@ -1435,7 +1517,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             }
         }
 
-        if ((state.pendingDamage1 !== -1 && state.pendingDamage1Enabled) || state.lastDamage1 < damage1) {
+        if ((state.pendingDamage1 !== -1 && state.pendingDamage1Enabled) || state.lastDamage1 < candidateDamage1) {
             if (["guard.png", "miss.png", "miss2.png", "mikawasi.png"].includes(main.file)) {
                 state.pendingDamage1Enabled = false;
                 state.maybeCritical = -1;
@@ -1443,21 +1525,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 state.preAction = -1;
                 return true;
             }
-            if (damage1 !== -1) {
-                state.lastDamage1 = damage1;
+            if (candidateDamage1 !== -1) {
+                state.lastDamage1 = candidateDamage1;
                 state.pendingDamage1Enabled = false;
-                resolvePendingDamage(state.pendingDamage1, damage1);
+                resolvePendingDamage(state.pendingDamage1, candidateDamage1);
                 state.preAction = -1;
                 return true;
             }
-            if (damage2 !== -1 && damage1 < damage2) {
-                state.lastDamage1 = damage2;
-                state.pendingDamage1Enabled = false;
-                resolvePendingDamage(state.pendingDamage1, damage2);
-                state.preAction = -1;
-                return true;
-            }
-        } else if ((state.pendingDamage2 !== -1 && state.pendingDamage2Enabled) || state.lastDamage2 < damage2) {
+        } else if ((state.pendingDamage2 !== -1 && state.pendingDamage2Enabled) || state.lastDamage2 < candidateDamage2) {
             if (["guard.png", "miss.png", "miss2.png", "mikawasi.png"].includes(main.file)) {
                 state.pendingDamage2Enabled = false;
                 state.maybeCritical = -1;
@@ -1466,17 +1541,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 state.preAction = -1;
                 return true;
             }
-            if (damage2 !== -1) {
+            if (candidateDamage2 !== -1) {
                 state.pendingDamage2Enabled = false;
-                state.lastDamage2 = damage2;
-                resolvePendingDamage(state.pendingDamage2, damage2);
-                state.preAction = -1;
-                return true;
-            }
-            if (damage1 !== -1 && damage2 < damage1) {
-                state.pendingDamage2Enabled = false;
-                state.lastDamage2 = damage1;
-                resolvePendingDamage(state.pendingDamage2, damage1);
+                state.lastDamage2 = candidateDamage2;
+                resolvePendingDamage(state.pendingDamage2, candidateDamage2);
                 state.preAction = -1;
                 return true;
             }
@@ -1606,6 +1674,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         });
         setBridgeStatus(sync.key, sync.encoded);
     }
+
     function encodeBridgePayload(payload) {
         const json = JSON.stringify(payload);
         const bytes = utf8Encode(json);
@@ -1839,7 +1908,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                     damage2: recognizeDamageValue("damage2")
                 };
                 updateMatchCards(matches);
-                drawOverlay(matches);
+                drawOverlay(matches, damageReadings);
                 if (handlePendingDamages(matches, damageReadings)) {
                     updateFps(now);
                     queueLoop(runFrame);
