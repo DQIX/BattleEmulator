@@ -59,6 +59,37 @@
             en: {
               title: "DQ9 Battle Emulator",
               subtitle: "WebAssembly seed console for RTA analysis",
+              visionTitle: "Vision Console",
+              visionSubtitle: "WebGPU template matching for OBS camera feeds",
+              visionStatusIdle: "idle",
+              visionStatusReady: "ready",
+              visionStatusWatching: "watching",
+              visionStatusFallback: "cpu fallback",
+              visionStatusError: "error",
+              visionConnect: "Connect OBS Camera",
+              visionRequestPermission: "Request Camera Permission",
+              visionReset: "Reset Console",
+              visionCamera: "Camera",
+              visionFps: "Inspect FPS",
+              visionPreview: "Preview",
+              visionBridge: "Bridge",
+              visionBridgeIdle: "Not sent yet",
+              visionBridgeReady: "Stub bridge ready",
+              visionBridgeTurn: "Turn sync pending",
+              visionMatches: "Current Matches",
+              visionHistory: "Recognized Actions",
+              visionHistoryHint: "Duplicate prevention follows the desktop console flow",
+              visionEmpty: "No accepted actions yet",
+              visionTurn: "Turn",
+              visionAction: "Action",
+              visionDetail: "Detail",
+              visionScore: "Score",
+              visionEncoder: "Encoder",
+              visionEncoderLabel: "Custom encode",
+              visionConfirmTitle: "Reset recognition console?",
+              visionConfirmText: "Accepted actions, pending turn state, and bridge payload history will be cleared.",
+              visionConfirmCancel: "Cancel",
+              visionConfirmReset: "Reset",
               emulator: "Emulator",
               input: "Input",
               inputHint: "Enter runs, Shift+Enter adds a line",
@@ -105,6 +136,37 @@
             ja: {
               title: "DQ9 Battle Emulator",
               subtitle: "RTA向けWebAssemblyシードコンソール",
+              visionTitle: "映像認識コンソール",
+              visionSubtitle: "OBSカメラ向けのWebGPUテンプレートマッチング",
+              visionStatusIdle: "待機",
+              visionStatusReady: "準備完了",
+              visionStatusWatching: "認識中",
+              visionStatusFallback: "CPUフォールバック",
+              visionStatusError: "エラー",
+              visionConnect: "OBSカメラ接続",
+              visionRequestPermission: "カメラ権限を取得",
+              visionReset: "コンソール初期化",
+              visionCamera: "カメラ",
+              visionFps: "認識FPS",
+              visionPreview: "プレビュー",
+              visionBridge: "連携",
+              visionBridgeIdle: "未送信",
+              visionBridgeReady: "建前ブリッジ準備完了",
+              visionBridgeTurn: "ターン送信待ち",
+              visionMatches: "現在の一致",
+              visionHistory: "認識済みアクション",
+              visionHistoryHint: "重複防止はデスクトップ版の流れに合わせてあります",
+              visionEmpty: "まだ確定した行動はありません",
+              visionTurn: "ターン",
+              visionAction: "行動",
+              visionDetail: "詳細",
+              visionScore: "一致率",
+              visionEncoder: "エンコーダ",
+              visionEncoderLabel: "独自エンコード",
+              visionConfirmTitle: "認識コンソールを初期化しますか？",
+              visionConfirmText: "確定済み行動、ターン進行、ブリッジ送信履歴を消去します。",
+              visionConfirmCancel: "戻る",
+              visionConfirmReset: "初期化",
               emulator: "バトルエミュ",
               input: "入力",
               inputHint: "Enterで実行、Shift+Enterで改行",
@@ -288,6 +350,116 @@
           <textarea id="logOutput" class="log-output" aria-labelledby="logTitle ログ" readonly></textarea>
         </section>
 
+        <section class="panel panel-vision" style="--delay: 40ms">
+          <div class="panel-header">
+            <div>
+              <h2 data-i18n="visionTitle">Vision Console</h2>
+              <div class="hint" data-i18n="visionSubtitle">WebGPU template matching for OBS camera feeds</div>
+            </div>
+            <span id="visionStatus" class="chip" data-i18n="visionStatusIdle">idle</span>
+          </div>
+          <div class="vision-toolbar">
+            <label class="field">
+              <span data-i18n="visionCamera">Camera</span>
+              <select id="visionCameraSelect" class="emulator-select">
+                <option value="">camera not loaded</option>
+              </select>
+            </label>
+            <label class="field">
+              <span data-i18n="visionFps">Inspect FPS</span>
+              <input id="visionInspectRate" type="number" min="1" max="12" step="1" value="3" />
+            </label>
+            <button id="visionPermissionButton" class="run-button run-button-secondary" data-i18n="visionRequestPermission">Request Camera Permission</button>
+            <button id="visionConnectButton" class="run-button" data-i18n="visionConnect">Connect OBS Camera</button>
+            <button id="visionResetButton" class="run-button run-button-secondary" data-i18n="visionReset">Reset Console</button>
+          </div>
+          <div class="vision-stage">
+            <div class="vision-preview-wrap">
+              <div class="vision-label-row">
+                <span data-i18n="visionPreview">Preview</span>
+                <span id="visionFpsValue" class="chip chip-muted">0.0 fps</span>
+              </div>
+              <div class="vision-preview-shell">
+                <video id="visionVideo" class="vision-video" autoplay muted playsinline></video>
+                <canvas id="visionOverlay" class="vision-overlay" width="958" height="718"></canvas>
+              </div>
+            </div>
+            <div class="vision-side">
+              <div class="vision-card">
+                <div class="vision-label-row">
+                  <span data-i18n="visionMatches">Current Matches</span>
+                  <span id="visionEngine" class="chip chip-muted">WebGPU</span>
+                </div>
+                <div id="visionMatches" class="vision-matches">
+                  <div class="vision-match-card" data-slot="main">
+                    <div class="vision-match-label">main</div>
+                    <div class="vision-match-name">-</div>
+                    <div class="vision-match-score">0.0%</div>
+                  </div>
+                  <div class="vision-match-card" data-slot="sub">
+                    <div class="vision-match-label">sub</div>
+                    <div class="vision-match-name">-</div>
+                    <div class="vision-match-score">0.0%</div>
+                  </div>
+                  <div class="vision-match-card" data-slot="ally">
+                    <div class="vision-match-label">ally</div>
+                    <div class="vision-match-name">-</div>
+                    <div class="vision-match-score">0.0%</div>
+                  </div>
+                  <div class="vision-match-card" data-slot="target">
+                    <div class="vision-match-label">target</div>
+                    <div class="vision-match-name">-</div>
+                    <div class="vision-match-score">0.0%</div>
+                  </div>
+                </div>
+              </div>
+              <div class="vision-card">
+                <div class="vision-label-row">
+                  <span data-i18n="visionBridge">Bridge</span>
+                  <span id="visionTurnChip" class="chip chip-accent">T1 / A1</span>
+                </div>
+                <div id="visionBridgeStatus" class="meta-line" data-i18n="visionBridgeIdle">Not sent yet</div>
+                <label class="field">
+                  <span data-i18n="visionEncoder">Encoder</span>
+                  <textarea id="visionEncodedPayload" class="vision-encoded-output" readonly aria-label="Encoded battle payload"></textarea>
+                </label>
+                <div class="meta-line" data-i18n="visionEncoderLabel">Custom encode</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel panel-vision-history" style="--delay: 260ms">
+          <div class="panel-header">
+            <div class="memo-title">
+              <h2 data-i18n="visionHistory">Recognized Actions</h2>
+              <span class="chip chip-muted" data-i18n="visionHistoryHint">Duplicate prevention follows the desktop console flow</span>
+            </div>
+          </div>
+          <div id="visionHistoryEmpty" class="memo-empty" data-i18n="visionEmpty">No accepted actions yet</div>
+          <div class="memo-scroll vision-history-scroll" id="visionHistoryScroll" hidden>
+            <table class="memo-grid vision-history-grid">
+              <colgroup>
+                <col style="width: 72px" />
+                <col style="width: 120px" />
+                <col style="width: 220px" />
+                <col style="width: 220px" />
+                <col style="width: 90px" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th data-i18n="visionTurn">Turn</th>
+                  <th>Slot</th>
+                  <th data-i18n="visionAction">Action</th>
+                  <th data-i18n="visionDetail">Detail</th>
+                  <th data-i18n="visionScore">Score</th>
+                </tr>
+              </thead>
+              <tbody id="visionHistoryBody"></tbody>
+            </table>
+          </div>
+        </section>
+
         <section class="panel panel-ledger-table" style="--delay: 280ms">
           <div class="panel-header">
             <div class="memo-title">
@@ -350,6 +522,18 @@
       </main>
     </div>
 
+    <div id="visionResetDialog" class="vision-dialog" hidden>
+      <div class="vision-dialog-card">
+        <h2 data-i18n="visionConfirmTitle">Reset recognition console?</h2>
+        <p data-i18n="visionConfirmText">Accepted actions, pending turn state, and bridge payload history will be cleared.</p>
+        <div class="vision-dialog-actions">
+          <button id="visionResetCancel" class="run-button run-button-secondary" data-i18n="visionConfirmCancel">Cancel</button>
+          <button id="visionResetConfirm" class="run-button" data-i18n="visionConfirmReset">Reset</button>
+        </div>
+      </div>
+    </div>
+
     <script src="app.js" defer></script>
+    <script src="vision.js" defer></script>
   </body>
 </html>

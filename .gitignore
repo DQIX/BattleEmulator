@@ -8,3 +8,5 @@
 /out
 /.vs
 /.interface-design
+/public/branches
+/public/emulators.json
