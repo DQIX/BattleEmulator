@@ -20,6 +20,9 @@
         resetDialog: document.getElementById("visionResetDialog"),
         resetCancel: document.getElementById("visionResetCancel"),
         resetConfirm: document.getElementById("visionResetConfirm"),
+        gpuWarningDialog: document.getElementById("visionGpuWarningDialog"),
+        gpuWarningCancel: document.getElementById("visionGpuWarningCancel"),
+        gpuWarningStart: document.getElementById("visionGpuWarningStart"),
         matches: Array.from(document.querySelectorAll("#visionMatches .vision-match-card"))
     };
 
@@ -329,6 +332,7 @@
         processedFrames: 0,
         history: [],
         numberTemplates: [],
+        assetPack: null,
         lastMatches: Object.create(null),
         turnIndex: 1,
         actionIndex: 0,
@@ -349,6 +353,9 @@
         sleeping: false,      // C#のSleeping相当
         slept: false,         // C#のslept相当
         daibougilyo: false,   // C#のdaibougilyo相当
+        matcherKind: "",
+        gpuRecoveryInProgress: false,
+        gpuWarningResolver: null,
         captureRect: {
             sourceWidth: BASE_WIDTH,
             sourceHeight: BASE_HEIGHT,
@@ -386,13 +393,15 @@
     }
 
     class WebGpuTemplateMatcher {
-        constructor() {
+        constructor(options = {}) {
             this.device = null;
             this.queue = null;
             this.pipeline = null;
             this.sampler = null;
             this.frameTexture = null;
             this.frameSize = {width: BASE_WIDTH, height: BASE_HEIGHT};
+            this.onLost = options.onLost || null;
+            this.deviceLostPromise = null;
         }
 
         async init() {
@@ -406,6 +415,16 @@
             const device = await adapter.requestDevice();
             this.device = device;
             this.queue = device.queue;
+            this.deviceLostPromise = device.lost
+                .then((info) => {
+                    if (this.onLost) {
+                        Promise.resolve(this.onLost(info)).catch(() => {
+                        });
+                    }
+                    return info;
+                })
+                .catch(() => {
+                });
             this.sampler = device.createSampler({
                 magFilter: "nearest",
                 minFilter: "nearest"
@@ -1836,23 +1855,93 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }));
     }
 
-    async function createMatcher() {
+    function openGpuWarningDialog() {
+        return new Promise((resolve) => {
+            if (!ui.gpuWarningDialog) {
+                resolve(false);
+                return;
+            }
+            state.gpuWarningResolver = resolve;
+            ui.gpuWarningDialog.hidden = false;
+        });
+    }
+
+    function closeGpuWarningDialog(accepted) {
+        if (ui.gpuWarningDialog) {
+            ui.gpuWarningDialog.hidden = true;
+        }
+        const resolver = state.gpuWarningResolver;
+        state.gpuWarningResolver = null;
+        if (resolver) {
+            resolver(accepted);
+        }
+    }
+
+    async function createMatcher(options = {}) {
+        const {
+            warnOnCpuFallback = true,
+            onWebGpuLost = null
+        } = options;
         if (navigator.gpu) {
             try {
-                const matcher = new WebGpuTemplateMatcher();
+                const matcher = new WebGpuTemplateMatcher({onLost: onWebGpuLost});
                 await matcher.init();
                 ui.engine.textContent = "WebGPU";
+                state.matcherKind = "webgpu";
                 setStatus("visionStatusReady");
                 return matcher;
             } catch (error) {
                 console.warn("WebGPU matcher unavailable, falling back to CPU:", error);
+                if (warnOnCpuFallback) {
+                    const proceed = await openGpuWarningDialog();
+                    if (!proceed) {
+                        const abortError = new Error("cpu fallback declined");
+                        abortError.name = "AbortError";
+                        throw abortError;
+                    }
+                }
             }
         }
         const matcher = new CpuTemplateMatcher();
         await matcher.init();
         ui.engine.textContent = "CPU";
+        state.matcherKind = "cpu";
         setStatus("visionStatusFallback");
         return matcher;
+    }
+
+    async function recoverWebGpuMatcher() {
+        if (state.gpuRecoveryInProgress || !state.stream || state.matcherKind !== "webgpu") {
+            return;
+        }
+        state.gpuRecoveryInProgress = true;
+        state.loopToken += 1;
+        try {
+            if (!state.assetPack) {
+                state.assetPack = await loadPackedVisionAssets();
+            }
+            const matcher = await createMatcher({
+                warnOnCpuFallback: false,
+                onWebGpuLost: recoverWebGpuMatcher
+            });
+            state.matcher = matcher;
+            state.templatesBySlot = await loadTemplates(matcher, state.assetPack);
+            state.lastFrameAt = 0;
+            state.lastFpsAt = 0;
+            state.processedFrames = 0;
+            if (state.stream) {
+                setStatus(state.matcherKind === "webgpu" ? "visionStatusWatching" : "visionStatusFallback");
+                startLoop();
+            }
+        } catch (error) {
+            console.warn("WebGPU matcher recovery failed:", error);
+            state.matcher = null;
+            state.matcherKind = "";
+            state.templatesBySlot = new Map();
+            setStatus("visionStatusError");
+        } finally {
+            state.gpuRecoveryInProgress = false;
+        }
     }
 
     async function populateCameras() {
@@ -1921,11 +2010,16 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             ui.video.srcObject = stream;
             await ui.video.play();
             await populateCameras();
+            if (!state.assetPack) {
+                state.assetPack = await loadPackedVisionAssets();
+            }
             if (!state.matcher) {
-                state.matcher = await createMatcher();
-                const assetPack = await loadPackedVisionAssets();
-                state.templatesBySlot = await loadTemplates(state.matcher, assetPack);
-                state.numberTemplates = loadNumberTemplates(assetPack);
+                state.matcher = await createMatcher({
+                    warnOnCpuFallback: true,
+                    onWebGpuLost: recoverWebGpuMatcher
+                });
+                state.templatesBySlot = await loadTemplates(state.matcher, state.assetPack);
+                state.numberTemplates = loadNumberTemplates(state.assetPack);
             }
             state.lastFrameAt = 0;
             state.lastFpsAt = 0;
@@ -1934,6 +2028,20 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             setStatus("visionStatusWatching");
             startLoop();
         } catch (error) {
+            if (state.stream) {
+                state.stream.getTracks().forEach((track) => track.stop());
+                state.stream = null;
+            }
+            ui.video.srcObject = null;
+            if (error && error.name === "AbortError") {
+                setStatus("visionStatusIdle");
+                setBridgeStatus("visionBridgeIdle", "");
+                return;
+            }
+            state.matcher = null;
+            state.matcherKind = "";
+            state.templatesBySlot = new Map();
+            ui.engine.textContent = "";
             setStatus("visionStatusError");
             setBridgeStatus("visionBridgeIdle", "");
         } finally {
@@ -1951,28 +2059,39 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             const targetInterval = 1000 / getScaledFpsTarget();
             if (!state.lastFrameAt || now - state.lastFrameAt >= targetInterval) {
                 state.lastFrameAt = now;
-                drawProcessingFrame(ui.video);
-                const matches = await state.matcher.match(processingCanvas, state.templatesBySlot);
-                state.lastMatches = matches;
-                const damageReadings = {
-                    damage1: recognizeDamageValue("damage1"),
-                    damage2: recognizeDamageValue("damage2")
-                };
-                updateMatchCards(matches);
-                drawOverlay(matches, damageReadings);
-                if (handlePendingDamages(matches, damageReadings)) {
-                    updateFps(now);
-                    queueLoop(runFrame);
-                    return;
-                }
-                const candidate = pickCandidate(matches);
-                if (candidate && candidate.score < ACTION_THRESHOLD) {
-                    updateFps(now);
-                    queueLoop(runFrame);
-                    return;
-                }
-                if (!maybeResetFromCombo(candidate)) {
-                    acceptCandidate(candidate);
+                try {
+                    drawProcessingFrame(ui.video);
+                    const matches = await state.matcher.match(processingCanvas, state.templatesBySlot);
+                    state.lastMatches = matches;
+                    const damageReadings = {
+                        damage1: recognizeDamageValue("damage1"),
+                        damage2: recognizeDamageValue("damage2")
+                    };
+                    updateMatchCards(matches);
+                    drawOverlay(matches, damageReadings);
+                    if (handlePendingDamages(matches, damageReadings)) {
+                        updateFps(now);
+                        queueLoop(runFrame);
+                        return;
+                    }
+                    const candidate = pickCandidate(matches);
+                    if (candidate && candidate.score < ACTION_THRESHOLD) {
+                        updateFps(now);
+                        queueLoop(runFrame);
+                        return;
+                    }
+                    if (!maybeResetFromCombo(candidate)) {
+                        acceptCandidate(candidate);
+                    }
+                } catch (error) {
+                    if (state.matcherKind === "webgpu") {
+                        await recoverWebGpuMatcher();
+                        return;
+                    } else {
+                        setStatus("visionStatusError");
+                        console.error("vision matcher error:", error);
+                        return;
+                    }
                 }
                 updateFps(now);
             }
@@ -2026,6 +2145,17 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         ui.resetConfirm.addEventListener("click", () => {
             closeResetDialog();
             resetConsoleState();
+        });
+        ui.gpuWarningCancel?.addEventListener("click", () => {
+            closeGpuWarningDialog(false);
+        });
+        ui.gpuWarningStart?.addEventListener("click", () => {
+            closeGpuWarningDialog(true);
+        });
+        ui.gpuWarningDialog?.addEventListener("click", (event) => {
+            if (event.target === ui.gpuWarningDialog) {
+                closeGpuWarningDialog(false);
+            }
         });
         navigator.mediaDevices?.addEventListener?.("devicechange", () => {
             populateCameras().catch(() => {

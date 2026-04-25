@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -66,6 +66,10 @@
               visionStatusWatching: "watching",
               visionStatusFallback: "cpu fallback",
               visionStatusError: "error",
+              visionGpuWarningTitle: "WebGPU unavailable",
+              visionGpuWarningText: "Your environment does not seem to have a GPU connected. Vision recognition can run on CPU, but the browser may freeze heavily. Start anyway?",
+              visionGpuWarningCancel: "Cancel",
+              visionGpuWarningStart: "Start",
               visionConnect: "Connect OBS Camera",
               visionRequestPermission: "Request Camera Permission",
               visionReset: "Reset Console",
@@ -150,6 +154,10 @@
               visionStatusWatching: "認識中",
               visionStatusFallback: "CPUフォールバック",
               visionStatusError: "エラー",
+              visionGpuWarningTitle: "WebGPUが使えません",
+              visionGpuWarningText: "あなたの環境にはGPUが接続されていないようです。映像認識はCPU動作にも対応しておりますが、ブラウザがめちゃくちゃフリーズします。それでも開始しますか？",
+              visionGpuWarningCancel: "キャンセル",
+              visionGpuWarningStart: "開始",
               visionConnect: "OBSカメラ接続",
               visionRequestPermission: "カメラ権限を取得",
               visionReset: "コンソール初期化",
@@ -542,6 +550,17 @@
         <div class="vision-dialog-actions">
           <button id="visionResetCancel" class="run-button run-button-secondary" data-i18n="visionConfirmCancel">Cancel</button>
           <button id="visionResetConfirm" class="run-button" data-i18n="visionConfirmReset">Reset</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="visionGpuWarningDialog" class="vision-dialog" hidden>
+      <div class="vision-dialog-card">
+        <h2 data-i18n="visionGpuWarningTitle">WebGPU unavailable</h2>
+        <p data-i18n="visionGpuWarningText">Your environment does not seem to have a GPU connected. Vision recognition can run on CPU, but the browser may freeze heavily. Start anyway?</p>
+        <div class="vision-dialog-actions">
+          <button id="visionGpuWarningCancel" class="run-button run-button-secondary" data-i18n="visionGpuWarningCancel">Cancel</button>
+          <button id="visionGpuWarningStart" class="run-button" data-i18n="visionGpuWarningStart">Start</button>
         </div>
       </div>
     </div>
