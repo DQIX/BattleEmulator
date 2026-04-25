@@ -706,7 +706,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     return {
       sourceWidth,
       sourceHeight,
-      sourceX: 0,
+      sourceX: Math.max(0, sourceWidth - sourceCropWidth),
       sourceY: 0,
       sourceCropWidth,
       sourceCropHeight

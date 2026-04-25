@@ -576,6 +576,7 @@ h2 {
 .vision-video {
   object-fit: cover;
   background: color-mix(in srgb, var(--panel) 75%, var(--fg) 8%);
+  object-position: right center;
 }
 
 .vision-overlay {
