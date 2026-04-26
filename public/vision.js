@@ -547,106 +547,156 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             );
         }
 
-        async matchSlot(slot, templates) {
-            const roi = ROI_DEFS[slot];
-            let best = emptyMatch(slot);
-            for (const template of templates) {
-                const scoreWidth = roi.width - template.width + 1;
-                const scoreHeight = roi.height - template.height + 1;
-                if (scoreWidth < 1 || scoreHeight < 1) {
-                    continue;
+        // 全スロット・全テンプレートを1回のsubmit + 1回のmapAsyncで処理する
+        async match(source, templatesBySlot) {
+            this.uploadFrame(source);
+            const device = this.device;
+            const frameView = this.frameTexture.createView();
+
+            // --- パス1: 全テンプレートのGPUジョブを1つのencoderに積む ---
+            // 各テンプレートのメタ情報（オフセット・サイズ・バッファ参照）を収集
+            const jobs = []; // {slot, template, scoreWidth, scoreHeight, scoreCount, scoreOffset, scoreBuffer, uniformBuffer}
+            let totalScoreCount = 0;
+
+            for (const slot of MATCH_SLOT_KEYS) {
+                const roi = ROI_DEFS[slot];
+                for (const template of (templatesBySlot.get(slot) || [])) {
+                    const scoreWidth = roi.width - template.width + 1;
+                    const scoreHeight = roi.height - template.height + 1;
+                    if (scoreWidth < 1 || scoreHeight < 1) continue;
+                    const scoreCount = scoreWidth * scoreHeight;
+                    jobs.push({slot, roi, template, scoreWidth, scoreHeight, scoreCount, scoreOffset: totalScoreCount});
+                    totalScoreCount += scoreCount;
                 }
-                const result = await this.matchTemplate(roi, template, scoreWidth, scoreHeight);
-                if (result.score > best.score) {
-                    best = {
+            }
+
+            if (totalScoreCount === 0) {
+                return Object.fromEntries(MATCH_SLOT_KEYS.map(slot => [slot, emptyMatch(slot)]));
+            }
+
+            // 全スコアをまとめるreadBuffer（1回のmapAsyncのため）
+            // copyBufferToBuffer の destinationOffset は 256バイトアライメントが必要
+            const ALIGN = 256;
+            const align256 = (n) => Math.ceil(n / ALIGN) * ALIGN;
+
+            // 各ジョブのcopyOffsetを事前に256アライメントで計算し、readBufferサイズを確定
+            let totalAlignedSize = 0;
+            for (const job of jobs) {
+                job.alignedOffset = totalAlignedSize;
+                totalAlignedSize += align256(job.scoreCount * 4);
+            }
+
+            const readBuffer = device.createBuffer({
+                size: Math.max(totalAlignedSize, ALIGN),
+                usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+            });
+
+            const encoder = device.createCommandEncoder();
+            const pass = encoder.beginComputePass();
+            pass.setPipeline(this.pipeline);
+
+            const scoreBuffers = [];
+            const uniformBuffers = [];
+
+            for (const job of jobs) {
+                const {roi, template, scoreWidth, scoreHeight, scoreCount} = job;
+
+                const paramsBuffer = new ArrayBuffer(56);
+                const paramsView = new DataView(paramsBuffer);
+                paramsView.setUint32(0, roi.x, true);
+                paramsView.setUint32(4, roi.y, true);
+                paramsView.setUint32(8, roi.width, true);
+                paramsView.setUint32(12, roi.height, true);
+                paramsView.setUint32(16, template.width, true);
+                paramsView.setUint32(20, template.height, true);
+                paramsView.setUint32(24, scoreWidth, true);
+                paramsView.setUint32(28, scoreHeight, true);
+                paramsView.setFloat32(32, WHITE_THRESHOLD, true);
+                paramsView.setFloat32(36, MATCH_PENALTY_WEIGHT, true);
+                paramsView.setFloat32(40, MATCH_WHITE_WEIGHT, true);
+                paramsView.setFloat32(44, MATCH_CONTRAST, true);
+                paramsView.setFloat32(48, MATCH_BIAS, true);
+                paramsView.setFloat32(52, TEMPLATE_ALPHA_THRESHOLD, true);
+
+                const uniformBuffer = device.createBuffer({
+                    size: 64, // 56バイト→64バイトにアライン
+                    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+                });
+                this.queue.writeBuffer(uniformBuffer, 0, paramsBuffer);
+
+                const scoreBuffer = device.createBuffer({
+                    size: scoreCount * 4,
+                    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
+                });
+
+                const bindGroup = device.createBindGroup({
+                    layout: this.pipeline.getBindGroupLayout(0),
+                    entries: [
+                        {binding: 0, resource: frameView},
+                        {binding: 1, resource: template.texture.createView()},
+                        {binding: 2, resource: {buffer: scoreBuffer}},
+                        {binding: 3, resource: {buffer: uniformBuffer}}
+                    ]
+                });
+
+                pass.setBindGroup(0, bindGroup);
+                pass.dispatchWorkgroups(Math.ceil(scoreWidth / 8), Math.ceil(scoreHeight / 8));
+
+                job.scoreBufferRef = scoreBuffer;
+                scoreBuffers.push(scoreBuffer);
+                uniformBuffers.push(uniformBuffer);
+            }
+
+            pass.end();
+
+            // 全スコアバッファをreadBufferへコピー
+            for (const job of jobs) {
+                encoder.copyBufferToBuffer(job.scoreBufferRef, 0, readBuffer, job.alignedOffset, job.scoreCount * 4);
+            }
+
+            // 1回のsubmit
+            this.queue.submit([encoder.finish()]);
+
+            // 1回のmapAsync
+            await readBuffer.mapAsync(GPUMapMode.READ);
+            const allScores = new Float32Array(readBuffer.getMappedRange());
+
+            // --- パス2: CPUで各スロットのベストを選ぶ ---
+            const bestBySlot = Object.fromEntries(MATCH_SLOT_KEYS.map(slot => [slot, emptyMatch(slot)]));
+
+            for (const job of jobs) {
+                const {slot, roi, template, scoreWidth, scoreHeight, scoreCount, alignedOffset} = job;
+                const byteOffset = alignedOffset / 4; // Float32Arrayインデックス（alignedOffsetはバイト単位）
+                let bestScore = 0;
+                let bestIndex = 0;
+                const end = byteOffset + scoreCount;
+                for (let i = byteOffset; i < end; i++) {
+                    if (allScores[i] > bestScore) {
+                        bestScore = allScores[i];
+                        bestIndex = i - byteOffset;
+                    }
+                }
+                if (bestScore > bestBySlot[slot].score) {
+                    bestBySlot[slot] = {
                         slot,
                         file: template.file,
-                        score: result.score,
-                        x: roi.x + result.x,
-                        y: roi.y + result.y,
+                        score: bestScore,
+                        x: roi.x + (bestIndex % scoreWidth),
+                        y: roi.y + Math.floor(bestIndex / scoreWidth),
                         width: template.width,
                         height: template.height
                     };
                 }
             }
-            return best;
-        }
 
-        async matchTemplate(roi, template, scoreWidth, scoreHeight) {
-            const scoreCount = scoreWidth * scoreHeight;
-            const scoreBuffer = this.device.createBuffer({
-                size: scoreCount * 4,
-                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
-            });
-            const readBuffer = this.device.createBuffer({
-                size: scoreCount * 4,
-                usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
-            });
-            const paramsBuffer = new ArrayBuffer(56);
-            const paramsView = new DataView(paramsBuffer);
-            paramsView.setUint32(0, roi.x, true);
-            paramsView.setUint32(4, roi.y, true);
-            paramsView.setUint32(8, roi.width, true);
-            paramsView.setUint32(12, roi.height, true);
-            paramsView.setUint32(16, template.width, true);
-            paramsView.setUint32(20, template.height, true);
-            paramsView.setUint32(24, scoreWidth, true);
-            paramsView.setUint32(28, scoreHeight, true);
-            paramsView.setFloat32(32, WHITE_THRESHOLD, true);
-            paramsView.setFloat32(36, MATCH_PENALTY_WEIGHT, true);
-            paramsView.setFloat32(40, MATCH_WHITE_WEIGHT, true);
-            paramsView.setFloat32(44, MATCH_CONTRAST, true);
-            paramsView.setFloat32(48, MATCH_BIAS, true);
-            paramsView.setFloat32(52, TEMPLATE_ALPHA_THRESHOLD, true);
-            const uniformBuffer = this.device.createBuffer({
-                size: paramsBuffer.byteLength,
-                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-            });
-            this.queue.writeBuffer(uniformBuffer, 0, paramsBuffer);
-            const bindGroup = this.device.createBindGroup({
-                layout: this.pipeline.getBindGroupLayout(0),
-                entries: [
-                    {binding: 0, resource: this.frameTexture.createView()},
-                    {binding: 1, resource: template.texture.createView()},
-                    {binding: 2, resource: {buffer: scoreBuffer}},
-                    {binding: 3, resource: {buffer: uniformBuffer}}
-                ]
-            });
-            const encoder = this.device.createCommandEncoder();
-            const pass = encoder.beginComputePass();
-            pass.setPipeline(this.pipeline);
-            pass.setBindGroup(0, bindGroup);
-            pass.dispatchWorkgroups(Math.ceil(scoreWidth / 8), Math.ceil(scoreHeight / 8));
-            pass.end();
-            encoder.copyBufferToBuffer(scoreBuffer, 0, readBuffer, 0, scoreCount * 4);
-            this.queue.submit([encoder.finish()]);
-            await readBuffer.mapAsync(GPUMapMode.READ);
-            const scores = new Float32Array(readBuffer.getMappedRange()).slice();
             readBuffer.unmap();
-            scoreBuffer.destroy();
-            readBuffer.destroy();
-            uniformBuffer.destroy();
-            let bestScore = 0;
-            let bestIndex = 0;
-            for (let index = 0; index < scores.length; index += 1) {
-                if (scores[index] > bestScore) {
-                    bestScore = scores[index];
-                    bestIndex = index;
-                }
-            }
-            return {
-                score: bestScore,
-                x: bestIndex % scoreWidth,
-                y: Math.floor(bestIndex / scoreWidth)
-            };
-        }
 
-        async match(source, templatesBySlot) {
-            this.uploadFrame(source);
-            const entries = await Promise.all(
-                MATCH_SLOT_KEYS.map(async (slot) => [slot, await this.matchSlot(slot, templatesBySlot.get(slot) || [])])
-            );
-            return Object.fromEntries(entries);
+            // バッファ解放
+            readBuffer.destroy();
+            for (const buf of scoreBuffers) buf.destroy();
+            for (const buf of uniformBuffers) buf.destroy();
+
+            return bestBySlot;
         }
     }
 
@@ -1127,10 +1177,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
                     // スコアラベルを枠の外側（上）に表示
                     const digitLabel = score !== null
-                        ? `${digit} (${(score * 100).toFixed(0)}%)`
+                        ? `${digit} ${(score * 100).toFixed(0)}%`
                         : `${digit}`;
                     const labelWidth = overlayContext.measureText(digitLabel).width;
-                    const labelY = by + NUM_H + 13;
+                    const labelY = by >= 16 ? by - 3 : by + NUM_H + 13;
                     overlayContext.fillStyle = "rgba(20, 10, 0, 0.78)";
                     overlayContext.fillRect(bx, labelY - 13, labelWidth + 8, 15);
                     overlayContext.fillStyle = "rgba(255, 160, 40, 0.97)";
