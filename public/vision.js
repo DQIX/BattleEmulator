@@ -1177,10 +1177,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
                     // スコアラベルを枠の外側（上）に表示
                     const digitLabel = score !== null
-                        ? `${digit} ${(score * 100).toFixed(0)}%`
+                        ? `${digit} (${(score * 100).toFixed(0)}%)`
                         : `${digit}`;
                     const labelWidth = overlayContext.measureText(digitLabel).width;
-                    const labelY = by >= 16 ? by - 3 : by + NUM_H + 13;
+                    const labelY = by + NUM_H + 13;
                     overlayContext.fillStyle = "rgba(20, 10, 0, 0.78)";
                     overlayContext.fillRect(bx, labelY - 13, labelWidth + 8, 15);
                     overlayContext.fillStyle = "rgba(255, 160, 40, 0.97)";
