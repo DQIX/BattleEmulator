@@ -23,7 +23,9 @@
         gpuWarningDialog: document.getElementById("visionGpuWarningDialog"),
         gpuWarningCancel: document.getElementById("visionGpuWarningCancel"),
         gpuWarningStart: document.getElementById("visionGpuWarningStart"),
-        matches: Array.from(document.querySelectorAll("#visionMatches .vision-match-card"))
+        matches: Array.from(document.querySelectorAll("#visionMatches .vision-match-card")),
+        copyMarkdown: document.getElementById("visionCopyMarkdown"),
+        copyCsv: document.getElementById("visionCopyCsv")
     };
 
     if (!ui.status || !ui.video || !ui.overlay) {
@@ -1530,6 +1532,37 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         setBridgeStatus("visionBridgeReady", "");
     }
 
+    function historyToMarkdown() {
+        const rows = getTurnRows();
+        if (!rows.length) return "";
+        const header = "| Turn | Act 1 | Damage 1 | Act 2 | Damage 2 | Act 3 | Damage 3 |";
+        const sep    = "| --- | --- | --- | --- | --- | --- | --- |";
+        const lines = rows.map((row) => {
+            const cells = row.slots.map((slot) => {
+                const act = slot.actionId ? getActionLabel(slot.actionId) : "-";
+                const dmg = typeof slot.damage === "number" && slot.damage >= 0 ? String(slot.damage) : slot.actionId ? "..." : "-";
+                return `${act} | ${dmg}`;
+            });
+            return `| T${row.turn} | ${cells.join(" | ")} |`;
+        });
+        return [header, sep, ...lines].join("\n");
+    }
+
+    function historyToCsv() {
+        const rows = getTurnRows();
+        if (!rows.length) return "";
+        const header = "Turn,Act 1,Damage 1,Act 2,Damage 2,Act 3,Damage 3";
+        const lines = rows.map((row) => {
+            const cells = row.slots.flatMap((slot) => {
+                const act = slot.actionId ? getActionLabel(slot.actionId) : "";
+                const dmg = typeof slot.damage === "number" && slot.damage >= 0 ? String(slot.damage) : slot.actionId ? "..." : "";
+                return [act, dmg];
+            });
+            return [`T${row.turn}`, ...cells].join(",");
+        });
+        return [header, ...lines].join("\n");
+    }
+
     function renderHistory() {
         ui.historyBody.innerHTML = "";
         const rows = getTurnRows();
@@ -2255,6 +2288,18 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         navigator.mediaDevices?.addEventListener?.("devicechange", () => {
             populateCameras().catch(() => {
             });
+        });
+        ui.copyMarkdown?.addEventListener("click", (event) => {
+            event.preventDefault();
+            if (!state.history.length) return;
+            const text = historyToMarkdown();
+            if (typeof copyText === "function") copyText(text);
+        });
+        ui.copyCsv?.addEventListener("click", (event) => {
+            event.preventDefault();
+            if (!state.history.length) return;
+            const text = historyToCsv();
+            if (typeof copyText === "function") copyText(text);
         });
         const observer = new MutationObserver(() => {
             syncLanguage();
