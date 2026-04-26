@@ -873,7 +873,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             if (foundX !== -1) break;
         }
 
-        if (foundX === -1) return binary;
+        if (foundX === -1) return {...binary, sourceX: 0, sourceY: 0};
 
         // フェーズ2: foundXだけ絞り込む（foundYは変更しない）
         for (let col = 0; col < foundX; col += 1) {
@@ -895,7 +895,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             const dstOffset = row * targetWidth;
             mask.set(binary.mask.subarray(srcOffset, srcOffset + width), dstOffset);
         }
-        return {width: targetWidth, height: targetHeight, mask};
+        return {width: targetWidth, height: targetHeight, mask, sourceX: foundX, sourceY: foundY};
     }
 
     function compareBinaryImages(frameMask, templateMask) {
@@ -963,14 +963,23 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                     bestScore = score;
                 }
             });
-            return {digit: bestDigit, score: bestScore};
+            // trimFirstPixel が返す sourceX/sourceY = actionArea内での検出起点
+            return {digit: bestDigit, score: bestScore, localX: trimmed.sourceX ?? 0, localY: trimmed.sourceY ?? 0};
         });
-// recognizeDamageValue の return を変更
         return {
             digits: digits.map((item) => item.digit),
-            scores: digits.map((item) => item.score),   // ← 追加
+            scores: digits.map((item) => item.score),
             score: digits.reduce((max, item) => Math.max(max, item.score), 0),
-            value: convertMatchResults(digits.map((item) => item.digit))
+            value: convertMatchResults(digits.map((item) => item.digit)),
+            // 各桁の実際の検出位置（絶対座標）。認識失敗時は null
+            positions: digits.map((item, i) => {
+                if (item.digit === -1) return null;
+                const area = config.actionAreas[i];
+                return {
+                    x: config.x + area.x + item.localX,
+                    y: config.y + area.y + item.localY
+                };
+            })
         };
     }
 
@@ -1071,14 +1080,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     function drawOverlay(matches, damageReadings) {
         overlayContext.clearRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
-        overlayContext.imageSmoothingEnabled = false; // ★ 追加
+        overlayContext.imageSmoothingEnabled = false;
         overlayContext.drawImage(processingCanvas, 0, 0, BASE_WIDTH, BASE_HEIGHT);
-        overlayContext.lineWidth = 3;
-        overlayContext.font = "18px Bahnschrift, sans-serif";
 
+        // 数字テンプレートの固定サイズ（26x40）
+        const NUM_W = 26;
+        const NUM_H = 40;
 
-
-        // --- 追加: 数字認識枠 ---
+        // --- 数字認識枠（実際の検出位置をオレンジで） ---
         if (damageReadings) {
             overlayContext.font = "13px Bahnschrift, sans-serif";
             for (const [key, reading] of Object.entries(damageReadings)) {
@@ -1086,68 +1095,61 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 if (!config) continue;
 
                 // ROI全体枠（薄い水色）
-                overlayContext.strokeStyle = "rgba(100, 210, 255, 0.55)";
-                overlayContext.lineWidth = 2;
+                overlayContext.strokeStyle = "rgba(100, 210, 255, 0.45)";
+                overlayContext.lineWidth = 1;
                 overlayContext.strokeRect(config.x, config.y, config.width, config.height);
 
-                // 認識値ラベル（ROI上部）
+                // 認識値ラベル（ROI枠の外上側）
                 const valueLabel = reading.value !== -1 ? `${key}: ${reading.value}` : `${key}: --`;
                 const valueLabelWidth = overlayContext.measureText(valueLabel).width;
-                const valueLabelY = config.y >= 20 ? config.y - 4 : config.y + config.height + 16;
-                overlayContext.fillStyle = "rgba(10, 30, 50, 0.75)";
-                overlayContext.fillRect(config.x, valueLabelY - 14, valueLabelWidth + 12, 18);
+                const valueLabelY = config.y >= 18 ? config.y - 5 : config.y + config.height + 15;
+                overlayContext.fillStyle = "rgba(10, 30, 50, 0.78)";
+                overlayContext.fillRect(config.x, valueLabelY - 13, valueLabelWidth + 10, 16);
                 overlayContext.fillStyle = reading.value !== -1
                     ? "rgba(100, 230, 255, 0.96)"
-                    : "rgba(180, 180, 180, 0.7)";
-                overlayContext.fillText(valueLabel, config.x + 6, valueLabelY);
+                    : "rgba(160, 160, 160, 0.8)";
+                overlayContext.fillText(valueLabel, config.x + 5, valueLabelY);
 
-                // 桁ごとのactionArea枠
-                // 桁ごとのactionArea枠
-                config.actionAreas.forEach((area, index) => {
-                    const digit = reading.digits[index];
+                // 桁ごと：実際の検出位置（positions[i]）をオレンジ枠で囲む
+                reading.digits.forEach((digit, index) => {
+                    if (digit === -1) return;
+                    const pos = reading.positions ? reading.positions[index] : null;
+                    if (!pos) return;
+
                     const score = reading.scores ? reading.scores[index] : null;
-                    const absX = config.x + area.x;
-                    const absY = config.y + area.y;
+                    const bx = pos.x;
+                    const by = pos.y;
 
-                    if (digit !== -1) {
-                        overlayContext.strokeStyle = "rgba(80, 255, 120, 0.85)";
-                        overlayContext.lineWidth = 1.5;
-                        overlayContext.strokeRect(absX, absY, area.width, area.height);
+                    // 実際のマッチ位置をオレンジで囲む
+                    overlayContext.strokeStyle = "rgba(255, 140, 0, 0.92)";
+                    overlayContext.lineWidth = 1.5;
+                    overlayContext.strokeRect(bx, by, NUM_W, NUM_H);
 
-                        const digitLabel = score !== null
-                            ? `${digit} (${(score * 100).toFixed(0)}%)`
-                            : `${digit}`;
-
-// 偶数=枠の下側内側、奇数=枠の上側内側に交互配置
-                        const labelAbove = index % 2 === 1;
-                        const labelY = labelAbove
-                            ? absY + 11                  // 枠の上側内側（上から11px）
-                            : absY + area.height - 3;   // 枠の下側内側（下端から3px）
-
-                        const labelWidth = overlayContext.measureText(digitLabel).width;
-                        overlayContext.fillStyle = "rgba(10, 30, 10, 0.72)";
-                        overlayContext.fillRect(
-                            absX + 1,
-                            labelAbove ? absY + 1 : absY + area.height - 14,
-                            labelWidth + 6,
-                            13
-                        );
-
-                        overlayContext.fillStyle = "rgba(80, 255, 120, 0.95)";
-                        overlayContext.fillText(digitLabel, absX + 3, labelY);
-                    }
+                    // スコアラベルを枠の外側（上）に表示
+                    const digitLabel = score !== null
+                        ? `${digit} (${(score * 100).toFixed(0)}%)`
+                        : `${digit}`;
+                    const labelWidth = overlayContext.measureText(digitLabel).width;
+                    const labelY = by + NUM_H + 13;
+                    overlayContext.fillStyle = "rgba(20, 10, 0, 0.78)";
+                    overlayContext.fillRect(bx, labelY - 13, labelWidth + 8, 15);
+                    overlayContext.fillStyle = "rgba(255, 160, 40, 0.97)";
+                    overlayContext.fillText(digitLabel, bx + 4, labelY);
                 });
             }
         }
 
-        // --- 既存: テンプレートマッチング枠 ---
+        // --- テンプレートマッチング枠（既存） ---
+        overlayContext.font = "18px Bahnschrift, sans-serif";
         for (const slot of MATCH_SLOT_KEYS) {
             const roi = ROI_DEFS[slot];
             const match = matches[slot] || emptyMatch(slot);
             overlayContext.strokeStyle = "rgba(230, 230, 230, 0.72)";
+            overlayContext.lineWidth = 1;
             overlayContext.strokeRect(roi.x, roi.y, roi.width, roi.height);
             if (match.file && match.score >= TEMPLATE_THRESHOLD) {
                 overlayContext.strokeStyle = "rgba(255, 187, 92, 0.92)";
+                overlayContext.lineWidth = 2;
                 overlayContext.strokeRect(match.x, match.y, match.width, match.height);
                 overlayContext.fillStyle = "rgba(17, 22, 27, 0.78)";
                 const label = `${slot}: ${match.file} ${(match.score * 100).toFixed(1)}%`;
