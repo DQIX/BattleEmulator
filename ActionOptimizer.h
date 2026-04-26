@@ -1,6 +1,6 @@
 //
 // Fixed ActionOptimizer Header
-// Contains declarations for the enhanced A* algorithm
+// Contains declarations for the hybrid action search
 //
 
 #ifndef ACTION_OPTIMIZER_FIXED_H
@@ -13,7 +13,7 @@
 
 class ActionOptimizer {
 public:
-    // Main A* algorithm with fixes for f-cost stagnation
+    // Main hybrid search entry point
     static Genome RunAlgorithm(const Player players[2], uint64_t seed, int turns, int maxGenerations,
                                int actions[350], int seedOffset);
     static std::pair<int, Genome> RunAlgorithmAsync(const Player players[2], uint64_t seed, int turns,
