@@ -1,314 +1,470 @@
 //
-// Flexible ActionOptimizer with Adaptive Constraint Management
-// Solves deadlock issues with longer predefined action sequences
+// Deterministic trace-style action optimizer.
+// Builds a fast incumbent first, then proves optimality with IDDFS + branch and bound.
 //
 
 #include "ActionOptimizer.h"
-#include <random>
-#include <unordered_set>
-#include <memory>
+
+#include <algorithm>
+#include <array>
+#include <climits>
+#include <cstdint>
+#include <cstring>
 
 #include "BattleEmulator.h"
-#include "LinearIdPool.h"
 #include "Genome.h"
-#include "EnhancedHashCalculator.h"
-#include "EnhancedCostCalculator.h"
-#include "EnhancedHeapQueue.h"
 #include "lcg.h"
 
-struct ActionEntry {
-    int action;
-    bool (*condition)(const Genome&);
-};
+namespace {
+    struct ActionEntry {
+        int action;
+        bool (*condition)(const Player &ally);
+    };
 
-constexpr ActionEntry ACTION_TABLE[] = {
-    { BattleEmulator::ATTACK_ALLY,  [](const Genome&) { return true; } },
-    { BattleEmulator::DRAGON_SLASH, [](const Genome&) { return true; } },
-    { BattleEmulator::DEFENCE,      [](const Genome&) { return true; } },
-    { BattleEmulator::FLEE_ALLY,    [](const Genome&) { return true; } },
+    const ActionEntry ACTION_TABLE[] = {
+        {BattleEmulator::ATTACK_ALLY, [](const Player &) { return true; }},
+        {BattleEmulator::DRAGON_SLASH, [](const Player &) { return true; }},
+        {BattleEmulator::DEFENCE, [](const Player &) { return true; }},
+        {BattleEmulator::FLEE_ALLY, [](const Player &) { return true; }},
+        {BattleEmulator::SPECIAL_ANTIDOTE, [](const Player &ally) {
+             return ally.SpecialAntidoteCount >= 1 && ally.PoisonEnable;
+         }},
+        {BattleEmulator::SPECIAL_MEDICINE, [](const Player &ally) {
+             return ally.SpecialMedicineCount >= 1 && !ally.PoisonEnable;
+         }},
+        {BattleEmulator::HEAL, [](const Player &ally) { return ally.mp >= 2; }},
+        {BattleEmulator::CRACK_ALLY, [](const Player &ally) { return ally.mp >= 3; }},
+        {BattleEmulator::WOOSH_ALLY, [](const Player &ally) { return ally.mp >= 3; }},
+        {BattleEmulator::ACROBATIC_STAR, [](const Player &ally) {
+             return ally.specialCharge && ally.specialChargeTurn != 0;
+         }},
+    };
 
-    { BattleEmulator::SPECIAL_ANTIDOTE,
-        [](const Genome& g) {
-            return g.AllyPlayer.SpecialMedicineCount >= 1 &&
-                   g.AllyPlayer.PoisonEnable;
-    }
-    },
-    { BattleEmulator::SPECIAL_MEDICINE,
-        [](const Genome& g) {
-            return g.AllyPlayer.SpecialMedicineCount >= 1 &&
-                   !g.AllyPlayer.PoisonEnable;
-    }
-    },
-    { BattleEmulator::HEAL,
-        [](const Genome& g) { return g.AllyPlayer.mp >= 2; }
-    },
-    { BattleEmulator::CRACK_ALLY,
-        [](const Genome& g) { return g.AllyPlayer.mp >= 3; }
-    },
-    { BattleEmulator::WOOSH_ALLY,
-        [](const Genome& g) { return g.AllyPlayer.mp >= 3; }
-    },
-    { BattleEmulator::ACROBATIC_STAR,
-        [](const Genome& g) {
-            return g.AllyPlayer.specialCharge &&
-                   g.AllyPlayer.specialChargeTurn != 0;
-    }
-    }
-};
+    const int ACTION_TABLE_SIZE = static_cast<int>(sizeof(ACTION_TABLE) / sizeof(ACTION_TABLE[0]));
+    constexpr int MAX_ACTIONS = 350;
+    constexpr int MAX_EXTRA_TURNS = 40;
+    constexpr int MAX_BRANCHING = ACTION_TABLE_SIZE;
+    constexpr int MAX_DAMAGE_PER_TURN_UPPER = 256;
+    constexpr int NO_SOLUTION = INT_MAX;
 
-static uint32_t Node_Used;
+    struct SearchState {
+        Player ally{};
+        Player enemy{};
+        int position = 1;
+        uint64_t nowState = 0;
+        int processedTurns = 0;
+    };
+
+    struct Candidate {
+        SearchState state{};
+        int action = BattleEmulator::ATTACK_ALLY;
+        int damage = 0;
+        int score = INT_MIN;
+        bool kill = false;
+        bool alive = false;
+    };
+
+    static uint32_t Node_Used = 0;
+
+    inline int computeProcessedTurns(const uint64_t nowState) {
+        return static_cast<int>((nowState >> 12) & 0xFFFFF);
+    }
+
+    inline void clearActionTail(int actions[MAX_ACTIONS], const int startIndex) {
+        for (int i = startIndex; i < MAX_ACTIONS; ++i) {
+            actions[i] = -1;
+        }
+    }
+
+    inline int actionPriority(const int action) {
+        switch (action) {
+            case BattleEmulator::ATTACK_ALLY:
+                return 0;
+            case BattleEmulator::DRAGON_SLASH:
+                return 1;
+            case BattleEmulator::CRACK_ALLY:
+                return 2;
+            case BattleEmulator::WOOSH_ALLY:
+                return 3;
+            case BattleEmulator::ACROBATIC_STAR:
+                return 4;
+            case BattleEmulator::HEAL:
+                return 5;
+            case BattleEmulator::SPECIAL_MEDICINE:
+                return 6;
+            case BattleEmulator::SPECIAL_ANTIDOTE:
+                return 7;
+            case BattleEmulator::DEFENCE:
+                return 8;
+            case BattleEmulator::FLEE_ALLY:
+                return 9;
+            default:
+                return 10;
+        }
+    }
+
+    inline bool isSupportAction(const int action) {
+        return action == BattleEmulator::HEAL ||
+               action == BattleEmulator::SPECIAL_MEDICINE ||
+               action == BattleEmulator::SPECIAL_ANTIDOTE ||
+               action == BattleEmulator::DEFENCE ||
+               action == BattleEmulator::FLEE_ALLY;
+    }
+
+    inline int computeImmediateScore(const SearchState &currentState, const Candidate &candidate) {
+        int score = candidate.damage * 10000;
+        score += candidate.state.ally.hp * 32;
+        score -= candidate.state.enemy.hp * 8;
+
+        if (candidate.kill) {
+            score += 100000000;
+        }
+        if (!candidate.alive) {
+            score -= 100000000;
+        }
+
+        if (candidate.state.ally.hp > currentState.ally.hp) {
+            score += (candidate.state.ally.hp - currentState.ally.hp) * 512;
+        }
+        if (candidate.state.ally.specialCharge && !currentState.ally.specialCharge) {
+            score += 1200;
+        }
+        if (candidate.state.enemy.rage && !currentState.enemy.rage) {
+            score += 300;
+        }
+        if (currentState.ally.hp <= 28 && isSupportAction(candidate.action)) {
+            score += 1600;
+        }
+        if (candidate.action == BattleEmulator::ACROBATIC_STAR && currentState.ally.specialCharge) {
+            score += 400;
+        }
+
+        score -= actionPriority(candidate.action);
+        return score;
+    }
+
+    inline bool simulateTurn(const SearchState &currentState, const int action, int actions[MAX_ACTIONS], const uint64_t seed,
+                             SearchState &nextState) {
+        const int actionIndex = currentState.processedTurns;
+        actions[actionIndex] = action;
+
+        Player players[2] = {currentState.ally, currentState.enemy};
+        int position = currentState.position;
+        uint64_t nowState = currentState.nowState;
+
+        BattleEmulator::Main(&position, 1, actions, players, nullptr, seed, nullptr, nullptr, -2, &nowState);
+
+        actions[actionIndex] = -1;
+
+        nextState.ally = players[0];
+        nextState.enemy = players[1];
+        nextState.position = position;
+        nextState.nowState = nowState;
+        nextState.processedTurns = computeProcessedTurns(nowState);
+        return true;
+    }
+
+    inline int optimisticDamageUpperBound(const SearchState &state, const int remainingTurns) {
+        if (remainingTurns <= 0 || state.ally.hp <= 0) {
+            return 0;
+        }
+
+        int damageTurns = remainingTurns;
+        if (state.ally.sleeping) {
+            damageTurns -= 1;
+        }
+
+        if (damageTurns <= 0) {
+            return 0;
+        }
+
+        return damageTurns * MAX_DAMAGE_PER_TURN_UPPER;
+    }
+
+    inline int optimisticLowerBoundTurns(const SearchState &state) {
+        if (state.enemy.hp <= 0) {
+            return 0;
+        }
+
+        int effectiveHp = state.enemy.hp;
+        if (state.ally.sleeping) {
+            effectiveHp += MAX_DAMAGE_PER_TURN_UPPER;
+        }
+
+        return (effectiveHp + MAX_DAMAGE_PER_TURN_UPPER - 1) / MAX_DAMAGE_PER_TURN_UPPER;
+    }
+
+    int buildCandidates(const SearchState &currentState, int actions[MAX_ACTIONS], const uint64_t seed,
+                        Candidate outCandidates[MAX_BRANCHING]) {
+        if (currentState.ally.sleeping) {
+            SearchState nextState;
+            simulateTurn(currentState, BattleEmulator::ATTACK_ALLY, actions, seed, nextState);
+
+            Candidate candidate;
+            candidate.state = nextState;
+            candidate.action = BattleEmulator::ATTACK_ALLY;
+            candidate.damage = currentState.enemy.hp - nextState.enemy.hp;
+            candidate.kill = nextState.enemy.hp <= 0;
+            candidate.alive = nextState.ally.hp > 0;
+            candidate.score = computeImmediateScore(currentState, candidate);
+            outCandidates[0] = candidate;
+            return 1;
+        }
+
+        int count = 0;
+        for (const auto &entry: ACTION_TABLE) {
+            if (!entry.condition(currentState.ally)) {
+                continue;
+            }
+
+            SearchState nextState;
+            simulateTurn(currentState, entry.action, actions, seed, nextState);
+
+            Candidate candidate;
+            candidate.state = nextState;
+            candidate.action = entry.action;
+            candidate.damage = currentState.enemy.hp - nextState.enemy.hp;
+            candidate.kill = nextState.enemy.hp <= 0;
+            candidate.alive = nextState.ally.hp > 0;
+            candidate.score = computeImmediateScore(currentState, candidate);
+            outCandidates[count++] = candidate;
+        }
+
+        std::sort(outCandidates, outCandidates + count, [](const Candidate &lhs, const Candidate &rhs) {
+            if (lhs.score != rhs.score) {
+                return lhs.score > rhs.score;
+            }
+            if (lhs.damage != rhs.damage) {
+                return lhs.damage > rhs.damage;
+            }
+            if (lhs.state.ally.hp != rhs.state.ally.hp) {
+                return lhs.state.ally.hp > rhs.state.ally.hp;
+            }
+            return actionPriority(lhs.action) < actionPriority(rhs.action);
+        });
+
+        return count;
+    }
+
+    int greedyUpperBound(const SearchState &startState, const uint64_t seed, int actions[MAX_ACTIONS],
+                         int bestActions[MAX_ACTIONS]) {
+        clearActionTail(bestActions, startState.processedTurns);
+
+        SearchState currentState = startState;
+        for (int extraTurns = 0; extraTurns < MAX_EXTRA_TURNS; ++extraTurns) {
+            if (currentState.enemy.hp <= 0) {
+                return extraTurns;
+            }
+            if (currentState.ally.hp <= 0) {
+                return NO_SOLUTION;
+            }
+
+            Candidate candidates[MAX_BRANCHING];
+            const int candidateCount = buildCandidates(currentState, actions, seed, candidates);
+            if (candidateCount == 0) {
+                return NO_SOLUTION;
+            }
+
+            const Candidate *selected = nullptr;
+            for (int i = 0; i < candidateCount; ++i) {
+                if (candidates[i].alive) {
+                    selected = &candidates[i];
+                    break;
+                }
+            }
+
+            if (selected == nullptr) {
+                return NO_SOLUTION;
+            }
+
+            const int actionIndex = currentState.processedTurns;
+            bestActions[actionIndex] = selected->action;
+            currentState = selected->state;
+            clearActionTail(bestActions, currentState.processedTurns);
+        }
+
+        return currentState.enemy.hp <= 0 ? currentState.processedTurns - startState.processedTurns : NO_SOLUTION;
+    }
+
+    bool depthLimitedSearch(const SearchState &currentState, const int remainingTurns, const uint64_t seed,
+                            int actions[MAX_ACTIONS], int bestActions[MAX_ACTIONS]) {
+        ++Node_Used;
+
+        if (currentState.enemy.hp <= 0) {
+            return true;
+        }
+        if (currentState.ally.hp <= 0 || remainingTurns <= 0) {
+            return false;
+        }
+        if (optimisticDamageUpperBound(currentState, remainingTurns) < currentState.enemy.hp) {
+            return false;
+        }
+
+        Candidate candidates[MAX_BRANCHING];
+        const int candidateCount = buildCandidates(currentState, actions, seed, candidates);
+        for (int i = 0; i < candidateCount; ++i) {
+            const Candidate &candidate = candidates[i];
+            if (!candidate.alive) {
+                continue;
+            }
+
+            const int actionIndex = currentState.processedTurns;
+            actions[actionIndex] = candidate.action;
+            clearActionTail(actions, actionIndex + 1);
+
+            if (candidate.kill) {
+                std::memcpy(bestActions, actions, sizeof(int) * MAX_ACTIONS);
+                return true;
+            }
+
+            if (depthLimitedSearch(candidate.state, remainingTurns - 1, seed, actions, bestActions)) {
+                return true;
+            }
+
+            actions[actionIndex] = -1;
+        }
+
+        return false;
+    }
+
+    Genome buildGenomeFromState(const SearchState &state, const int actions[MAX_ACTIONS]) {
+        Genome genome{};
+        genome.AllyPlayer = state.ally;
+        genome.EnemyPlayer = state.enemy;
+        genome.state = state.nowState;
+        genome.position = state.position;
+        genome.processed = state.processedTurns;
+        genome.turn = state.processedTurns + 1;
+        genome.fitness = std::max(0, state.enemy.maxHp - state.enemy.hp);
+        genome.EActions[0] = -1;
+        genome.EActions[1] = -1;
+        genome.Aactions = -1;
+        genome.Initialized = true;
+        genome.Visited = 0;
+        for (int i = 0; i < MAX_ACTIONS; ++i) {
+            genome.actions[i] = actions[i];
+        }
+        return genome;
+    }
+
+    SearchState makeInitialState(const Player players[2], const uint64_t seed, const int turns, const int actions[MAX_ACTIONS],
+                                 int initialActions[MAX_ACTIONS]) {
+        for (int i = 0; i < MAX_ACTIONS; ++i) {
+            initialActions[i] = -1;
+        }
+
+        for (int i = 0; i < MAX_ACTIONS; ++i) {
+            if (actions[i] == -1 || actions[i] == 0) {
+                initialActions[i] = -1;
+                break;
+            }
+            initialActions[i] = actions[i];
+        }
+
+        SearchState state;
+        state.ally = players[0];
+        state.enemy = players[1];
+        state.position = 1;
+        state.nowState = 0;
+        state.processedTurns = 0;
+
+        lcg::init(seed, true);
+
+        if (turns > 0) {
+            Player copiedPlayers[2] = {players[0], players[1]};
+            int position = 1;
+            uint64_t nowState = 0;
+            BattleEmulator::Main(&position, turns, initialActions, copiedPlayers, nullptr, seed, nullptr, nullptr, -2,
+                                 &nowState);
+            state.ally = copiedPlayers[0];
+            state.enemy = copiedPlayers[1];
+            state.position = position;
+            state.nowState = nowState;
+            state.processedTurns = computeProcessedTurns(nowState);
+        }
+
+        clearActionTail(initialActions, state.processedTurns);
+        return state;
+    }
+}
 
 uint32_t ActionOptimizer::getNodesUsed() {
     return Node_Used;
 }
 
-// Flexible A* Algorithm Implementation
-Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int turns, int maxGenerations,
-                                     int actions[350], int seedOffset) {
-    lcg::init(seed, true);
+Genome ActionOptimizer::RunAlgorithm(const Player players[2], const uint64_t seed, const int turns, int maxGenerations,
+                                     int actions[MAX_ACTIONS], int seedOffset) {
+    (void)maxGenerations;
+    (void)seedOffset;
+
     Node_Used = 0;
-    //std::mt19937 rng(seed + seedOffset);
 
-    // Cache enemy max HP (immutable value)
-    const auto enemyMaxHp = static_cast<double>(players[1].maxHp);
-    const auto playerMaxHp = static_cast<double>(players[0].maxHp);
-    //const auto playerMaxMP = static_cast<double>(players[0].maxMp);
+    int workingActions[MAX_ACTIONS];
+    SearchState initialState = makeInitialState(players, seed, turns, actions, workingActions);
+    Genome initialGenome = buildGenomeFromState(initialState, workingActions);
 
-    std::unique_ptr<int> position = std::make_unique<int>(1);
-    std::unique_ptr<uint64_t> nowState = std::make_unique<uint64_t>(0);
-
-    LinearIdPool<Genome, 180000> Pool{};
-
-    // Enhanced A* priority queue and visited set
-    EnhancedHeapQueue openSet{};
-    std::unordered_set<uint64_t> closedSet;
-
-    Player CopedPlayers[2] = {players[0], players[1]};
-    *position = 1;
-    *nowState = 0;
-
-    // Execute one turn
-    BattleEmulator::Main(position.get(), turns, actions, CopedPlayers,
-                         nullptr, seed,
-                         nullptr, nullptr, -2, nowState.get());
-
-    // Initialize starting node
-    Genome initialGenome = {};
-    initialGenome.EnemyPlayer = CopedPlayers[1];
-    initialGenome.AllyPlayer = CopedPlayers[0];
-    initialGenome.EActions[0] = -1;
-    initialGenome.EActions[1] = -1;
-    initialGenome.Aactions = -1;
-    initialGenome.fitness = 0;
-    initialGenome.turn = turns + 1;
-    initialGenome.processed = 0;
-    initialGenome.Initialized = false;
-    initialGenome.processed = turns;
-    initialGenome.Visited = 0;
-    initialGenome.position = *position;
-    initialGenome.state = *nowState;
-
-    // Set initial action array
-    for (int i = 0; i < 350; ++i) {
-        if (actions[i] == -1 || actions[i] == 0) {
-            initialGenome.actions[i] = -1;
-            break;
-        } else {
-            initialGenome.actions[i] = actions[i];
-        }
+    if (initialState.enemy.hp <= 0 || initialState.ally.hp <= 0) {
+        return initialGenome;
     }
 
-    // Create initial node with enhanced cost calculation
-    EnhancedAStarNode initialNode{};
-    initialNode.gCost = 0;
-    initialNode.hCost = EnhancedCostCalculator::calculateHCost(initialGenome, enemyMaxHp, playerMaxHp);
-    initialNode.fCost = initialNode.gCost + initialNode.hCost;
-    initialNode.stateHash = EnhancedHashCalculator::computeStateHash(initialGenome);
-    initialNode.allyHP = initialGenome.AllyPlayer.hp;
-    initialNode.enemyHP = initialGenome.EnemyPlayer.hp;
-    initialNode.nodeId = Pool.alloc(initialGenome);
-    openSet.push(initialNode);
+    int incumbentActions[MAX_ACTIONS];
+    std::memcpy(incumbentActions, workingActions, sizeof(workingActions));
+    const int greedyDepth = greedyUpperBound(initialState, seed, workingActions, incumbentActions);
 
-    Genome bestSolution = {};
-    bestSolution.turn = INT32_MAX;
-    bool solutionFound = false;
+    int bestActions[MAX_ACTIONS];
+    std::memcpy(bestActions, incumbentActions, sizeof(incumbentActions));
+    int bestDepth = greedyDepth;
 
-    int counter = 0;
-    double startT = turns + 40;
-    double lastBestFCost = 1000000.0;
-    auto percent = 0.0;
-    auto percenttmp = 0.0;
-
-    Player CopedPlayers3[2];
-
-    for (int i = 0; i < 10; ++i) {
-        if (!solutionFound) {
-            maxGenerations *= 2;
-        }else {
-            break;
+    if (bestDepth == NO_SOLUTION) {
+        bestDepth = MAX_EXTRA_TURNS;
+        for (int limit = optimisticLowerBoundTurns(initialState); limit <= MAX_EXTRA_TURNS; ++limit) {
+            std::memcpy(workingActions, incumbentActions, sizeof(workingActions));
+            clearActionTail(workingActions, initialState.processedTurns);
+            if (depthLimitedSearch(initialState, limit, seed, workingActions, bestActions)) {
+                bestDepth = limit;
+                break;
+            }
         }
-        while (!openSet.empty() && (maxGenerations == -1 || counter < maxGenerations)) {
-            // Get node with minimum f-cost
-            EnhancedAStarNode currentNode = openSet.top();
-            openSet.pop();
-
-            auto preGCost = currentNode.gCost;
-
-            //Progress reporting with constraint info
-            // if (counter % 10 == 0) {
-            //     percenttmp = counter / static_cast<double>(maxGenerations) * 100.0;
-            //     if (percenttmp != percent) {
-            //         std::cout << "[Node Info] " << percenttmp << "%"
-            //                   << " | turn=" << currentNode.genome.turn
-            //                   << " | hCost=" << currentNode.hCost
-            //                   << " | gCost=" << currentNode.gCost
-            //                   << " | enemyHP=" << currentNode.genome.EnemyPlayer.hp
-            //                   << " | bestTurn=" << (solutionFound ? bestSolution.turn - 1: -1)
-            //                   << std::endl;
-            //         percent = percenttmp;
-            //     }
-            // }
-
-
-            // if (counter % 1000000 == 0) {
-            //     for (int i = 0; i < 350; ++i) {
-            //         if (currentNode.genome.actions[i] == 0 || currentNode.genome.actions[i] == -1) {
-            //             break;
-            //         }
-            //         std::cout << currentNode.genome.actions[i];
-            //     }
-            //     std::cout << std::endl;
-            // }
-            //       }
-
-            // Skip already explored states
-            if (closedSet.count(currentNode.stateHash)) {
-                continue;
-            }
-            closedSet.insert(currentNode.stateHash);
-
-            const Genome currentGenome = Pool.get(currentNode.nodeId);
-
-            // Turn limit check
-            if (currentGenome.turn > startT) {
-                continue;
-            }
-            if (solutionFound && currentGenome.turn > bestSolution.turn - 1) {
-                continue;
-            }
-
-            // Victory condition check
-            if (currentGenome.EnemyPlayer.hp <= 0) {
-                if (!solutionFound || currentGenome.turn < bestSolution.turn) {
-                    bestSolution = currentGenome;
-                    solutionFound = true;
-                }
-                continue;
-            }
-
-            // Defeat condition check
-            if (currentGenome.AllyPlayer.hp <= 0) {
-                continue;
-            }
-
-            // Skip if worse than existing solution
-            if (solutionFound && currentGenome.turn >= bestSolution.turn) {
-                continue;
-            }
-
-            // Execute each action and generate new nodes
-            for (const auto& entry : ACTION_TABLE) {
-                if (!entry.condition(currentGenome)) {
-                    continue;
-                }
-                // // Skip low-priority actions if we have many candidates
-                // if (actionCandidates.size() > 6 && candidate.priority < 0.5) {
-                //     continue;
-                // }
-                // if (rng() % 100 >= 80) {
-                //     continue;
-                // }
-
-                Genome newGenome = currentGenome;
-                newGenome.actions[currentGenome.turn - 1] = entry.action;
-                newGenome.Initialized = true;
-
-                // Copy for battle emulator execution
-                CopedPlayers3[0] = currentGenome.AllyPlayer;
-                CopedPlayers3[1] = currentGenome.EnemyPlayer;
-                *position = currentGenome.position;
-                *nowState = currentGenome.state;
-
-                // Execute one turn
-                BattleEmulator::Main(position.get(), newGenome.turn - newGenome.processed, newGenome.actions, CopedPlayers3,
-                                    nullptr, seed,
-                                     nullptr, nullptr, -2, nowState.get());
-
-                if (CopedPlayers3[0].hp > 0) {
-                    // Update genome with results
-                    newGenome.position = *position;
-                    newGenome.state = *nowState;
-                    newGenome.turn = currentGenome.turn + 1;
-                    newGenome.processed = currentGenome.turn;
-                    newGenome.AllyPlayer = CopedPlayers3[0];
-                    newGenome.EnemyPlayer = CopedPlayers3[1];
-
-                    // Calculate enhanced state hash
-                    uint64_t newStateHash = EnhancedHashCalculator::computeStateHash(newGenome);
-
-                    // Skip already explored states
-                    if (closedSet.count(newStateHash)) {
-                        continue;
-                    }
-
-                    // Create new node with enhanced cost calculation
-                    EnhancedAStarNode newNode{};
-                    newNode.gCost = EnhancedCostCalculator::calculateGCost(newGenome, entry.action, preGCost);
-                    newNode.hCost = EnhancedCostCalculator::calculateHCost(newGenome, enemyMaxHp, playerMaxHp);
-                    newNode.fCost = newNode.gCost + newNode.hCost;
-                    newNode.stateHash = newStateHash;
-                    newNode.allyHP = newGenome.AllyPlayer.hp;
-                    newNode.enemyHP = newGenome.EnemyPlayer.hp;
-                    newNode.nodeId = Pool.alloc(newGenome);
-
-                    // Add to open set
-                    openSet.push(newNode);
-                }
-            }
-
-            counter++;
-
-            // Track best f-cost for progress monitoring
-            if (currentNode.fCost < lastBestFCost) {
-                lastBestFCost = currentNode.fCost;
+    } else {
+        const int lowerBound = optimisticLowerBoundTurns(initialState);
+        for (int limit = lowerBound; limit < bestDepth; ++limit) {
+            std::memcpy(workingActions, incumbentActions, sizeof(workingActions));
+            clearActionTail(workingActions, initialState.processedTurns);
+            if (depthLimitedSearch(initialState, limit, seed, workingActions, bestActions)) {
+                bestDepth = limit;
+                break;
             }
         }
     }
 
-    Node_Used = Pool.getSize();
-
-    if (solutionFound) {
-        return bestSolution;
+    if (bestDepth == NO_SOLUTION || bestDepth > MAX_EXTRA_TURNS) {
+        return initialGenome;
     }
 
-    // Return best available node if no solution found
-    if (!openSet.empty()) {
-        return Pool.get(openSet.top().nodeId);
-    }
+    Player replayPlayers[2] = {players[0], players[1]};
+    int replayPosition = 1;
+    uint64_t replayState = 0;
+    BattleEmulator::Main(&replayPosition, turns + bestDepth, bestActions, replayPlayers, nullptr, seed, nullptr,
+                         nullptr, -2, &replayState);
 
-    return initialGenome;
+    SearchState finalState;
+    finalState.ally = replayPlayers[0];
+    finalState.enemy = replayPlayers[1];
+    finalState.position = replayPosition;
+    finalState.nowState = replayState;
+    finalState.processedTurns = computeProcessedTurns(replayState);
+    return buildGenomeFromState(finalState, bestActions);
 }
 
 void ActionOptimizer::updateCompromiseScore(Genome &genome) {
-    // Enemy action penalty processing (unchanged)
+    (void)genome;
 }
 
-std::pair<int, Genome> ActionOptimizer::RunAlgorithmAsync(const Player players[2], uint64_t seed, int turns,
-                                                          int maxGenerations, int actions[350], int numThreads,
-                                                          bool dropbug) {
+std::pair<int, Genome> ActionOptimizer::RunAlgorithmAsync(const Player players[2], const uint64_t seed, const int turns,
+                                                          const int maxGenerations, int actions[MAX_ACTIONS],
+                                                          int numThreads, bool dropbug) {
     (void)numThreads;
     (void)dropbug;
     auto genome = RunAlgorithm(players, seed, turns, maxGenerations, actions, 0);
     return {0, genome};
 }
-
