@@ -297,6 +297,19 @@ namespace {
     int collectCandidates(const Genome &currentGenome, const SearchContext &context,
                           std::array<SearchCandidate, std::size(ACTION_TABLE)> &candidates) {
         int count = 0;
+        if (currentGenome.AllyPlayer.sleeping || currentGenome.AllyPlayer.paralysis) {
+            Genome nextGenome{};
+            initializeGenomeActions(nextGenome);
+            if (advanceGenome(currentGenome, BattleEmulator::ATTACK_ALLY, context.seed, nextGenome)) {
+                candidates[count].genome = nextGenome;
+                candidates[count].action = BattleEmulator::ATTACK_ALLY;
+                candidates[count].heuristic = evaluateCandidate(currentGenome, nextGenome, BattleEmulator::ATTACK_ALLY,
+                                                                 context);
+                ++count;
+            }
+            return count;
+        }
+        
         for (const auto &entry: ACTION_TABLE) {
             if (!entry.condition(currentGenome)) {
                 continue;

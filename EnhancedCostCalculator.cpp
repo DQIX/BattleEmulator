@@ -5,6 +5,21 @@
 #include "EnhancedCostCalculator.h"
 #include <algorithm>
 
+namespace {
+    constexpr double TurnCost = 2.0;
+    constexpr double EnemyHpWeight = 33.0;
+    constexpr double PlayerHpWeight = 1.5;
+    constexpr double ResourceWeight = 0.75;
+    constexpr double AttackCost = 0.005;
+    constexpr double DamageSpellCost = 0.030;
+    constexpr double HealCost = 0.015;
+    constexpr double ItemHealCost = 0.020;
+    constexpr double DefenceCost = 0.070;
+    constexpr double FleeCost = 0.120;
+    constexpr double SetupCost = 0.001;
+    constexpr double AntidoteCost = 0.001;
+}
+
 #if defined(OPTIMIZE_MODE)
 
 #include "SimpleParameterOptimizer.h"
@@ -124,7 +139,7 @@ double EnhancedCostCalculator::calculateResourceCost(const Genome &genome) {
 
 double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, double preGCost) {
     // Base cost is turn number (maintains depth-first preference)
-    double gCost = preGCost + 2.0;
+    double gCost = preGCost + TurnCost;
 
     // Add fine-grained action costs to break ties
     gCost += getActionCost(action);
@@ -144,14 +159,14 @@ double EnhancedCostCalculator::calculateHCost(const Genome &genome, double enemy
     double hCost = 0.0;
 
     // Primary heuristic: enemy HP ratio (scaled down for better granularity)
-    hCost = (genome.EnemyPlayer.hp / enemyMaxHp) * 31.0;
+    hCost = (genome.EnemyPlayer.hp / enemyMaxHp) * EnemyHpWeight;
 
     // Player HP consideration (more granular than original)
     double playerHpRatio = genome.AllyPlayer.hp / playerMaxHp;
-    hCost += (1.0 - playerHpRatio) * 2.0;
+    hCost += (1.0 - playerHpRatio) * PlayerHpWeight;
 
     // MP consideration (resource management)
-    hCost += calculateResourceCost(genome);
+    hCost += calculateResourceCost(genome) * ResourceWeight;
 
     // Status effect penalties/bonuses
     hCost += calculateStatusEffectCost(genome);
@@ -162,36 +177,36 @@ double EnhancedCostCalculator::calculateHCost(const Genome &genome, double enemy
 double EnhancedCostCalculator::getActionCost(int action) {
     switch (action) {
         case BattleEmulator::ATTACK_ALLY:
-            return 0.01;
+            return AttackCost;
         case BattleEmulator::DRAGON_SLASH:
-            return 0.01; // Offensive actions have no penalty
+            return AttackCost; // Offensive actions have no penalty
 
         case BattleEmulator::HEAL:
-            return 0.01; // Slight penalty for healing
+            return HealCost; // Slight penalty for healing
 
         case BattleEmulator::MEDICINAL_HERBS:
-            return 0.03; // Less penalty for item healing
+            return ItemHealCost; // Less penalty for item healing
 
         case BattleEmulator::DEFENCE:
-            return 0.05; // Higher penalty for defensive actions
+            return DefenceCost; // Higher penalty for defensive actions
 
         case BattleEmulator::FLEE_ALLY:
-            return 0.1; // High penalty for fleeing
+            return FleeCost; // High penalty for fleeing
 
         case BattleEmulator::CRACK_ALLY:
-            return 0.05; // Small penalty for buff spells
+            return DamageSpellCost; // Small penalty for buff spells
 
         case BattleEmulator::ACROBATIC_STAR:
-            return 0.0001; // Small penalty for special abilities
+            return SetupCost; // Small penalty for special abilities
 
         case BattleEmulator::SPECIAL_ANTIDOTE:
-            return 0.001000;
+            return AntidoteCost;
         case BattleEmulator::SPECIAL_MEDICINE:
-            return 0.015;
+            return ItemHealCost;
         case BattleEmulator::WOOSH_ALLY:
-            return 0.1;
+            return DamageSpellCost;
         default:
-            return 0.1; // Default moderate penalty
+            return FleeCost; // Default moderate penalty
     }
 }
 
