@@ -8,12 +8,13 @@
 namespace {
     constexpr double TurnCost = 2.0;
     constexpr double EnemyHpWeight = 33.0;
-    constexpr double PlayerHpWeight = 1.5;
-    constexpr double ResourceWeight = 0.75;
+    constexpr double PlayerHpWeight = 2.0;
+    constexpr double ResourceWeight = 0.50;
     constexpr double AttackCost = 0.005;
     constexpr double DamageSpellCost = 0.030;
     constexpr double HealCost = 0.015;
     constexpr double ItemHealCost = 0.020;
+    constexpr double SpecialMedicineCost = 0.020;
     constexpr double DefenceCost = 0.070;
     constexpr double FleeCost = 0.120;
     constexpr double SetupCost = 0.001;
@@ -202,9 +203,9 @@ double EnhancedCostCalculator::getActionCost(int action) {
         case BattleEmulator::SPECIAL_ANTIDOTE:
             return AntidoteCost;
         case BattleEmulator::SPECIAL_MEDICINE:
-            return ItemHealCost;
+            return SpecialMedicineCost;
         case BattleEmulator::WOOSH_ALLY:
-            return DamageSpellCost;
+            return 0.120;
         default:
             return FleeCost; // Default moderate penalty
     }
