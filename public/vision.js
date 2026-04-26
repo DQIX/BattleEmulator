@@ -1649,7 +1649,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return false;
     }
 
-    function acceptCandidate(candidate) {
+    function acceptCandidate(candidate, matches) {
         // ano.png: preActionリセット、actionTaken=true、slept=false のみ
         if (candidate && candidate.kind === "ano") {
             state.preAction = -1;
@@ -1659,8 +1659,18 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
 
         if (!candidate || candidate.kind !== "action") {
-            if (Date.now() - state.lastDetectionAt > 5000) {
+            const now = Date.now();
+            const elapsed = now - state.lastDetectionAt;
+            // C#移植: (currentTime - LastDetection) > 閾値 && lastHit1 == ""
+            // lastHit1 == "" 相当 = mainスロットでテンプレートが閾値未満（未検出）
+            const mainMatch = matches && matches.main ? matches.main : null;
+            const noTemplateDetected = !mainMatch || mainMatch.score < TEMPLATE_THRESHOLD;
+            if (elapsed > 3000 && noTemplateDetected) {
                 state.preAction = -1;
+            }
+            // C#移植: 一定時間行動未検出でsleptをリセット（C#は4秒、ここでは3秒に統一）
+            if (elapsed > 3000) {
+                state.slept = false;
             }
             // C#: else節でActionIndex==0ならActionTakenリセット
             if (state.actionIndex === 0) {
@@ -1670,7 +1680,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
 
         if (candidate.actionId === state.preAction) {
-            state.lastDetectionAt = Date.now();
+            // 同一アクション検知中はタイマーをリセットしない
+            // → nullが3秒続いたときだけpreActionがクリアされる
             // C#: action==preActionのとき ActionIndex==0ならActionTakenリセット
             if (state.actionIndex === 0) {
                 state.actionTaken = false;
@@ -2113,7 +2124,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                         return;
                     }
                     if (!maybeResetFromCombo(candidate)) {
-                        acceptCandidate(candidate);
+                        acceptCandidate(candidate, matches);
                     }
                 } catch (error) {
                     if (state.matcherKind === "webgpu") {
