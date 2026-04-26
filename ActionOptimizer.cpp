@@ -67,6 +67,7 @@ namespace {
     constexpr int DFS_BRANCH_LIMIT = 10;
     constexpr int CRITICAL_SCAN_WIDTH = 24;
     constexpr int CRITICAL_BEAM_WIDTH = 768;
+    constexpr auto SHORTENING_BUDGET = std::chrono::milliseconds(35);
 
 #if defined(BattleEmulatorLV19)
     constexpr int ALLY_CRITICAL_THRESHOLD = 500;
@@ -474,6 +475,26 @@ namespace {
         return false;
     }
 
+    bool runIterativeShortSearch(SearchContext &context, const Genome &initialGenome,
+                                 int firstTargetTurn, int lastTargetTurn) {
+        for (int targetTurn = firstTargetTurn;
+             targetTurn <= lastTargetTurn &&
+             Clock::now() < context.deadline &&
+             context.nodesVisited < context.nodeBudget; ++targetTurn) {
+            context.visitedDepth.clear();
+            context.timedOut = false;
+            if (depthFirstSearch(context, initialGenome, targetTurn - initialGenome.processed)) {
+                if (context.bestIsSolution && context.bestGenome.turn - 1 <= targetTurn) {
+                    return true;
+                }
+            }
+            if (context.timedOut) {
+                return false;
+            }
+        }
+        return false;
+    }
+
     Genome runLegacyBestFirst(const Player players[2], uint64_t seed, int turns, int maxGenerations,
                               int actions[350], uint32_t &legacyNodesUsed) {
         const auto enemyMaxHp = static_cast<double>(players[1].maxHp);
@@ -695,25 +716,21 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
     runCriticalBeam(context, initialGenome, 24);
     if (context.bestIsSolution) {
+        const int bestTargetTurn = context.bestGenome.turn - 1;
+        if (bestTargetTurn > turns + 1) {
+            const auto originalDeadline = context.deadline;
+            context.deadline = std::min(context.deadline, Clock::now() + SHORTENING_BUDGET);
+            runIterativeShortSearch(context, initialGenome, turns + 1, bestTargetTurn - 1);
+            context.deadline = originalDeadline;
+        }
         Node_Used = static_cast<uint32_t>(context.nodesVisited);
         return context.bestGenome;
     }
 
     const int firstTargetLimit = std::min(turns + 24, 99);
-    for (int targetTurn = turns + 1;
-         targetTurn < firstTargetLimit &&
-         Clock::now() < context.deadline &&
-         context.nodesVisited < context.nodeBudget; ++targetTurn) {
-        context.visitedDepth.clear();
-        context.timedOut = false;
-        if (depthFirstSearch(context, initialGenome, targetTurn - turns)) {
-            if (context.bestIsSolution && context.bestGenome.turn - 1 <= targetTurn) {
-                break;
-            }
-        }
-        if (context.timedOut) {
-            break;
-        }
+    if (runIterativeShortSearch(context, initialGenome, turns + 1, firstTargetLimit - 1)) {
+        Node_Used = static_cast<uint32_t>(context.nodesVisited);
+        return context.bestGenome;
     }
 
     const int rolloutLimit = maxGenerations <= 0 ? 256 : std::clamp(maxGenerations / 32, 64, 512);
@@ -730,23 +747,9 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
     }
 
     const int currentBestTurn = context.bestIsSolution ? context.bestGenome.turn - 1 : std::min(turns + 24, 99);
-    for (int targetTurn = turns + 1;
-         targetTurn < currentBestTurn &&
-         Clock::now() < context.deadline &&
-         context.nodesVisited < context.nodeBudget; ++targetTurn) {
-        context.visitedDepth.clear();
-        context.timedOut = false;
-        if (depthFirstSearch(context, initialGenome, targetTurn - turns)) {
-            if (context.bestIsSolution && context.bestGenome.turn - 1 <= targetTurn) {
-                break;
-            }
-        }
-        if (context.timedOut) {
-            break;
-        }
-    }
+    runIterativeShortSearch(context, initialGenome, turns + 1, currentBestTurn - 1);
 
-    Node_Used = static_cast<uint32_t>(context.visitedDepth.size());
+    Node_Used = static_cast<uint32_t>(context.nodesVisited);
 
     if (context.bestIsSolution) {
         return context.bestGenome;
