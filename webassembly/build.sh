@@ -55,9 +55,6 @@ SRC_FILES=(
   camera.cpp
   debug.cpp
   ActionOptimizer.cpp
-  EnhancedCostCalculator.cpp
-  EnhancedHashCalculator.cpp
-  EnhancedHeapQueue.cpp
   InputBuilder.cpp
 )
 
