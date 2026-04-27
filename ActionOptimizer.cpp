@@ -40,7 +40,7 @@ namespace {
          }},
     };
 
-    const int ACTION_TABLE_SIZE = static_cast<int>(sizeof(ACTION_TABLE) / sizeof(ACTION_TABLE[0]));
+    const int ACTION_TABLE_SIZE = static_cast<int>(std::size(ACTION_TABLE));
     constexpr int MAX_ACTIONS = 350;
     constexpr int MAX_EXTRA_TURNS = 35;
     constexpr int MAX_BRANCHING = ACTION_TABLE_SIZE;
@@ -49,15 +49,15 @@ namespace {
     constexpr int NO_SOLUTION = INT_MAX;
 
     struct SearchState {
-        Player ally{};
-        Player enemy{};
+        Player ally;
+        Player enemy;
         int position = 1;
         uint64_t nowState = 0;
         int processedTurns = 0;
     };
 
     struct Candidate {
-        SearchState state{};
+        SearchState state;
         int action = BattleEmulator::ATTACK_ALLY;
         int damage = 0;
         int score = INT_MIN;
@@ -72,9 +72,7 @@ namespace {
     }
 
     inline void clearActionTail(int actions[MAX_ACTIONS], const int startIndex) {
-        for (int i = startIndex; i < MAX_ACTIONS; ++i) {
-            actions[i] = -1;
-        }
+        actions[startIndex] = -1;
     }
 
     inline int actionPriority(const int action) {
