@@ -29,8 +29,8 @@ done
 # ------------------------------------------------------------
 declare -A BRANCH_VARIANTS
 
-BRANCH_VARIANTS[bilyouma_new_arugo]="
-bilyouma_v6:-DBattleEmulatorLV15=1 -DMULTITHREADING=1
+BRANCH_VARIANTS[bilyouma_new_arugo_v8]="
+bilyouma_v8:-DBattleEmulatorLV15=1 -DMULTITHREADING=1
 "
 
 
