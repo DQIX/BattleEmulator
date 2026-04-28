@@ -473,11 +473,19 @@ function computeRealSecondsScaled(parsed) {
   return BigInt(totalSeconds) * SEED_TIME_SCALE;
 }
 
-function computeSeedDriftText(seed, parsed) {
+function computeSeedDriftScaled(seed, parsed) {
   const seedSecondsScaled = computeSeedSecondsScaled(seed);
   const realSecondsScaled = computeRealSecondsScaled(parsed);
-  const driftScaled = realSecondsScaled - seedSecondsScaled;
+  return realSecondsScaled - seedSecondsScaled;
+}
+
+function computeSeedDriftText(seed, parsed) {
+  const driftScaled = computeSeedDriftScaled(seed, parsed);
   return formatScaledSeconds(driftScaled, SEED_TIME_SCALE);
+}
+
+function scaledSecondsToNumber(scaledValue, scale) {
+  return Number(scaledValue) / Number(scale);
 }
 
 function setSeedValues(seedText, parsedTime) {
@@ -900,12 +908,15 @@ function shouldApplyAutoTimerCorrection(parsed, rawInput, nowPerf = performance.
   return extractInputTimeText(rawInput) === state.autoTimerLastUse.timeText;
 }
 
-function applySearchResultAutoTimerCorrection(parsed) {
+function applySearchResultAutoTimerCorrection(parsed, seedText) {
   const lastUse = state.autoTimerLastUse;
   if (!lastUse) {
     return false;
   }
-  const totalSeconds = parsedToTotalSeconds(parsed) + normalizeOffsetSeconds(state.offsetSeconds);
+  const seed = BigInt(seedText);
+  const driftSeconds = scaledSecondsToNumber(computeSeedDriftScaled(seed, parsed), SEED_TIME_SCALE);
+  const totalSeconds =
+    parsedToTotalSeconds(parsed) + normalizeOffsetSeconds(state.offsetSeconds) - driftSeconds;
   setAutoTimerAnchorSeconds(totalSeconds, lastUse.perfNow);
   return true;
 }
@@ -1148,7 +1159,7 @@ async function runSearch() {
 
     const driftText = computeSeedDriftText(BigInt(foundSeed), parsed);
     if (shouldCorrectAutoTimer) {
-      applySearchResultAutoTimerCorrection(parsed);
+      applySearchResultAutoTimerCorrection(parsed, foundSeed);
     }
     recordSeedMemo(parsed, input, driftText);
 
