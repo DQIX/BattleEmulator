@@ -655,7 +655,8 @@ function scheduleAutoTimerTick() {
   if (!state.autoTimerAnchor) {
     return;
   }
-  const delay = 1000 - (Math.floor(performance.now()) % 1000);
+  const elapsedMs = Math.max(0, performance.now() - state.autoTimerAnchor.perfNow);
+  const delay = 1000 - (Math.floor(elapsedMs) % 1000);
   state.autoTimerTickHandle = setTimeout(scheduleAutoTimerTick, Math.max(80, delay));
 }
 
