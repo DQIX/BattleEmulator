@@ -61,7 +61,8 @@ const state = {
   urlOverridesAppliedNonEmu: false,
   urlOverridesAppliedEmu: false,
   autoTimerAnchor: null,
-  autoTimerTickHandle: null
+  autoTimerTickHandle: null,
+  autoTimerAppliedPrefix: ""
 };
 
 const logLines = [];
@@ -520,6 +521,20 @@ function setOffsetSeconds(value) {
     ui.offsetSeconds.value = String(normalized);
   }
   localStorage.setItem(OFFSET_STORAGE_KEY, String(normalized));
+  if (
+    state.autoTimerAnchor &&
+    state.autoTimerAppliedPrefix &&
+    ui.actionInput &&
+    ui.actionInput.value.startsWith(state.autoTimerAppliedPrefix)
+  ) {
+    const appliedSeconds = computeAutoTimerAppliedSeconds();
+    if (appliedSeconds !== null) {
+      const suffix = ui.actionInput.value.slice(state.autoTimerAppliedPrefix.length);
+      ui.actionInput.value = `${formatActionTime(appliedSeconds)}${suffix}`;
+      state.autoTimerAppliedPrefix = ui.actionInput.value;
+    }
+  }
+  updateAutoTimerPreview();
 }
 
 function loadSearchRangeSeconds() {
@@ -580,6 +595,14 @@ function computeAutoTimerSeconds(nowPerf = performance.now()) {
   return state.autoTimerAnchor.totalSeconds + elapsedSeconds;
 }
 
+function computeAutoTimerAppliedSeconds(nowPerf = performance.now()) {
+  const seconds = computeAutoTimerSeconds(nowPerf);
+  if (seconds === null) {
+    return null;
+  }
+  return seconds - normalizeOffsetSeconds(state.offsetSeconds);
+}
+
 function updateAutoTimerButtons() {
   const hasAnchor = Boolean(state.autoTimerAnchor);
   if (ui.autoTimerUseButton) {
@@ -594,7 +617,7 @@ function updateAutoTimerButtons() {
 }
 
 function updateAutoTimerPreview() {
-  const seconds = computeAutoTimerSeconds();
+  const seconds = computeAutoTimerAppliedSeconds();
   if (ui.autoTimerPreview) {
     ui.autoTimerPreview.textContent = formatTimerPreview(seconds);
   }
@@ -623,6 +646,7 @@ function setAutoTimerAnchor(parsed, perfNow) {
     totalSeconds: parsedToTotalSeconds(parsed),
     perfNow
   };
+  state.autoTimerAppliedPrefix = "";
   setAutoTimerResetConfirmVisible(false);
   setAutoTimerStatusText(getAutoTimerStatusReadyText());
   scheduleAutoTimerTick();
@@ -630,10 +654,19 @@ function setAutoTimerAnchor(parsed, perfNow) {
 
 function clearAutoTimerAnchor() {
   state.autoTimerAnchor = null;
+  state.autoTimerAppliedPrefix = "";
   setAutoTimerResetConfirmVisible(false);
   stopAutoTimerTicker();
   updateAutoTimerPreview();
   setAutoTimerStatusText(getAutoTimerStatusIdleText());
+}
+
+function extractActionSuffix(text) {
+  const tokens = text.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length <= 3) {
+    return "";
+  }
+  return tokens.slice(3).join(" ");
 }
 
 function focusActionInputAtTop() {
@@ -802,6 +835,9 @@ function setActiveEmulator(index) {
   if (!emulator) {
     return;
   }
+  if (state.active && state.active !== emulator && state.autoTimerAnchor) {
+    clearAutoTimerAnchor();
+  }
   state.active = emulator;
   ui.emulatorMeta.textContent = `${emulator.branch} :: ${emulator.module}`;
   appendLog(`selected emulator ${emulator.label}`);
@@ -888,7 +924,9 @@ async function runSearch() {
   }
 
   const threads = Math.max(1, Math.min(32, parseIntValue(ui.threads) || 4));
-  const input = ui.actionInput.value.trim();
+  const rawInput = ui.actionInput.value;
+  const input = rawInput.trim();
+  const useAppliedOffset = Boolean(state.autoTimerAppliedPrefix) && rawInput.startsWith(state.autoTimerAppliedPrefix);
 
   if (!input) {
     appendLog("input is empty");
@@ -906,7 +944,7 @@ async function runSearch() {
     parsed.hours,
     parsed.minutes,
     parsed.seconds,
-    state.offsetSeconds
+    useAppliedOffset ? 0 : state.offsetSeconds
   );
   const ranges = splitRange(start, end, threads);
   if (!ranges.length) {
@@ -1128,12 +1166,13 @@ function initPointerSafety() {
 }
 
 function applyAutoTimerToInput() {
-  const predictedSeconds = computeAutoTimerSeconds();
+  const predictedSeconds = computeAutoTimerAppliedSeconds();
   if (predictedSeconds === null) {
     return;
   }
-  ui.actionInput.value = `${formatActionTime(predictedSeconds)} `;
-  setOffsetSeconds(0);
+  const suffix = extractActionSuffix(ui.actionInput.value);
+  ui.actionInput.value = `${formatActionTime(predictedSeconds)}${suffix ? ` ${suffix}` : " "}`;
+  state.autoTimerAppliedPrefix = `${formatActionTime(predictedSeconds)} `;
   setAutoTimerResetConfirmVisible(false);
 }
 
