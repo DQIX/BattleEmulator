@@ -9,6 +9,7 @@ const ui = {
   runButton: document.getElementById("runButton"),
   autoTimerPreview: document.getElementById("autoTimerPreview"),
   autoTimerStatus: document.getElementById("autoTimerStatus"),
+  autoTimerStartButton: document.getElementById("autoTimerStartButton"),
   autoTimerUseButton: document.getElementById("autoTimerUseButton"),
   autoTimerResetButton: document.getElementById("autoTimerResetButton"),
   autoTimerResetConfirm: document.getElementById("autoTimerResetConfirm"),
@@ -36,6 +37,7 @@ const OFFSET_STORAGE_KEY = "dq9OffsetSeconds";
 const DEFAULT_SEARCH_RANGE_SECONDS = 6;
 const SEARCH_RANGE_STORAGE_KEY = "dq9SearchRangeSeconds";
 const AUTO_TIMER_MAX_SECONDS = 30 * 60 * 60;
+const AUTO_TIMER_CORRECTION_LIMIT_MS = 4 * 60 * 1000;
 const SEED_MEMO_STORAGE_KEY = "dq9SeedMemoList";
 const SEED_MEMO_LIMIT = 200;
 const SEED_TIME_SCALE = 100n;
@@ -62,7 +64,8 @@ const state = {
   urlOverridesAppliedEmu: false,
   autoTimerAnchor: null,
   autoTimerTickHandle: null,
-  autoTimerAppliedPrefix: ""
+  autoTimerAppliedPrefix: "",
+  autoTimerLastUse: null
 };
 
 const logLines = [];
@@ -112,6 +115,14 @@ function parsedToTotalSeconds(parsed) {
     return 0;
   }
   return parsed.hours * 3600 + parsed.minutes * 60 + parsed.seconds;
+}
+
+function extractInputTimeText(text) {
+  const tokens = String(text || "").trim().split(/\s+/).filter(Boolean);
+  if (tokens.length < 3) {
+    return "";
+  }
+  return tokens.slice(0, 3).join(" ");
 }
 
 function formatDatePartsUTC(date) {
@@ -530,8 +541,12 @@ function setOffsetSeconds(value) {
     const appliedSeconds = computeAutoTimerAppliedSeconds();
     if (appliedSeconds !== null) {
       const suffix = ui.actionInput.value.slice(state.autoTimerAppliedPrefix.length);
-      ui.actionInput.value = `${formatActionTime(appliedSeconds)}${suffix}`;
-      state.autoTimerAppliedPrefix = ui.actionInput.value;
+      const timeText = formatActionTime(appliedSeconds);
+      ui.actionInput.value = `${timeText}${suffix}`;
+      state.autoTimerAppliedPrefix = `${timeText} `;
+      if (state.autoTimerLastUse) {
+        state.autoTimerLastUse.timeText = timeText;
+      }
     }
   }
   updateAutoTimerPreview();
@@ -605,6 +620,9 @@ function computeAutoTimerAppliedSeconds(nowPerf = performance.now()) {
 
 function updateAutoTimerButtons() {
   const hasAnchor = Boolean(state.autoTimerAnchor);
+  if (ui.autoTimerStartButton) {
+    ui.autoTimerStartButton.disabled = state.running;
+  }
   if (ui.autoTimerUseButton) {
     ui.autoTimerUseButton.disabled = !hasAnchor || state.running;
   }
@@ -641,9 +659,9 @@ function scheduleAutoTimerTick() {
   state.autoTimerTickHandle = setTimeout(scheduleAutoTimerTick, Math.max(80, delay));
 }
 
-function setAutoTimerAnchor(parsed, perfNow) {
+function setAutoTimerAnchorSeconds(totalSeconds, perfNow) {
   state.autoTimerAnchor = {
-    totalSeconds: parsedToTotalSeconds(parsed),
+    totalSeconds,
     perfNow
   };
   setAutoTimerResetConfirmVisible(false);
@@ -651,9 +669,18 @@ function setAutoTimerAnchor(parsed, perfNow) {
   scheduleAutoTimerTick();
 }
 
+function setAutoTimerAnchor(parsed, perfNow) {
+  setAutoTimerAnchorSeconds(parsedToTotalSeconds(parsed), perfNow);
+}
+
+function startManualAutoTimer(perfNow = performance.now()) {
+  setAutoTimerAnchorSeconds(normalizeOffsetSeconds(state.offsetSeconds), perfNow);
+}
+
 function clearAutoTimerAnchor() {
   state.autoTimerAnchor = null;
   state.autoTimerAppliedPrefix = "";
+  state.autoTimerLastUse = null;
   setAutoTimerResetConfirmVisible(false);
   stopAutoTimerTicker();
   updateAutoTimerPreview();
@@ -862,6 +889,26 @@ function parseInput(text) {
   };
 }
 
+function shouldApplyAutoTimerCorrection(parsed, rawInput, nowPerf = performance.now()) {
+  if (!parsed || !state.autoTimerLastUse) {
+    return false;
+  }
+  if (nowPerf - state.autoTimerLastUse.perfNow > AUTO_TIMER_CORRECTION_LIMIT_MS) {
+    return false;
+  }
+  return extractInputTimeText(rawInput) === state.autoTimerLastUse.timeText;
+}
+
+function applySearchResultAutoTimerCorrection(parsed) {
+  const lastUse = state.autoTimerLastUse;
+  if (!lastUse) {
+    return false;
+  }
+  const totalSeconds = parsedToTotalSeconds(parsed) + normalizeOffsetSeconds(state.offsetSeconds);
+  setAutoTimerAnchorSeconds(totalSeconds, lastUse.perfNow);
+  return true;
+}
+
 function applyLanguage(lang) {
   const config = window.APP_CONFIG || {};
   const dictionary = config.i18n ? config.i18n[lang] : null;
@@ -935,7 +982,7 @@ async function runSearch() {
     return;
   }
   const runStartedAtPerf = performance.now();
-  setAutoTimerAnchor(parsed, runStartedAtPerf);
+  const shouldCorrectAutoTimer = shouldApplyAutoTimerCorrection(parsed, input, runStartedAtPerf);
 
   const { start, end } = computeSeedRange(
     parsed.hours,
@@ -1050,7 +1097,9 @@ async function runSearch() {
     setSeedValues(foundSeed, parsed);
     setSeedState("found", totalFound);
     if (totalFound === 1) {
-      setAutoTimerAnchor(parsed, runStartedAtPerf);
+      if (shouldCorrectAutoTimer) {
+        applySearchResultAutoTimerCorrection(parsed);
+      }
       const driftText = computeSeedDriftText(BigInt(foundSeed), parsed);
       recordSeedMemo(parsed, input, driftText);
     }
@@ -1168,13 +1217,21 @@ function applyAutoTimerToInput() {
     return;
   }
   const suffix = extractActionSuffix(ui.actionInput.value);
-  ui.actionInput.value = `${formatActionTime(predictedSeconds)}${suffix ? ` ${suffix}` : " "}`;
-  state.autoTimerAppliedPrefix = `${formatActionTime(predictedSeconds)} `;
+  const perfNow = performance.now();
+  const timeText = formatActionTime(predictedSeconds);
+  ui.actionInput.value = `${timeText}${suffix ? ` ${suffix}` : " "}`;
+  state.autoTimerAppliedPrefix = `${timeText} `;
+  state.autoTimerLastUse = {
+    perfNow,
+    timeText
+  };
   setAutoTimerResetConfirmVisible(false);
 }
 
 ui.emulatorSelect.addEventListener("change", (event) => {
   setActiveEmulator(Number(event.target.value));
+  ui.actionInput.value = "";
+  state.autoTimerAppliedPrefix = "";
 });
 
 ui.runButton.addEventListener("click", () => {
@@ -1190,14 +1247,14 @@ ui.actionInput.addEventListener("keydown", (event) => {
   }
 });
 
+if (ui.autoTimerStartButton) {
+  ui.autoTimerStartButton.addEventListener("click", () => {
+    startManualAutoTimer();
+  });
+}
+
 if (ui.autoTimerUseButton) {
   ui.autoTimerUseButton.addEventListener("click", () => {
-    if (isPointerUnsafe()) {
-      setAutoTimerStatusText(
-        t("autoTimerStatusUnsafe", "Pointer just re-entered the window. Wait 1.5s and try again.")
-      );
-      return;
-    }
     applyAutoTimerToInput();
   });
 }
