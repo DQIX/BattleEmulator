@@ -9,21 +9,6 @@
 - .interface-design/.claude/skills/interface-design/SKILL.md
 を読むこと。
 
-# フロントエンドコード
-- publicから探すこと。
-
-public/app.js
-public/index.html
-
-# テーマ
-- フロントエンドの新uiは、テーマに沿うこと
-
-# 言語設定
-- public/index.htmlの言語コンフィグは追加時に適切に変更すること。
-
-
-## Mandatory Rules
-
 * Read this file at the start of every chat.
 * Only solve the requested problem. Do not do extra work.
 * However, for creative tasks, it is acceptable to implement features other than those requested.
@@ -66,6 +51,10 @@ get_symbol_info
 rename_refactoring
 execute_terminal_command
 get_repositories
+
+# build command
+cmake -S . -B cmake-build-release2 -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build cmake-build-release2 --target rbe_lv15_sp22_v2 --config Release
 
 # agents.md End
 If the context has been injected up to this point, do not reread AGENTS.md file

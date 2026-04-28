@@ -145,8 +145,33 @@
               visionCopyMd: "Copy markdown",
               visionCopyCsv: "Copy CSV",
               memoCopyInput: "Copy input"
+              memoCopyInput: "Copy input",
+              autoTimer: "Auto Timer",
+              autoTimerHint: "Seed=1 time assist from the last confirmed run",
+              autoTimerStart: "Start Timer",
+              autoTimerLive: "Predicted Timer",
+              autoTimerUse: "Use Current Time",
+              autoTimerReset: "Reset",
+              autoTimerConfirm: "Confirm Reset",
+              autoTimerCancel: "Cancel",
+              autoTimerResetPrompt: "Disable the current timer anchor?",
+              autoTimerStatusIdle: "No timer anchor yet. Run one confirmed search first.",
+              autoTimerStatusReady: "Preview is locked to performance.now() and ignores wall-clock changes.",
+              autoTimerStatusUnsafe: "Pointer just re-entered the window. Wait 1.5s and try again."
             },
             ja: {
+              autoTimer: "自動タイマー",
+              autoTimerHint: "直前の確定検索を基準にした seed=1 時間補助",
+              autoTimerStart: "タイマー開始",
+              autoTimerLive: "推定タイマー",
+              autoTimerUse: "今の時刻を使う",
+              autoTimerReset: "リセット",
+              autoTimerConfirm: "リセット確定",
+              autoTimerCancel: "キャンセル",
+              autoTimerResetPrompt: "現在のタイマー基準を無効化しますか？",
+              autoTimerStatusIdle: "まだタイマー基準がありません。まず1回、確定検索を実行してください。",
+              autoTimerStatusReady: "表示は performance.now() 基準で進み、PC時刻を変えても影響を受けません。",
+              autoTimerStatusUnsafe: "ポインタがウィンドウに戻ったばかりです。1.5秒待ってから操作してください。",
               title: "DQ9 Battle Emulator",
               subtitle: "RTA向けWebAssemblyシードコンソール",
               visionTitle: "映像認識コンソール",
@@ -252,6 +277,30 @@
       </header>
 
       <main class="grid">
+        <section class="panel panel-auto-timer" style="--delay: 0ms">
+          <div class="panel-header">
+            <h2 data-i18n="autoTimer">Auto Timer</h2>
+            <span class="hint" data-i18n="autoTimerHint">Seed=1 time assist from the last confirmed run</span>
+          </div>
+          <div class="auto-timer-layout">
+            <div class="auto-timer-preview-wrap">
+              <div class="auto-timer-label" data-i18n="autoTimerLive">Predicted Timer</div>
+              <div id="autoTimerPreview" class="auto-timer-preview" aria-live="polite">--:--:--</div>
+            </div>
+            <div class="auto-timer-actions">
+              <button id="autoTimerStartButton" class="run-button auto-timer-start-button" type="button" data-i18n="autoTimerStart">Start Timer</button>
+              <button id="autoTimerUseButton" class="run-button auto-timer-use-button" type="button" data-i18n="autoTimerUse">Use Current Time</button>
+              <button id="autoTimerResetButton" class="run-button auto-timer-reset-button" type="button" data-i18n="autoTimerReset">Reset</button>
+            </div>
+            <div id="autoTimerResetConfirm" class="auto-timer-confirm is-hidden" aria-live="polite">
+              <span class="auto-timer-confirm-text" data-i18n="autoTimerResetPrompt">Disable the current timer anchor?</span>
+              <button id="autoTimerResetConfirmButton" class="run-button auto-timer-confirm-button" type="button" data-i18n="autoTimerConfirm">Confirm Reset</button>
+              <button id="autoTimerResetCancelButton" class="run-button auto-timer-cancel-button" type="button" data-i18n="autoTimerCancel">Cancel</button>
+            </div>
+            <div id="autoTimerStatus" class="auto-timer-status" data-i18n="autoTimerStatusIdle">No timer anchor yet. Run one confirmed search first.</div>
+          </div>
+        </section>
+
         <section class="panel panel-emulator" style="--delay: 0ms">
           <div class="panel-header">
             <h2 data-i18n="emulator">Emulator</h2>

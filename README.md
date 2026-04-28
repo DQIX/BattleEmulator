@@ -208,6 +208,12 @@ or equivalently:<br>
 <br>
 This approximation makes the constant 0.125 a clean reciprocal representation of the upper timer frequency, while 7.920 represents the empirically observed effective rate in real conditions.<br>
 
+### Why is brute force used to identify the seed?
+As explained above, this repository uses brute force with early exits to identify the seed efficiently.  
+The RNG table is based on a 64-bit LCG, which makes approaches such as rainbow tables impractical. Sequential storage access would become a bottleneck, and any bug fix or implementation change would require rebuilding the entire table. This results in poor maintainability and inefficient workflows.  
+In addition, there are approximately 519,045 possible seed candidates per second. If these were quantized into lookup tables matched against damage values, the required storage size would easily reach the terabyte range.  
+Because modern CPUs can process brute force searches extremely quickly, direct enumeration with aggressive early termination is currently the most practical, maintainable, and fastest solution.  
+
 ### Why is the searcher algorithm so slow?
 The Battle Emulator can execute 13 to 17 million times per second, but the v4 and v6 searcher algorithms are based on a very slow priority queue.<br>
 Even with optimizations such as malloc and fixed memory allocation using LinearIdPool.h, which is present in some of the source code, the extremely slow speed cannot be overcome.<br>
@@ -221,6 +227,28 @@ Although many battle mechanics are shared and could technically be combined into
 By isolating one boss per branch, each boss can maintain its own constexpr values, constants, action selection logic, and argument parser independently. Each branch effectively becomes a self-contained black box.<br>
 This separation greatly simplifies maintenance, reduces unintended cross-effects between bosses, and allows boss-specific optimizations without increasing overall structural complexity.<br>
 The emulator focuses strictly on precise RNG position tracking and damage calculation. By ignoring unrelated game systems, it preserves both compactness and execution speed.<br>
+
+### Why not use machine learning?
+
+Machine learning is mainly useful when you need to make good decisions without knowing the future.  
+
+That is not the case here. In this project, future outcomes can be simulated exactly, so the problem is better treated as combinatorial optimization: searching a huge number of possible action sequences and finding the fastest winning route. Because the future is known through simulation, search algorithms are a much better fit than machine learning.  
+
+### Why not use beam search?
+
+Beam search throws away branches early to keep the search fast. That sounds good, but it can remove paths that look weak now and become very strong later, such as routes that depend on future critical hits or favorable RNG swings.  
+
+Because of this, beam search could not outperform A* in practice, so it is not used.  
+
+### Why not use memory reading on real hardware?
+
+Because it would be cheating.  
+
+### Why use C++ instead of Rust or C?
+ 
+Because the project owner knows C++ best.  
+
+It also provides the speed and low-level control needed for heavy optimization, so it was the practical choice for development.  
 
 ## Glossary
 
