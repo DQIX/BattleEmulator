@@ -885,7 +885,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position)++; //0x02157f58 偽回避
             baseDamage = FUN_021e8458_typeD(position, 5, 22);
             tmp = baseDamage * players[defender].defence;
-#if defined(lv16_sp22_hagane_atk106_def86) || defined(lv16_sp22_tamahagane_atk123_def86)
+#if defined(lv16_sp22_hagane_atk106_def86) || defined(lv16_sp22_tamahagane_atk123_def86) || defined(lv16_sp22_hagane_atk106)
             tmp *= 0.8;
 #endif
             baseDamage = static_cast<int>((tmp));
