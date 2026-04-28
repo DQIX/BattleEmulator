@@ -594,8 +594,11 @@ function updateAutoTimerButtons() {
 }
 
 function updateAutoTimerPreview() {
+  const seconds = computeAutoTimerSeconds();
+  if (seconds !== null && ui.actionInput) {
+    ui.actionInput.value = `${formatActionTime(seconds)} `;
+  }
   if (ui.autoTimerPreview) {
-    const seconds = computeAutoTimerSeconds();
     ui.autoTimerPreview.textContent = formatTimerPreview(seconds);
   }
   updateAutoTimerButtons();
@@ -634,14 +637,6 @@ function clearAutoTimerAnchor() {
   stopAutoTimerTicker();
   updateAutoTimerPreview();
   setAutoTimerStatusText(getAutoTimerStatusIdleText());
-}
-
-function extractActionSuffix(text) {
-  const tokens = text.trim().split(/\s+/).filter(Boolean);
-  if (tokens.length <= 3) {
-    return "";
-  }
-  return tokens.slice(3).join(" ");
 }
 
 function focusActionInputAtTop() {
@@ -1135,21 +1130,14 @@ function initPointerSafety() {
   });
 }
 
-function applyAutoTimerToInputAndRun() {
+function applyAutoTimerToInput() {
   const predictedSeconds = computeAutoTimerSeconds();
   if (predictedSeconds === null) {
     return;
   }
-  const suffix = extractActionSuffix(ui.actionInput.value);
-  ui.actionInput.value = `${formatActionTime(predictedSeconds)}${suffix ? ` ${suffix}` : ""}`;
+  ui.actionInput.value = `${formatActionTime(predictedSeconds)} `;
   setOffsetSeconds(0);
   setAutoTimerResetConfirmVisible(false);
-  focusActionInputAtTop();
-  if (!suffix) {
-    appendLog("input needs time and actions");
-    return;
-  }
-  runSearch();
 }
 
 ui.emulatorSelect.addEventListener("change", (event) => {
@@ -1177,7 +1165,7 @@ if (ui.autoTimerUseButton) {
       );
       return;
     }
-    applyAutoTimerToInputAndRun();
+    applyAutoTimerToInput();
   });
 }
 
