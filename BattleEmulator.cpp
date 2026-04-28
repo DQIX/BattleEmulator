@@ -401,7 +401,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
 #ifdef DEBUG2
         std::cout << "c: " << counterJ << ", " << (*position) << std::endl;
-        if ((*position) == 48) {
+        if ((*position) == 50) {
             std::cout << "!!" << std::endl;
         }
 #endif

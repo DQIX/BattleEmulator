@@ -22,7 +22,7 @@
 #include "SimpleParameterOptimizer.h"
 #endif
 
-namespace {
+namespace{
     // MinGW/GCC用のnoinline属性
 #ifndef NOINLINE
 #ifdef _MSC_VER
@@ -32,32 +32,33 @@ namespace {
 #endif
 #endif
 
-    int toint(char *string);
+    int toint(char* string);
 
     //void processResult(const Player *copiedPlayers, const uint64_t seed, std::string input);
 
-    std::string ltrim(const std::string &s);
+    std::string ltrim(const std::string& s);
 
-    std::string rtrim(const std::string &s);
+    std::string rtrim(const std::string& s);
 
-    std::string trim(const char *s);
+    std::string trim(const char* s);
 
-    std::string trim(const std::string &s);
+    std::string trim(const std::string& s);
 
-    bool isMatchStrWithTrim(const char *s1, const char *s2);
+    bool isMatchStrWithTrim(const char* s1, const char* s2);
 
-    void help(const char *program_name);
+    void help(const char* program_name);
 
-    bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads, bool Dropbug);
+    bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads,
+                       bool Dropbug);
 
     uint64_t BruteForceRequest(const Player copiedPlayers[2], int hours, int minutes, int seconds, int turns,
                                int aActions[350], int damages[350]);
 
-    void dumpTableMain(BattleResult &result1, Genome &genome, uint64_t seed, int turns);
+    void dumpTableMain(BattleResult& result1, Genome& genome, uint64_t seed, int turns);
 
-    void printHeader(std::stringstream &ss);
+    void printHeader(std::stringstream& ss);
 
-    std::pair<char, int> toABCint(const char *str);
+    std::pair<char, int> toABCint(const char* str);
 
     int foundSeeds = 0;
 
@@ -66,7 +67,7 @@ namespace {
     int foundTurn = 0;
     int foundTurnOffset = 0;
 
-    const char *version = "v8.0.6_vK_v2";
+    const char* version = "v8.0.6_vK_v2";
 
     std::stringstream performanceLogger = std::stringstream();
 
@@ -108,25 +109,25 @@ namespace {
      *
      * @param ss 出力先の文字列ストリームオブジェクト
      */
-    void printHeader(std::stringstream &ss) {
+    void printHeader(std::stringstream& ss){
         ss << std::left << std::setw(6) << "turn"
-                << std::setw(18) << "sp"
-                << std::setw(18) << "aAct"
-                << std::setw(18) << "eAct1"
-                << std::setw(18) << "eAct2"
-                << std::setw(6) << "aD"
-                << std::setw(6) << "eD1"
-                << std::setw(6) << "eD2"
-                << std::setw(6) << "ahp"
-                << std::setw(6) << "ehp"
-                << std::setw(6) << "amp"
-                << std::setw(6) << "ini"
+            << std::setw(18) << "sp"
+            << std::setw(18) << "aAct"
+            << std::setw(18) << "eAct1"
+            << std::setw(18) << "eAct2"
+            << std::setw(6) << "aD"
+            << std::setw(6) << "eD1"
+            << std::setw(6) << "eD2"
+            << std::setw(6) << "ahp"
+            << std::setw(6) << "ehp"
+            << std::setw(6) << "amp"
+            << std::setw(6) << "ini"
 #if defined(MINGW_BUILD)
-                << std::setw(6) << "DET"
-                << std::setw(6) << "TAB"
-                << std::setw(6) << "Sct"
+            << std::setw(6) << "DET"
+            << std::setw(6) << "TAB"
+            << std::setw(6) << "Sct"
 #endif
-                << "\n";
+            << "\n";
 #if defined(MINGW_BUILD)
         ss << std::string(135, '-') << "\n"; // 区切り線を出力
 #else
@@ -134,7 +135,7 @@ namespace {
 #endif
     }
 
-    std::string dumpTable(BattleResult &result, int32_t gene[350], int PastTurns);
+    std::string dumpTable(BattleResult& result, int32_t gene[350], int PastTurns);
 
     /**
      * バトル結果および対応するデータからテーブルを作成し、その内容を文字列として返します。
@@ -145,18 +146,18 @@ namespace {
      * @param PastTurns 結果の出力に含めない過去のターン数
      * @return 整形されたテーブルを表す文字列
      */
-    std::string dumpTable(BattleResult &result, int32_t gene[350], int PastTurns) {
+    std::string dumpTable(BattleResult& result, int32_t gene[350], int PastTurns){
         std::stringstream ss6;
         printHeader(ss6);
         int currentTurn = -1;
         int eDamage[2] = {-1, -1}, aDamage = -1;
         bool initiative_tmp, def_f = false;
         std::string eAction[2], aAction, sp, tmpState, DEFTurn1, specialChargeTurn1,
-                ahp2,
-                ehp2, amp2, poisonTurn1, SpeedTurn1, tmp_state;
+                    ahp2,
+                    ehp2, amp2, poisonTurn1, SpeedTurn1, tmp_state;
         auto counter = 0;
         // データのループ
-        for (int i = 0; i < result.position; ++i) {
+        for(int i = 0; i < result.position; ++i){
             auto action = result.actions[i];
             auto damage = result.damages[i];
             auto DEFTurn = result.BuffTurnss[i];
@@ -171,42 +172,42 @@ namespace {
             auto SpeedTurn = result.SpeedTurn[i];
             auto defenseFlag = result.defenseFlag[i];
             int amp = -1;
-            if (i >= 1) {
+            if(i >= 1){
                 amp = result.amp[i - 1];
             }
 
             auto special = gene[turn];
 
             std::string specialAction;
-            if (special != 0 && special != -1) {
+            if(special != 0 && special != -1){
                 specialAction = BattleEmulator::getActionName(special & 0x3ff);
             }
 
             // ターンが変わったら、前のターンのデータを出力
-            if (turn != currentTurn) {
-                if (currentTurn != -1) {
+            if(turn != currentTurn){
+                if(currentTurn != -1){
                     // 前のターンの出力
-                    if (turn > PastTurns) {
+                    if(turn > PastTurns){
                         ss6
-                                << std::left << std::setw(6) << (currentTurn + 1)
-                                << std::setw(18) << sp
-                                << std::setw(18) << aAction
-                                << std::setw(18) << eAction[0]
-                                << std::setw(18) << eAction[1]
-                                << std::setw(6) << aDamage
-                                << std::setw(6) << eDamage[0]
-                                << std::setw(6) << eDamage[1]
-                                << std::setw(6) << ahp2
-                                << std::setw(6) << ehp2
-                                << std::setw(6) << amp2
-                                << std::setw(6) << (initiative_tmp ? "yes" : "")
+                            << std::left << std::setw(6) << (currentTurn + 1)
+                            << std::setw(18) << sp
+                            << std::setw(18) << aAction
+                            << std::setw(18) << eAction[0]
+                            << std::setw(18) << eAction[1]
+                            << std::setw(6) << aDamage
+                            << std::setw(6) << eDamage[0]
+                            << std::setw(6) << eDamage[1]
+                            << std::setw(6) << ahp2
+                            << std::setw(6) << ehp2
+                            << std::setw(6) << amp2
+                            << std::setw(6) << (initiative_tmp ? "yes" : "")
 #if defined(MINGW_BUILD)
-                                << std::setw(6) << DEFTurn1
-                                << std::setw(6) << tmp_state
-                                << std::setw(6) << specialChargeTurn1
-                                << std::setw(11) << ""
+                            << std::setw(6) << DEFTurn1
+                            << std::setw(6) << tmp_state
+                            << std::setw(6) << specialChargeTurn1
+                            << std::setw(11) << ""
 #endif
-                                << "\n";
+                            << "\n";
                     }
                 }
                 // ターンの初期化
@@ -228,48 +229,49 @@ namespace {
             }
 
             // 敵か味方の行動を適切な変数に格納
-            if (isEnemy) {
+            if(isEnemy){
                 eAction[counter] = BattleEmulator::getActionName(action);
                 eDamage[counter] = damage;
                 counter++;
                 ahp2 = std::to_string(ahp1);
-
-            } else {
+            }
+            else{
                 ehp2 = std::to_string(ehp1);
                 amp2 = std::to_string(amp);
                 aAction = BattleEmulator::getActionName(action);
                 aDamage = damage;
-                if (DEFTurn >= 0) {
+                if(DEFTurn >= 0){
                     DEFTurn1 = std::to_string(DEFTurn);
                 }
-                if (poisonTurn >= 0) {
+                if(poisonTurn >= 0){
                     poisonTurn1 = std::to_string(poisonTurn);
                 }
 
-                if (SpeedTurn >= 0) {
+                if(SpeedTurn >= 0){
                     SpeedTurn1 = std::to_string(SpeedTurn);
                 }
-                if (specialChargeTurn > 0) {
+                if(specialChargeTurn > 0){
                     specialChargeTurn1 = std::to_string(specialChargeTurn);
                 }
                 initiative_tmp = initiative;
                 sp = specialAction;
 
-                if (state == BattleEmulator::TYPE_2A) {
+                if(state == BattleEmulator::TYPE_2A){
                     tmp_state = "A";
-                }else if (state == BattleEmulator::TYPE_2B) {
+                }
+                else if(state == BattleEmulator::TYPE_2B){
                     tmp_state = "B";
                 }
 
-                if (eAction[0] != "magic Burst" && eAction[1] != "magic Burst") {
-                    if (!initiative && (action == BattleEmulator::TURN_SKIPPED || action == BattleEmulator::PARALYSIS ||
-                                        action == BattleEmulator::SLEEPING)) {
+                if(eAction[0] != "magic Burst" && eAction[1] != "magic Burst"){
+                    if(!initiative && (action == BattleEmulator::TURN_SKIPPED || action == BattleEmulator::PARALYSIS ||
+                        action == BattleEmulator::SLEEPING)){
                         sp = "---------------";
                     }
-                    if ((action == BattleEmulator::CURE_SLEEPING || action == BattleEmulator::CURE_PARALYSIS)) {
+                    if((action == BattleEmulator::CURE_SLEEPING || action == BattleEmulator::CURE_PARALYSIS)){
                         sp = "---------------";
                     }
-                    if (!initiative && defenseFlag && action != BattleEmulator::DEFENCE) {
+                    if(!initiative && defenseFlag && action != BattleEmulator::DEFENCE){
                         sp = "Defense !Sleep";
                     }
                 }
@@ -277,34 +279,34 @@ namespace {
         }
 
         // 最後のターンのデータを出力
-        if (currentTurn != -1) {
+        if(currentTurn != -1){
             ss6
-                    << std::left << std::setw(6) << (currentTurn + 1)
-                    << std::setw(18) << sp
-                    << std::setw(18) << aAction
-                    << std::setw(18) << eAction[0]
-                    << std::setw(18) << eAction[1]
-                    << std::setw(6) << aDamage
-                    << std::setw(6) << eDamage[0]
-                    << std::setw(6) << eDamage[1]
-                    << std::setw(6) << ahp2
-                    << std::setw(6) << ehp2
-                    << std::setw(6) << amp2
-                    << std::setw(6) << (initiative_tmp ? "yes" : "")
+                << std::left << std::setw(6) << (currentTurn + 1)
+                << std::setw(18) << sp
+                << std::setw(18) << aAction
+                << std::setw(18) << eAction[0]
+                << std::setw(18) << eAction[1]
+                << std::setw(6) << aDamage
+                << std::setw(6) << eDamage[0]
+                << std::setw(6) << eDamage[1]
+                << std::setw(6) << ahp2
+                << std::setw(6) << ehp2
+                << std::setw(6) << amp2
+                << std::setw(6) << (initiative_tmp ? "yes" : "")
 #if defined(MINGW_BUILD)
-                    << std::setw(6) << DEFTurn1
-                    << std::setw(6) << tmp_state
-                    << std::setw(6) << specialChargeTurn1
-                    << std::setw(11) << ""
+                << std::setw(6) << DEFTurn1
+                << std::setw(6) << tmp_state
+                << std::setw(6) << specialChargeTurn1
+                << std::setw(11) << ""
 #endif
 
-                    << "\n";
+                << "\n";
         }
 
         return ss6.str();
     }
 
-    void showHeader() {
+    void showHeader(){
 #ifdef BUILD_DATE
         const auto buildDate = BUILD_DATE;
 #else
@@ -331,34 +333,37 @@ namespace {
 #endif
 #if defined(OPTIMIZATION_O3_ENABLED)
         std::cout << "dq9 Ragin' Contagion battle emulator " << version << " (Optimized for O3), Build date: " <<
-                buildDate
-                << ", " <<
-                buildTime << " UTC/GMT, Compiler: " << compiler << std::endl;
+            buildDate
+            << ", " <<
+            buildTime << " UTC/GMT, Compiler: " << compiler << std::endl;
 #elif defined(OPTIMIZATION_O2_ENABLED)
-        std::cout << "dq9 Ragin' Contagion battle emulator " << version << " (Optimized for O2), Build date: " << buildDate << ", " << buildTime  << " UTC/GMT, Compiler: " << compiler << multiThreading << std::endl;
+        std::cout << "dq9 Ragin' Contagion battle emulator " << version << " (Optimized for O2), Build date: " <<
+            buildDate << ", " << buildTime << " UTC/GMT, Compiler: " << compiler << multiThreading << std::endl;
 #elif defined(NO_OPTIMIZATION)
-        std::cout << "dq9 Ragin' Contagion battle emulator " << version << " (No optimization), Build date: " << buildDate << ", " << buildTime << " UTC/GMT, Compiler: " << compiler << multiThreading << std::endl;
+        std::cout << "dq9 Ragin' Contagion battle emulator " << version << " (No optimization), Build date: " <<
+            buildDate << ", " << buildTime << " UTC/GMT, Compiler: " << compiler << multiThreading << std::endl;
 #else
-        std::cout << "dq9 Corvus battle emulator" << version << " (Unknown build configuration), Build date: " << buildDate << ", " << buildTime   << " UTC, Compiler: " << compiler << std::endl;
+        std::cout << "dq9 Corvus battle emulator" << version << " (Unknown build configuration), Build date: " <<
+            buildDate << ", " << buildTime << " UTC, Compiler: " << compiler << std::endl;
         << ", " << buildTime << std::endl;
 #endif
     }
 
     // ヘッダー出力関数
-    NOINLINE void printShortcutTableHeader() {
+    NOINLINE void printShortcutTableHeader(){
         std::cout << std::left << std::setw(5) << "Key"
-                << std::left << std::setw(18) << "Action"
-                << std::endl;
+            << std::left << std::setw(18) << "Action"
+            << std::endl;
 
         std::cout << std::string(3, '-') << " "
-                << std::string(18, '-') << std::endl;
+            << std::string(18, '-') << std::endl;
     }
 
     // 各行の出力関数
-    NOINLINE void printShortcutEntry(const char *shortcutKey, const char *name) {
+    NOINLINE void printShortcutEntry(const char* shortcutKey, const char* name){
         std::cout << std::left << std::setw(5) << shortcutKey
-                << std::left << std::setw(18) << name
-                << std::endl;
+            << std::left << std::setw(18) << name
+            << std::endl;
     }
 
     /**
@@ -368,7 +373,7 @@ namespace {
      *
      * @param program_name 実行中のプログラム名
      */
-    void help(const char *program_name) {
+    void help(const char* program_name){
         std::cout << "Usage: " << program_name << " h m s [actions...]" << std::endl;
         std::cout << "WARNING: Please input 0 damage attacks (such as shield guard) correctly" << std::endl;
 
@@ -390,32 +395,35 @@ namespace {
      * @return 入力が正常に処理され、ビルダーに追加された場合はtrueを返し、
      *         引数の個数が不十分または他のエラーが発生した場合はfalseを返します。
      */
-    NOINLINE bool ProcessInputBuilder(const int argc, char *argv[]) {
+    NOINLINE bool ProcessInputBuilder(const int argc, char* argv[]){
         // 4番目以降の引数を `push()` に入れる
-        for (int i = 4; i < argc; ++i) {
-            if (isMatchStrWithTrim(argv[i], "t") || isMatchStrWithTrim(argv[i], "p")) {
+        for(int i = 4; i < argc; ++i){
+            if(isMatchStrWithTrim(argv[i], "t") || isMatchStrWithTrim(argv[i], "p")){
                 builder.push(InputBuilder::TYPE_PSYCHE_UP_ENEMY, InputBuilder::PREFIX_PSYCHE_UP_ENEMY);
                 continue;
             }
-            if (isMatchStrWithTrim(argv[i], "b") || isMatchStrWithTrim(argv[i], "s") || isMatchStrWithTrim(argv[i], "ab") || isMatchStrWithTrim(argv[i], "as")) {
+            if(isMatchStrWithTrim(argv[i], "b") || isMatchStrWithTrim(argv[i], "s") || isMatchStrWithTrim(argv[i], "ab")
+                || isMatchStrWithTrim(argv[i], "as")){
                 builder.push(InputBuilder::TYPE_BUFF_ALLY, InputBuilder::PREFIX_BUFF_ALLY);
                 continue;
             }
-            if (isMatchStrWithTrim(argv[i], "h") || isMatchStrWithTrim(argv[i], "d") || isMatchStrWithTrim(argv[i], "ah") || isMatchStrWithTrim(argv[i], "ad")) {
+            if(isMatchStrWithTrim(argv[i], "h") || isMatchStrWithTrim(argv[i], "d") || isMatchStrWithTrim(argv[i], "ah")
+                || isMatchStrWithTrim(argv[i], "ad")){
                 builder.push(InputBuilder::TYPE_PRE_SPECIAL_MEDICINE, InputBuilder::PREFIX_SPECIAL_MEDICINE);
                 builder.push(InputBuilder::TYPE_SPECIAL_MEDICINE, InputBuilder::PREFIX_SPECIAL_MEDICINE);
                 continue;
             }
-            if (isMatchStrWithTrim(argv[i], "at") || isMatchStrWithTrim(argv[i], "AP")) {
+            if(isMatchStrWithTrim(argv[i], "at") || isMatchStrWithTrim(argv[i], "AP")){
                 builder.push(InputBuilder::TYPE_PSYCHE_UP_ALLY, InputBuilder::PREFIX_PSYCHE_UP_ALLY);
                 continue;
             }
             auto [prefix, damage] = toABCint(argv[i]);
-            if (prefix == 'a' || prefix == InputBuilder::PREFIX_MULTITHRUST) {
+            if(prefix == 'a' || prefix == InputBuilder::PREFIX_MULTITHRUST){
                 builder.push(-6, 't'); //攻撃フォローアップ
             }
-            if (prefix == 'h') {
-                builder.push(InputBuilder::TYPE_PRE_SPECIAL_MEDICINE, InputBuilder::PREFIX_SPECIAL_MEDICINE); //攻撃フォローアップ
+            if(prefix == 'h'){
+                builder.push(InputBuilder::TYPE_PRE_SPECIAL_MEDICINE, InputBuilder::PREFIX_SPECIAL_MEDICINE);
+                //攻撃フォローアップ
             }
             builder.push(damage, prefix);
         }
@@ -430,11 +438,11 @@ namespace {
      * @param seconds 秒を表す整数値
      * @return 処理が成功した場合は0を返し、エラーが発生した場合は1を返します。
      */
-    NOINLINE int ProgramMain(int hours, int minutes, int seconds) {
+    NOINLINE int ProgramMain(int hours, int minutes, int seconds){
         // 構造体の組み合わせを作成
-        try {
+        try{
             auto results = builder.makeStructure();
-            for (const auto &result: results) {
+            for(const auto& result : results){
                 result.print(); // 結果の出力
 
                 // スタックを配列に変換
@@ -442,13 +450,13 @@ namespace {
                 int damages[350] = {0};
 
                 // Aactions をスタックにコピー
-                for (int i = 0; i < result.AactionsCounter; ++i) {
+                for(int i = 0; i < result.AactionsCounter; ++i){
                     aActions[i] = result.Aactions[i];
                 }
                 aActions[result.AactionsCounter] = -1;
 
                 // AII_damage をスタックにコピー
-                for (int i = 0; i < result.AII_damageCounter; ++i) {
+                for(int i = 0; i < result.AII_damageCounter; ++i){
                     damages[i] = result.AII_damage[i];
                 }
                 damages[result.AII_damageCounter] = -1;
@@ -458,17 +466,18 @@ namespace {
                 foundSeeds = 0;
                 auto seed = BruteForceRequest(BasePlayers, hours, minutes, seconds, result.AactionsCounter, aActions,
                                               damages);
-                if (foundSeeds == 1) {
+                if(foundSeeds == 1){
                     auto test = SearchRequest(BasePlayers, seed, aActions, THREAD_COUNT, true);
-                    if (!test) {
+                    if(!test){
                         std::cout << "The first search request failed." << std::endl;
-                        if (!SearchRequest(BasePlayers, seed, aActions, THREAD_COUNT, false)) {
+                        if(!SearchRequest(BasePlayers, seed, aActions, THREAD_COUNT, false)){
                             std::cout << "The second search request failed" << std::endl;
                         }
                     }
                 }
             }
-        } catch (const std::runtime_error &e) {
+        }
+        catch(const std::runtime_error& e){
             std::cerr << e.what() << std::endl;
             return 1;
         }
@@ -484,15 +493,15 @@ namespace {
      * @param seed テーブル生成と表示に使用されるランダムシード値。
      * @param turns テーブル表示を省略するターン数(リリースバイナリでのみ使用)
      */
-    void dumpTableMain(BattleResult &result1, Genome &genome, uint64_t seed, int turns) {
+    void dumpTableMain(BattleResult& result1, Genome& genome, uint64_t seed, int turns){
         std::cout << dumpTable(result1, genome.actions, turns) << std::endl;
 
         std::cout << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def <<
-                ", seed: ";
+            ", seed: ";
         std::cout << "0x" << std::hex << seed << std::dec << std::endl << "actions: ";
 
-        for (auto i = 0; i < 100; ++i) {
-            if (genome.actions[i] == 0 || genome.actions[i] == -1) {
+        for(auto i = 0; i < 100; ++i){
+            if(genome.actions[i] == 0 || genome.actions[i] == -1){
                 break;
             }
             std::cout << genome.actions[i] << ", ";
@@ -500,22 +509,23 @@ namespace {
         std::cout << std::endl;
     }
 
-    void PerformanceDebug(const char *name, int turnProcessed, double elapsed_time1, uint64_t seeds) {
+    void PerformanceDebug(const char* name, int turnProcessed, double elapsed_time1, uint64_t seeds){
         // 正しい計算：1秒あたりの探索回数 (万回/秒)
         double performance = (static_cast<double>(turnProcessed) * 100.0) /
-                             static_cast<double>(elapsed_time1);
+            static_cast<double>(elapsed_time1);
         performanceLogger << name << ": Turn Consumed: " << turnProcessed << " (" << (
             static_cast<double>(turnProcessed) / 10000) << " mann), ";
 
-        if (seeds != 0) {
+        if(seeds != 0){
             performanceLogger << "Seed Processd: " << (seeds) << "  (" << (
                 static_cast<double>(seeds) / 10000) << " mann), ";
         }
         performanceLogger << "elapsed time: " << double(elapsed_time1) / 1000 << " ms, " <<
-                "Performance: " << std::fixed << std::setprecision(2) << performance << " mann turns/s" << std::endl;
+            "Performance: " << std::fixed << std::setprecision(2) << performance << " mann turns/s" << std::endl;
     }
 
-    bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads, bool Dropbug) {
+    bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads,
+                       bool Dropbug){
 #ifdef DEBUG
         auto t0 = std::chrono::high_resolution_clock::now();
         BattleEmulator::ResetTurnProcessed();
@@ -523,9 +533,9 @@ namespace {
 
         int32_t gene[350] = {0};
         auto turns = 0;
-        for (int i = 0; i < 349; ++i) {
+        for(int i = 0; i < 349; ++i){
             gene[i] = aActions[i];
-            if (aActions[i] == -1) {
+            if(aActions[i] == -1){
                 gene[i] = -1;
                 gene[i + 1] = -1;
                 break;
@@ -539,19 +549,19 @@ namespace {
 #ifdef DEBUG
         auto t3 = std::chrono::high_resolution_clock::now();
         auto elapsed_time1 =
-                std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
+            std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
         PerformanceDebug("Searcher multi", BattleEmulator::getTurnProcessed(), static_cast<double>(elapsed_time1), 0);
 #endif
 
-        if (genome.turn >= 100) {
+        if(genome.turn >= 100){
             return false;
         }
 
         BattleResult result1;
         Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
 
-        auto *position = new int(1);
-        auto *nowState = new uint64_t(0);
+        auto* position = new int(1);
+        auto* nowState = new uint64_t(0);
 
         BattleEmulator::Main(position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
                              nowState);
@@ -580,11 +590,11 @@ namespace {
      * @param damages バトル中に発生するダメージを記録する配列
      */
     void BruteForceMainLoop(const Player copiedPlayers[2], uint64_t start, uint64_t end, int gene[350],
-                            int damages[350]) {
-        int *position = new int(1);
-        auto *nowState = new uint64_t(0);
+                            int damages[350]){
+        int* position = new int(1);
+        auto* nowState = new uint64_t(0);
         int maxElement = 350;
-        for (uint64_t seed = start; seed < end; ++seed) {
+        for(uint64_t seed = start; seed < end; ++seed){
             BattleEmulator::resetStartTurn();
             lcg::init(seed);
             (*nowState) = 0;
@@ -596,7 +606,7 @@ namespace {
                                                    nullptr, seed, nullptr, damages,
                                                    maxElement,
                                                    nowState);
-            if (resultBool) {
+            if(resultBool){
                 std::cout << seed << std::endl;
                 FoundSeed = seed;
                 foundSeeds++;
@@ -623,7 +633,7 @@ namespace {
      */
     [[nodiscard]] uint64_t BruteForceRequest(const Player copiedPlayers[2], int hours, int minutes, int seconds,
                                              int turns,
-                                             int aActions[350], int damages[350]) {
+                                             int aActions[350], int damages[350]){
 #ifdef DEBUG
         auto t0 = std::chrono::high_resolution_clock::now();
 #endif
@@ -648,9 +658,9 @@ namespace {
         time2 = time2 << 16;
         int32_t gene[350] = {0};
 
-        for (int i = 0; i < 350; ++i) {
+        for(int i = 0; i < 350; ++i){
             gene[i] = aActions[i];
-            if (aActions[i] == -1) {
+            if(aActions[i] == -1){
                 gene[i] = -1;
                 gene[i + 1] = -1;
                 break;
@@ -675,20 +685,20 @@ namespace {
 
         std::cout << std::endl << "found: " << foundSeeds << std::endl;
 
-        if (foundSeeds == 1) {
+        if(foundSeeds == 1){
 #ifdef DEBUG
             auto turnProcessed = BattleEmulator::getTurnProcessed();
             BattleEmulator::ResetTurnProcessed();
             auto t3 = std::chrono::high_resolution_clock::now();
             auto elapsed_time1 =
-                    std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
+                std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
             PerformanceDebug("BruteForcer", turnProcessed, static_cast<int>(elapsed_time1), time2 - time1);
 
 #endif
 
             return FoundSeed;
         }
-        if (foundSeeds == 0) {
+        if(foundSeeds == 0){
             std::cout << "not found!!!" << std::endl;
             return 0;
         }
@@ -697,14 +707,16 @@ namespace {
         return 0;
     }
 
-    int toint(char *str) {
-        try {
+    int toint(char* str){
+        try{
             int number = std::stoi(str);
             return number;
-        } catch (const std::invalid_argument &e) {
+        }
+        catch(const std::invalid_argument& e){
             std::cerr << "Invalid argument: " << e.what() << std::endl;
             return -1;
-        } catch (const std::out_of_range &e) {
+        }
+        catch(const std::out_of_range& e){
             std::cerr << "Out of range: " << e.what() << std::endl;
             return -1;
         }
@@ -723,18 +735,18 @@ namespace {
      * @throws std::invalid_argument 引数が nullptr の場合や、不正な形式の文字列が含まれる場合にスローされます。
      * @throws std::length_error 入力文字列の長さが4文字を超える場合にスローされます。
      */
-    NOINLINE std::pair<char, int> toABCint(const char *str) {
-        if (str == nullptr) throw std::invalid_argument("Input is null");
+    NOINLINE std::pair<char, int> toABCint(const char* str){
+        if(str == nullptr) throw std::invalid_argument("Input is null");
 
         size_t len = std::strlen(str);
 
         // 先頭がアルファベットの場合
-        if (len >= 2 && std::isalpha(static_cast<unsigned char>(str[0]))) {
+        if(len >= 2 && std::isalpha(static_cast<unsigned char>(str[0]))){
             char prefix = static_cast<char>(std::tolower(static_cast<unsigned char>(str[0])));
             int value = 0;
 
-            for (size_t i = 1; i < len; ++i) {
-                if (!std::isdigit(static_cast<unsigned char>(str[i]))) {
+            for(size_t i = 1; i < len; ++i){
+                if(!std::isdigit(static_cast<unsigned char>(str[i]))){
                     throw std::invalid_argument("Invalid character in numeric portion");
                 }
                 value = value * 10 + (str[i] - '0');
@@ -744,13 +756,15 @@ namespace {
         }
 
         // 通常の整数として扱う（先頭が数字の場合）
-        try {
+        try{
             int number = std::stoi(str);
             return std::make_pair('\0', number);
-        } catch (const std::invalid_argument &e) {
+        }
+        catch(const std::invalid_argument& e){
             std::cerr << "Invalid argument: " << e.what() << std::endl;
             return std::make_pair('\0', -1);
-        } catch (const std::out_of_range &e) {
+        }
+        catch(const std::out_of_range& e){
             std::cerr << "Out of range: " << e.what() << std::endl;
             return std::make_pair('\0', -1);
         }
@@ -764,7 +778,7 @@ namespace {
      * @param s 対象の文字列
      * @return 先頭の空白文字を削除した新しい文字列
      */
-    NOINLINE std::string ltrim(const std::string &s) {
+    NOINLINE std::string ltrim(const std::string& s){
         size_t start = s.find_first_not_of(" \t\n\r\f\v");
         return (start == std::string::npos) ? "" : s.substr(start);
     }
@@ -777,7 +791,7 @@ namespace {
      * @param s 処理対象の文字列
      * @return 空白が除去された新しい文字列
      */
-    NOINLINE std::string rtrim(const std::string &s) {
+    NOINLINE std::string rtrim(const std::string& s){
         size_t end = s.find_last_not_of(" \t\n\r\f\v");
         return (end == std::string::npos) ? "" : s.substr(0, end + 1);
     }
@@ -790,8 +804,8 @@ namespace {
      * @param s トリム対象のC文字列
      * @return トリム後の文字列
      */
-    NOINLINE std::string trim(const char *s) {
-        if (s == nullptr) return "";
+    NOINLINE std::string trim(const char* s){
+        if(s == nullptr) return "";
         std::string str(s);
         return trim(str);
     }
@@ -803,7 +817,7 @@ namespace {
      * @param s トリム対象の文字列
      * @return トリムされた文字列
      */
-    NOINLINE std::string trim(const std::string &s) {
+    NOINLINE std::string trim(const std::string& s){
         return rtrim(ltrim(s));
     }
 
@@ -815,13 +829,13 @@ namespace {
      * @param s2 比較対象の二番目の文字列
      * @return トリム後の文字列が一致する場合にtrue、一致しない場合にfalseを返します
      */
-    NOINLINE bool isMatchStrWithTrim(const char *s1, const char *s2) {
+    NOINLINE bool isMatchStrWithTrim(const char* s1, const char* s2){
         return trim(s1) == trim(s2);
     }
 }
 
-int main(int argc, char *argv[]) {
-    if (argc == 2 && isMatchStrWithTrim(argv[1], "h")) {
+int main(int argc, char* argv[]){
+    if(argc == 2 && isMatchStrWithTrim(argv[1], "h")){
         showHeader();
         return 0;
     }
@@ -858,13 +872,12 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
         */
 
 
-
     //AI Warning: This is code related to debug2
-    uint64_t time1 = 0x1001;
+    uint64_t time1 = 0x1af41c64b;
 
     int dummy[100];
     lcg::init(time1, false);
-    int *position1 = new int(1);
+    int* position1 = new int(1);
 
     /*
     ver: v8.0.6_vG_v2, atk: 220, def: 155, seed: 0x1000
@@ -889,28 +902,29 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
                                      合計 6Byte
     */
 
-    auto *NowState = new uint64_t(0); //エミュレーターの内部ステートを表すint
+    auto* NowState = new uint64_t(0); //エミュレーターの内部ステートを表すint
 
     Player players1[2];
 
     //0x22e2dbaf:
 
     //AI Warning: This is code related to debug2
-    // int32_t gene1[350] = {
-    //     30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
-    //     BattleEmulator::ATTACK_ALLY};
+    int32_t gene1[350] = {
+        30, 30, 62, 50, 62, 62, 33, 62, 27, 34, 34,
+        BattleEmulator::ATTACK_ALLY
+    };
     //gene1[19-1] = BattleEmulator::DEFENCE;
     int counter = 0;
-    int32_t gene1[350] = {0};
-     gene1[counter++] = BattleEmulator::BUFF;
-     gene1[counter++] = BattleEmulator::BUFF;
-     gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
-     gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-     gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-     gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-     gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-     gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-     gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
+    // int32_t gene1[350] = {0};
+    //  gene1[counter++] = BattleEmulator::BUFF;
+    //  gene1[counter++] = BattleEmulator::BUFF;
+    //  gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
+    //  gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    //  gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    //  gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    //  gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    //  gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+    //  gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
     // gene1[counter++] = BattleEmulator::DEFENCE;
     // gene1[counter++] = BattleEmulator::DEFENCE;
     // gene1[counter++] = BattleEmulator::DEFENCE;
@@ -925,18 +939,15 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 
     (*NowState) = 0;
     (*position1) = 1;
-    std::optional<BattleResult> dummy1;
-    dummy1 = BattleResult();
+    BattleResult dummy1;
     std::memcpy(players1, BasePlayers, sizeof(players1));
-    BattleEmulator::Main(position1, (counter == 0 ? 1000 : counter), gene1, players1, dummy1, time1, dummy, dummy, -1,
+    BattleEmulator::Main(position1, (counter == 0 ? 1000 : counter), gene1, players1, &dummy1, time1, dummy, dummy, -1,
                          NowState);
 
     std::stringstream ss1;
     ss1 << time1 << " ";
     std::cout << (*position1) << std::endl;
-    if (dummy1.has_value()) {
-        std::cout << dumpTable(dummy1.value(), gene1, -1) << std::endl;
-    }
+    std::cout << dumpTable(dummy1, gene1, -1) << std::endl;
 
     //}
     delete position1;
@@ -946,7 +957,7 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 0x050b6067;
+    uint64_t seed = 0x1af41c64b;
 
     int actions[350] = {
         BattleEmulator::BUFF,
@@ -958,7 +969,7 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 
     return 0;
 #endif
-    if (argc < 5) {
+    if(argc < 5){
         help(argv[0]);
         return 1;
     }
@@ -968,13 +979,13 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
     const int minutes = toint(argv[2]);
     const int seconds = toint(argv[3]);
 
-    if (hours < 0 || minutes < 0 || seconds < 0) {
+    if(hours < 0 || minutes < 0 || seconds < 0){
         std::cerr << "Invalid time parameters" << std::endl;
         return 1;
     }
 
 
-    if (!ProcessInputBuilder(argc, argv)) {
+    if(!ProcessInputBuilder(argc, argv)){
         return 1;
     }
     auto exitCode = ProgramMain(hours, minutes, seconds);
@@ -982,7 +993,7 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 #ifdef DEBUG
     auto t1 = std::chrono::high_resolution_clock::now();
     auto elapsed_time =
-            std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+        std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
     std::cout << "elapsed time: " << double(elapsed_time) / 1000 << " ms" << std::endl;
 #endif
 
