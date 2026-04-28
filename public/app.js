@@ -595,9 +595,6 @@ function updateAutoTimerButtons() {
 
 function updateAutoTimerPreview() {
   const seconds = computeAutoTimerSeconds();
-  if (seconds !== null && ui.actionInput) {
-    ui.actionInput.value = `${formatActionTime(seconds)} `;
-  }
   if (ui.autoTimerPreview) {
     ui.autoTimerPreview.textContent = formatTimerPreview(seconds);
   }
