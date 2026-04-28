@@ -12,55 +12,55 @@
  * このクラスは、各ターンにおける行動やダメージ、バフやデバフの状態など、バトルの詳細な結果を記録します。
  * また、記録されたデータを更新するためのメソッドを提供します。
  */
-class BattleResult {
-
+class BattleResult{
 public:
-    // 各メンバの内容を 0 にリセットする clear 関数
-    void clear() {
-        position = 0;
-        turn = 0;
-    }
+	// 各メンバの内容を 0 にリセットする clear 関数
+	void clear(){
+		position = 0;
+		turn = 0;
+	}
 
-    static void
-    add(std::optional<BattleResult> &obj1, int action, int damage, bool isEnemy, int BuffTurns, int PoisonTurns, int speedTurn, int turn,
-        bool player0_has_initiative, int ehp, int ahp, uint64_t nowState, int scTurn, int amp,bool defenseFlag) {
-        if (obj1.has_value()) {
-            BattleResult& obj = obj1.value();
-            obj.actions[obj.position] = action;
-            obj.damages[obj.position] = damage;
-            obj.isEnemy[obj.position] = isEnemy;
-            obj.BuffTurnss[obj.position] = BuffTurns;
-            obj.PoisonTurns[obj.position] = PoisonTurns;
-            obj.SpeedTurn[obj.position] = speedTurn;
-            obj.turns[obj.position] = turn;
-            obj.initiative[obj.position] = player0_has_initiative;
-            obj.ehp[obj.position] = ehp;
-            obj.ahp[obj.position] = ahp;
-            obj.state[obj.position] = nowState;
-            obj.scTurn[obj.position] = scTurn;
-            obj.amp[obj.position] = amp;
-            obj.defenseFlag[obj.position] = defenseFlag;
-            obj.turn = turn;
-            obj.position++;
-        }
-    }
+	static void
+	add(BattleResult* & obj1, int action, int damage, bool isEnemy, int BuffTurns, int PoisonTurns, int speedTurn,
+	    int turn,
+	    bool player0_has_initiative, int ehp, int ahp, uint64_t nowState, int scTurn, int amp, bool defenseFlag){
+		if(!obj1) return; // ← これが最重要
+		const int pos = obj1->position;
 
-    int position = 0;
-    int turn = 0;
-    int actions[400] = {};
-    int damages[400] = {};
-    int isEnemy[400] = {};
-    int BuffTurnss[400] = {};
-    int PoisonTurns[400] = {};
-    int SpeedTurn[400] = {};
-    int turns[400] = {};
-    bool initiative[400] = {};
-    int ehp[400] = {};
-    int ahp[400] = {};
-    int scTurn[400] = {};
-    int amp[400] = {};
-    uint64_t state[400] = {};
-    bool defenseFlag[400] = {};
+		obj1->actions[pos] = action;
+		obj1->damages[pos] = damage;
+		obj1->isEnemy[pos] = isEnemy;
+		obj1->BuffTurnss[pos] = BuffTurns;
+		obj1->PoisonTurns[pos] = PoisonTurns;
+		obj1->SpeedTurn[pos] = speedTurn;
+		obj1->turns[pos] = turn;
+		obj1->initiative[pos] = player0_has_initiative;
+		obj1->ehp[pos] = ehp;
+		obj1->ahp[pos] = ahp;
+		obj1->state[pos] = nowState;
+		obj1->scTurn[pos] = scTurn;
+		obj1->amp[pos] = amp;
+		obj1->defenseFlag[pos] = defenseFlag;
+		obj1->turn = turn;
+		obj1->position = pos + 1;
+	}
+
+	int position = 0;
+	int turn = 0;
+	int actions[400] = {};
+	int damages[400] = {};
+	int isEnemy[400] = {};
+	int BuffTurnss[400] = {};
+	int PoisonTurns[400] = {};
+	int SpeedTurn[400] = {};
+	int turns[400] = {};
+	bool initiative[400] = {};
+	int ehp[400] = {};
+	int ahp[400] = {};
+	int scTurn[400] = {};
+	int amp[400] = {};
+	uint64_t state[400] = {};
+	bool defenseFlag[400] = {};
 };
 
 #endif //NEWDIRECTORY_BATTLERESULT_H

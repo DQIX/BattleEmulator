@@ -18,7 +18,9 @@
 #include <chrono>
 
 #endif
-
+#if defined(OPTIMIZE_MODE)
+#include "SimpleParameterOptimizer.h"
+#endif
 
 namespace {
     // MinGW/GCC用のnoinline属性
@@ -331,7 +333,7 @@ namespace {
         std::cout << "dq9 Ragin' Contagion battle emulator " << version << " (Optimized for O3), Build date: " <<
                 buildDate
                 << ", " <<
-                buildTime << " UTC/GMT, Compiler: " << compiler << multiThreading << std::endl;
+                buildTime << " UTC/GMT, Compiler: " << compiler << std::endl;
 #elif defined(OPTIMIZATION_O2_ENABLED)
         std::cout << "dq9 Ragin' Contagion battle emulator " << version << " (Optimized for O2), Build date: " << buildDate << ", " << buildTime  << " UTC/GMT, Compiler: " << compiler << multiThreading << std::endl;
 #elif defined(NO_OPTIMIZATION)
@@ -537,29 +539,28 @@ namespace {
         auto [turnProcessed,genome] =
         ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 1500, gene, numThreads, Dropbug);
 #elif defined(erusionn_lv21)
-        auto [turnProcessed,genome] =
-                ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 2000, gene, numThreads, Dropbug);
+        auto genome =
+                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 100, gene, numThreads);
 #endif
 
 #ifdef DEBUG
         auto t3 = std::chrono::high_resolution_clock::now();
         auto elapsed_time1 =
                 std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
-        PerformanceDebug("Searcher multi", turnProcessed, static_cast<double>(elapsed_time1), 0);
+        PerformanceDebug("Searcher multi", BattleEmulator::getTurnProcessed(), static_cast<double>(elapsed_time1), 0);
 #endif
 
         if (genome.turn >= 100) {
             return false;
         }
 
-        std::optional<BattleResult> result1;
-        result1 = BattleResult();
+        BattleResult result1;
         Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
 
         auto *position = new int(1);
         auto *nowState = new uint64_t(0);
 
-        BattleEmulator::Main(position, 100, genome.actions, players, result1, seed, nullptr, nullptr, -1,
+        BattleEmulator::Main(position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
                              nowState);
 
         delete position;
@@ -567,7 +568,7 @@ namespace {
 
         std::cout << "foundTurn: " << foundTurn << ", " << turns << std::endl;
 #ifdef MINGW_BUILD
-        dumpTableMain(result1.value(), genome, seed, foundTurn);
+        dumpTableMain(result1, genome, seed, foundTurn);
 #else
         dumpTableMain(result1.value(), genome, seed, foundTurn);
 #endif
@@ -599,7 +600,7 @@ namespace {
 
 
             bool resultBool = BattleEmulator::Main(position, 20, gene, players,
-                                                   (std::optional<BattleResult> &) std::nullopt, seed, nullptr, damages,
+                                                   nullptr, seed, nullptr, damages,
                                                    maxElement,
                                                    nowState);
             if (resultBool) {
@@ -831,6 +832,15 @@ int main(int argc, char *argv[]) {
         showHeader();
         return 0;
     }
+
+#if defined(OPTIMIZE_MODE)
+    int actions1[350] = {};
+    auto counter = 0;
+    actions1[counter++] = BattleEmulator::BUFF;
+    actions1[counter] = -1;
+    SimpleParameterOptimizer::optimize(BasePlayers, 0x12345, actions1, 100000, counter);
+    return 0;
+#endif
 
 #ifdef DEBUG
     auto t0 = std::chrono::high_resolution_clock::now();

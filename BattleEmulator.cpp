@@ -357,7 +357,7 @@ constexpr int AttackTable2B[6] = {
  *   それ以外の場合はfalseを返します。（modeが -1 または -2の場合、常にfalse）
  */
 bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
-                          std::optional<BattleResult> &result,
+                          BattleResult* result,
                           uint64_t seed, const int eActions[350], const int damages[350], int mode,
                           uint64_t *NowState) {
     resetCombo(NowState);
@@ -412,8 +412,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
         int32_t actions[3] = {0, 0, 0};
         int actionsPosition = 0;
-        double speed0 = players[0].speed * lcg::floatRand(position, 0.51, 1.0);
-        double speed1 = players[1].speed * lcg::floatRand(position, 0.51, 1.0);
+        double speed0 = players[0].speed * lcg::floatRand051_1(position);
+        double speed1 = players[1].speed * lcg::floatRand051_1(position);
 
         // 素早さを比較
         if (speed0 > speed1) {
@@ -1661,34 +1661,84 @@ int BattleEmulator::FUN_021e8458_typeD(int *position, double difference, double 
 }
 
 
-int BattleEmulator::FUN_0207564c(int *position, int atk, int def) {
-    auto atk5 = static_cast<double>(atk);
-    auto def5 = static_cast<double>(def);
+#if !defined(__EMSCRIPTEN__)
 
-    auto atk1 = (atk5 - (def5 / 2)) / 2;
-    if (atk1 <= 0) {
+#if defined(_MSC_VER) && !defined(__clang__)
+#include <__msvc_int128.hpp>
+using u128 = std::_Unsigned128;
+#else
+using u128 = unsigned __int128;
+#endif
+
+
+int BattleEmulator::FUN_0207564c(int *position, int atk, int def) {
+    [[assume(atk >= 0)]];
+    [[assume(def >= 0)]];
+    int base = 2 * atk - def;
+    if (base <= 0) [[unlikely]] {
         return 0;
-    } else {
-        auto atk2 = atk / 16.0000;
-        if (atk1 > atk2) {
-            auto atk4 = atk1 / 16;
-            auto atk3 = -atk4;
-            auto result = atk1 + lcg::floatRand(position, atk3, atk4);
-            result = result + lcg::floatRand(position, -1, 1);
-            if (result <= 0) {
-                result = 0.0;
-            }
-            return static_cast<int>(floor(result));
-        } else {
-            double result = lcg::floatRand(position, 0.0, atk2);
-            if (result <= 0) {
-                result = 0.0;
-            }
-            return static_cast<int>(floor(result));
-        }
     }
+
+    int64_t atk1_fp = static_cast<int64_t>(base) << 30;
+    int64_t atk2_fp = static_cast<int64_t>(atk) << 28; // atk * 1/16
+
+    int64_t result_fp;
+
+    if (atk1_fp > atk2_fp) [[likely]] {
+        int64_t atk4_fp = atk1_fp >> 4; // /16
+
+        // floatRand(-atk4, atk4): -atk4 + top/2^32 * (2*atk4)
+        uint32_t r1 = lcg::getTop32(position);
+        auto spread_u = static_cast<uint64_t>(
+            (static_cast<u128>(r1) * static_cast<u128>(static_cast<uint64_t>(atk4_fp))) >> 31);
+        int64_t spread = static_cast<int64_t>(spread_u) - atk4_fp;
+
+        // floatRandAttack(-1, 1): -1 + top/2^31
+        uint32_t r2 = lcg::getTop32(position);
+        int64_t attack = (static_cast<int64_t>(r2) << 1) - (1ll << 32);
+
+        result_fp = atk1_fp + spread + attack;
+    } else {
+        // floatRand(0, atk2)
+        uint32_t r = lcg::getTop32(position);
+        auto result_u = static_cast<uint64_t>(
+            (static_cast<u128>(r) * static_cast<u128>(static_cast<uint64_t>(atk2_fp))) >> 32);
+        result_fp = static_cast<int64_t>(result_u);
+    }
+
+    if (result_fp <= 0) [[unlikely]] {
+        return 0;
+    }
+
+    return static_cast<int>(result_fp >> 32);
+}
+
+#else
+
+int BattleEmulator::FUN_0207564c(int *position, int atk, int def) {
+    [[assume(atk >= 0)]];
+    [[assume(def >= 0)]];
+    double result;
+    const double atk1 = (2*atk - def) * 0.25;
+    if (atk1 <= 0) [[unlikely]] {
+        return 0;
+    }
+    auto atk2 = atk * 0.0625;
+    if (atk1 > atk2) [[likely]] {
+        auto atk4 = atk1 * 0.0625;
+        result = atk1 + lcg::floatRand(position, -atk4, atk4);
+        result = result + lcg::floatRandAttack(position);
+    } else {
+        result = lcg::floatRand(position, 0.0, atk2);
+    }
+    if (result <= 0) [[unlikely]] {
+        return 0;
+    }
+    return static_cast<int>((result));
     //return 0;
 }
+
+#endif
 
 void BattleEmulator::process7A8(int *position, int baseDamage, Player players[2], int defender) {
     if (players[defender].paralysis || players[defender].sleeping || players[defender].specialCharge

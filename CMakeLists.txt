@@ -53,6 +53,15 @@ set(SOURCES
         InputBuilder.h
         ResultStructure.h
         Equipment.h
+        EnhancedCostCalculator.cpp
+        EnhancedHashCalculator.cpp
+        EnhancedHeapQueue.cpp
+        EnhancedCostCalculator.h
+        EnhancedHashCalculator.h
+        EnhancedHeapQueue.h
+        LinearIdPool.h
+        SimpleParameterOptimizer.cpp
+        SimpleParameterOptimizer.h
 )
 
 # シングルスレッド版（multithreading = OFF）
@@ -60,22 +69,27 @@ set(SOURCES
 #target_compile_definitions(rbe_single PRIVATE NO_MULTITHREADING BattleEmulatorLV19)  # `#define NO_MULTITHREADING` を適用
 # マルチスレッド版（multithreading = ON）
 add_executable(ebe_lv21_v2 ${SOURCES})
+add_executable(ebe_lv21_v2_opt ${SOURCES})
 target_compile_definitions(ebe_lv21_v2 PRIVATE MULTITHREADING=1 erusionn_lv21=1)  # `#define MULTITHREADING` を適用
+target_compile_definitions(ebe_lv21_v2_opt PRIVATE OPTIMIZE_MODE=1 erusionn_lv21=1)  # `#define MULTITHREADING` を適用
 
 string(TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)
 string(TIMESTAMP BUILD_TIME "%H:%M:%S" UTC)
 add_definitions(-DBUILD_DATE="${BUILD_DATE}" -DBUILD_TIME="${BUILD_TIME}")
 
 if(MINGW)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections") #  -fno-inline-small-functions
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections") #  -fno-inline-small-functions
     set(CMAKE_EXE_LINKER_FLAGS "-static -Wl,--gc-sections")
 elseif(MSVC)
     target_compile_options(ebe_lv21_v2 PRIVATE /W4 /MP)  # `/MP` で並列コンパイル
+    target_compile_options(ebe_lv21_v2_opt PRIVATE /W4 /MP)  # `/MP` で並列コンパイル
 
     target_link_options(ebe_lv21_v2 PRIVATE /INCREMENTAL:NO /DEBUG)
+    target_link_options(ebe_lv21_v2_opt PRIVATE /INCREMENTAL:NO /DEBUG)
 
     target_compile_options(ebe_lv21_v2 PRIVATE /utf-8)
+    target_compile_options(ebe_lv21_v2_opt PRIVATE /utf-8)
 
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi /O2")
     set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
