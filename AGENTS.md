@@ -18,6 +18,8 @@
 * You don't need to submit me the line numbers you edited. I don't need to reread the file in the final submission just to know the line numbers. Because of Git, the filename alone is sufficient.
 * rg command installed
 
+When modifying the UI, read interface-design-main/.claude/skills/interface-design/SKILL.md.
+
 ## mcp server
 
 Use these tools if you feel it's necessary. Of course, it's perfectly fine to complete everything using only commands.
