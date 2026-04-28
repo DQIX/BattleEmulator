@@ -1097,13 +1097,6 @@ async function runSearch() {
 
     setSeedValues(foundSeed, parsed);
     setSeedState("found", totalFound);
-    if (totalFound === 1) {
-      if (shouldCorrectAutoTimer) {
-        applySearchResultAutoTimerCorrection(parsed);
-      }
-      const driftText = computeSeedDriftText(BigInt(foundSeed), parsed);
-      recordSeedMemo(parsed, input, driftText);
-    }
     appendLog(`seed found ${foundSeed}`);
     if (bestSpeed && bestElapsed && bestTurns) {
       ui.seedSpeed.textContent = `${bestSpeed} (m turns/s)`;
@@ -1152,6 +1145,12 @@ async function runSearch() {
     appendLog(
         `searcher worker turns=${turns} elapsed=${elapsedMs}ms speed=${speed} (m turns/s)`
     );
+
+    const driftText = computeSeedDriftText(BigInt(foundSeed), parsed);
+    if (shouldCorrectAutoTimer) {
+      applySearchResultAutoTimerCorrection(parsed);
+    }
+    recordSeedMemo(parsed, input, driftText);
 
     appendLog("dump table ready");
     searchClient.terminate();
