@@ -134,14 +134,9 @@ function normalizeFractionDigits(value) {
 
 function splitPreciseSeconds(totalSeconds) {
   const safeSeconds = Math.max(0, Number.isFinite(totalSeconds) ? totalSeconds : 0);
-  const wholeSeconds = Math.floor(safeSeconds);
-  let fraction = Math.round((safeSeconds - wholeSeconds) * AUTO_TIMER_FRACTION_SCALE);
-  if (fraction >= AUTO_TIMER_FRACTION_SCALE) {
-    return {
-      wholeSeconds: wholeSeconds + 1,
-      fraction: 0
-    };
-  }
+  const totalUnits = Math.floor((safeSeconds + 1e-9) * AUTO_TIMER_FRACTION_SCALE);
+  const wholeSeconds = Math.floor(totalUnits / AUTO_TIMER_FRACTION_SCALE);
+  const fraction = totalUnits % AUTO_TIMER_FRACTION_SCALE;
   return {
     wholeSeconds,
     fraction
