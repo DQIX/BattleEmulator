@@ -416,6 +416,11 @@ body::before {
   grid-row: span 2;
 }
 
+.panel-auto-timer {
+  grid-column: span 2;
+  min-height: 0;
+}
+
 .panel-header {
   display: flex;
   align-items: baseline;
@@ -477,6 +482,90 @@ h2 {
   gap: 12px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: end;
+}
+
+.auto-timer-layout {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  align-items: stretch;
+}
+
+.auto-timer-preview-wrap {
+  min-width: 0;
+}
+
+.auto-timer-label {
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.auto-timer-preview {
+  min-height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--fg) 10%, var(--border));
+  background: color-mix(in srgb, var(--fg) 14%, var(--panel));
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: clamp(32px, 4vw, 54px);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.auto-timer-actions {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+}
+
+.auto-timer-reset-button,
+.auto-timer-cancel-button {
+  background: color-mix(in srgb, var(--panel) 88%, var(--fg) 12%);
+  border-color: color-mix(in srgb, var(--border) 88%, var(--fg) 12%);
+  box-shadow: none;
+}
+
+.auto-timer-confirm-button {
+  background: color-mix(in srgb, var(--warn) 38%, var(--panel));
+  border-color: color-mix(in srgb, var(--warn) 40%, var(--border));
+  box-shadow: none;
+}
+
+.auto-timer-confirm {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  min-height: 42px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--warn) 28%, var(--border));
+  background: color-mix(in srgb, var(--warn) 10%, var(--panel));
+}
+
+.auto-timer-confirm.is-hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.auto-timer-confirm-text,
+.auto-timer-status {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.auto-timer-status {
+  grid-column: 1 / -1;
+  min-height: 18px;
 }
 
 .field span {
@@ -766,8 +855,18 @@ h2 {
     grid-row: span 1;
   }
 
+  .panel-auto-timer {
+    grid-column: span 1;
+  }
+
+  .auto-timer-layout,
   .field-row,
   .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .auto-timer-actions,
+  .auto-timer-confirm {
     grid-template-columns: 1fr;
   }
 

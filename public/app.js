@@ -7,6 +7,13 @@ const ui = {
   threads: document.getElementById("threads"),
   actionInput: document.getElementById("actionInput"),
   runButton: document.getElementById("runButton"),
+  autoTimerPreview: document.getElementById("autoTimerPreview"),
+  autoTimerStatus: document.getElementById("autoTimerStatus"),
+  autoTimerUseButton: document.getElementById("autoTimerUseButton"),
+  autoTimerResetButton: document.getElementById("autoTimerResetButton"),
+  autoTimerResetConfirm: document.getElementById("autoTimerResetConfirm"),
+  autoTimerResetConfirmButton: document.getElementById("autoTimerResetConfirmButton"),
+  autoTimerResetCancelButton: document.getElementById("autoTimerResetCancelButton"),
   seedHex: document.getElementById("seedHex"),
   seedSpeed: document.getElementById("seedSpeed"),
   seedElapsed: document.getElementById("seedElapsed"),
@@ -28,6 +35,7 @@ const DEFAULT_OFFSET_SECONDS = 15;
 const OFFSET_STORAGE_KEY = "dq9OffsetSeconds";
 const DEFAULT_SEARCH_RANGE_SECONDS = 6;
 const SEARCH_RANGE_STORAGE_KEY = "dq9SearchRangeSeconds";
+const AUTO_TIMER_MAX_SECONDS = 30 * 60 * 60;
 const SEED_MEMO_STORAGE_KEY = "dq9SeedMemoList";
 const SEED_MEMO_LIMIT = 200;
 const SEED_TIME_SCALE = 100n;
@@ -51,7 +59,9 @@ const state = {
   memoList: [],
   urlOverrides: null,
   urlOverridesAppliedNonEmu: false,
-  urlOverridesAppliedEmu: false
+  urlOverridesAppliedEmu: false,
+  autoTimerAnchor: null,
+  autoTimerTickHandle: null
 };
 
 const logLines = [];
@@ -75,6 +85,32 @@ function pad2(value) {
 
 function formatInputTime(parsed) {
   return `${pad2(parsed.hours)}:${pad2(parsed.minutes)}:${pad2(parsed.seconds)}`;
+}
+
+function formatTimerPreview(totalSeconds) {
+  if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
+    return "--:--:--";
+  }
+  const clamped = Math.min(AUTO_TIMER_MAX_SECONDS, Math.floor(totalSeconds));
+  const hours = Math.floor(clamped / 3600);
+  const minutes = Math.floor((clamped % 3600) / 60);
+  const seconds = clamped % 60;
+  return `${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)}`;
+}
+
+function formatActionTime(totalSeconds) {
+  const clamped = Math.max(0, Math.min(AUTO_TIMER_MAX_SECONDS, Math.floor(totalSeconds)));
+  const hours = Math.floor(clamped / 3600);
+  const minutes = Math.floor((clamped % 3600) / 60);
+  const seconds = clamped % 60;
+  return `${hours} ${minutes} ${seconds}`;
+}
+
+function parsedToTotalSeconds(parsed) {
+  if (!parsed) {
+    return 0;
+  }
+  return parsed.hours * 3600 + parsed.minutes * 60 + parsed.seconds;
 }
 
 function formatDatePartsUTC(date) {
@@ -509,6 +545,117 @@ function initMemoLedger() {
   applyUrlOverrides(false);
 }
 
+function setAutoTimerStatusText(message) {
+  if (ui.autoTimerStatus) {
+    ui.autoTimerStatus.textContent = message;
+  }
+}
+
+function setAutoTimerResetConfirmVisible(visible) {
+  if (!ui.autoTimerResetConfirm) {
+    return;
+  }
+  ui.autoTimerResetConfirm.classList.toggle("is-hidden", !visible);
+}
+
+function getAutoTimerStatusReadyText() {
+  return t(
+    "autoTimerStatusReady",
+    "Preview is locked to performance.now() and ignores wall-clock changes."
+  );
+}
+
+function getAutoTimerStatusIdleText() {
+  return t(
+    "autoTimerStatusIdle",
+    "No timer anchor yet. Run one confirmed search first."
+  );
+}
+
+function computeAutoTimerSeconds(nowPerf = performance.now()) {
+  if (!state.autoTimerAnchor) {
+    return null;
+  }
+  const elapsedSeconds = Math.max(0, (nowPerf - state.autoTimerAnchor.perfNow) / 1000);
+  return state.autoTimerAnchor.totalSeconds + elapsedSeconds;
+}
+
+function updateAutoTimerButtons() {
+  const hasAnchor = Boolean(state.autoTimerAnchor);
+  if (ui.autoTimerUseButton) {
+    ui.autoTimerUseButton.disabled = !hasAnchor || state.running;
+  }
+  if (ui.autoTimerResetButton) {
+    ui.autoTimerResetButton.disabled = !hasAnchor || state.running;
+  }
+  if (ui.autoTimerResetConfirmButton) {
+    ui.autoTimerResetConfirmButton.disabled = !hasAnchor || state.running;
+  }
+}
+
+function updateAutoTimerPreview() {
+  if (ui.autoTimerPreview) {
+    const seconds = computeAutoTimerSeconds();
+    ui.autoTimerPreview.textContent = formatTimerPreview(seconds);
+  }
+  updateAutoTimerButtons();
+}
+
+function stopAutoTimerTicker() {
+  if (state.autoTimerTickHandle !== null) {
+    clearTimeout(state.autoTimerTickHandle);
+    state.autoTimerTickHandle = null;
+  }
+}
+
+function scheduleAutoTimerTick() {
+  stopAutoTimerTicker();
+  updateAutoTimerPreview();
+  if (!state.autoTimerAnchor) {
+    return;
+  }
+  const delay = 1000 - (Math.floor(performance.now()) % 1000);
+  state.autoTimerTickHandle = setTimeout(scheduleAutoTimerTick, Math.max(80, delay));
+}
+
+function setAutoTimerAnchor(parsed, perfNow) {
+  state.autoTimerAnchor = {
+    totalSeconds: parsedToTotalSeconds(parsed),
+    perfNow
+  };
+  setAutoTimerResetConfirmVisible(false);
+  setAutoTimerStatusText(getAutoTimerStatusReadyText());
+  scheduleAutoTimerTick();
+}
+
+function clearAutoTimerAnchor() {
+  state.autoTimerAnchor = null;
+  setAutoTimerResetConfirmVisible(false);
+  stopAutoTimerTicker();
+  updateAutoTimerPreview();
+  setAutoTimerStatusText(getAutoTimerStatusIdleText());
+}
+
+function extractActionSuffix(text) {
+  const tokens = text.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length <= 3) {
+    return "";
+  }
+  return tokens.slice(3).join(" ");
+}
+
+function focusActionInputAtTop() {
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  requestAnimationFrame(() => {
+    if (!ui.actionInput) {
+      return;
+    }
+    ui.actionInput.focus({ preventScroll: true });
+    const end = ui.actionInput.value.length;
+    ui.actionInput.setSelectionRange(end, end);
+  });
+}
+
 function computeSeedRange(hours, minutes, seconds, offsetSeconds) {
   const seedShift = 65536n;
   const totalSeconds = BigInt(hours * 3600 + minutes * 60 + seconds);
@@ -711,6 +858,10 @@ function applyLanguage(lang) {
   state.lang = lang;
   localStorage.setItem("dq9Lang", lang);
   renderSeedMemos(state.memoList);
+  setAutoTimerStatusText(
+    state.autoTimerAnchor ? getAutoTimerStatusReadyText() : getAutoTimerStatusIdleText()
+  );
+  updateAutoTimerPreview();
 }
 
 function applyTheme(theme) {
@@ -736,6 +887,7 @@ function initSettings() {
   applyTheme(state.theme);
   setOffsetSeconds(loadOffsetSeconds());
   setSearchRangeSeconds(loadSearchRangeSeconds());
+  clearAutoTimerAnchor();
 }
 
 async function runSearch() {
@@ -756,6 +908,7 @@ async function runSearch() {
     appendLog(parsed.error);
     return;
   }
+  const runStartedAtPerf = performance.now();
 
   const { start, end } = computeSeedRange(
     parsed.hours,
@@ -772,6 +925,7 @@ async function runSearch() {
   clearOutputs();
   state.running = true;
   ui.runButton.disabled = true;
+  updateAutoTimerButtons();
   setSeedState("running", 0);
   appendLog(`range ${start} -> ${end} using ${ranges.length} workers`);
   const inputActions = parsed.actions.join(" ");
@@ -869,6 +1023,7 @@ async function runSearch() {
     setSeedValues(foundSeed, parsed);
     setSeedState("found", totalFound);
     if (totalFound === 1) {
+      setAutoTimerAnchor(parsed, runStartedAtPerf);
       const driftText = computeSeedDriftText(BigInt(foundSeed), parsed);
       recordSeedMemo(parsed, input, driftText);
     }
@@ -930,7 +1085,71 @@ async function runSearch() {
     clients.forEach((client) => client.terminate());
     state.running = false;
     ui.runButton.disabled = false;
+    updateAutoTimerButtons();
   }
+}
+
+let becameActive = false;
+let movementTimer = null;
+const SAFE_TIME = 1500;
+
+function setMovementTimerOnce() {
+  if (movementTimer !== null) {
+    return;
+  }
+  movementTimer = setTimeout(() => {
+    becameActive = false;
+    movementTimer = null;
+  }, SAFE_TIME);
+}
+
+function throttle(fn, wait) {
+  let lastTime = 0;
+  return function throttled(...args) {
+    const now = Date.now();
+    if (now - lastTime >= wait) {
+      lastTime = now;
+      fn.apply(this, args);
+    }
+  };
+}
+
+function movePointerGuard() {
+  if (!becameActive) {
+    return;
+  }
+  setMovementTimerOnce();
+}
+
+function isPointerUnsafe() {
+  return becameActive;
+}
+
+function initPointerSafety() {
+  const throttledMove = throttle(movePointerGuard, 200);
+  window.addEventListener("mousemove", throttledMove);
+  document.addEventListener("mouseenter", () => {
+    becameActive = true;
+    movementTimer = null;
+    setMovementTimerOnce();
+  });
+}
+
+function applyAutoTimerToInputAndRun() {
+  const predictedSeconds = computeAutoTimerSeconds();
+  if (predictedSeconds === null) {
+    return;
+  }
+  const suffix = extractActionSuffix(ui.actionInput.value);
+  ui.actionInput.value = `${formatActionTime(predictedSeconds)}${suffix ? ` ${suffix}` : ""}`;
+  setOffsetSeconds(0);
+  setAutoTimerResetConfirmVisible(false);
+  focusActionInputAtTop();
+  if (!suffix) {
+    appendLog("input needs time and actions");
+    return;
+  }
+  runSearch();
 }
 
 ui.emulatorSelect.addEventListener("change", (event) => {
@@ -938,15 +1157,66 @@ ui.emulatorSelect.addEventListener("change", (event) => {
 });
 
 ui.runButton.addEventListener("click", () => {
+  focusActionInputAtTop();
   runSearch();
 });
 
 ui.actionInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
+    focusActionInputAtTop();
     runSearch();
   }
 });
+
+if (ui.autoTimerUseButton) {
+  ui.autoTimerUseButton.addEventListener("click", () => {
+    if (isPointerUnsafe()) {
+      setAutoTimerStatusText(
+        t("autoTimerStatusUnsafe", "Pointer just re-entered the window. Wait 1.5s and try again.")
+      );
+      return;
+    }
+    applyAutoTimerToInputAndRun();
+  });
+}
+
+if (ui.autoTimerResetButton) {
+  ui.autoTimerResetButton.addEventListener("click", () => {
+    if (!state.autoTimerAnchor) {
+      return;
+    }
+    if (isPointerUnsafe()) {
+      setAutoTimerStatusText(
+        t("autoTimerStatusUnsafe", "Pointer just re-entered the window. Wait 1.5s and try again.")
+      );
+      return;
+    }
+    setAutoTimerStatusText(getAutoTimerStatusReadyText());
+    setAutoTimerResetConfirmVisible(true);
+  });
+}
+
+if (ui.autoTimerResetConfirmButton) {
+  ui.autoTimerResetConfirmButton.addEventListener("click", () => {
+    if (isPointerUnsafe()) {
+      setAutoTimerStatusText(
+        t("autoTimerStatusUnsafe", "Pointer just re-entered the window. Wait 1.5s and try again.")
+      );
+      return;
+    }
+    clearAutoTimerAnchor();
+  });
+}
+
+if (ui.autoTimerResetCancelButton) {
+  ui.autoTimerResetCancelButton.addEventListener("click", () => {
+    setAutoTimerResetConfirmVisible(false);
+    setAutoTimerStatusText(
+      state.autoTimerAnchor ? getAutoTimerStatusReadyText() : getAutoTimerStatusIdleText()
+    );
+  });
+}
 
 ui.themeSelect.addEventListener("change", (event) => {
   applyTheme(event.target.value);
@@ -1042,6 +1312,7 @@ if (ui.searchRangeSeconds) {
 loadManifest();
 initSettings();
 initMemoLedger();
+initPointerSafety();
 
 
   let composing = false;
