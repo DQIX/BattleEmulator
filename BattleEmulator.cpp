@@ -1783,16 +1783,69 @@ int BattleEmulator::ProcessEnemyRandomAction2A(int *position) {
 }
 
 
+
+#include <array>
+#include <cstddef>
+
+constexpr std::size_t TABLE_MAX = 256;
+template<std::size_t N>
+constexpr std::array<int, TABLE_MAX>
+makeProbabilityTable(const std::array<int, N>& ratios,
+                     const std::array<int, N>& ids)
+{
+    std::array<int, TABLE_MAX> table{};
+
+    std::size_t index = 0;
+
+    for (std::size_t i = 0; i < N; ++i)
+    {
+        for (int j = 0; j < ratios[i]; ++j)
+        {
+            table[index++] = ids[i];  // ← ここが重要
+        }
+    }
+
+    return table;
+}
+
+
+template<std::size_t N>
+constexpr int sum(const std::array<int, N>& arr)
+{
+    int s = 0;
+    for (int v : arr) s += v;
+    return s;
+}
+
+constexpr std::array<int, 6> ratios = {
+    68,
+    58,
+    48,
+    38,
+    27,
+    17  // 239 + 17 = 256
+};
+
+constexpr std::array<int, 6> ids = {
+    BattleEmulator::ATTACK_ENEMY,
+    BattleEmulator::DOUBLE_TROUBLE,
+    BattleEmulator::ZAMMLE,
+    BattleEmulator::SWITCH_2B,
+    BattleEmulator::CRACKLE_ENEMY,
+    BattleEmulator::ATTACK_ENEMY
+};
+
+static_assert(sum(ratios) == TABLE_MAX, "Ratio sum must be 256");
+
+constexpr auto actionTable = makeProbabilityTable(ratios, ids);
+
+
 int BattleEmulator::ProcessEnemyRandomAction44(int *position) {
     //0x0208aca8
-    int rnd = lcg::getPercent(position, 0x100) + 1;
-    if (rnd <= 68) return ATTACK_ENEMY;
-    if (rnd <= 68 + 58) return DOUBLE_TROUBLE;
-    if (rnd <= 68 + 58 + 48) return ZAMMLE;
-    if (rnd <= 68 + 58 + 48 + 38) return SWITCH_2B;
-    if (rnd <= 68 + 58 + 48 + 38 + 27) return CRACKLE_ENEMY;
-    return ATTACK_ENEMY;
+    int rnd = lcg::getPercent(position, 0x100);
+    return actionTable[rnd];
 }
+
 
 int BattleEmulator::CalculateMoreHealBase(Player *players) {
     //ベホイミ
