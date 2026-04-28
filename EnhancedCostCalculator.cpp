@@ -126,6 +126,7 @@ constexpr std::array<double, 201> GENOME = {
         /* 165 */ 4.47899,
         /* 166 */ -0.27755,    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
     };
+
 double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, double preGCost) {
     // Base cost is turn number (maintains depth-first preference)
     double gCost = preGCost + GENOME[SimpleParameterOptimizerNode::turnHeignt];

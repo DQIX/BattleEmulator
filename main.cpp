@@ -532,15 +532,8 @@ namespace {
             }
             turns++;
         }
-#if defined(BattleEmulatorLV13)
-        auto [turnProcessed,genome] =
-                ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 3000, gene, numThreads, Dropbug);
-#elif defined(BattleEmulatorLV19)
-        auto [turnProcessed,genome] =
-        ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 1500, gene, numThreads, Dropbug);
-#elif defined(erusionn_lv21)
-        auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 100, gene, numThreads);
+#if defined(erusionn_lv21)
+        auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
 #endif
 
 #ifdef DEBUG
@@ -570,7 +563,7 @@ namespace {
 #ifdef MINGW_BUILD
         dumpTableMain(result1, genome, seed, foundTurn);
 #else
-        dumpTableMain(result1.value(), genome, seed, foundTurn);
+        dumpTableMain(result1, genome, seed, foundTurn);
 #endif
 
         return true;

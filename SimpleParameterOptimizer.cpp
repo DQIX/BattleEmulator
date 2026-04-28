@@ -29,11 +29,10 @@
 //// 各挿入を行う確率（1.0=必ずction id を並べるだけで追加完了
 static constexpr std::array<int, ids> TUNE_IDS = {
     BattleEmulator::MIDHEAL,
-    BattleEmulator::HEAL,
     BattleEmulator::SPECIAL_MEDICINE,
-    BattleEmulator::FLEE_ALLY,
     BattleEmulator::DOUBLE_UP,
     BattleEmulator::PSYCHE_UP_ALLY,
+    BattleEmulator::FLEE_ALLY,
     BattleEmulator::BUFF,
     BattleEmulator::MULTITHRUST,
     BattleEmulator::DEFENCE,
@@ -44,6 +43,8 @@ static constexpr std::array<int, ids> TUNE_IDS = {
     SimpleParameterOptimizerNode::StatusEffectWeight,
     SimpleParameterOptimizerNode::paralysisWeight,
     SimpleParameterOptimizerNode::sleepWeight,
+    SimpleParameterOptimizerNode::poisonWeight,
+    SimpleParameterOptimizerNode::inactiveWeight,
     SimpleParameterOptimizerNode::SpHeight,
     SimpleParameterOptimizerNode::ActHeight,
     SimpleParameterOptimizerNode::ResourceHPCost,
@@ -584,7 +585,7 @@ int SimpleParameterOptimizer::testParameters(
         if (actions[i] == -1) { gene[i] = -1; break; }
     }
 
-    auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 100, gene, 0);
+    auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
 
     if (genome.EnemyPlayer.hp <= 0) {
         return genome.turn - 1;
