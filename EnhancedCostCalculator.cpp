@@ -59,13 +59,13 @@ double EnhancedCostCalculator::calculateStatusEffectCost(const Genome &genome) {
     // Negative status effects (penalties)
     if (genome.AllyPlayer.paralysis) statusCost += getActionCost(SimpleParameterOptimizerNode::paralysisWeight);
     if (genome.AllyPlayer.sleeping) statusCost += getActionCost(SimpleParameterOptimizerNode::sleepWeight);
+
     // Positive status effects (bonuses - negative cost)
     statusCost -= genome.AllyPlayer.BuffLevel * getActionCost(SimpleParameterOptimizerNode::BuffWeight);
     statusCost -= genome.AllyPlayer.AtkBuffLevel * getActionCost(SimpleParameterOptimizerNode::AtkBuffWeight);
     statusCost -= genome.AllyPlayer.TensionLevel * getActionCost(SimpleParameterOptimizerNode::TensionWeight);
 
     // Special abilities
-    if (genome.AllyPlayer.acrobaticStar) statusCost -= getActionCost(SimpleParameterOptimizerNode::SpHeight);
     if (genome.AllyPlayer.specialCharge) statusCost -= getActionCost(SimpleParameterOptimizerNode::ActHeight);
 
     return statusCost;
@@ -126,7 +126,6 @@ constexpr std::array<double, 201> GENOME = {
         /* 165 */ 4.47899,
         /* 166 */ -0.27755,    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
     };
-
 double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, double preGCost) {
     // Base cost is turn number (maintains depth-first preference)
     double gCost = preGCost + GENOME[SimpleParameterOptimizerNode::turnHeignt];
@@ -174,6 +173,8 @@ double EnhancedCostCalculator::calculateStatusEffectCost(const Genome &genome) {
     // Negative status effects (penalties)
     if (genome.AllyPlayer.paralysis) statusCost += GENOME[SimpleParameterOptimizerNode::paralysisWeight];
     if (genome.AllyPlayer.sleeping) statusCost += GENOME[SimpleParameterOptimizerNode::sleepWeight];
+    if (genome.AllyPlayer.PoisonEnable) statusCost += GENOME[SimpleParameterOptimizerNode::poisonWeight];
+    if (genome.AllyPlayer.inactive) statusCost += GENOME[SimpleParameterOptimizerNode::inactiveWeight];
 
     // Positive status effects (bonuses - negative cost)
     statusCost -= genome.AllyPlayer.BuffLevel * GENOME[SimpleParameterOptimizerNode::BuffWeight];
