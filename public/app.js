@@ -646,7 +646,6 @@ function setAutoTimerAnchor(parsed, perfNow) {
     totalSeconds: parsedToTotalSeconds(parsed),
     perfNow
   };
-  state.autoTimerAppliedPrefix = "";
   setAutoTimerResetConfirmVisible(false);
   setAutoTimerStatusText(getAutoTimerStatusReadyText());
   scheduleAutoTimerTick();
@@ -835,9 +834,6 @@ function setActiveEmulator(index) {
   if (!emulator) {
     return;
   }
-  if (state.active && state.active !== emulator && state.autoTimerAnchor) {
-    clearAutoTimerAnchor();
-  }
   state.active = emulator;
   ui.emulatorMeta.textContent = `${emulator.branch} :: ${emulator.module}`;
   appendLog(`selected emulator ${emulator.label}`);
@@ -939,6 +935,7 @@ async function runSearch() {
     return;
   }
   const runStartedAtPerf = performance.now();
+  setAutoTimerAnchor(parsed, runStartedAtPerf);
 
   const { start, end } = computeSeedRange(
     parsed.hours,
