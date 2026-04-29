@@ -102,7 +102,7 @@
               memoCopyUrl: "Copy URL",
               memoCopyInput: "Copy input",
               autoTimer: "Auto Timer",
-              autoTimerHint: "Manual timer assist corrected from the latest confirmed search",
+              autoTimerHint: "Starts timer from zero and auto-corrects it using search results",
               autoTimerStart: "Start Timer",
               autoTimerLive: "Predicted Timer",
               autoTimerUse: "Use Current Time",
@@ -112,12 +112,12 @@
               autoTimerCancel: "Cancel",
               autoTimerResetPrompt: "Disable the current timer anchor?",
               autoTimerStatusIdle: "No timer anchor yet. Press Start Timer when the in-game timer begins.",
-              autoTimerStatusReady: "Preview is locked to performance.now() and ignores wall-clock changes.",
+              autoTimerStatusReady: "Timer is running. It will be corrected automatically when a search result is confirmed.",
               autoTimerStatusUnsafe: "Pointer just re-entered the window. Wait 1.5s and try again."
             },
             ja: {
               autoTimer: "自動タイマー",
-              autoTimerHint: "手動開始したタイマーを最新の確定検索結果で補正する補助",
+              autoTimerHint: "タイマーを0秒から開始し、検索結果で自動補正します",
               autoTimerStart: "タイマー開始",
               autoTimerLive: "推定タイマー",
               autoTimerUse: "今の時刻を使う",
@@ -126,8 +126,8 @@
               autoTimerConfirm: "リセット確定",
               autoTimerCancel: "キャンセル",
               autoTimerResetPrompt: "現在のタイマー基準を無効化しますか？",
-              autoTimerStatusIdle: "まだタイマー基準がありません。ゲーム内タイマーが始まったらタイマー開始を押してください。",
-              autoTimerStatusReady: "表示は performance.now() 基準で進み、PC時刻を変えても影響を受けません。",
+              autoTimerStatusIdle: "まだタイマー基準がありません。ゲーム内タイマーがスタートしたらタイマー開始を押してください。",
+              autoTimerStatusReady: "タイマーが動作中です。検索結果が確定すると自動的に補正されます。",
               autoTimerStatusUnsafe: "ポインタがウィンドウに戻ったばかりです。1.5秒待ってから操作してください。",
               title: "DQ9 Battle Emulator",
               subtitle: "RTA向けWebAssemblyシードコンソール",
@@ -199,7 +199,7 @@
         <section class="panel panel-auto-timer" style="--delay: 0ms">
           <div class="panel-header">
             <h2 data-i18n="autoTimer">Auto Timer</h2>
-            <span class="hint" data-i18n="autoTimerHint">Manual timer assist corrected from the latest confirmed search</span>
+            <span class="hint" data-i18n="autoTimerHint">Corrects a manually started timer using the latest confirmed search result</span>
           </div>
           <div class="auto-timer-layout">
             <div class="auto-timer-preview-wrap">
@@ -414,5 +414,5 @@
     </div>
 
     <script src="app.js" defer></script>
-  </body>
+    </body>
 </html>
