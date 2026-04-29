@@ -89,6 +89,7 @@
                         visionHistoryHint: "Duplicate prevention follows the desktop console flow",
                         visionEmpty: "No accepted actions yet",
                         visionConnectButtonDescription: "Connecting to an OBS camera",
+                        visionstageDescription: "Go to video recognition",
                         visionTurn: "Turn",
                         visionAct1: "Act 1",
                         visionDamage1: "Damage 1",
@@ -203,6 +204,7 @@
                         runButtonDescription: "バトルエミュレーターを実行する",
                         actionInputDescription: "入力に行く",
                         dumpOutputDescription: "出力に行く",
+                        visionstageDescription: "映像認識に行く",
                         visionConnectButtonDescription: "obsカメラに接続する",
                         title: "DQ9 Battle Emulator",
                         subtitle: "RTA向けWebAssemblyシードコンソール",
@@ -511,7 +513,7 @@
                         data-i18n="visionDebugExport">Download Recognized Crops
                 </button>
             </div>
-            <div class="vision-stage">
+            <div id="visionstage" class="vision-stage">
                 <div class="vision-preview-wrap">
                     <div class="vision-label-row">
                         <span data-i18n="visionPreview">Preview</span>
@@ -917,6 +919,38 @@
                     </div>
                 </div>
                 <!-- /ショートカット8 -->
+
+                <!-- ショートカット9: vision-stage -->
+                <div
+                        class="shortcut-row"
+                        data-shortcut-target="visionstage"
+                        data-shortcut-default="KeyM"
+                >
+                    <div class="shortcut-copy">
+                        <div class="shortcut-description" data-i18n="visionstageDescription">Go to vision-stage.
+                        </div>
+                    </div>
+                    <div class="shortcut-actions">
+                        <button
+                                type="button"
+                                class="shortcut-key-button"
+                                data-shortcut-capture
+                                data-shortcut-target="visionstage"
+                        >
+                            M
+                        </button>
+                        <button
+                                type="button"
+                                class="shortcut-clear-button"
+                                data-shortcut-clear
+                                data-shortcut-target="visionstage"
+                                data-i18n="shortcutClear"
+                        >
+                            Clear
+                        </button>
+                    </div>
+                </div>
+                <!-- /ショートカット9 -->
 
 
             </div><!-- /shortcut-list -->
