@@ -703,9 +703,6 @@ function computeAutoTimerAppliedSeconds(nowPerf = performance.now()) {
 
 function updateAutoTimerButtons() {
   const hasAnchor = Boolean(state.autoTimerAnchor);
-  if (ui.autoTimerStartButton) {
-    ui.autoTimerStartButton.disabled = state.running;
-  }
   if (ui.autoTimerUseButton) {
     ui.autoTimerUseButton.disabled = !hasAnchor || state.running;
   }
@@ -715,6 +712,7 @@ function updateAutoTimerButtons() {
   if (ui.autoTimerResetConfirmButton) {
     ui.autoTimerResetConfirmButton.disabled = !hasAnchor || state.running;
   }
+  ui.autoTimerStartButton.disabled = state.running || hasAnchor;
 }
 
 function updateAutoTimerPreview() {
@@ -1356,6 +1354,7 @@ function applyAutoTimerToInput() {
   setAutoTimerFractionDigits(preciseTime.fraction, timeText);
   restartAutoTimerFractionHideTimer();
   setAutoTimerResetConfirmVisible(false);
+  ui.actionInput.focus();
 }
 
 ui.emulatorSelect.addEventListener("change", (event) => {

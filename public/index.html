@@ -57,11 +57,12 @@
           ],
           i18n: {
             en: {
+              autoTimerUseHint: "Press Use Current Time the moment the boss BGM starts or the screen rotates.",
               title: "DQ9 Battle Emulator",
               subtitle: "WebAssembly seed console for RTA analysis",
               emulator: "Emulator",
               input: "Input",
-              inputHint: "Enter runs, Shift+Enter adds a line",
+              inputHint: "Enter your combat action and press Enter to search",
               seed: "Seed",
               dump: "Dump Table",
               dumpHint: "C++ dumpTable output",
@@ -102,7 +103,7 @@
               memoCopyUrl: "Copy URL",
               memoCopyInput: "Copy input",
               autoTimer: "Auto Timer",
-              autoTimerHint: "Starts timer from zero and auto-corrects it using search results",
+              autoTimerHint: "Starts timer from zero and auto-corrects it using search results.",
               autoTimerStart: "Start Timer",
               autoTimerLive: "Predicted Timer",
               autoTimerUse: "Use Current Time",
@@ -111,13 +112,14 @@
               autoTimerConfirm: "Confirm Reset",
               autoTimerCancel: "Cancel",
               autoTimerResetPrompt: "Disable the current timer anchor?",
-              autoTimerStatusIdle: "No timer anchor yet. Press Start Timer when the in-game timer begins.",
-              autoTimerStatusReady: "Timer is running. It will be corrected automatically when a search result is confirmed.",
+              autoTimerStatusIdle: "No timer anchor yet. Set Offset (sec) to 0, then press Start Timer the moment the DS top screen lights up white after startup.",
+              autoTimerStatusReady: "Timer is running. Do not change Offset (sec) while the timer is active.",
               autoTimerStatusUnsafe: "Pointer just re-entered the window. Wait 1.5s and try again."
             },
             ja: {
+              autoTimerUseHint: "ボスBGMまたは画面回転の瞬間に今の時刻を使うを押してください。",
               autoTimer: "自動タイマー",
-              autoTimerHint: "タイマーを0秒から開始し、検索結果で自動補正します",
+              autoTimerHint: "タイマーを0秒から開始し、検索結果で自動補正します。",
               autoTimerStart: "タイマー開始",
               autoTimerLive: "推定タイマー",
               autoTimerUse: "今の時刻を使う",
@@ -126,14 +128,14 @@
               autoTimerConfirm: "リセット確定",
               autoTimerCancel: "キャンセル",
               autoTimerResetPrompt: "現在のタイマー基準を無効化しますか？",
-              autoTimerStatusIdle: "まだタイマー基準がありません。ゲーム内タイマーがスタートしたらタイマー開始を押してください。",
-              autoTimerStatusReady: "タイマーが動作中です。検索結果が確定すると自動的に補正されます。",
+              autoTimerStatusIdle: "まだタイマー基準がありません。Offset (sec) を 0 にしてから、起動後DSの上画面が白く点灯した瞬間にタイマー開始を押してください。",
+              autoTimerStatusReady: "タイマーが動作中です。タイマー使用中はOffset (sec) を変更しないでください。",
               autoTimerStatusUnsafe: "ポインタがウィンドウに戻ったばかりです。1.5秒待ってから操作してください。",
               title: "DQ9 Battle Emulator",
               subtitle: "RTA向けWebAssemblyシードコンソール",
               emulator: "バトルエミュ",
               input: "入力",
-              inputHint: "Enterで実行、Shift+Enterで改行",
+              inputHint: "戦闘行動を入力してEnterで検索",
               seed: "シード",
               dump: "出力",
               dumpHint: "C++ dumpTableの出力",
@@ -210,20 +212,22 @@
               <button id="autoTimerStartButton" class="run-button auto-timer-start-button" type="button" data-i18n="autoTimerStart">Start Timer</button>
               <button id="autoTimerUseButton" class="run-button auto-timer-use-button" type="button" data-i18n="autoTimerUse">Use Current Time</button>
               <button id="autoTimerResetButton" class="run-button auto-timer-reset-button" type="button" data-i18n="autoTimerReset">Reset</button>
+              <div class="auto-timer-use-hint" data-i18n="autoTimerUseHint">タイマー動作中にボスBGMまたは画面回転の瞬間に押してください。</div>
             </div>
             <label id="autoTimerFractionField" class="auto-timer-fraction is-hidden">
               <span class="auto-timer-fraction-label" data-i18n="autoTimerFraction">Fraction (4 digits)</span>
               <input
-                id="autoTimerFractionInput"
-                class="auto-timer-fraction-input"
-                type="number"
-                min="0"
-                max="9999"
-                step="1"
-                inputmode="numeric"
-                placeholder="0000"
+                      id="autoTimerFractionInput"
+                      class="auto-timer-fraction-input"
+                      type="number"
+                      min="0"
+                      max="9999"
+                      step="1"
+                      inputmode="numeric"
+                      placeholder="0000"
               />
             </label>
+
             <div id="autoTimerResetConfirm" class="auto-timer-confirm is-hidden" aria-live="polite">
               <span class="auto-timer-confirm-text" data-i18n="autoTimerResetPrompt">Disable the current timer anchor?</span>
               <button id="autoTimerResetConfirmButton" class="run-button auto-timer-confirm-button" type="button" data-i18n="autoTimerConfirm">Confirm Reset</button>

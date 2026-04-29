@@ -586,6 +586,12 @@ h2 {
   pointer-events: none;
 }
 
+.auto-timer-use-hint {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .auto-timer-confirm-text,
 .auto-timer-status {
   color: var(--muted);
