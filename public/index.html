@@ -71,7 +71,8 @@
                         autoTimerResetButtonDescription: "Attempting to reset the timer.",
                         autoTimerResetConfirmButtonDescription: "Confirm reset.",
                         runButtonDescription: "RUN Battle Emulator",
-                        actionInputDescription: "a",
+                        actionInputDescription: "Go to input.",
+                        dumpOutputDescription: "Go to output.",
                         title: "DQ9 Battle Emulator",
                         subtitle: "WebAssembly seed console for RTA analysis",
                         emulator: "Emulator",
@@ -142,7 +143,8 @@
                         autoTimerResetButtonDescription: "タイマーをリセットしようとします。",
                         autoTimerResetConfirmButtonDescription: "リセットを確定します。",
                         runButtonDescription: "バトルエミュレーターを実行する",
-                        actionInputDescription: "a",
+                        actionInputDescription: "入力に行く",
+                        dumpOutputDescription: "出力に行く",
                         autoTimer: "自動タイマー",
                         autoTimerHint: "タイマーを0秒から開始し、検索結果で自動補正します。",
                         autoTimerStart: "タイマー開始",
@@ -449,7 +451,7 @@
                 <div
                         class="shortcut-row"
                         data-shortcut-target="autoTimerStartButton"
-                        data-shortcut-default="Minus"
+                        data-shortcut-default="KeyS"
                 >
                     <div class="shortcut-copy">
                         <div class="shortcut-description" data-i18n="shortcutAutoTimerStartDescription">Starts the timer
@@ -607,14 +609,14 @@
                 </div>
                 <!-- /ショートカット⑤ -->
 
-                <!-- ショートカット6: 検索実行 (Run) -->
+                <!-- ショートカット6: 入力欄へ移動 -->
                 <div
                         class="shortcut-row"
                         data-shortcut-target="actionInput"
                         data-shortcut-default="KeyZ"
                 >
                     <div class="shortcut-copy">
-                        <div class="shortcut-description" data-i18n="actionInputDescription">RUN Battle Emulator.
+                        <div class="shortcut-description" data-i18n="actionInputDescription">Go to input.
                         </div>
                     </div>
                     <div class="shortcut-actions">
@@ -624,7 +626,7 @@
                                 data-shortcut-capture
                                 data-shortcut-target="actionInput"
                         >
-                            Q
+                            Z
                         </button>
                         <button
                                 type="button"
@@ -637,7 +639,39 @@
                         </button>
                     </div>
                 </div>
-                <!-- /ショートカット⑤ -->
+                <!-- /ショートカット⑥ -->
+
+                <!-- ショートカット7: 出力欄へ移動 -->
+                <div
+                        class="shortcut-row"
+                        data-shortcut-target="dumpOutput"
+                        data-shortcut-default="KeyC"
+                >
+                    <div class="shortcut-copy">
+                        <div class="shortcut-description" data-i18n="dumpOutputDescription">Go to output.
+                        </div>
+                    </div>
+                    <div class="shortcut-actions">
+                        <button
+                                type="button"
+                                class="shortcut-key-button"
+                                data-shortcut-capture
+                                data-shortcut-target="dumpOutput"
+                        >
+                            C
+                        </button>
+                        <button
+                                type="button"
+                                class="shortcut-clear-button"
+                                data-shortcut-clear
+                                data-shortcut-target="dumpOutput"
+                                data-i18n="shortcutClear"
+                        >
+                            Clear
+                        </button>
+                    </div>
+                </div>
+                <!-- /ショートカット⑦ -->
 
             </div><!-- /shortcut-list -->
         </section>

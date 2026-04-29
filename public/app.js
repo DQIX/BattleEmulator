@@ -59,6 +59,10 @@ const SHORTCUT_MODIFIER_CODES = new Set([
   "MetaLeft",
   "MetaRight"
 ]);
+const SHORTCUT_FOCUS_TARGETS = new Set([
+  "actionInput",
+  "dumpOutput"
+]);
 
 const state = {
   emulators: [],
@@ -892,11 +896,47 @@ function matchesShortcut(binding, event) {
 
 function isShortcutTargetAvailable(target) {
   const element = ui[target];
-  if (!element || typeof element.click !== "function" || element.disabled || element.hidden) {
+  if (!element || element.hidden) {
+    return false;
+  }
+  if ("disabled" in element && element.disabled) {
+    return false;
+  }
+  if (!SHORTCUT_FOCUS_TARGETS.has(target) && typeof element.click !== "function") {
     return false;
   }
   const style = window.getComputedStyle(element);
   return style.display !== "none" && style.visibility !== "hidden" && element.getClientRects().length > 0;
+}
+
+function focusShortcutTarget(target) {
+  const element = ui[target];
+  if (!element || typeof element.focus !== "function") {
+    return;
+  }
+
+  // 今フォーカス中なら一度外す
+  if (document.activeElement === element) {
+    element.blur();
+  } else if (document.activeElement &&
+      typeof document.activeElement.blur === "function") {
+    // 他の要素にフォーカス中でも外しておく
+    document.activeElement.blur();
+  }
+
+  element.focus();
+
+  if (target === "actionInput" &&
+      typeof element.setSelectionRange === "function") {
+    const end = element.value.length;
+    element.setSelectionRange(end, end);
+  }else{
+    element.scrollIntoView({
+      behavior: "smooth",
+      block: "center"
+    });
+
+  }
 }
 
 function handleShortcutCapture(event) {
@@ -935,10 +975,12 @@ function handleWindowShortcut(event) {
     if (!matchesShortcut(binding, event)) {
       continue;
     }
-    if (isInputLikeTarget(event.target) || isInputLikeTarget(document.activeElement)) {
-      event.preventDefault();
-    }
+    event.preventDefault();
     if (!isShortcutTargetAvailable(target)) {
+      return;
+    }
+    if (SHORTCUT_FOCUS_TARGETS.has(target)) {
+      focusShortcutTarget(target);
       return;
     }
     ui[target].click();
