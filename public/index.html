@@ -27,185 +27,343 @@
 
 
     <script>
-        (function () {
-            const root = document.documentElement;
-            const savedTheme = localStorage.getItem("dq9Theme") || "lightSepia";
-            const savedLang = localStorage.getItem("dq9Lang") || "ja";
-            root.dataset.theme = savedTheme;
-            root.dataset.lang = savedLang;
-            root.lang = savedLang;
-            window.APP_CONFIG = {
-                themes: [
-                    "lightSepia",
-                    "light",
-                    "light2",
-                    "lightGray",
-                    "lightGrayPlus",
-                    "lightCool",
-                    "lightGreen",
-                    "lightHighContrast",
-                    "softGray",
-                    "warmPaper",
-                    "mistBlue",
-                    "blue",
-                    "gold",
-                    "pink",
-                    "DarkPlus",
-                    "deepDark",
-                    "darkAsh",
-                    "graphiteSoft",
-                    "darkMoss",
-                    "darkColorblind",
-                    "darkTritanopia"
-                ],
-                i18n: {
-                    en: {
-                        autoTimerUseHint: "Press Use Current Time the moment the boss BGM starts or the screen rotates.",
-                        shortcuts: "Shortcuts",
-                        shortcutsHint: "Trigger these buttons while the pointer is inside the window.",
-                        shortcutNotSet: "Not set",
-                        shortcutWaiting: "Press a key",
-                        shortcutClear: "Clear",
-                        shortcutAutoTimerStartDescription: "Starts the timer from the current Offset value.",
-                        shortcutAutoTimerUseDescription: "Puts the current predicted timer into the input time.",
-                        autoTimerResetButtonDescription: "Attempting to reset the timer.",
-                        autoTimerResetConfirmButtonDescription: "Confirm reset.",
-                        runButtonDescription: "RUN Battle Emulator",
-                        actionInputDescription: "Go to input.",
-                        dumpOutputDescription: "Go to output.",
-                        title: "DQ9 Battle Emulator",
-                        subtitle: "WebAssembly seed console for RTA analysis",
-                        emulator: "Emulator",
-                        input: "Input",
-                        inputHint: "Enter your combat action and press Enter to search",
-                        seed: "Seed",
-                        dump: "Dump Table",
-                        dumpHint: "C++ dumpTable output",
-                        settings: "Settings",
-                        settingsHint: "Theme and language",
-                        log: "Log",
-                        logHint: "session output",
-                        timeLabel: "Time (H M S)",
-                        workers: "Workers",
-                        run: "Run Search",
-                        theme: "Theme",
-                        language: "Language",
-                        idle: "idle",
-                        ready: "ready",
-                        missing: "missing",
-                        waiting: "waiting",
-                        reserved: "reserved",
-                        seedHex: "Hex",
-                        seedDec: "Dec",
-                        seedDrift: "Drift",
-                        speed: "Speed",
-                        elapsed: "Elapsed",
-                        preload: "Preload",
-                        memoTable: "Seed Memo",
-                        memoSaveOnly: "Saved only when a single seed is found",
-                        memoEmpty: "No memo entries yet",
-                        memoTime: "Time",
-                        memoRealTime: "Real",
-                        memoEmu: "Emu",
-                        memoOffset: "Offset",
-                        memoRange: "Range",
-                        memoDrift: "Drift",
-                        memoInput: "Input",
-                        memoNote: "Memo",
-                        memoUrlCol: "URL",
-                        memoCopyMd: "Copy Markdown",
-                        memoCopyCsv: "Copy CSV",
-                        memoCopyUrl: "Copy URL",
-                        memoCopyInput: "Copy input",
-                        autoTimer: "Auto Timer",
-                        autoTimerHint: "Starts timer from zero and auto-corrects it using search results.",
-                        autoTimerStart: "Start Timer",
-                        autoTimerLive: "Predicted In Game Timer",
-                        autoTimerUse: "Use Current Time",
-                        autoTimerFraction: "Fraction (4 digits)",
-                        autoTimerReset: "Reset",
-                        autoTimerConfirm: "Confirm Reset",
-                        autoTimerCancel: "Cancel",
-                        autoTimerResetPrompt: "Disable the current timer anchor?",
-                        autoTimerStatusIdle: "No timer anchor yet. Set Offset (sec) to 0, then press Start Timer the moment the DS top screen lights up white after startup.",
-                        autoTimerStatusReady: "Timer is running. Do not change Offset (sec) while the timer is active.",
-                        autoTimerStatusUnsafe: "Pointer just re-entered the window. Wait 1.5s and try again."
-                    },
-                    ja: {
-                        autoTimerUseHint: "ボスBGMまたは画面回転の瞬間に今の時刻を使うを押してください。",
-                        shortcuts: "ショートカット",
-                        shortcutsHint: "ポインタがウィンドウ内にある間、この欄のキーで対象ボタンを押せます。",
-                        shortcutNotSet: "未設定",
-                        shortcutWaiting: "キーを押してください",
-                        shortcutClear: "クリア",
-                        shortcutAutoTimerStartDescription: "今のOffsetを基準にタイマーを開始します。",
-                        shortcutAutoTimerUseDescription: "現在の推定タイマーを入力欄の時刻に入れます。",
-                        autoTimerResetButtonDescription: "タイマーをリセットしようとします。",
-                        autoTimerResetConfirmButtonDescription: "リセットを確定します。",
-                        runButtonDescription: "バトルエミュレーターを実行する",
-                        actionInputDescription: "入力に行く",
-                        dumpOutputDescription: "出力に行く",
-                        autoTimer: "自動タイマー",
-                        autoTimerHint: "タイマーを0秒から開始し、検索結果で自動補正します。",
-                        autoTimerStart: "タイマー開始",
-                        autoTimerLive: "推定ゲーム内タイマー",
-                        autoTimerUse: "今の時刻を使う",
-                        autoTimerFraction: "小数点以下4桁",
-                        autoTimerReset: "リセット",
-                        autoTimerConfirm: "リセット確定",
-                        autoTimerCancel: "キャンセル",
-                        autoTimerResetPrompt: "現在のタイマー基準を無効化しますか？",
-                        autoTimerStatusIdle: "まだタイマー基準がありません。Offset (sec) を 0 にしてから、起動後DSの上画面が白く点灯した瞬間にタイマー開始を押してください。",
-                        autoTimerStatusReady: "タイマーが動作中です。タイマー使用中はOffset (sec) を変更しないでください。",
-                        autoTimerStatusUnsafe: "ポインタがウィンドウに戻ったばかりです。1.5秒待ってから操作してください。",
-                        title: "DQ9 Battle Emulator",
-                        subtitle: "RTA向けWebAssemblyシードコンソール",
-                        emulator: "バトルエミュ",
-                        input: "入力",
-                        inputHint: "戦闘行動を入力してEnterで検索",
-                        seed: "シード",
-                        dump: "出力",
-                        dumpHint: "C++ dumpTableの出力",
-                        settings: "設定",
-                        settingsHint: "テーマと言語",
-                        log: "ログ",
-                        logHint: "セッション出力",
-                        timeLabel: "時間 (H M S)",
-                        workers: "ワーカー数",
-                        run: "検索開始",
-                        theme: "テーマ",
-                        language: "言語",
-                        idle: "待機",
-                        ready: "準備完了",
-                        missing: "未検出",
-                        waiting: "待機中",
-                        reserved: "予約",
-                        seedHex: "Hex",
-                        seedDec: "Dec",
-                        seedDrift: "誤差",
-                        speed: "速度",
-                        elapsed: "経過",
-                        preload: "プリロード",
-                        memoTable: "シードメモ",
-                        memoSaveOnly: "シードが1件のときのみ保存",
-                        memoEmpty: "メモがありません",
-                        memoTime: "時間",
-                        memoRealTime: "現実",
-                        memoEmu: "Emu",
-                        memoOffset: "Offset",
-                        memoRange: "Range",
-                        memoDrift: "誤差",
-                        memoInput: "Input",
-                        memoNote: "メモ",
-                        memoUrlCol: "URL",
-                        memoCopyMd: "Markdownコピー",
-                        memoCopyCsv: "CSVコピー",
-                        memoCopyUrl: "URLコピー",
-                        memoCopyInput: "Inputコピー"
-                    }
-                }
-            };
-        })();
+(function () {
+  const root = document.documentElement;
+  const savedTheme = localStorage.getItem("dq9Theme") || "lightSepia";
+  const savedLang = localStorage.getItem("dq9Lang") || "ja";
+
+  root.dataset.theme = savedTheme;
+  root.dataset.lang = savedLang;
+  root.lang = savedLang;
+
+  window.APP_CONFIG = {
+    themes: [
+      "lightSepia",
+      "light",
+      "light2",
+      "lightGray",
+      "lightGrayPlus",
+      "lightCool",
+      "lightGreen",
+      "lightHighContrast",
+      "softGray",
+      "warmPaper",
+      "mistBlue",
+      "blue",
+      "gold",
+      "pink",
+      "DarkPlus",
+      "deepDark",
+      "darkAsh",
+      "graphiteSoft",
+      "darkMoss",
+      "darkColorblind",
+      "darkTritanopia"
+    ],
+
+    i18n: {
+      en: {
+        title: "DQ9 Battle Emulator",
+        subtitle: "WebAssembly seed console for RTA analysis",
+
+        emulator: "Emulator",
+        input: "Input",
+        inputHint: "Enter actions, Shift+Enter adds a line",
+        seed: "Seed",
+        dump: "Dump Table",
+        dumpHint: "C++ dumpTable output",
+        settings: "Settings",
+        settingsHint: "Theme and language",
+        log: "Log",
+        logHint: "Session output",
+
+        timeLabel: "Time (H M S)",
+        workers: "Workers",
+        run: "Run Search",
+        theme: "Theme",
+        language: "Language",
+
+        idle: "idle",
+        ready: "ready",
+        missing: "missing",
+        waiting: "waiting",
+        reserved: "reserved",
+
+        seedHex: "Hex",
+        seedDec: "Dec",
+        seedDrift: "Drift",
+        speed: "Speed",
+        elapsed: "Elapsed",
+        preload: "Preload",
+
+        memoTable: "Seed Memo",
+        memoSaveOnly: "Saved only when a single seed is found",
+        memoEmpty: "No memo entries yet",
+        memoTime: "Time",
+        memoRealTime: "Real",
+        memoEmu: "Emu",
+        memoOffset: "Offset",
+        memoRange: "Range",
+        memoDrift: "Drift",
+        memoInput: "Input",
+        memoNote: "Memo",
+        memoUrlCol: "URL",
+        memoCopyMd: "Copy Markdown",
+        memoCopyCsv: "Copy CSV",
+        memoCopyUrl: "Copy URL",
+        memoCopyInput: "Copy Input",
+
+        autoTimer: "Auto Timer",
+        autoTimerHint: "Starts from zero and auto-corrects using search results.",
+        autoTimerStart: "Start Timer",
+        autoTimerLive: "Predicted In-Game Timer",
+        autoTimerUse: "Use Current Time",
+        autoTimerUseHint: "Press when boss BGM starts or the screen rotates.",
+        autoTimerFraction: "Fraction (4 digits)",
+        autoTimerReset: "Reset",
+        autoTimerConfirm: "Confirm Reset",
+        autoTimerCancel: "Cancel",
+        autoTimerResetPrompt: "Disable the current timer anchor?",
+        autoTimerStatusIdle:
+          "No timer anchor yet. Set Offset (sec) to 0, then press Start Timer when the DS top screen flashes white after boot.",
+        autoTimerStatusReady:
+          "Timer is running. Do not change Offset (sec) while active.",
+        autoTimerStatusUnsafe:
+          "Pointer just re-entered the window. Wait 1.5s and try again.",
+
+        shortcuts: "Shortcuts",
+        shortcutsHint:
+          "While the pointer is inside the window, these keys trigger the buttons below.",
+        shortcutNotSet: "Not set",
+        shortcutWaiting: "Press a key",
+        shortcutClear: "Clear",
+        shortcutAutoTimerStartDescription:
+          "Starts the timer using the current Offset.",
+        shortcutAutoTimerUseDescription:
+          "Copies the current predicted timer into the time input.",
+        autoTimerResetButtonDescription:
+          "Attempts to reset the timer.",
+        autoTimerResetConfirmButtonDescription:
+          "Confirms reset.",
+        runButtonDescription:
+          "Run Battle Emulator.",
+        actionInputDescription:
+          "Move focus to input.",
+        dumpOutputDescription:
+          "Move focus to output.",
+
+        visionTitle: "Vision Console",
+        visionSubtitle: "WebGPU template matching for OBS camera feeds",
+        visionStatusIdle: "idle",
+        visionStatusReady: "ready",
+        visionStatusWatching: "watching",
+        visionStatusFallback: "CPU fallback",
+        visionStatusError: "error",
+
+        visionGpuWarningTitle: "WebGPU unavailable",
+        visionGpuWarningText:
+          "No usable GPU was detected. Vision mode can run on CPU, but the browser may freeze heavily. Start anyway?",
+        visionGpuWarningCancel: "Cancel",
+        visionGpuWarningStart: "Start",
+
+        visionConnect: "Connect OBS Camera",
+        visionRequestPermission: "Request Camera Permission",
+        visionReset: "Reset Console",
+        visionDebugExport: "Download Recognized Crops",
+
+        visionCamera: "Camera",
+        visionFps: "Inspect FPS",
+        visionPreview: "Preview",
+
+        visionBridge: "Bridge",
+        visionBridgeIdle: "Not sent yet",
+        visionBridgeReady: "Stub bridge ready",
+        visionBridgeTurn: "Turn sync pending",
+
+        visionMatches: "Current Matches",
+        visionHistory: "Recognized Actions",
+        visionHistoryHint:
+          "Duplicate prevention follows the desktop console flow",
+        visionEmpty: "No accepted actions yet",
+
+        visionTurn: "Turn",
+        visionAct1: "Act 1",
+        visionDamage1: "Damage 1",
+        visionAct2: "Act 2",
+        visionDamage2: "Damage 2",
+        visionAct3: "Act 3",
+        visionDamage3: "Damage 3",
+
+        visionAction: "Action",
+        visionDetail: "Detail",
+        visionScore: "Score",
+
+        visionEncoder: "Encoder",
+        visionEncoderLabel: "Custom Encode",
+
+        visionConfirmTitle: "Reset recognition console?",
+        visionConfirmText:
+          "Accepted actions, pending turn state, and bridge history will be cleared.",
+        visionConfirmCancel: "Cancel",
+        visionConfirmReset: "Reset",
+
+        visionCopyMd: "Copy Markdown",
+        visionCopyCsv: "Copy CSV"
+      },
+
+      ja: {
+        title: "DQ9 Battle Emulator",
+        subtitle: "RTA向けWebAssemblyシードコンソール",
+
+        emulator: "バトルエミュ",
+        input: "入力",
+        inputHint: "入力してEnterで検索、Shift+Enterで改行",
+        seed: "シード",
+        dump: "出力",
+        dumpHint: "C++ dumpTableの出力",
+        settings: "設定",
+        settingsHint: "テーマと言語",
+        log: "ログ",
+        logHint: "セッション出力",
+
+        timeLabel: "時間 (H M S)",
+        workers: "ワーカー数",
+        run: "検索開始",
+        theme: "テーマ",
+        language: "言語",
+
+        idle: "待機",
+        ready: "準備完了",
+        missing: "未検出",
+        waiting: "待機中",
+        reserved: "予約",
+
+        seedHex: "Hex",
+        seedDec: "Dec",
+        seedDrift: "誤差",
+        speed: "速度",
+        elapsed: "経過",
+        preload: "プリロード",
+
+        memoTable: "シードメモ",
+        memoSaveOnly: "シードが1件のときのみ保存",
+        memoEmpty: "メモがありません",
+        memoTime: "時間",
+        memoRealTime: "現実",
+        memoEmu: "Emu",
+        memoOffset: "Offset",
+        memoRange: "Range",
+        memoDrift: "誤差",
+        memoInput: "Input",
+        memoNote: "メモ",
+        memoUrlCol: "URL",
+        memoCopyMd: "Markdownコピー",
+        memoCopyCsv: "CSVコピー",
+        memoCopyUrl: "URLコピー",
+        memoCopyInput: "Inputコピー",
+
+        autoTimer: "自動タイマー",
+        autoTimerHint: "0秒から開始し、検索結果で自動補正します。",
+        autoTimerStart: "タイマー開始",
+        autoTimerLive: "推定ゲーム内タイマー",
+        autoTimerUse: "今の時刻を使う",
+        autoTimerUseHint:
+          "ボスBGM開始または画面回転の瞬間に押してください。",
+        autoTimerFraction: "小数点以下4桁",
+        autoTimerReset: "リセット",
+        autoTimerConfirm: "リセット確定",
+        autoTimerCancel: "キャンセル",
+        autoTimerResetPrompt:
+          "現在のタイマー基準を無効化しますか？",
+        autoTimerStatusIdle:
+          "まだタイマー基準がありません。Offset (sec) を0にして、起動後DS上画面が白く光った瞬間にタイマー開始を押してください。",
+        autoTimerStatusReady:
+          "タイマー動作中です。使用中は Offset (sec) を変更しないでください。",
+        autoTimerStatusUnsafe:
+          "ポインタがウィンドウに戻った直後です。1.5秒待ってから操作してください。",
+
+        shortcuts: "ショートカット",
+        shortcutsHint:
+          "ポインタがウィンドウ内にある間、このキーで対象ボタンを押せます。",
+        shortcutNotSet: "未設定",
+        shortcutWaiting: "キーを押してください",
+        shortcutClear: "クリア",
+        shortcutAutoTimerStartDescription:
+          "現在のOffsetを基準にタイマー開始します。",
+        shortcutAutoTimerUseDescription:
+          "現在の推定タイマーを入力欄へ入れます。",
+        autoTimerResetButtonDescription:
+          "タイマーをリセットしようとします。",
+        autoTimerResetConfirmButtonDescription:
+          "リセットを確定します。",
+        runButtonDescription:
+          "バトルエミュレーターを実行する。",
+        actionInputDescription:
+          "入力欄へ移動します。",
+        dumpOutputDescription:
+          "出力欄へ移動します。",
+
+        visionTitle: "映像認識コンソール",
+        visionSubtitle: "OBSカメラ向けWebGPUテンプレートマッチング",
+        visionStatusIdle: "待機",
+        visionStatusReady: "準備完了",
+        visionStatusWatching: "認識中",
+        visionStatusFallback: "CPUフォールバック",
+        visionStatusError: "エラー",
+
+        visionGpuWarningTitle: "WebGPUが使えません",
+        visionGpuWarningText:
+          "利用可能なGPUが見つかりません。CPU動作は可能ですが、ブラウザが重くなる場合があります。開始しますか？",
+        visionGpuWarningCancel: "キャンセル",
+        visionGpuWarningStart: "開始",
+
+        visionConnect: "OBSカメラ接続",
+        visionRequestPermission: "カメラ権限を取得",
+        visionReset: "コンソール初期化",
+        visionDebugExport: "認識枠保存",
+
+        visionCamera: "カメラ",
+        visionFps: "認識FPS",
+        visionPreview: "プレビュー",
+
+        visionBridge: "連携",
+        visionBridgeIdle: "未送信",
+        visionBridgeReady: "ブリッジ準備完了",
+        visionBridgeTurn: "ターン送信待ち",
+
+        visionMatches: "現在の一致",
+        visionHistory: "認識済みアクション",
+        visionHistoryHint:
+          "重複防止はデスクトップ版の流れに合わせています",
+        visionEmpty: "まだ確定した行動はありません",
+
+        visionTurn: "ターン",
+        visionAct1: "行動1",
+        visionDamage1: "ダメージ1",
+        visionAct2: "行動2",
+        visionDamage2: "ダメージ2",
+        visionAct3: "行動3",
+        visionDamage3: "ダメージ3",
+
+        visionAction: "行動",
+        visionDetail: "詳細",
+        visionScore: "一致率",
+
+        visionEncoder: "エンコーダ",
+        visionEncoderLabel: "独自エンコード",
+
+        visionConfirmTitle: "認識コンソールを初期化しますか？",
+        visionConfirmText:
+          "確定済み行動、ターン状態、ブリッジ履歴を削除します。",
+        visionConfirmCancel: "戻る",
+        visionConfirmReset: "初期化",
+
+        visionCopyMd: "Markdownコピー",
+        visionCopyCsv: "CSVコピー"
+      }
+    }
+  };
+})();
     </script>
     <link rel="stylesheet" href="styles.css"/>
 </head>
@@ -394,6 +552,124 @@
                 <span class="hint" data-i18n="logHint">session output</span>
             </div>
             <textarea id="logOutput" class="log-output" aria-labelledby="logTitle ログ" readonly></textarea>
+        </section>
+
+        <section class="panel panel-vision" style="--delay: 40ms">
+          <div class="panel-header">
+            <div>
+              <h2 data-i18n="visionTitle">Vision Console</h2>
+              <div class="hint" data-i18n="visionSubtitle">WebGPU template matching for OBS camera feeds</div>
+            </div>
+            <span id="visionStatus" class="chip" data-i18n="visionStatusIdle">idle</span>
+          </div>
+          <div class="vision-toolbar">
+            <label class="field">
+              <span data-i18n="visionCamera">Camera</span>
+              <select id="visionCameraSelect" class="emulator-select">
+                <option value="">camera not loaded</option>
+              </select>
+            </label>
+            <label class="field">
+              <span data-i18n="visionFps">Inspect FPS</span>
+              <input id="visionInspectRate" type="number" min="1" max="30" step="1" value="3" />
+            </label>
+            <button id="visionPermissionButton" class="run-button run-button-secondary" data-i18n="visionRequestPermission">Request Camera Permission</button>
+            <button id="visionConnectButton" class="run-button" data-i18n="visionConnect">Connect OBS Camera</button>
+            <button id="visionResetButton" class="run-button run-button-secondary" data-i18n="visionReset">Reset Console</button>
+            <button id="visionDebugExportButton" class="run-button run-button-secondary" data-i18n="visionDebugExport">Download Recognized Crops</button>
+          </div>
+          <div class="vision-stage">
+            <div class="vision-preview-wrap">
+              <div class="vision-label-row">
+                <span data-i18n="visionPreview">Preview</span>
+                <span id="visionFpsValue" class="chip chip-muted">0.0 fps</span>
+              </div>
+              <div class="vision-preview-shell">
+                <video id="visionVideo" class="vision-video" autoplay muted playsinline hidden></video>
+                <canvas id="visionOverlay" class="vision-overlay" width="958" height="718"></canvas>
+              </div>
+            </div>
+            <div class="vision-side">
+              <div class="vision-card">
+                <div class="vision-label-row">
+                  <span data-i18n="visionMatches">Current Matches</span>
+                  <span id="visionEngine" class="chip chip-muted">WebGPU</span>
+                </div>
+                <div id="visionMatches" class="vision-matches">
+                  <div class="vision-match-card" data-slot="main">
+                    <div class="vision-match-label">main</div>
+                    <div class="vision-match-name">-</div>
+                    <div class="vision-match-score">0.0%</div>
+                  </div>
+                  <div class="vision-match-card" data-slot="sub">
+                    <div class="vision-match-label">sub</div>
+                    <div class="vision-match-name">-</div>
+                    <div class="vision-match-score">0.0%</div>
+                  </div>
+                  <div class="vision-match-card" data-slot="ally">
+                    <div class="vision-match-label">ally</div>
+                    <div class="vision-match-name">-</div>
+                    <div class="vision-match-score">0.0%</div>
+                  </div>
+                  <div class="vision-match-card" data-slot="target">
+                    <div class="vision-match-label">target</div>
+                    <div class="vision-match-name">-</div>
+                    <div class="vision-match-score">0.0%</div>
+                  </div>
+                </div>
+              </div>
+              <div class="vision-card">
+                <div class="vision-label-row">
+                  <span data-i18n="visionBridge">Bridge</span>
+                  <span id="visionTurnChip" class="chip chip-accent">T1 / A1</span>
+                </div>
+                <div id="visionBridgeStatus" class="meta-line" data-i18n="visionBridgeIdle">Not sent yet</div>
+                <label class="field">
+                  <span data-i18n="visionEncoder">Encoder</span>
+                  <textarea id="visionEncodedPayload" class="vision-encoded-output" readonly aria-label="Encoded battle payload"></textarea>
+                </label>
+                <div class="meta-line" data-i18n="visionEncoderLabel">Custom encode</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel panel-vision-history" style="--delay: 260ms">
+          <div class="panel-header">
+            <div class="memo-title">
+              <h2 data-i18n="visionHistory">Recognized Actions</h2>
+            </div>
+            <div class="memo-actions">
+              <a id="visionCopyMarkdown" class="chip chip-muted" href="#" data-i18n="visionCopyMd">Copy Markdown</a>
+              <a id="visionCopyCsv" class="chip chip-muted" href="#" data-i18n="visionCopyCsv">Copy CSV</a>
+            </div>
+          </div>
+          <div id="visionHistoryEmpty" class="memo-empty" data-i18n="visionEmpty">No accepted actions yet</div>
+          <div class="memo-scroll vision-history-scroll" id="visionHistoryScroll" hidden>
+            <table class="memo-grid vision-history-grid">
+              <colgroup>
+                <col style="width: 72px" />
+                <col style="width: 190px" />
+                <col style="width: 110px" />
+                <col style="width: 190px" />
+                <col style="width: 110px" />
+                <col style="width: 190px" />
+                <col style="width: 110px" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th data-i18n="visionTurn">Turn</th>
+                  <th data-i18n="visionAct1">Act 1</th>
+                  <th data-i18n="visionDamage1">Damage 1</th>
+                  <th data-i18n="visionAct2">Act 2</th>
+                  <th data-i18n="visionDamage2">Damage 2</th>
+                  <th data-i18n="visionAct3">Act 3</th>
+                  <th data-i18n="visionDamage3">Damage 3</th>
+                </tr>
+              </thead>
+              <tbody id="visionHistoryBody"></tbody>
+            </table>
+          </div>
         </section>
 
         <section class="panel panel-ledger-table" style="--delay: 280ms">
@@ -693,6 +969,29 @@
     </main>
 </div>
 
-<script src="app.js" defer></script>
-</body>
+    <div id="visionResetDialog" class="vision-dialog" hidden>
+      <div class="vision-dialog-card">
+        <h2 data-i18n="visionConfirmTitle">Reset recognition console?</h2>
+        <p data-i18n="visionConfirmText">Accepted actions, pending turn state, and bridge payload history will be cleared.</p>
+        <div class="vision-dialog-actions">
+          <button id="visionResetCancel" class="run-button run-button-secondary" data-i18n="visionConfirmCancel">Cancel</button>
+          <button id="visionResetConfirm" class="run-button" data-i18n="visionConfirmReset">Reset</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="visionGpuWarningDialog" class="vision-dialog" hidden>
+      <div class="vision-dialog-card">
+        <h2 data-i18n="visionGpuWarningTitle">WebGPU unavailable</h2>
+        <p data-i18n="visionGpuWarningText">Your environment does not seem to have a GPU connected. Vision recognition can run on CPU, but the browser may freeze heavily. Start anyway?</p>
+        <div class="vision-dialog-actions">
+          <button id="visionGpuWarningCancel" class="run-button run-button-secondary" data-i18n="visionGpuWarningCancel">Cancel</button>
+          <button id="visionGpuWarningStart" class="run-button" data-i18n="visionGpuWarningStart">Start</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="app.js" defer></script>
+    <script src="vision.js" defer></script>
+  </body>
 </html>

@@ -8,7 +8,9 @@
 /out
 /.vs
 /.interface-design
-/interface-design-main
 /public/branches
 /public/emulators.json
+/public/erugiosu2
+/interface-design-main
+/interface-design
 /cmake-build-release2
