@@ -416,9 +416,12 @@ body::before {
   grid-row: span 2;
 }
 
+
 .panel-vision,
 .panel-vision-history {
   grid-column: span 2;
+}
+
 .panel-auto-timer {
   grid-column: span 2;
   min-height: 0;
