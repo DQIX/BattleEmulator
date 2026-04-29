@@ -32,7 +32,8 @@ const ui = {
   memoEmpty: document.getElementById("memoEmpty"),
   memoScroll: document.getElementById("memoScroll"),
   memoCopyMarkdown: document.getElementById("memoCopyMarkdown"),
-  memoCopyCsv: document.getElementById("memoCopyCsv")
+  memoCopyCsv: document.getElementById("memoCopyCsv"),
+  visionConnectButton: document.getElementById("visionConnectButton")
 };
 
 const DEFAULT_OFFSET_SECONDS = 15;
