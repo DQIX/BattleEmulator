@@ -1395,6 +1395,12 @@ if (ui.autoTimerFractionInput) {
 
 if (ui.autoTimerStartButton) {
   ui.autoTimerStartButton.addEventListener("click", () => {
+    if (isPointerUnsafe() && state.autoTimerAnchor != null) {
+      setAutoTimerStatusText(
+          t("autoTimerStatusUnsafe", "Pointer just re-entered the window. Wait 1.5s and try again.")
+      );
+      return;
+    }
     startManualAutoTimer();
   });
 }
