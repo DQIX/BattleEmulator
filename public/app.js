@@ -541,8 +541,8 @@ function computeSeedSecondsScaled(seed) {
   return (shifted * SEED_SECONDS_NUMERATOR) / SEED_SECONDS_DIVISOR;
 }
 
-function computeSeedSecondsNumber(seed) {
-  return Number(computeSeedSecondsScaled(seed)) / Number(SEED_TIME_SCALE);
+function computeSeedTimeUnits(seed) {
+  return computeSeedSecondsScaled(seed) * BigInt(AUTO_TIMER_FRACTION_SCALE / Number(SEED_TIME_SCALE));
 }
 
 function computeRealSecondsScaled(parsed, preciseTimeUnits = null) {
@@ -1007,9 +1007,12 @@ function applySearchResultAutoTimerCorrection(seed) {
   if (!lastUse) {
     return false;
   }
-  const correctedDisplayedSeconds = computeSeedSecondsNumber(seed);
+  const correctedTimeUnits = computeSeedTimeUnits(seed);
+  const correctedDisplayedSeconds = Number(correctedTimeUnits) / AUTO_TIMER_FRACTION_SCALE;
+  const timingOffsetUnits = lastUse.preciseTimeUnitsAtUse - correctedTimeUnits;
+  const correctedPerfNow = lastUse.perfNow - (Number(timingOffsetUnits) * 1000 / AUTO_TIMER_FRACTION_SCALE);
   const totalSeconds = correctedDisplayedSeconds + normalizeOffsetSeconds(lastUse.offsetSecondsAtUse);
-  setAutoTimerAnchorSeconds(totalSeconds, lastUse.perfNow);
+  setAutoTimerAnchorSeconds(totalSeconds, correctedPerfNow);
   state.autoTimerCorrectionCount += 1;
   const preciseTime = splitPreciseSeconds(correctedDisplayedSeconds);
   setAutoTimerFractionDigits(preciseTime.fraction, formatActionTime(preciseTime.wholeSeconds));
@@ -1335,6 +1338,7 @@ function applyAutoTimerToInput() {
     inputText: ui.actionInput.value,
     timeText,
     fractionDigits: preciseTime.fraction,
+    preciseTimeUnitsAtUse: BigInt(preciseTime.wholeSeconds * AUTO_TIMER_FRACTION_SCALE + preciseTime.fraction),
     offsetSecondsAtUse: state.offsetSeconds
   };
   setAutoTimerFractionDigits(preciseTime.fraction, timeText);
