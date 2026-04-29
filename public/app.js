@@ -1007,15 +1007,27 @@ function applySearchResultAutoTimerCorrection(seed) {
   if (!lastUse) {
     return false;
   }
-  const correctedTimeUnits = computeSeedTimeUnits(seed);
-  const correctedDisplayedSeconds = Number(correctedTimeUnits) / AUTO_TIMER_FRACTION_SCALE;
-  const timingOffsetUnits = lastUse.preciseTimeUnitsAtUse - correctedTimeUnits;
-  const correctedPerfNow = lastUse.perfNow - (Number(timingOffsetUnits) * 1000 / AUTO_TIMER_FRACTION_SCALE);
-  const totalSeconds = correctedDisplayedSeconds + normalizeOffsetSeconds(lastUse.offsetSecondsAtUse);
-  setAutoTimerAnchorSeconds(totalSeconds, correctedPerfNow);
+
+  const seedTimeUnits = computeSeedTimeUnits(seed);
+  const seedSeconds = Number(seedTimeUnits) / AUTO_TIMER_FRACTION_SCALE;
+
+  const toolSecondsAtUse =
+      Number(lastUse.preciseTimeUnitsAtUse) / AUTO_TIMER_FRACTION_SCALE;
+
+  const periodSeconds = normalizeOffsetSeconds(lastUse.offsetSecondsAtUse);
+  const correctedSeconds = periodSeconds > 0
+      ? seedSeconds + Math.round((toolSecondsAtUse - seedSeconds) / periodSeconds) * periodSeconds
+      : seedSeconds;
+
+  setAutoTimerAnchorSeconds(correctedSeconds, lastUse.perfNow);
   state.autoTimerCorrectionCount += 1;
-  const preciseTime = splitPreciseSeconds(correctedDisplayedSeconds);
-  setAutoTimerFractionDigits(preciseTime.fraction, formatActionTime(preciseTime.wholeSeconds));
+
+  const preciseTime = splitPreciseSeconds(correctedSeconds);
+  setAutoTimerFractionDigits(
+      preciseTime.fraction,
+      formatActionTime(preciseTime.wholeSeconds)
+  );
+
   return true;
 }
 
