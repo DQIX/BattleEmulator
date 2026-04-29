@@ -1290,7 +1290,7 @@ async function runSearch() {
 
 let becameActive = false;
 let movementTimer = null;
-const SAFE_TIME = 1500;
+const SAFE_TIME = 3000;
 
 function setMovementTimerOnce() {
   if (movementTimer !== null) {
