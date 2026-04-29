@@ -1,13 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <title>DQ9 Battle Emulator - WebAssembly Console</title>
 
     <meta property="og:type" content="website">
     <meta property="og:title" content="dq9 バトルエミュレータコンソール">
-    <meta property="og:description" content="ドラゴンクエストIX対応の一人旅スピードラン向けバトルエミュレータコンソール。総当たり探索や探索アルゴリズムを用いて戦闘行動の組み合わせを自動探索し、入力条件に基づく戦闘シミュレーション結果を取得できます。">
+    <meta property="og:description"
+          content="ドラゴンクエストIX対応の一人旅スピードラン向けバトルエミュレータコンソール。総当たり探索や探索アルゴリズムを用いて戦闘行動の組み合わせを自動探索し、入力条件に基づく戦闘シミュレーション結果を取得できます。">
     <meta property="og:url" content="https://dqix.github.io/BattleEmulator/">
     <meta property="og:site_name" content="dq9 バトルエミュレータコンソール">
     <meta property="og:locale" content="ja_JP">
@@ -15,408 +16,601 @@
 
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="dq9 バトルエミュレータコンソール">
-    <meta name="twitter:description" content="DQ9一人旅スピードラン向けのバトルエミュレータコンソール。総当たり探索や探索アルゴリズムにより、戦闘行動の組み合わせを自動探索するバトルシミュレーションツールです。">
+    <meta name="twitter:description"
+          content="DQ9一人旅スピードラン向けのバトルエミュレータコンソール。総当たり探索や探索アルゴリズムにより、戦闘行動の組み合わせを自動探索するバトルシミュレーションツールです。">
     <meta name="twitter:image" content="https://dqix.github.io/BattleEmulator/ogp.png">
     <meta name="twitter:site" content="@Daisuke76897125">
     <meta name="twitter:creator" content="@Daisuke76897125">
 
-    <meta name="description" content="dq9 バトルエミュレータコンソールは、ドラゴンクエストIXの一人旅スピードラン向けに設計されたバトルエミュレーションツールです。総当たり探索や探索アルゴリズムを用いて戦闘行動の組み合わせを自動的に探索し、戦闘シミュレーションを行えます。">
+    <meta name="description"
+          content="dq9 バトルエミュレータコンソールは、ドラゴンクエストIXの一人旅スピードラン向けに設計されたバトルエミュレーションツールです。総当たり探索や探索アルゴリズムを用いて戦闘行動の組み合わせを自動的に探索し、戦闘シミュレーションを行えます。">
 
 
     <script>
-      (function () {
-        const root = document.documentElement;
-        const savedTheme = localStorage.getItem("dq9Theme") || "lightSepia";
-        const savedLang = localStorage.getItem("dq9Lang") || "ja";
-        root.dataset.theme = savedTheme;
-        root.dataset.lang = savedLang;
-        root.lang = savedLang;
-        window.APP_CONFIG = {
-          themes: [
-            "lightSepia",
-            "light",
-            "light2",
-            "lightGray",
-            "lightGrayPlus",
-            "lightCool",
-            "lightGreen",
-            "lightHighContrast",
-            "softGray",
-            "warmPaper",
-            "mistBlue",
-            "blue",
-            "gold",
-            "pink",
-            "DarkPlus",
-            "deepDark",
-            "darkAsh",
-            "graphiteSoft",
-            "darkMoss",
-            "darkColorblind",
-            "darkTritanopia"
-          ],
-          i18n: {
-            en: {
-              autoTimerUseHint: "Press Use Current Time the moment the boss BGM starts or the screen rotates.",
-              title: "DQ9 Battle Emulator",
-              subtitle: "WebAssembly seed console for RTA analysis",
-              emulator: "Emulator",
-              input: "Input",
-              inputHint: "Enter your combat action and press Enter to search",
-              seed: "Seed",
-              dump: "Dump Table",
-              dumpHint: "C++ dumpTable output",
-              settings: "Settings",
-              settingsHint: "Theme and language",
-              log: "Log",
-              logHint: "session output",
-              timeLabel: "Time (H M S)",
-              workers: "Workers",
-              run: "Run Search",
-              theme: "Theme",
-              language: "Language",
-              idle: "idle",
-              ready: "ready",
-              missing: "missing",
-              waiting: "waiting",
-              reserved: "reserved",
-              seedHex: "Hex",
-              seedDec: "Dec",
-              seedDrift: "Drift",
-              speed: "Speed",
-              elapsed: "Elapsed",
-              preload: "Preload",
-              memoTable: "Seed Memo",
-              memoSaveOnly: "Saved only when a single seed is found",
-              memoEmpty: "No memo entries yet",
-              memoTime: "Time",
-              memoRealTime: "Real",
-              memoEmu: "Emu",
-              memoOffset: "Offset",
-              memoRange: "Range",
-              memoDrift: "Drift",
-              memoInput: "Input",
-              memoNote: "Memo",
-              memoUrlCol: "URL",
-              memoCopyMd: "Copy Markdown",
-              memoCopyCsv: "Copy CSV",
-              memoCopyUrl: "Copy URL",
-              memoCopyInput: "Copy input",
-              autoTimer: "Auto Timer",
-              autoTimerHint: "Starts timer from zero and auto-corrects it using search results.",
-              autoTimerStart: "Start Timer",
-              autoTimerLive: "Predicted In Game Timer",
-              autoTimerUse: "Use Current Time",
-              autoTimerFraction: "Fraction (4 digits)",
-              autoTimerReset: "Reset",
-              autoTimerConfirm: "Confirm Reset",
-              autoTimerCancel: "Cancel",
-              autoTimerResetPrompt: "Disable the current timer anchor?",
-              autoTimerStatusIdle: "No timer anchor yet. Set Offset (sec) to 0, then press Start Timer the moment the DS top screen lights up white after startup.",
-              autoTimerStatusReady: "Timer is running. Do not change Offset (sec) while the timer is active.",
-              autoTimerStatusUnsafe: "Pointer just re-entered the window. Wait 1.5s and try again."
-            },
-            ja: {
-              autoTimerUseHint: "ボスBGMまたは画面回転の瞬間に今の時刻を使うを押してください。",
-              autoTimer: "自動タイマー",
-              autoTimerHint: "タイマーを0秒から開始し、検索結果で自動補正します。",
-              autoTimerStart: "タイマー開始",
-              autoTimerLive: "推定ゲーム内タイマー",
-              autoTimerUse: "今の時刻を使う",
-              autoTimerFraction: "小数点以下4桁",
-              autoTimerReset: "リセット",
-              autoTimerConfirm: "リセット確定",
-              autoTimerCancel: "キャンセル",
-              autoTimerResetPrompt: "現在のタイマー基準を無効化しますか？",
-              autoTimerStatusIdle: "まだタイマー基準がありません。Offset (sec) を 0 にしてから、起動後DSの上画面が白く点灯した瞬間にタイマー開始を押してください。",
-              autoTimerStatusReady: "タイマーが動作中です。タイマー使用中はOffset (sec) を変更しないでください。",
-              autoTimerStatusUnsafe: "ポインタがウィンドウに戻ったばかりです。1.5秒待ってから操作してください。",
-              title: "DQ9 Battle Emulator",
-              subtitle: "RTA向けWebAssemblyシードコンソール",
-              emulator: "バトルエミュ",
-              input: "入力",
-              inputHint: "戦闘行動を入力してEnterで検索",
-              seed: "シード",
-              dump: "出力",
-              dumpHint: "C++ dumpTableの出力",
-              settings: "設定",
-              settingsHint: "テーマと言語",
-              log: "ログ",
-              logHint: "セッション出力",
-              timeLabel: "時間 (H M S)",
-              workers: "ワーカー数",
-              run: "検索開始",
-              theme: "テーマ",
-              language: "言語",
-              idle: "待機",
-              ready: "準備完了",
-              missing: "未検出",
-              waiting: "待機中",
-              reserved: "予約",
-              seedHex: "Hex",
-              seedDec: "Dec",
-              seedDrift: "誤差",
-              speed: "速度",
-              elapsed: "経過",
-              preload: "プリロード",
-              memoTable: "シードメモ",
-              memoSaveOnly: "シードが1件のときのみ保存",
-              memoEmpty: "メモがありません",
-              memoTime: "時間",
-              memoRealTime: "現実",
-              memoEmu: "Emu",
-              memoOffset: "Offset",
-              memoRange: "Range",
-              memoDrift: "誤差",
-              memoInput: "Input",
-              memoNote: "メモ",
-              memoUrlCol: "URL",
-              memoCopyMd: "Markdownコピー",
-              memoCopyCsv: "CSVコピー",
-              memoCopyUrl: "URLコピー",
-              memoCopyInput: "Inputコピー"
-            }
-          }
-        };
-      })();
+        (function () {
+            const root = document.documentElement;
+            const savedTheme = localStorage.getItem("dq9Theme") || "lightSepia";
+            const savedLang = localStorage.getItem("dq9Lang") || "ja";
+            root.dataset.theme = savedTheme;
+            root.dataset.lang = savedLang;
+            root.lang = savedLang;
+            window.APP_CONFIG = {
+                themes: [
+                    "lightSepia",
+                    "light",
+                    "light2",
+                    "lightGray",
+                    "lightGrayPlus",
+                    "lightCool",
+                    "lightGreen",
+                    "lightHighContrast",
+                    "softGray",
+                    "warmPaper",
+                    "mistBlue",
+                    "blue",
+                    "gold",
+                    "pink",
+                    "DarkPlus",
+                    "deepDark",
+                    "darkAsh",
+                    "graphiteSoft",
+                    "darkMoss",
+                    "darkColorblind",
+                    "darkTritanopia"
+                ],
+                i18n: {
+                    en: {
+                        autoTimerUseHint: "Press Use Current Time the moment the boss BGM starts or the screen rotates.",
+                        shortcuts: "Shortcuts",
+                        shortcutsHint: "Trigger these buttons while the pointer is inside the window.",
+                        shortcutNotSet: "Not set",
+                        shortcutWaiting: "Press a key",
+                        shortcutClear: "Clear",
+                        shortcutAutoTimerStartDescription: "Starts the timer from the current Offset value.",
+                        shortcutAutoTimerUseDescription: "Puts the current predicted timer into the input time.",
+                        autoTimerResetButtonDescription: "Attempting to reset the timer.",
+                        autoTimerResetConfirmButtonDescription: "Confirm reset.",
+                        runButtonDescription: "RUN Battle Emulator",
+                        title: "DQ9 Battle Emulator",
+                        subtitle: "WebAssembly seed console for RTA analysis",
+                        emulator: "Emulator",
+                        input: "Input",
+                        inputHint: "Enter your combat action and press Enter to search",
+                        seed: "Seed",
+                        dump: "Dump Table",
+                        dumpHint: "C++ dumpTable output",
+                        settings: "Settings",
+                        settingsHint: "Theme and language",
+                        log: "Log",
+                        logHint: "session output",
+                        timeLabel: "Time (H M S)",
+                        workers: "Workers",
+                        run: "Run Search",
+                        theme: "Theme",
+                        language: "Language",
+                        idle: "idle",
+                        ready: "ready",
+                        missing: "missing",
+                        waiting: "waiting",
+                        reserved: "reserved",
+                        seedHex: "Hex",
+                        seedDec: "Dec",
+                        seedDrift: "Drift",
+                        speed: "Speed",
+                        elapsed: "Elapsed",
+                        preload: "Preload",
+                        memoTable: "Seed Memo",
+                        memoSaveOnly: "Saved only when a single seed is found",
+                        memoEmpty: "No memo entries yet",
+                        memoTime: "Time",
+                        memoRealTime: "Real",
+                        memoEmu: "Emu",
+                        memoOffset: "Offset",
+                        memoRange: "Range",
+                        memoDrift: "Drift",
+                        memoInput: "Input",
+                        memoNote: "Memo",
+                        memoUrlCol: "URL",
+                        memoCopyMd: "Copy Markdown",
+                        memoCopyCsv: "Copy CSV",
+                        memoCopyUrl: "Copy URL",
+                        memoCopyInput: "Copy input",
+                        autoTimer: "Auto Timer",
+                        autoTimerHint: "Starts timer from zero and auto-corrects it using search results.",
+                        autoTimerStart: "Start Timer",
+                        autoTimerLive: "Predicted In Game Timer",
+                        autoTimerUse: "Use Current Time",
+                        autoTimerFraction: "Fraction (4 digits)",
+                        autoTimerReset: "Reset",
+                        autoTimerConfirm: "Confirm Reset",
+                        autoTimerCancel: "Cancel",
+                        autoTimerResetPrompt: "Disable the current timer anchor?",
+                        autoTimerStatusIdle: "No timer anchor yet. Set Offset (sec) to 0, then press Start Timer the moment the DS top screen lights up white after startup.",
+                        autoTimerStatusReady: "Timer is running. Do not change Offset (sec) while the timer is active.",
+                        autoTimerStatusUnsafe: "Pointer just re-entered the window. Wait 1.5s and try again."
+                    },
+                    ja: {
+                        autoTimerUseHint: "ボスBGMまたは画面回転の瞬間に今の時刻を使うを押してください。",
+                        shortcuts: "ショートカット",
+                        shortcutsHint: "ポインタがウィンドウ内にある間、この欄のキーで対象ボタンを押せます。",
+                        shortcutNotSet: "未設定",
+                        shortcutWaiting: "キーを押してください",
+                        shortcutClear: "クリア",
+                        shortcutAutoTimerStartDescription: "今のOffsetを基準にタイマーを開始します。",
+                        shortcutAutoTimerUseDescription: "現在の推定タイマーを入力欄の時刻に入れます。",
+                        autoTimerResetButtonDescription: "タイマーをリセットしようとします。",
+                        autoTimerResetConfirmButtonDescription: "リセットを確定します。",
+                        runButtonDescription: "バトルエミュレーターを実行する",
+                        autoTimer: "自動タイマー",
+                        autoTimerHint: "タイマーを0秒から開始し、検索結果で自動補正します。",
+                        autoTimerStart: "タイマー開始",
+                        autoTimerLive: "推定ゲーム内タイマー",
+                        autoTimerUse: "今の時刻を使う",
+                        autoTimerFraction: "小数点以下4桁",
+                        autoTimerReset: "リセット",
+                        autoTimerConfirm: "リセット確定",
+                        autoTimerCancel: "キャンセル",
+                        autoTimerResetPrompt: "現在のタイマー基準を無効化しますか？",
+                        autoTimerStatusIdle: "まだタイマー基準がありません。Offset (sec) を 0 にしてから、起動後DSの上画面が白く点灯した瞬間にタイマー開始を押してください。",
+                        autoTimerStatusReady: "タイマーが動作中です。タイマー使用中はOffset (sec) を変更しないでください。",
+                        autoTimerStatusUnsafe: "ポインタがウィンドウに戻ったばかりです。1.5秒待ってから操作してください。",
+                        title: "DQ9 Battle Emulator",
+                        subtitle: "RTA向けWebAssemblyシードコンソール",
+                        emulator: "バトルエミュ",
+                        input: "入力",
+                        inputHint: "戦闘行動を入力してEnterで検索",
+                        seed: "シード",
+                        dump: "出力",
+                        dumpHint: "C++ dumpTableの出力",
+                        settings: "設定",
+                        settingsHint: "テーマと言語",
+                        log: "ログ",
+                        logHint: "セッション出力",
+                        timeLabel: "時間 (H M S)",
+                        workers: "ワーカー数",
+                        run: "検索開始",
+                        theme: "テーマ",
+                        language: "言語",
+                        idle: "待機",
+                        ready: "準備完了",
+                        missing: "未検出",
+                        waiting: "待機中",
+                        reserved: "予約",
+                        seedHex: "Hex",
+                        seedDec: "Dec",
+                        seedDrift: "誤差",
+                        speed: "速度",
+                        elapsed: "経過",
+                        preload: "プリロード",
+                        memoTable: "シードメモ",
+                        memoSaveOnly: "シードが1件のときのみ保存",
+                        memoEmpty: "メモがありません",
+                        memoTime: "時間",
+                        memoRealTime: "現実",
+                        memoEmu: "Emu",
+                        memoOffset: "Offset",
+                        memoRange: "Range",
+                        memoDrift: "誤差",
+                        memoInput: "Input",
+                        memoNote: "メモ",
+                        memoUrlCol: "URL",
+                        memoCopyMd: "Markdownコピー",
+                        memoCopyCsv: "CSVコピー",
+                        memoCopyUrl: "URLコピー",
+                        memoCopyInput: "Inputコピー"
+                    }
+                }
+            };
+        })();
     </script>
-    <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body>
-    <div class="app">
-      <header class="hero">
+    <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<div class="app">
+    <header class="hero">
         <div class="hero-left">
-          <div class="hero-title" data-i18n="title">DQ9 Battle Emulator</div>
-          <div class="hero-subtitle" data-i18n="subtitle">
-            WebAssembly seed console for RTA analysis
-          </div>
+            <div class="hero-title" data-i18n="title">DQ9 Battle Emulator</div>
+            <div class="hero-subtitle" data-i18n="subtitle">
+                WebAssembly seed console for RTA analysis
+            </div>
         </div>
         <div class="hero-links">
-          <a class="hero-link" href="https://note.com/zeppeki0711/n/neac461916cc8">チャートはこちら</a>
-          <div class="hero-note">最新は第二版(2025.09.25更新)です</div>
+            <a class="hero-link" href="https://note.com/zeppeki0711/n/neac461916cc8">チャートはこちら</a>
+            <div class="hero-note">最新は第二版(2025.09.25更新)です</div>
         </div>
-      </header>
+    </header>
 
-      <main class="grid">
+    <main class="grid">
         <section class="panel panel-auto-timer" style="--delay: 0ms">
-          <div class="panel-header">
-            <h2 data-i18n="autoTimer">Auto Timer</h2>
-            <span class="hint" data-i18n="autoTimerHint">Corrects a manually started timer using the latest confirmed search result</span>
-          </div>
-          <div class="auto-timer-layout">
-            <div class="auto-timer-preview-wrap">
-              <div class="auto-timer-label" data-i18n="autoTimerLive">Predicted Timer</div>
-              <div id="autoTimerPreview" class="auto-timer-preview" aria-live="polite">--:--:--</div>
+            <div class="panel-header">
+                <h2 data-i18n="autoTimer">Auto Timer</h2>
+                <span class="hint" data-i18n="autoTimerHint">Corrects a manually started timer using the latest confirmed search result</span>
             </div>
-            <div class="auto-timer-actions">
-              <button id="autoTimerStartButton" class="run-button auto-timer-start-button" type="button" data-i18n="autoTimerStart">Start Timer</button>
-              <button id="autoTimerUseButton" class="run-button auto-timer-use-button" type="button" data-i18n="autoTimerUse">Use Current Time</button>
-              <button id="autoTimerResetButton" class="run-button auto-timer-reset-button" type="button" data-i18n="autoTimerReset">Reset</button>
-              <div class="auto-timer-use-hint" data-i18n="autoTimerUseHint">タイマー動作中にボスBGMまたは画面回転の瞬間に押してください。</div>
-            </div>
-            <label id="autoTimerFractionField" class="auto-timer-fraction is-hidden">
-              <span class="auto-timer-fraction-label" data-i18n="autoTimerFraction">Fraction (4 digits)</span>
-              <input
-                      id="autoTimerFractionInput"
-                      class="auto-timer-fraction-input"
-                      type="number"
-                      min="0"
-                      max="9999"
-                      step="1"
-                      inputmode="numeric"
-                      placeholder="0000"
-              />
-            </label>
+            <div class="auto-timer-layout">
+                <div class="auto-timer-preview-wrap">
+                    <div class="auto-timer-label" data-i18n="autoTimerLive">Predicted Timer</div>
+                    <div id="autoTimerPreview" class="auto-timer-preview" aria-live="polite">--:--:--</div>
+                </div>
+                <div class="auto-timer-actions">
+                    <button id="autoTimerStartButton" class="run-button auto-timer-start-button" type="button"
+                            data-i18n="autoTimerStart">Start Timer
+                    </button>
+                    <button id="autoTimerUseButton" class="run-button auto-timer-use-button" type="button"
+                            data-i18n="autoTimerUse">Use Current Time
+                    </button>
+                    <button id="autoTimerResetButton" class="run-button auto-timer-reset-button" type="button"
+                            data-i18n="autoTimerReset">Reset
+                    </button>
+                    <div class="auto-timer-use-hint" data-i18n="autoTimerUseHint">
+                        タイマー動作中にボスBGMまたは画面回転の瞬間に押してください。
+                    </div>
+                </div>
+                <label id="autoTimerFractionField" class="auto-timer-fraction is-hidden">
+                    <span class="auto-timer-fraction-label" data-i18n="autoTimerFraction">Fraction (4 digits)</span>
+                    <input
+                            id="autoTimerFractionInput"
+                            class="auto-timer-fraction-input"
+                            type="number"
+                            min="0"
+                            max="9999"
+                            step="1"
+                            inputmode="numeric"
+                            placeholder="0000"
+                    />
+                </label>
 
-            <div id="autoTimerResetConfirm" class="auto-timer-confirm is-hidden" aria-live="polite">
-              <span class="auto-timer-confirm-text" data-i18n="autoTimerResetPrompt">Disable the current timer anchor?</span>
-              <button id="autoTimerResetConfirmButton" class="run-button auto-timer-confirm-button" type="button" data-i18n="autoTimerConfirm">Confirm Reset</button>
-              <button id="autoTimerResetCancelButton" class="run-button auto-timer-cancel-button" type="button" data-i18n="autoTimerCancel">Cancel</button>
+                <div id="autoTimerResetConfirm" class="auto-timer-confirm is-hidden" aria-live="polite">
+                    <span class="auto-timer-confirm-text" data-i18n="autoTimerResetPrompt">Disable the current timer anchor?</span>
+                    <button id="autoTimerResetConfirmButton" class="run-button auto-timer-confirm-button" type="button"
+                            data-i18n="autoTimerConfirm">Confirm Reset
+                    </button>
+                    <button id="autoTimerResetCancelButton" class="run-button auto-timer-cancel-button" type="button"
+                            data-i18n="autoTimerCancel">Cancel
+                    </button>
+                </div>
+                <div id="autoTimerStatus" class="auto-timer-status" data-i18n="autoTimerStatusIdle">No timer anchor yet.
+                    Press Start Timer when the in-game timer begins.
+                </div>
             </div>
-            <div id="autoTimerStatus" class="auto-timer-status" data-i18n="autoTimerStatusIdle">No timer anchor yet. Press Start Timer when the in-game timer begins.</div>
-          </div>
         </section>
 
         <section class="panel panel-emulator" style="--delay: 0ms">
-          <div class="panel-header">
-            <h2 data-i18n="emulator">Emulator</h2>
-            <span id="emulatorStatus" class="chip" data-i18n="idle">idle</span>
-          </div>
-          <select id="emulatorSelect" class="emulator-select"></select>
-          <label class="field">
-            <span>Offset (sec)</span>
-            <input
-              id="offsetSeconds"
-              type="number"
-              min="0"
-              step="1"
-              inputmode="numeric"
-              pattern="[0-9]*"
-              value="15"
-            />
-          </label>
-          <label class="field">
-            <span>Search range (sec)</span>
-            <input
-              id="searchRangeSeconds"
-              type="number"
-              min="2"
-              max="15"
-              step="1"
-              inputmode="numeric"
-              pattern="[0-9]*"
-              value="6"
-            />
-          </label>
-          <div id="emulatorMeta" class="meta-line">manifest not loaded</div>
+            <div class="panel-header">
+                <h2 data-i18n="emulator">Emulator</h2>
+                <span id="emulatorStatus" class="chip" data-i18n="idle">idle</span>
+            </div>
+            <select id="emulatorSelect" class="emulator-select"></select>
+            <label class="field">
+                <span>Offset (sec)</span>
+                <input
+                        id="offsetSeconds"
+                        type="number"
+                        min="0"
+                        step="1"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        value="15"
+                />
+            </label>
+            <label class="field">
+                <span>Search range (sec)</span>
+                <input
+                        id="searchRangeSeconds"
+                        type="number"
+                        min="2"
+                        max="15"
+                        step="1"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        value="6"
+                />
+            </label>
+            <div id="emulatorMeta" class="meta-line">manifest not loaded</div>
         </section>
 
         <section class="panel panel-input" style="--delay: 80ms">
-          <div class="panel-header">
-            <h2 data-i18n="input">Input</h2>
-            <span class="hint" data-i18n="inputHint">Enter runs, Shift+Enter adds a line</span>
-          </div>
-          <div class="field-row">
-            <label class="field">
-              <span data-i18n="workers">Workers</span>
-              <input id="threads" type="number" min="1" max="32" value="2" />
-            </label>
-            <button id="runButton" class="run-button" data-i18n="run">Run Search</button>
-          </div>
-          <textarea
-            id="actionInput"
-            class="action-input"
-            placeholder="1 27 2 a25 11 b a78 12 r 21 22 a25"
-          ></textarea>
+            <div class="panel-header">
+                <h2 data-i18n="input">Input</h2>
+                <span class="hint" data-i18n="inputHint">Enter runs, Shift+Enter adds a line</span>
+            </div>
+            <div class="field-row">
+                <label class="field">
+                    <span data-i18n="workers">Workers</span>
+                    <input id="threads" type="number" min="1" max="32" value="2"/>
+                </label>
+                <button id="runButton" class="run-button" data-i18n="run">Run Search</button>
+            </div>
+            <textarea
+                    id="actionInput"
+                    class="action-input"
+                    placeholder="1 27 2 a25 11 b a78 12 r 21 22 a25"
+            ></textarea>
         </section>
 
         <section class="panel panel-dump" style="--delay: 160ms">
-          <div class="panel-header">
-            <h2 data-i18n="dump">Dump Table</h2>
-            <span id="seedState" class="chip chip-accent" data-i18n="waiting">waiting</span>
-          </div>
-          <textarea
-                  id="dumpOutput"
-                  class="dump-output"
-                  readonly
-                  wrap="off"
-                  aria-labelledby="dump table 出力"
-          ></textarea>
+            <div class="panel-header">
+                <h2 data-i18n="dump">Dump Table</h2>
+                <span id="seedState" class="chip chip-accent" data-i18n="waiting">waiting</span>
+            </div>
+            <textarea
+                    id="dumpOutput"
+                    class="dump-output"
+                    readonly
+                    wrap="off"
+                    aria-labelledby="dump table 出力"
+            ></textarea>
         </section>
 
         <section class="panel panel-settings" style="--delay: 200ms">
-          <div class="panel-header">
-            <h2 data-i18n="settings">Settings</h2>
-            <span class="hint" data-i18n="settingsHint">Theme and language</span>
-          </div>
-          <div class="settings-grid">
-            <label class="field">
-              <span data-i18n="theme">Theme</span>
-              <select id="themeSelect"></select>
-            </label>
-            <label class="field">
-              <span data-i18n="language">Language</span>
-              <select id="langSelect">
-                <option value="ja">日本語</option>
-                <option value="en">English</option>
-              </select>
-            </label>
-            <label class="field field-inline">
-              <span data-i18n="preload">Preload</span>
-              <div class="toggle">
-                <input id="preloadToggle" type="checkbox" />
-                <div class="toggle-ui"></div>
-              </div>
-            </label>
-          </div>
+            <div class="panel-header">
+                <h2 data-i18n="settings">Settings</h2>
+                <span class="hint" data-i18n="settingsHint">Theme and language</span>
+            </div>
+            <div class="settings-grid">
+                <label class="field">
+                    <span data-i18n="theme">Theme</span>
+                    <select id="themeSelect"></select>
+                </label>
+                <label class="field">
+                    <span data-i18n="language">Language</span>
+                    <select id="langSelect">
+                        <option value="ja">日本語</option>
+                        <option value="en">English</option>
+                    </select>
+                </label>
+                <label class="field field-inline">
+                    <span data-i18n="preload">Preload</span>
+                    <div class="toggle">
+                        <input id="preloadToggle" type="checkbox"/>
+                        <div class="toggle-ui"></div>
+                    </div>
+                </label>
+            </div>
         </section>
 
         <section class="panel panel-seed" style="--delay: 120ms">
-          <div class="panel-header">
-            <h2 data-i18n="seed">Seed</h2>
-          </div>
-          <div class="seed-grid">
-            <div class="seed-label" data-i18n="seedHex">Hex</div>
-            <div id="seedHex" class="seed-value">-</div>
-            <div class="seed-label" data-i18n="speed">Speed</div>
-            <div id="seedSpeed" class="seed-value">-</div>
-            <div class="seed-label" data-i18n="elapsed">Elapsed</div>
-            <div id="seedElapsed" class="seed-value">-</div>
-            <div class="seed-label" data-i18n="seedDrift">Drift</div>
-            <div id="seedDrift" class="seed-value">-</div>
-          </div>
+            <div class="panel-header">
+                <h2 data-i18n="seed">Seed</h2>
+            </div>
+            <div class="seed-grid">
+                <div class="seed-label" data-i18n="seedHex">Hex</div>
+                <div id="seedHex" class="seed-value">-</div>
+                <div class="seed-label" data-i18n="speed">Speed</div>
+                <div id="seedSpeed" class="seed-value">-</div>
+                <div class="seed-label" data-i18n="elapsed">Elapsed</div>
+                <div id="seedElapsed" class="seed-value">-</div>
+                <div class="seed-label" data-i18n="seedDrift">Drift</div>
+                <div id="seedDrift" class="seed-value">-</div>
+            </div>
         </section>
 
         <section class="panel panel-log" style="--delay: 240ms">
-          <div class="panel-header">
-            <h2 data-i18n="log">Log</h2>
-            <span class="hint" data-i18n="logHint">session output</span>
-          </div>
-          <textarea id="logOutput" class="log-output" aria-labelledby="logTitle ログ" readonly></textarea>
+            <div class="panel-header">
+                <h2 data-i18n="log">Log</h2>
+                <span class="hint" data-i18n="logHint">session output</span>
+            </div>
+            <textarea id="logOutput" class="log-output" aria-labelledby="logTitle ログ" readonly></textarea>
         </section>
 
         <section class="panel panel-ledger-table" style="--delay: 280ms">
-          <div class="panel-header">
-            <div class="memo-title">
-              <h2 data-i18n="memoTable">Seed Memo</h2>
-              <span class="chip chip-muted" data-i18n="memoSaveOnly">Saved only when a single seed is found</span>
+            <div class="panel-header">
+                <div class="memo-title">
+                    <h2 data-i18n="memoTable">Seed Memo</h2>
+                    <span class="chip chip-muted" data-i18n="memoSaveOnly">Saved only when a single seed is found</span>
+                </div>
+                <div class="memo-actions">
+                    <a id="memoCopyMarkdown" class="chip chip-muted" href="#" data-i18n="memoCopyMd">Copy Markdown</a>
+                    <a id="memoCopyCsv" class="chip chip-muted" href="#" data-i18n="memoCopyCsv">Copy CSV</a>
+                </div>
             </div>
-            <div class="memo-actions">
-              <a id="memoCopyMarkdown" class="chip chip-muted" href="#" data-i18n="memoCopyMd">Copy Markdown</a>
-              <a id="memoCopyCsv" class="chip chip-muted" href="#" data-i18n="memoCopyCsv">Copy CSV</a>
+            <div class="memo-table">
+                <div id="memoEmpty" class="memo-empty" data-i18n="memoEmpty">No memo entries yet</div>
+                <div id="memoScroll" class="memo-scroll" hidden>
+                    <table class="memo-grid">
+                        <colgroup>
+                            <col style="width: 80px"/>
+                            <col style="width: 170px"/>
+                            <col style="width: 140px"/>
+                            <col style="width: 50px"/>
+                            <col style="width: 50px"/>
+                            <col style="width: 90px"/>
+                            <col style="width: 320px"/>
+                            <col style="width: 220px"/>
+                            <col style="width: 80px"/>
+                        </colgroup>
+                        <thead>
+                        <tr>
+                            <th data-i18n="memoTime">Time</th>
+                            <th data-i18n="memoRealTime">Real</th>
+                            <th data-i18n="memoEmu">Emu</th>
+                            <th data-i18n="memoOffset">Offset</th>
+                            <th data-i18n="memoRange">Range</th>
+                            <th data-i18n="memoDrift">Drift</th>
+                            <th data-i18n="memoInput">Input</th>
+                            <th data-i18n="memoNote">Memo</th>
+                            <th data-i18n="memoUrlCol">URL</th>
+                        </tr>
+                        </thead>
+                        <tbody id="memoTableBody"></tbody>
+                    </table>
+                </div>
             </div>
-          </div>
-          <div class="memo-table">
-            <div id="memoEmpty" class="memo-empty" data-i18n="memoEmpty">No memo entries yet</div>
-            <div id="memoScroll" class="memo-scroll" hidden>
-              <table class="memo-grid">
-                <colgroup>
-                  <col style="width: 80px" />
-                  <col style="width: 170px" />
-                  <col style="width: 140px" />
-                  <col style="width: 50px" />
-                  <col style="width: 50px" />
-                  <col style="width: 90px" />
-                  <col style="width: 320px" />
-                  <col style="width: 220px" />
-                  <col style="width: 80px" />
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th data-i18n="memoTime">Time</th>
-                    <th data-i18n="memoRealTime">Real</th>
-                    <th data-i18n="memoEmu">Emu</th>
-                    <th data-i18n="memoOffset">Offset</th>
-                    <th data-i18n="memoRange">Range</th>
-                    <th data-i18n="memoDrift">Drift</th>
-                    <th data-i18n="memoInput">Input</th>
-                    <th data-i18n="memoNote">Memo</th>
-                    <th data-i18n="memoUrlCol">URL</th>
-                  </tr>
-                </thead>
-                <tbody id="memoTableBody"></tbody>
-              </table>
+        </section>
+        <section class="panel panel-shortcuts" style="--delay: 300ms">
+            <div class="panel-header">
+                <h2 data-i18n="shortcuts">Shortcuts</h2>
+                <span class="hint" data-i18n="shortcutsHint">Trigger these buttons while the pointer is inside the window.</span>
             </div>
-          </div>
+            <div class="shortcut-list">
+                <div
+                        class="shortcut-row"
+                        data-shortcut-target="autoTimerStartButton"
+                        data-shortcut-default="KeyT"
+                >
+                    <div class="shortcut-copy">
+                        <div class="shortcut-description" data-i18n="shortcutAutoTimerStartDescription">Starts the timer
+                            from the current Offset value.
+                        </div>
+                    </div>
+                    <div class="shortcut-actions">
+                        <button
+                                type="button"
+                                class="shortcut-key-button"
+                                data-shortcut-capture
+                                data-shortcut-target="autoTimerStartButton"
+                        >
+                            T
+                        </button>
+                        <button
+                                type="button"
+                                class="shortcut-clear-button"
+                                data-shortcut-clear
+                                data-shortcut-target="autoTimerStartButton"
+                                data-i18n="shortcutClear"
+                        >
+                            Clear
+                        </button>
+                    </div>
+                </div>
+                <div
+                        class="shortcut-row"
+                        data-shortcut-target="autoTimerUseButton"
+                        data-shortcut-default="KeyU"
+                >
+                    <div class="shortcut-copy">
+                        <div class="shortcut-description" data-i18n="shortcutAutoTimerUseDescription">Puts the current
+                            predicted timer into the input time.
+                        </div>
+                    </div>
+                    <div class="shortcut-actions">
+                        <button
+                                type="button"
+                                class="shortcut-key-button"
+                                data-shortcut-capture
+                                data-shortcut-target="autoTimerUseButton"
+                        >
+                            U
+                        </button>
+                        <button
+                                type="button"
+                                class="shortcut-clear-button"
+                                data-shortcut-clear
+                                data-shortcut-target="autoTimerUseButton"
+                                data-i18n="shortcutClear"
+                        >
+                            Clear
+                        </button>
+                    </div>
+                </div>
+                <div
+                        class="shortcut-row"
+                        data-shortcut-target="autoTimerResetButton"
+                        data-shortcut-default="KeyL"
+                >
+                    <div class="shortcut-copy">
+                        <div class="shortcut-description" data-i18n="autoTimerResetButtonDescription">Puts the current
+                            predicted timer into the input time.
+                        </div>
+                    </div>
+                    <div class="shortcut-actions">
+                        <button
+                                type="button"
+                                class="shortcut-key-button"
+                                data-shortcut-capture
+                                data-shortcut-target="autoTimerResetButton"
+                        >
+                            L
+                        </button>
+                        <button
+                                type="button"
+                                class="shortcut-clear-button"
+                                data-shortcut-clear
+                                data-shortcut-target="autoTimerResetButton"
+                                data-i18n="shortcutClear"
+                        >
+                            Clear
+                        </button>
+                    </div>
+                    <div
+                            class="shortcut-row"
+                            data-shortcut-target="autoTimerResetConfirmButton"
+                            data-shortcut-default="KeyO"
+                    >
+                        <div class="shortcut-copy">
+                            <div class="shortcut-description" data-i18n="autoTimerResetConfirmButtonDescription">Puts
+                                the current predicted timer into the input time.
+                            </div>
+                        </div>
+                        <div class="shortcut-actions">
+                            <button
+                                    type="button"
+                                    class="shortcut-key-button"
+                                    data-shortcut-capture
+                                    data-shortcut-target="autoTimerResetConfirmButton"
+                            >
+                                O
+                            </button>
+                            <button
+                                    type="button"
+                                    class="shortcut-clear-button"
+                                    data-shortcut-clear
+                                    data-shortcut-target="autoTimerResetConfirmButton"
+                                    data-i18n="shortcutClear"
+                            >
+                                Clear
+                            </button>
+                        </div>
+                    </div>
+
+                    <div
+                            class="shortcut-row"
+                            data-shortcut-target="runButton"
+                            data-shortcut-default="tab"
+                    >
+                        <div class="shortcut-copy">
+                            <div class="shortcut-description" data-i18n="runButtonDescription">Puts
+                                the current predicted timer into the input time.
+                            </div>
+                        </div>
+                        <div class="shortcut-actions">
+                            <button
+                                    type="button"
+                                    class="shortcut-key-button"
+                                    data-shortcut-capture
+                                    data-shortcut-target="runButton"
+                            >
+                                tab
+                            </button>
+                            <button
+                                    type="button"
+                                    class="shortcut-clear-button"
+                                    data-shortcut-clear
+                                    data-shortcut-target="runButton"
+                                    data-i18n="shortcutClear"
+                            >
+                                Clear
+                            </button>
+                        </div>
+                    </div>
         </section>
         <section class="panel panel-copyright" style="--delay: 320ms">
-          <div class="panel-header">
-            <h2>権利表記</h2>
-          </div>
+            <div class="panel-header">
+                <h2>権利表記</h2>
+            </div>
 
-          <div>
-            <p>
-              このページで利用している株式会社スクウェア・エニックスを代表とする共同著作者が権利を所有する画像の転載・配布は禁止いたします。
-            </p>
-            <p>
-              © 2009 ARMOR PROJECT/BIRD STUDIO/LEVEL-5/SQUARE ENIX All Rights Reserved.
-            </p>
-          </div>
+            <div>
+                <p>
+                    このページで利用している株式会社スクウェア・エニックスを代表とする共同著作者が権利を所有する画像の転載・配布は禁止いたします。
+                </p>
+                <p>
+                    © 2009 ARMOR PROJECT/BIRD STUDIO/LEVEL-5/SQUARE ENIX All Rights Reserved.
+                </p>
+            </div>
         </section>
 
-      </main>
-    </div>
+    </main>
+</div>
 
-    <script src="app.js" defer></script>
-    </body>
+<script src="app.js" defer></script>
+</body>
 </html>
