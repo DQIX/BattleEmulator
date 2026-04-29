@@ -1081,6 +1081,10 @@ h2 {
     grid-template-columns: 1fr;
   }
 
+ .vision-matches {
+    grid-template-columns: 1fr;
+  }
+  
   .vision-toolbar,
   .vision-stage {
     grid-template-columns: 1fr;
@@ -1090,7 +1094,6 @@ h2 {
     grid-template-rows: none;
   }
 
-  .vision-matches {
   .auto-timer-actions,
   .auto-timer-confirm {
     grid-template-columns: 1fr;
