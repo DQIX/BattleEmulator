@@ -11,6 +11,8 @@ const ui = {
   autoTimerStatus: document.getElementById("autoTimerStatus"),
   autoTimerStartButton: document.getElementById("autoTimerStartButton"),
   autoTimerUseButton: document.getElementById("autoTimerUseButton"),
+  autoTimerFractionField: document.getElementById("autoTimerFractionField"),
+  autoTimerFractionInput: document.getElementById("autoTimerFractionInput"),
   autoTimerResetButton: document.getElementById("autoTimerResetButton"),
   autoTimerResetConfirm: document.getElementById("autoTimerResetConfirm"),
   autoTimerResetConfirmButton: document.getElementById("autoTimerResetConfirmButton"),
@@ -37,7 +39,9 @@ const OFFSET_STORAGE_KEY = "dq9OffsetSeconds";
 const DEFAULT_SEARCH_RANGE_SECONDS = 6;
 const SEARCH_RANGE_STORAGE_KEY = "dq9SearchRangeSeconds";
 const AUTO_TIMER_MAX_SECONDS = 30 * 60 * 60;
-const AUTO_TIMER_CORRECTION_LIMIT_MS = 4 * 60 * 1000;
+const AUTO_TIMER_CORRECTION_LIMIT_MS = 5 * 60 * 1000;
+const AUTO_TIMER_FRACTION_SCALE = 10000;
+const AUTO_TIMER_FRACTION_HIDE_DELAY_MS = 5 * 60 * 1000;
 const SEED_MEMO_STORAGE_KEY = "dq9SeedMemoList";
 const SEED_MEMO_LIMIT = 200;
 const SEED_TIME_SCALE = 100n;
@@ -65,7 +69,10 @@ const state = {
   autoTimerAnchor: null,
   autoTimerTickHandle: null,
   autoTimerAppliedPrefix: "",
-  autoTimerLastUse: null
+  autoTimerLastUse: null,
+  autoTimerFractionHideHandle: null,
+  autoTimerFractionSourceTimeText: "",
+  autoTimerCorrectionCount: 0
 };
 
 const logLines = [];
@@ -110,11 +117,77 @@ function formatActionTime(totalSeconds) {
   return `${hours} ${minutes} ${seconds}`;
 }
 
+function formatFractionDigits(value) {
+  return String(value).padStart(4, "0");
+}
+
+function normalizeFractionDigits(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const numeric = Number.parseInt(String(value), 10);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+  return Math.max(0, Math.min(AUTO_TIMER_FRACTION_SCALE - 1, numeric));
+}
+
+function splitPreciseSeconds(totalSeconds) {
+  const safeSeconds = Math.max(0, Number.isFinite(totalSeconds) ? totalSeconds : 0);
+  const totalUnits = Math.floor((safeSeconds + 1e-9) * AUTO_TIMER_FRACTION_SCALE);
+  const wholeSeconds = Math.floor(totalUnits / AUTO_TIMER_FRACTION_SCALE);
+  const fraction = totalUnits % AUTO_TIMER_FRACTION_SCALE;
+  return {
+    wholeSeconds,
+    fraction
+  };
+}
+
 function parsedToTotalSeconds(parsed) {
   if (!parsed) {
     return 0;
   }
   return parsed.hours * 3600 + parsed.minutes * 60 + parsed.seconds;
+}
+
+function getAutoTimerFractionDigits() {
+  return normalizeFractionDigits(ui.autoTimerFractionInput ? ui.autoTimerFractionInput.value : "");
+}
+
+function clearAutoTimerFractionHideTimer() {
+  if (state.autoTimerFractionHideHandle !== null) {
+    clearTimeout(state.autoTimerFractionHideHandle);
+    state.autoTimerFractionHideHandle = null;
+  }
+}
+
+function updateAutoTimerFractionVisibility() {
+  if (!ui.autoTimerFractionField) {
+    return;
+  }
+  const digits = getAutoTimerFractionDigits();
+  const hidden = digits === null || digits === 0;
+  ui.autoTimerFractionField.classList.toggle("is-hidden", hidden);
+  if (ui.autoTimerFractionInput) {
+    ui.autoTimerFractionInput.disabled = hidden;
+  }
+}
+
+function setAutoTimerFractionDigits(value, timeText = "") {
+  if (!ui.autoTimerFractionInput) {
+    return;
+  }
+  const digits = normalizeFractionDigits(value);
+  ui.autoTimerFractionInput.value = digits === null ? "" : formatFractionDigits(digits);
+  state.autoTimerFractionSourceTimeText = digits === null || digits === 0 ? "" : timeText;
+  updateAutoTimerFractionVisibility();
+}
+
+function restartAutoTimerFractionHideTimer() {
+  clearAutoTimerFractionHideTimer();
+  state.autoTimerFractionHideHandle = setTimeout(() => {
+    setAutoTimerFractionDigits(null, "");
+  }, AUTO_TIMER_FRACTION_HIDE_DELAY_MS);
 }
 
 function extractInputTimeText(text) {
@@ -468,14 +541,21 @@ function computeSeedSecondsScaled(seed) {
   return (shifted * SEED_SECONDS_NUMERATOR) / SEED_SECONDS_DIVISOR;
 }
 
-function computeRealSecondsScaled(parsed) {
+function computeSeedTimeUnits(seed) {
+  return computeSeedSecondsScaled(seed) * BigInt(AUTO_TIMER_FRACTION_SCALE / Number(SEED_TIME_SCALE));
+}
+
+function computeRealSecondsScaled(parsed, preciseTimeUnits = null) {
+  if (preciseTimeUnits !== null) {
+    return preciseTimeUnits / BigInt(AUTO_TIMER_FRACTION_SCALE / Number(SEED_TIME_SCALE));
+  }
   const totalSeconds = parsed.hours * 3600 + parsed.minutes * 60 + parsed.seconds;
   return BigInt(totalSeconds) * SEED_TIME_SCALE;
 }
 
-function computeSeedDriftText(seed, parsed) {
+function computeSeedDriftText(seed, parsed, preciseTimeUnits = null) {
   const seedSecondsScaled = computeSeedSecondsScaled(seed);
-  const realSecondsScaled = computeRealSecondsScaled(parsed);
+  const realSecondsScaled = computeRealSecondsScaled(parsed, preciseTimeUnits);
   const driftScaled = realSecondsScaled - seedSecondsScaled;
   return formatScaledSeconds(driftScaled, SEED_TIME_SCALE);
 }
@@ -547,6 +627,9 @@ function setOffsetSeconds(value) {
       if (state.autoTimerLastUse) {
         state.autoTimerLastUse.timeText = timeText;
       }
+      if (state.autoTimerFractionSourceTimeText) {
+        state.autoTimerFractionSourceTimeText = timeText;
+      }
     }
   }
   updateAutoTimerPreview();
@@ -598,7 +681,7 @@ function getAutoTimerStatusReadyText() {
 function getAutoTimerStatusIdleText() {
   return t(
     "autoTimerStatusIdle",
-    "No timer anchor yet. Run one confirmed search first."
+    "No timer anchor yet. Press Start Timer when the in-game timer begins."
   );
 }
 
@@ -682,6 +765,9 @@ function clearAutoTimerAnchor() {
   state.autoTimerAnchor = null;
   state.autoTimerAppliedPrefix = "";
   state.autoTimerLastUse = null;
+  state.autoTimerCorrectionCount = 0;
+  clearAutoTimerFractionHideTimer();
+  setAutoTimerFractionDigits(null, "");
   setAutoTimerResetConfirmVisible(false);
   stopAutoTimerTicker();
   updateAutoTimerPreview();
@@ -708,15 +794,31 @@ function focusActionInputAtTop() {
   });
 }
 
-function computeSeedRange(hours, minutes, seconds, offsetSeconds) {
+function getPreciseSearchTimeUnits(parsed, rawInput) {
+  const baseUnits = BigInt(parsedToTotalSeconds(parsed) * AUTO_TIMER_FRACTION_SCALE);
+  const fractionDigits = getAutoTimerFractionDigits();
+  if (
+    fractionDigits === null ||
+    fractionDigits === 0 ||
+    extractInputTimeText(rawInput) !== state.autoTimerFractionSourceTimeText
+  ) {
+    return baseUnits;
+  }
+  return baseUnits + BigInt(fractionDigits);
+}
+
+function computeSeedRange(hours, minutes, seconds, offsetSeconds, preciseTimeUnits = null) {
   const seedShift = 65536n;
-  const totalSeconds = BigInt(hours * 3600 + minutes * 60 + seconds);
-  const offset = BigInt(normalizeOffsetSeconds(offsetSeconds));
-  const range = BigInt(normalizeSearchRangeSeconds(state.searchRangeSeconds));
-  const numerator1 = 2n * (totalSeconds - offset) - range;
-  const time1 = (numerator1 * 100000n) / (2n * 12515n);
-  const numerator2 = 2n * (totalSeconds - offset) + range;
-  const time2 = (numerator2 * 1000000n) / (2n * 125155n);
+  const totalTimeUnits = preciseTimeUnits === null
+    ? BigInt((hours * 3600 + minutes * 60 + seconds) * AUTO_TIMER_FRACTION_SCALE)
+    : preciseTimeUnits;
+  const offset = BigInt(normalizeOffsetSeconds(offsetSeconds) * AUTO_TIMER_FRACTION_SCALE);
+  const range = BigInt(normalizeSearchRangeSeconds(state.searchRangeSeconds) * AUTO_TIMER_FRACTION_SCALE);
+  const unitScale = BigInt(AUTO_TIMER_FRACTION_SCALE);
+  const numerator1 = 2n * (totalTimeUnits - offset) - range;
+  const time1 = (numerator1 * 100000n) / (2n * 12515n * unitScale);
+  const numerator2 = 2n * (totalTimeUnits - offset) + range;
+  const time2 = (numerator2 * 1000000n) / (2n * 125155n * unitScale);
   return { start: time1 * seedShift, end: time2 * seedShift };
 }
 
@@ -897,16 +999,35 @@ function shouldApplyAutoTimerCorrection(parsed, rawInput, nowPerf = performance.
   if (nowPerf - state.autoTimerLastUse.perfNow > AUTO_TIMER_CORRECTION_LIMIT_MS) {
     return false;
   }
-  return extractInputTimeText(rawInput) === state.autoTimerLastUse.timeText;
+  return true;
 }
 
-function applySearchResultAutoTimerCorrection(parsed) {
+function applySearchResultAutoTimerCorrection(seed) {
   const lastUse = state.autoTimerLastUse;
   if (!lastUse) {
     return false;
   }
-  const totalSeconds = parsedToTotalSeconds(parsed) + normalizeOffsetSeconds(state.offsetSeconds);
-  setAutoTimerAnchorSeconds(totalSeconds, lastUse.perfNow);
+
+  const seedTimeUnits = computeSeedTimeUnits(seed);
+  const seedSeconds = Number(seedTimeUnits) / AUTO_TIMER_FRACTION_SCALE;
+
+  const toolSecondsAtUse =
+      Number(lastUse.preciseTimeUnitsAtUse) / AUTO_TIMER_FRACTION_SCALE;
+
+  const periodSeconds = normalizeOffsetSeconds(lastUse.offsetSecondsAtUse);
+  const correctedSeconds = periodSeconds > 0
+      ? seedSeconds + Math.round((toolSecondsAtUse - seedSeconds) / periodSeconds) * periodSeconds
+      : seedSeconds;
+
+  setAutoTimerAnchorSeconds(correctedSeconds, lastUse.perfNow);
+  state.autoTimerCorrectionCount += 1;
+
+  const preciseTime = splitPreciseSeconds(correctedSeconds);
+  setAutoTimerFractionDigits(
+      preciseTime.fraction,
+      formatActionTime(preciseTime.wholeSeconds)
+  );
+
   return true;
 }
 
@@ -982,6 +1103,7 @@ async function runSearch() {
     appendLog(parsed.error);
     return;
   }
+  const preciseTimeUnits = getPreciseSearchTimeUnits(parsed, input);
   const runStartedAtPerf = performance.now();
   const shouldCorrectAutoTimer = shouldApplyAutoTimerCorrection(parsed, input, runStartedAtPerf);
 
@@ -989,7 +1111,8 @@ async function runSearch() {
     parsed.hours,
     parsed.minutes,
     parsed.seconds,
-    useAppliedOffset ? 0 : state.offsetSeconds
+    useAppliedOffset ? 0 : state.offsetSeconds,
+    preciseTimeUnits
   );
   const ranges = splitRange(start, end, threads);
   if (!ranges.length) {
@@ -1146,9 +1269,9 @@ async function runSearch() {
         `searcher worker turns=${turns} elapsed=${elapsedMs}ms speed=${speed} (m turns/s)`
     );
 
-    const driftText = computeSeedDriftText(BigInt(foundSeed), parsed);
+    const driftText = computeSeedDriftText(BigInt(foundSeed), parsed, preciseTimeUnits);
     if (shouldCorrectAutoTimer) {
-      applySearchResultAutoTimerCorrection(parsed);
+      applySearchResultAutoTimerCorrection(BigInt(foundSeed));
     }
     recordSeedMemo(parsed, input, driftText);
 
@@ -1167,7 +1290,7 @@ async function runSearch() {
 
 let becameActive = false;
 let movementTimer = null;
-const SAFE_TIME = 1500;
+const SAFE_TIME = 3000;
 
 function setMovementTimerOnce() {
   if (movementTimer !== null) {
@@ -1218,13 +1341,20 @@ function applyAutoTimerToInput() {
   }
   const suffix = extractActionSuffix(ui.actionInput.value);
   const perfNow = performance.now();
-  const timeText = formatActionTime(predictedSeconds);
+  const preciseTime = splitPreciseSeconds(predictedSeconds);
+  const timeText = formatActionTime(preciseTime.wholeSeconds);
   ui.actionInput.value = `${timeText}${suffix ? ` ${suffix}` : " "}`;
   state.autoTimerAppliedPrefix = `${timeText} `;
   state.autoTimerLastUse = {
     perfNow,
-    timeText
+    inputText: ui.actionInput.value,
+    timeText,
+    fractionDigits: preciseTime.fraction,
+    preciseTimeUnitsAtUse: BigInt(preciseTime.wholeSeconds * AUTO_TIMER_FRACTION_SCALE + preciseTime.fraction),
+    offsetSecondsAtUse: state.offsetSeconds
   };
+  setAutoTimerFractionDigits(preciseTime.fraction, timeText);
+  restartAutoTimerFractionHideTimer();
   setAutoTimerResetConfirmVisible(false);
 }
 
@@ -1232,6 +1362,9 @@ ui.emulatorSelect.addEventListener("change", (event) => {
   setActiveEmulator(Number(event.target.value));
   ui.actionInput.value = "";
   state.autoTimerAppliedPrefix = "";
+  state.autoTimerLastUse = null;
+  clearAutoTimerFractionHideTimer();
+  setAutoTimerFractionDigits(null, "");
 });
 
 ui.runButton.addEventListener("click", () => {
@@ -1247,8 +1380,27 @@ ui.actionInput.addEventListener("keydown", (event) => {
   }
 });
 
+if (ui.autoTimerFractionInput) {
+  ui.autoTimerFractionInput.addEventListener("input", () => {
+    const digits = normalizeFractionDigits(ui.autoTimerFractionInput.value);
+    if (digits === null || digits === 0) {
+      clearAutoTimerFractionHideTimer();
+      setAutoTimerFractionDigits(null, "");
+      return;
+    }
+    ui.autoTimerFractionInput.value = formatFractionDigits(digits);
+    updateAutoTimerFractionVisibility();
+  });
+}
+
 if (ui.autoTimerStartButton) {
   ui.autoTimerStartButton.addEventListener("click", () => {
+    if (isPointerUnsafe() && state.autoTimerAnchor != null) {
+      setAutoTimerStatusText(
+          t("autoTimerStatusUnsafe", "Pointer just re-entered the window. Wait 1.5s and try again.")
+      );
+      return;
+    }
     startManualAutoTimer();
   });
 }

@@ -27,6 +27,10 @@
 * You don't need to submit me the line numbers you edited. I don't need to reread the file in the final submission just to know the line numbers. Because of Git, the filename alone is sufficient.
 * rg command installed
 
+When modifying the UI, read interface-design-main/.claude/skills/interface-design/SKILL.md.
+A UI description is not a specification report. When adding a description, you should write about what the user should expect and what they should input, rather than just saying "it's based on xx" or "it uses performance.now()".
+In a UI description, you need to explain what it is, what happens as a result, and what the user needs to do.
+
 ## mcp server
 
 Use these tools if you feel it's necessary. Of course, it's perfectly fine to complete everything using only commands.

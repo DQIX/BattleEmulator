@@ -10,6 +10,10 @@
 /.interface-design
 /public/branches
 /public/emulators.json
+<<<<<<< bilyouma_new_arugo
 /public/erugiosu2
 /interface-design-main
 /interface-design
+=======
+/cmake-build-release2
+>>>>>>> bilyouma_new_arugo
