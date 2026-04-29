@@ -102,7 +102,7 @@
               memoCopyUrl: "Copy URL",
               memoCopyInput: "Copy input",
               autoTimer: "Auto Timer",
-              autoTimerHint: "Seed=1 time assist from the last confirmed run",
+              autoTimerHint: "Manual timer assist corrected from the latest confirmed search",
               autoTimerStart: "Start Timer",
               autoTimerLive: "Predicted Timer",
               autoTimerUse: "Use Current Time",
@@ -111,13 +111,13 @@
               autoTimerConfirm: "Confirm Reset",
               autoTimerCancel: "Cancel",
               autoTimerResetPrompt: "Disable the current timer anchor?",
-              autoTimerStatusIdle: "No timer anchor yet. Run one confirmed search first.",
+              autoTimerStatusIdle: "No timer anchor yet. Press Start Timer when the in-game timer begins.",
               autoTimerStatusReady: "Preview is locked to performance.now() and ignores wall-clock changes.",
               autoTimerStatusUnsafe: "Pointer just re-entered the window. Wait 1.5s and try again."
             },
             ja: {
               autoTimer: "自動タイマー",
-              autoTimerHint: "直前の確定検索を基準にした seed=1 時間補助",
+              autoTimerHint: "手動開始したタイマーを最新の確定検索結果で補正する補助",
               autoTimerStart: "タイマー開始",
               autoTimerLive: "推定タイマー",
               autoTimerUse: "今の時刻を使う",
@@ -126,7 +126,7 @@
               autoTimerConfirm: "リセット確定",
               autoTimerCancel: "キャンセル",
               autoTimerResetPrompt: "現在のタイマー基準を無効化しますか？",
-              autoTimerStatusIdle: "まだタイマー基準がありません。まず1回、確定検索を実行してください。",
+              autoTimerStatusIdle: "まだタイマー基準がありません。ゲーム内タイマーが始まったらタイマー開始を押してください。",
               autoTimerStatusReady: "表示は performance.now() 基準で進み、PC時刻を変えても影響を受けません。",
               autoTimerStatusUnsafe: "ポインタがウィンドウに戻ったばかりです。1.5秒待ってから操作してください。",
               title: "DQ9 Battle Emulator",
@@ -199,7 +199,7 @@
         <section class="panel panel-auto-timer" style="--delay: 0ms">
           <div class="panel-header">
             <h2 data-i18n="autoTimer">Auto Timer</h2>
-            <span class="hint" data-i18n="autoTimerHint">Seed=1 time assist from the last confirmed run</span>
+            <span class="hint" data-i18n="autoTimerHint">Manual timer assist corrected from the latest confirmed search</span>
           </div>
           <div class="auto-timer-layout">
             <div class="auto-timer-preview-wrap">
@@ -229,7 +229,7 @@
               <button id="autoTimerResetConfirmButton" class="run-button auto-timer-confirm-button" type="button" data-i18n="autoTimerConfirm">Confirm Reset</button>
               <button id="autoTimerResetCancelButton" class="run-button auto-timer-cancel-button" type="button" data-i18n="autoTimerCancel">Cancel</button>
             </div>
-            <div id="autoTimerStatus" class="auto-timer-status" data-i18n="autoTimerStatusIdle">No timer anchor yet. Run one confirmed search first.</div>
+            <div id="autoTimerStatus" class="auto-timer-status" data-i18n="autoTimerStatusIdle">No timer anchor yet. Press Start Timer when the in-game timer begins.</div>
           </div>
         </section>
 

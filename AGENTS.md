@@ -19,6 +19,7 @@
 * rg command installed
 
 When modifying the UI, read interface-design-main/.claude/skills/interface-design/SKILL.md.
+A UI description is not a specification report. When adding a description, you should write about what the user should expect and what they should input, rather than just saying "it's based on xx" or "it uses performance.now()".
 
 ## mcp server
 

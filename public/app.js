@@ -541,6 +541,10 @@ function computeSeedSecondsScaled(seed) {
   return (shifted * SEED_SECONDS_NUMERATOR) / SEED_SECONDS_DIVISOR;
 }
 
+function computeSeedSecondsNumber(seed) {
+  return Number(computeSeedSecondsScaled(seed)) / Number(SEED_TIME_SCALE);
+}
+
 function computeRealSecondsScaled(parsed, preciseTimeUnits = null) {
   if (preciseTimeUnits !== null) {
     return preciseTimeUnits / BigInt(AUTO_TIMER_FRACTION_SCALE / Number(SEED_TIME_SCALE));
@@ -677,7 +681,7 @@ function getAutoTimerStatusReadyText() {
 function getAutoTimerStatusIdleText() {
   return t(
     "autoTimerStatusIdle",
-    "No timer anchor yet. Run one confirmed search first."
+    "No timer anchor yet. Press Start Timer when the in-game timer begins."
   );
 }
 
@@ -995,26 +999,20 @@ function shouldApplyAutoTimerCorrection(parsed, rawInput, nowPerf = performance.
   if (nowPerf - state.autoTimerLastUse.perfNow > AUTO_TIMER_CORRECTION_LIMIT_MS) {
     return false;
   }
-  return extractInputTimeText(rawInput) === state.autoTimerLastUse.timeText;
+  return true;
 }
 
-function applySearchResultAutoTimerCorrection(parsed) {
+function applySearchResultAutoTimerCorrection(seed) {
   const lastUse = state.autoTimerLastUse;
   if (!lastUse) {
     return false;
   }
-  const useFractionForCorrection = state.autoTimerCorrectionCount > 0;
-  const fractionDigits = useFractionForCorrection &&
-    state.autoTimerFractionSourceTimeText === lastUse.timeText
-    ? getAutoTimerFractionDigits()
-    : null;
-  const correctionSeconds = fractionDigits ? fractionDigits / AUTO_TIMER_FRACTION_SCALE : 0;
-  const totalSeconds = parsedToTotalSeconds(parsed) + correctionSeconds + normalizeOffsetSeconds(state.offsetSeconds);
+  const correctedDisplayedSeconds = computeSeedSecondsNumber(seed);
+  const totalSeconds = correctedDisplayedSeconds + normalizeOffsetSeconds(lastUse.offsetSecondsAtUse);
   setAutoTimerAnchorSeconds(totalSeconds, lastUse.perfNow);
   state.autoTimerCorrectionCount += 1;
-  if (fractionDigits) {
-    setAutoTimerFractionDigits(fractionDigits, lastUse.timeText);
-  }
+  const preciseTime = splitPreciseSeconds(correctedDisplayedSeconds);
+  setAutoTimerFractionDigits(preciseTime.fraction, formatActionTime(preciseTime.wholeSeconds));
   return true;
 }
 
@@ -1258,7 +1256,7 @@ async function runSearch() {
 
     const driftText = computeSeedDriftText(BigInt(foundSeed), parsed, preciseTimeUnits);
     if (shouldCorrectAutoTimer) {
-      applySearchResultAutoTimerCorrection(parsed);
+      applySearchResultAutoTimerCorrection(BigInt(foundSeed));
     }
     recordSeedMemo(parsed, input, driftText);
 
@@ -1334,8 +1332,10 @@ function applyAutoTimerToInput() {
   state.autoTimerAppliedPrefix = `${timeText} `;
   state.autoTimerLastUse = {
     perfNow,
+    inputText: ui.actionInput.value,
     timeText,
-    fractionDigits: preciseTime.fraction
+    fractionDigits: preciseTime.fraction,
+    offsetSecondsAtUse: state.offsetSeconds
   };
   setAutoTimerFractionDigits(preciseTime.fraction, timeText);
   restartAutoTimerFractionHideTimer();
@@ -1346,6 +1346,7 @@ ui.emulatorSelect.addEventListener("change", (event) => {
   setActiveEmulator(Number(event.target.value));
   ui.actionInput.value = "";
   state.autoTimerAppliedPrefix = "";
+  state.autoTimerLastUse = null;
   clearAutoTimerFractionHideTimer();
   setAutoTimerFractionDigits(null, "");
 });
