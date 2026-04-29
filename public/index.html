@@ -71,6 +71,7 @@
                         autoTimerResetButtonDescription: "Attempting to reset the timer.",
                         autoTimerResetConfirmButtonDescription: "Confirm reset.",
                         runButtonDescription: "RUN Battle Emulator",
+                        actionInputDescription: "a",
                         title: "DQ9 Battle Emulator",
                         subtitle: "WebAssembly seed console for RTA analysis",
                         emulator: "Emulator",
@@ -141,6 +142,7 @@
                         autoTimerResetButtonDescription: "タイマーをリセットしようとします。",
                         autoTimerResetConfirmButtonDescription: "リセットを確定します。",
                         runButtonDescription: "バトルエミュレーターを実行する",
+                        actionInputDescription: "a",
                         autoTimer: "自動タイマー",
                         autoTimerHint: "タイマーを0秒から開始し、検索結果で自動補正します。",
                         autoTimerStart: "タイマー開始",
@@ -442,10 +444,12 @@
                 <span class="hint" data-i18n="shortcutsHint">Trigger these buttons while the pointer is inside the window.</span>
             </div>
             <div class="shortcut-list">
+
+                <!-- ショートカット①: タイマー開始 -->
                 <div
                         class="shortcut-row"
                         data-shortcut-target="autoTimerStartButton"
-                        data-shortcut-default="KeyT"
+                        data-shortcut-default="Minus"
                 >
                     <div class="shortcut-copy">
                         <div class="shortcut-description" data-i18n="shortcutAutoTimerStartDescription">Starts the timer
@@ -459,7 +463,7 @@
                                 data-shortcut-capture
                                 data-shortcut-target="autoTimerStartButton"
                         >
-                            T
+                            -
                         </button>
                         <button
                                 type="button"
@@ -472,10 +476,13 @@
                         </button>
                     </div>
                 </div>
+                <!-- /ショートカット① -->
+
+                <!-- ショートカット②: 今の時刻を使う -->
                 <div
                         class="shortcut-row"
                         data-shortcut-target="autoTimerUseButton"
-                        data-shortcut-default="KeyU"
+                        data-shortcut-default="KeyE"
                 >
                     <div class="shortcut-copy">
                         <div class="shortcut-description" data-i18n="shortcutAutoTimerUseDescription">Puts the current
@@ -489,7 +496,7 @@
                                 data-shortcut-capture
                                 data-shortcut-target="autoTimerUseButton"
                         >
-                            U
+                            E
                         </button>
                         <button
                                 type="button"
@@ -502,14 +509,16 @@
                         </button>
                     </div>
                 </div>
+                <!-- /ショートカット② -->
+
+                <!-- ショートカット③: タイマーリセット -->
                 <div
                         class="shortcut-row"
                         data-shortcut-target="autoTimerResetButton"
-                        data-shortcut-default="KeyL"
+                        data-shortcut-default="Quote"
                 >
                     <div class="shortcut-copy">
-                        <div class="shortcut-description" data-i18n="autoTimerResetButtonDescription">Puts the current
-                            predicted timer into the input time.
+                        <div class="shortcut-description" data-i18n="autoTimerResetButtonDescription">Attempting to reset the timer.
                         </div>
                     </div>
                     <div class="shortcut-actions">
@@ -519,7 +528,7 @@
                                 data-shortcut-capture
                                 data-shortcut-target="autoTimerResetButton"
                         >
-                            L
+                            :
                         </button>
                         <button
                                 type="button"
@@ -531,67 +540,106 @@
                             Clear
                         </button>
                     </div>
-                    <div
-                            class="shortcut-row"
-                            data-shortcut-target="autoTimerResetConfirmButton"
-                            data-shortcut-default="KeyO"
-                    >
-                        <div class="shortcut-copy">
-                            <div class="shortcut-description" data-i18n="autoTimerResetConfirmButtonDescription">Puts
-                                the current predicted timer into the input time.
-                            </div>
-                        </div>
-                        <div class="shortcut-actions">
-                            <button
-                                    type="button"
-                                    class="shortcut-key-button"
-                                    data-shortcut-capture
-                                    data-shortcut-target="autoTimerResetConfirmButton"
-                            >
-                                O
-                            </button>
-                            <button
-                                    type="button"
-                                    class="shortcut-clear-button"
-                                    data-shortcut-clear
-                                    data-shortcut-target="autoTimerResetConfirmButton"
-                                    data-i18n="shortcutClear"
-                            >
-                                Clear
-                            </button>
-                        </div>
-                    </div>
+                </div>
+                <!-- /ショートカット③ -->
 
-                    <div
-                            class="shortcut-row"
-                            data-shortcut-target="runButton"
-                            data-shortcut-default="tab"
-                    >
-                        <div class="shortcut-copy">
-                            <div class="shortcut-description" data-i18n="runButtonDescription">Puts
-                                the current predicted timer into the input time.
-                            </div>
-                        </div>
-                        <div class="shortcut-actions">
-                            <button
-                                    type="button"
-                                    class="shortcut-key-button"
-                                    data-shortcut-capture
-                                    data-shortcut-target="runButton"
-                            >
-                                tab
-                            </button>
-                            <button
-                                    type="button"
-                                    class="shortcut-clear-button"
-                                    data-shortcut-clear
-                                    data-shortcut-target="runButton"
-                                    data-i18n="shortcutClear"
-                            >
-                                Clear
-                            </button>
+                <!-- ショートカット④: リセット確定 -->
+                <div
+                        class="shortcut-row"
+                        data-shortcut-target="autoTimerResetConfirmButton"
+                        data-shortcut-default="Slash"
+                >
+                    <div class="shortcut-copy">
+                        <div class="shortcut-description" data-i18n="autoTimerResetConfirmButtonDescription">Confirm reset.
                         </div>
                     </div>
+                    <div class="shortcut-actions">
+                        <button
+                                type="button"
+                                class="shortcut-key-button"
+                                data-shortcut-capture
+                                data-shortcut-target="autoTimerResetConfirmButton"
+                        >
+                            /
+                        </button>
+                        <button
+                                type="button"
+                                class="shortcut-clear-button"
+                                data-shortcut-clear
+                                data-shortcut-target="autoTimerResetConfirmButton"
+                                data-i18n="shortcutClear"
+                        >
+                            Clear
+                        </button>
+                    </div>
+                </div>
+                <!-- /ショートカット④ -->
+
+                <!-- ショートカット⑤: 検索実行 (Run) -->
+                <div
+                        class="shortcut-row"
+                        data-shortcut-target="runButton"
+                        data-shortcut-default="KeyQ"
+                >
+                    <div class="shortcut-copy">
+                        <div class="shortcut-description" data-i18n="runButtonDescription">RUN Battle Emulator.
+                        </div>
+                    </div>
+                    <div class="shortcut-actions">
+                        <button
+                                type="button"
+                                class="shortcut-key-button"
+                                data-shortcut-capture
+                                data-shortcut-target="runButton"
+                        >
+                            Q
+                        </button>
+                        <button
+                                type="button"
+                                class="shortcut-clear-button"
+                                data-shortcut-clear
+                                data-shortcut-target="runButton"
+                                data-i18n="shortcutClear"
+                        >
+                            Clear
+                        </button>
+                    </div>
+                </div>
+                <!-- /ショートカット⑤ -->
+
+                <!-- ショートカット6: 検索実行 (Run) -->
+                <div
+                        class="shortcut-row"
+                        data-shortcut-target="actionInput"
+                        data-shortcut-default="KeyZ"
+                >
+                    <div class="shortcut-copy">
+                        <div class="shortcut-description" data-i18n="actionInputDescription">RUN Battle Emulator.
+                        </div>
+                    </div>
+                    <div class="shortcut-actions">
+                        <button
+                                type="button"
+                                class="shortcut-key-button"
+                                data-shortcut-capture
+                                data-shortcut-target="actionInput"
+                        >
+                            Q
+                        </button>
+                        <button
+                                type="button"
+                                class="shortcut-clear-button"
+                                data-shortcut-clear
+                                data-shortcut-target="actionInput"
+                                data-i18n="shortcutClear"
+                        >
+                            Clear
+                        </button>
+                    </div>
+                </div>
+                <!-- /ショートカット⑤ -->
+
+            </div><!-- /shortcut-list -->
         </section>
         <section class="panel panel-copyright" style="--delay: 320ms">
             <div class="panel-header">

@@ -851,8 +851,17 @@ function setShortcutBinding(target, binding) {
   renderShortcutSettings();
 }
 
-function isShortcutTextKey(code) {
-  return /^Key[A-Z]$/.test(code) || /^Digit[0-9]$/.test(code);
+function getShortcutFromEvent(event) {
+  if (!event || !event.code || event.code === "ControlLeft" || SHORTCUT_MODIFIER_CODES.has(event.code)) {
+    return null;
+  }
+  return {
+    code: event.code,
+    ctrlKey: Boolean(event.ctrlKey),
+    altKey: Boolean(event.altKey),
+    shiftKey: Boolean(event.shiftKey),
+    metaKey: Boolean(event.metaKey)
+  };
 }
 
 function isInputLikeTarget(target) {
@@ -868,19 +877,6 @@ function isInputLikeTarget(target) {
     return !["button", "checkbox", "color", "file", "hidden", "image", "radio", "range", "reset", "submit"].includes(type);
   }
   return target.isContentEditable;
-}
-
-function getShortcutFromEvent(event) {
-  if (!event || !event.code || event.code === "ControlLeft" || SHORTCUT_MODIFIER_CODES.has(event.code)) {
-    return null;
-  }
-  return {
-    code: event.code,
-    ctrlKey: Boolean(event.ctrlKey),
-    altKey: Boolean(event.altKey),
-    shiftKey: Boolean(event.shiftKey),
-    metaKey: Boolean(event.metaKey)
-  };
 }
 
 function matchesShortcut(binding, event) {
@@ -935,13 +931,12 @@ function handleWindowShortcut(event) {
   if (!state.shortcutPointerInsideWindow || event.code === "ControlLeft") {
     return;
   }
-  const textEntryActive = isInputLikeTarget(event.target) || isInputLikeTarget(document.activeElement);
   for (const [target, binding] of Object.entries(state.shortcutBindings)) {
     if (!matchesShortcut(binding, event)) {
       continue;
     }
-    if (textEntryActive && isShortcutTextKey(binding.code)) {
-      return;
+    if (isInputLikeTarget(event.target) || isInputLikeTarget(document.activeElement)) {
+      event.preventDefault();
     }
     if (!isShortcutTargetAvailable(target)) {
       return;
