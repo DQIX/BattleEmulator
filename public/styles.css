@@ -592,6 +592,12 @@ h2 {
   pointer-events: none;
 }
 
+.auto-timer-use-hint {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .auto-timer-confirm-text,
 .auto-timer-status {
   color: var(--muted);
@@ -953,6 +959,74 @@ h2 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.panel-shortcuts {
+  grid-column: span 2;
+}
+
+.shortcut-list {
+  display: grid;
+  gap: 10px;
+}
+
+.shortcut-row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, var(--fg) 8%);
+  background: color-mix(in srgb, var(--input-bg) 92%, var(--panel));
+}
+
+.shortcut-copy {
+  min-width: 0;
+}
+
+.shortcut-description {
+  min-height: 18px;
+  color: var(--fg);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.shortcut-actions {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(120px, 160px) auto;
+  align-items: center;
+}
+
+.shortcut-key-button,
+.shortcut-clear-button {
+  height: 42px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.shortcut-key-button {
+  padding: 0 14px;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+.shortcut-key-button.is-capturing {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.shortcut-clear-button {
+  padding: 0 14px;
+  background: color-mix(in srgb, var(--panel) 88%, var(--fg) 12%);
+}
+
 .field-inline {
   grid-column: span 2;
 }
@@ -1077,7 +1151,8 @@ h2 {
 
   .auto-timer-layout,
   .field-row,
-  .settings-grid {
+  .settings-grid,
+  .shortcut-row {
     grid-template-columns: 1fr;
   }
 
@@ -1095,7 +1170,8 @@ h2 {
   }
 
   .auto-timer-actions,
-  .auto-timer-confirm {
+  .auto-timer-confirm,
+  .shortcut-actions {
     grid-template-columns: 1fr;
   }
 

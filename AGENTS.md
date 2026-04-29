@@ -26,6 +26,7 @@
     * This project avoids circular references as much as possible
 * You don't need to submit me the line numbers you edited. I don't need to reread the file in the final submission just to know the line numbers. Because of Git, the filename alone is sufficient.
 * rg command installed
+* Minimize the number of differences during editing. If this is not possible, break it down into smaller parts.
 
 When modifying the UI, read interface-design-main/.claude/skills/interface-design/SKILL.md.
 A UI description is not a specification report. When adding a description, you should write about what the user should expect and what they should input, rather than just saying "it's based on xx" or "it uses performance.now()".

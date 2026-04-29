@@ -24,6 +24,7 @@ const ui = {
   seedState: document.getElementById("seedState"),
   dumpOutput: document.getElementById("dumpOutput"),
   logOutput: document.getElementById("logOutput"),
+  shortcutList: document.querySelector(".shortcut-list"),
   themeSelect: document.getElementById("themeSelect"),
   langSelect: document.getElementById("langSelect"),
   preloadToggle: document.getElementById("preloadToggle"),
@@ -38,6 +39,7 @@ const DEFAULT_OFFSET_SECONDS = 15;
 const OFFSET_STORAGE_KEY = "dq9OffsetSeconds";
 const DEFAULT_SEARCH_RANGE_SECONDS = 6;
 const SEARCH_RANGE_STORAGE_KEY = "dq9SearchRangeSeconds";
+const SHORTCUT_STORAGE_KEY = "dq9ButtonShortcuts";
 const AUTO_TIMER_MAX_SECONDS = 30 * 60 * 60;
 const AUTO_TIMER_CORRECTION_LIMIT_MS = 5 * 60 * 1000;
 const AUTO_TIMER_FRACTION_SCALE = 10000;
@@ -47,6 +49,20 @@ const SEED_MEMO_LIMIT = 200;
 const SEED_TIME_SCALE = 100n;
 const SEED_SECONDS_NUMERATOR = 10000n;
 const SEED_SECONDS_DIVISOR = 799n;
+const SHORTCUT_MODIFIER_CODES = new Set([
+  "ShiftLeft",
+  "ShiftRight",
+  "ControlLeft",
+  "ControlRight",
+  "AltLeft",
+  "AltRight",
+  "MetaLeft",
+  "MetaRight"
+]);
+const SHORTCUT_FOCUS_TARGETS = new Set([
+  "actionInput",
+  "dumpOutput"
+]);
 
 const state = {
   emulators: [],
@@ -72,7 +88,10 @@ const state = {
   autoTimerLastUse: null,
   autoTimerFractionHideHandle: null,
   autoTimerFractionSourceTimeText: "",
-  autoTimerCorrectionCount: 0
+  autoTimerCorrectionCount: 0,
+  shortcutBindings: {},
+  shortcutCaptureTarget: "",
+  shortcutPointerInsideWindow: true
 };
 
 const logLines = [];
@@ -649,6 +668,353 @@ function setSearchRangeSeconds(value) {
   localStorage.setItem(SEARCH_RANGE_STORAGE_KEY, String(normalized));
 }
 
+function getShortcutRows() {
+  return Array.from(document.querySelectorAll(".shortcut-row[data-shortcut-target]"));
+}
+
+function parseShortcutBinding(value) {
+  if (!value) {
+    return null;
+  }
+  const parts = String(value).split("+").map((part) => part.trim()).filter(Boolean);
+  if (!parts.length) {
+    return null;
+  }
+  const binding = {
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    metaKey: false,
+    code: ""
+  };
+  parts.forEach((part) => {
+    if (part === "Ctrl") {
+      binding.ctrlKey = true;
+    } else if (part === "Alt") {
+      binding.altKey = true;
+    } else if (part === "Shift") {
+      binding.shiftKey = true;
+    } else if (part === "Meta") {
+      binding.metaKey = true;
+    } else if (!binding.code) {
+      binding.code = part;
+    }
+  });
+  if (!binding.code || SHORTCUT_MODIFIER_CODES.has(binding.code) || binding.code === "ControlLeft") {
+    return null;
+  }
+  return binding;
+}
+
+function serializeShortcutBinding(binding) {
+  if (!binding || !binding.code) {
+    return "";
+  }
+  const parts = [];
+  if (binding.ctrlKey) {
+    parts.push("Ctrl");
+  }
+  if (binding.altKey) {
+    parts.push("Alt");
+  }
+  if (binding.shiftKey) {
+    parts.push("Shift");
+  }
+  if (binding.metaKey) {
+    parts.push("Meta");
+  }
+  parts.push(binding.code);
+  return parts.join("+");
+}
+
+function loadShortcutBindings() {
+  let stored = {};
+  try {
+    stored = JSON.parse(localStorage.getItem(SHORTCUT_STORAGE_KEY) || "{}");
+  } catch (err) {
+    stored = {};
+  }
+  const bindings = {};
+  getShortcutRows().forEach((row) => {
+    const target = row.dataset.shortcutTarget;
+    const hasStoredValue = Object.prototype.hasOwnProperty.call(stored, target);
+    const parsed = hasStoredValue
+      ? parseShortcutBinding(stored[target])
+      : parseShortcutBinding(row.dataset.shortcutDefault);
+    if (target && parsed) {
+      bindings[target] = parsed;
+    }
+  });
+  return bindings;
+}
+
+function saveShortcutBindings() {
+  const serialized = {};
+  getShortcutRows().forEach((row) => {
+    const target = row.dataset.shortcutTarget;
+    if (!target) {
+      return;
+    }
+    serialized[target] = serializeShortcutBinding(state.shortcutBindings[target]);
+  });
+  localStorage.setItem(SHORTCUT_STORAGE_KEY, JSON.stringify(serialized));
+}
+
+function formatShortcutCode(code) {
+  if (/^Key[A-Z]$/.test(code)) {
+    return code.slice(3);
+  }
+  if (/^Digit[0-9]$/.test(code)) {
+    return code.slice(5);
+  }
+  if (/^Numpad[0-9]$/.test(code)) {
+    return `Num ${code.slice(6)}`;
+  }
+  const namedCodes = {
+    Backquote: "`",
+    Minus: "-",
+    Equal: "=",
+    BracketLeft: "[",
+    BracketRight: "]",
+    Backslash: "\\",
+    Semicolon: ";",
+    Quote: "'",
+    Comma: ",",
+    Period: ".",
+    Slash: "/",
+    Space: "Space",
+    Enter: "Enter",
+    Escape: "Esc",
+    Tab: "Tab",
+    Backspace: "Backspace",
+    Delete: "Delete",
+    Insert: "Insert",
+    Home: "Home",
+    End: "End",
+    PageUp: "PageUp",
+    PageDown: "PageDown",
+    ArrowUp: "Up",
+    ArrowDown: "Down",
+    ArrowLeft: "Left",
+    ArrowRight: "Right"
+  };
+  return namedCodes[code] || code;
+}
+
+function formatShortcutBinding(binding) {
+  if (!binding || !binding.code) {
+    return t("shortcutNotSet", "Not set");
+  }
+  const parts = [];
+  if (binding.ctrlKey) {
+    parts.push("Ctrl");
+  }
+  if (binding.altKey) {
+    parts.push("Alt");
+  }
+  if (binding.shiftKey) {
+    parts.push("Shift");
+  }
+  if (binding.metaKey) {
+    parts.push("Meta");
+  }
+  parts.push(formatShortcutCode(binding.code));
+  return parts.join("+");
+}
+
+function renderShortcutSettings() {
+  getShortcutRows().forEach((row) => {
+    const target = row.dataset.shortcutTarget;
+    const captureButton = row.querySelector("[data-shortcut-capture]");
+    const clearButton = row.querySelector("[data-shortcut-clear]");
+    if (!target || !captureButton) {
+      return;
+    }
+    const binding = state.shortcutBindings[target] || null;
+    const capturing = state.shortcutCaptureTarget === target;
+    captureButton.textContent = capturing
+      ? t("shortcutWaiting", "Press a key")
+      : formatShortcutBinding(binding);
+    captureButton.classList.toggle("is-capturing", capturing);
+    if (clearButton) {
+      clearButton.disabled = !binding;
+    }
+  });
+}
+
+function setShortcutBinding(target, binding) {
+  if (!target) {
+    return;
+  }
+  if (binding && binding.code) {
+    state.shortcutBindings[target] = binding;
+  } else {
+    delete state.shortcutBindings[target];
+  }
+  saveShortcutBindings();
+  renderShortcutSettings();
+}
+
+function getShortcutFromEvent(event) {
+  if (!event || !event.code || event.code === "ControlLeft" || SHORTCUT_MODIFIER_CODES.has(event.code)) {
+    return null;
+  }
+  return {
+    code: event.code,
+    ctrlKey: Boolean(event.ctrlKey),
+    altKey: Boolean(event.altKey),
+    shiftKey: Boolean(event.shiftKey),
+    metaKey: Boolean(event.metaKey)
+  };
+}
+
+function isInputLikeTarget(target) {
+  if (!target || !(target instanceof Element)) {
+    return false;
+  }
+  if (target.closest("textarea, select")) {
+    return true;
+  }
+  const input = target.closest("input");
+  if (input) {
+    const type = (input.type || "text").toLowerCase();
+    return !["button", "checkbox", "color", "file", "hidden", "image", "radio", "range", "reset", "submit"].includes(type);
+  }
+  return target.isContentEditable;
+}
+
+function matchesShortcut(binding, event) {
+  if (!binding || !event) {
+    return false;
+  }
+  return binding.code === event.code &&
+    binding.ctrlKey === Boolean(event.ctrlKey) &&
+    binding.altKey === Boolean(event.altKey) &&
+    binding.shiftKey === Boolean(event.shiftKey) &&
+    binding.metaKey === Boolean(event.metaKey);
+}
+
+function isShortcutTargetAvailable(target) {
+  const element = ui[target];
+  if (!element || element.hidden) {
+    return false;
+  }
+  if ("disabled" in element && element.disabled) {
+    return false;
+  }
+  if (!SHORTCUT_FOCUS_TARGETS.has(target) && typeof element.click !== "function") {
+    return false;
+  }
+  const style = window.getComputedStyle(element);
+  return style.display !== "none" && style.visibility !== "hidden" && element.getClientRects().length > 0;
+}
+
+function focusShortcutTarget(target) {
+  const element = ui[target];
+  if (!element || typeof element.focus !== "function") {
+    return;
+  }
+
+  // 今フォーカス中なら一度外す
+  if (document.activeElement === element) {
+    element.blur();
+  } else if (document.activeElement &&
+      typeof document.activeElement.blur === "function") {
+    // 他の要素にフォーカス中でも外しておく
+    document.activeElement.blur();
+  }
+
+  element.focus();
+
+  if (target === "actionInput" &&
+      typeof element.setSelectionRange === "function") {
+    const end = element.value.length;
+    element.setSelectionRange(end, end);
+  }else{
+    element.scrollIntoView({
+      behavior: "smooth",
+      block: "center"
+    });
+
+  }
+}
+
+function handleShortcutCapture(event) {
+  if (!state.shortcutCaptureTarget) {
+    return false;
+  }
+  if (event.code === "Escape") {
+    state.shortcutCaptureTarget = "";
+    renderShortcutSettings();
+    return true;
+  }
+  if (event.code === "Backspace" || event.code === "Delete") {
+    setShortcutBinding(state.shortcutCaptureTarget, null);
+    state.shortcutCaptureTarget = "";
+    renderShortcutSettings();
+    return true;
+  }
+  const binding = getShortcutFromEvent(event);
+  if (!binding) {
+    return true;
+  }
+  setShortcutBinding(state.shortcutCaptureTarget, binding);
+  state.shortcutCaptureTarget = "";
+  renderShortcutSettings();
+  return true;
+}
+
+function handleWindowShortcut(event) {
+  if (handleShortcutCapture(event)) {
+    return;
+  }
+  if (!state.shortcutPointerInsideWindow || event.code === "ControlLeft") {
+    return;
+  }
+  for (const [target, binding] of Object.entries(state.shortcutBindings)) {
+    if (!matchesShortcut(binding, event)) {
+      continue;
+    }
+    event.preventDefault();
+    if (!isShortcutTargetAvailable(target)) {
+      return;
+    }
+    if (SHORTCUT_FOCUS_TARGETS.has(target)) {
+      focusShortcutTarget(target);
+      return;
+    }
+    ui[target].click();
+    return;
+  }
+}
+
+function initShortcutSettings() {
+  state.shortcutBindings = loadShortcutBindings();
+  renderShortcutSettings();
+  if (!ui.shortcutList) {
+    return;
+  }
+  ui.shortcutList.addEventListener("click", (event) => {
+    const captureButton = event.target.closest("[data-shortcut-capture]");
+    if (captureButton) {
+      const target = captureButton.dataset.shortcutTarget;
+      state.shortcutCaptureTarget = state.shortcutCaptureTarget === target ? "" : target;
+      renderShortcutSettings();
+      return;
+    }
+    const clearButton = event.target.closest("[data-shortcut-clear]");
+    if (!clearButton) {
+      return;
+    }
+    setShortcutBinding(clearButton.dataset.shortcutTarget, null);
+    if (state.shortcutCaptureTarget === clearButton.dataset.shortcutTarget) {
+      state.shortcutCaptureTarget = "";
+      renderShortcutSettings();
+    }
+  });
+  window.addEventListener("keydown", handleWindowShortcut);
+}
+
 function initMemoLedger() {
   state.memoList = loadSeedMemos();
   renderSeedMemos(state.memoList);
@@ -703,9 +1069,6 @@ function computeAutoTimerAppliedSeconds(nowPerf = performance.now()) {
 
 function updateAutoTimerButtons() {
   const hasAnchor = Boolean(state.autoTimerAnchor);
-  if (ui.autoTimerStartButton) {
-    ui.autoTimerStartButton.disabled = state.running;
-  }
   if (ui.autoTimerUseButton) {
     ui.autoTimerUseButton.disabled = !hasAnchor || state.running;
   }
@@ -715,6 +1078,7 @@ function updateAutoTimerButtons() {
   if (ui.autoTimerResetConfirmButton) {
     ui.autoTimerResetConfirmButton.disabled = !hasAnchor || state.running;
   }
+  ui.autoTimerStartButton.disabled = state.running || hasAnchor;
 }
 
 function updateAutoTimerPreview() {
@@ -1055,6 +1419,7 @@ function applyLanguage(lang) {
     state.autoTimerAnchor ? getAutoTimerStatusReadyText() : getAutoTimerStatusIdleText()
   );
   updateAutoTimerPreview();
+  renderShortcutSettings();
 }
 
 function applyTheme(theme) {
@@ -1076,11 +1441,13 @@ function initSettings() {
   ui.themeSelect.value = state.theme;
   ui.langSelect.value = state.lang;
   ui.preloadToggle.checked = state.preload;
+  state.shortcutBindings = loadShortcutBindings();
   applyLanguage(state.lang);
   applyTheme(state.theme);
   setOffsetSeconds(loadOffsetSeconds());
   setSearchRangeSeconds(loadSearchRangeSeconds());
   clearAutoTimerAnchor();
+  renderShortcutSettings();
 }
 
 async function runSearch() {
@@ -1328,9 +1695,13 @@ function initPointerSafety() {
   const throttledMove = throttle(movePointerGuard, 200);
   window.addEventListener("mousemove", throttledMove);
   document.addEventListener("mouseenter", () => {
+    state.shortcutPointerInsideWindow = true;
     becameActive = true;
     movementTimer = null;
     setMovementTimerOnce();
+  });
+  document.addEventListener("mouseleave", () => {
+    state.shortcutPointerInsideWindow = false;
   });
 }
 
@@ -1356,6 +1727,7 @@ function applyAutoTimerToInput() {
   setAutoTimerFractionDigits(preciseTime.fraction, timeText);
   restartAutoTimerFractionHideTimer();
   setAutoTimerResetConfirmVisible(false);
+  ui.actionInput.focus();
 }
 
 ui.emulatorSelect.addEventListener("change", (event) => {
@@ -1542,6 +1914,7 @@ if (ui.searchRangeSeconds) {
 loadManifest();
 initSettings();
 initMemoLedger();
+initShortcutSettings();
 initPointerSafety();
 
 
