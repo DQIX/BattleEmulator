@@ -52,6 +52,20 @@ constexpr int WooshSlashKaisinnP = 100;
 constexpr int multithrust3KaisinnP = DragonSlashKaisinnP / 3;
 constexpr int multithrust4KaisinnP = DragonSlashKaisinnP / 4;
 
+constexpr int determineTurn(const int level) {
+    return (level >= 10 && level <= 24)
+               ? 6
+               : (level >= 25 && level <= 49)
+                     ? 7
+                     : (level >= 50 && level <= 74)
+                           ? 8
+                           : (level >= 75 && level <= 99)
+                                 ? 9
+                                 : 0;
+}
+
+constexpr int SpecialChargeTurns = determineTurn(Ally_Level);
+
 
 /**
  * @brief 味方のhpを基に、hpテーブルをコンパイル時に生成します。
@@ -964,7 +978,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             if (!players[0].paralysis) {
                 if (!players[attacker].specialCharge && lcg::getPercent(position, 100) < 1) {
                     players[attacker].specialCharge = true;
-                    players[attacker].specialChargeTurn = 6;
+                    players[attacker].specialChargeTurn = SpecialChargeTurns;
                 }
             }
             resetCombo(NowState);
@@ -1045,7 +1059,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             if (preHP[1] > 0) {
                 if (!players[attacker].specialCharge && lcg::getPercent(position, 100) < 1) {
                     players[attacker].specialCharge = true;
-                    players[attacker].specialChargeTurn = 8;
+                    players[attacker].specialChargeTurn = SpecialChargeTurns;
                 }
             }
             //0x021ec6f8が多分の残りの攻撃回数だけ発生する
@@ -1074,7 +1088,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 if (lcg::getPercent(position, 100) < 1) {
                     //0x021edaf4
                     players[attacker].specialCharge = true;
-                    players[attacker].specialChargeTurn = 6;
+                    players[attacker].specialChargeTurn = SpecialChargeTurns;
                 }
             }
             baseDamage = 0;
@@ -1236,7 +1250,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 if (lcg::getPercent(position, 100) < 1) {
                     //0x021edaf4
                     players[attacker].specialCharge = true;
-                    players[attacker].specialChargeTurn = 6;
+                    players[attacker].specialChargeTurn = SpecialChargeTurns;
                 }
             }
 
@@ -1267,7 +1281,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 if (!players[0].paralysis) {
                     if (lcg::getPercent(position, 100) < 1) {
                         players[attacker].specialCharge = true;
-                        players[attacker].specialChargeTurn = 6;
+                        players[attacker].specialChargeTurn = SpecialChargeTurns;
                     }
                 }
             }
@@ -1343,7 +1357,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 if (lcg::getPercent(position, 100) < 1) {
                     //0x021edaf4
                     players[attacker].specialCharge = true;
-                    players[attacker].specialChargeTurn = 6;
+                    players[attacker].specialChargeTurn = SpecialChargeTurns;
                 }
             }
             if ((Id & 0xffff) == SPECIAL_ANTIDOTE) {
@@ -1368,7 +1382,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 if (lcg::getPercent(position, 100) < 1) {
                     //0x021edaf4
                     players[attacker].specialCharge = true;
-                    players[attacker].specialChargeTurn = 6;
+                    players[attacker].specialChargeTurn = SpecialChargeTurns;
                 }
             }
             players[attacker].mp += baseDamage;
@@ -1393,7 +1407,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 if (lcg::getPercent(position, 100) < 1) {
                     //0x021edaf4
                     players[attacker].specialCharge = true;
-                    players[attacker].specialChargeTurn = 6;
+                    players[attacker].specialChargeTurn = SpecialChargeTurns;
                 }
             }
             baseDamage = 0;
@@ -1511,7 +1525,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             if (!players[0].paralysis && !players[0].sleeping) {
                 if (!players[attacker].specialCharge && lcg::getPercent(position, 100) < 1) {
                     players[attacker].specialCharge = true;
-                    players[attacker].specialChargeTurn = 6;
+                    players[attacker].specialChargeTurn = SpecialChargeTurns;
                 }
             }
             resetCombo(NowState);
@@ -1627,7 +1641,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             if (players[defender].hp - baseDamage >= 0) {
                 if (!players[attacker].specialCharge && lcg::getPercent(position, 100) < 1) {
                     players[attacker].specialCharge = true;
-                    players[attacker].specialChargeTurn = 6;
+                    players[attacker].specialChargeTurn = SpecialChargeTurns;
                 }
             }
             //ミラクルのやつ
@@ -1757,7 +1771,7 @@ void BattleEmulator::process7A8(int *position, int baseDamage, Player players[2]
         if (baseDamage_tmp >= proportionTable3[i]) {
             if (percent_tmp < proportionTable2[i]) {
                 players[defender].specialCharge = true;
-                players[defender].specialChargeTurn = 6;
+                players[defender].specialChargeTurn = SpecialChargeTurns;
             }
             break;
         }
