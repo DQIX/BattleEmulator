@@ -85,8 +85,8 @@ namespace{
     constexpr Player BasePlayers[2] = {
         // プレイヤー1
         {
-            143, 143.0, 220, 220, 155, 155, 114, 114, 138, 88, // 最初のメンバー
-            88, false, false, 0, false, 0, -1,
+            135, 135, 207, 207, 148, 148, 108, 108, 124, 82, // 最初のメンバー
+            82, false, false, 0, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             6, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
             false, -1, 0, -1, 0, false, 1, 1, 1, -1, 0, -1, false, 2, false, -1
@@ -94,7 +94,7 @@ namespace{
 
         // プレイヤー2
         {
-            1680, 1680.0, 160, 160, 170, 170, 125, 125, 0, 255, // 最初のメンバー
+            1562, 1562, 140, 140, 150, 150, 95, 95, 0, 255, // 最初のメンバー
             255, false, false, 0, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             0, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
@@ -172,7 +172,7 @@ namespace{
             auto SpeedTurn = result.SpeedTurn[i];
             auto defenseFlag = result.defenseFlag[i];
             int amp = -1;
-            if(i >= 1){
+            if(i >= 2){
                 amp = result.amp[i - 1];
             }
 
@@ -873,7 +873,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 
     //AI Warning: This is code related to debug2
-    uint64_t time1 = 0x1af41c64b;
+    uint64_t time1 = 0x071935b9;
 
     int dummy[100];
     lcg::init(time1, false);
@@ -910,7 +910,8 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 
     //AI Warning: This is code related to debug2
     int32_t gene1[350] = {
-        30, 30, 62, 50, 62, 62, 33, 62, 27, 34, 34,
+        BattleEmulator::BUFF,
+        BattleEmulator::BUFF,
         BattleEmulator::ATTACK_ALLY
     };
     //gene1[19-1] = BattleEmulator::DEFENCE;

@@ -88,6 +88,14 @@ constexpr Equipment EnchantedGloves("Enchanted gloves", {
                                         {Attribute::Darkness, 7},
                                     });
 
+constexpr Equipment RadTights("Rad Tights", {
+                                        {Attribute::Fire, 7},
+                                        {Attribute::ThunderExplosion, 7},
+                                    });
+constexpr Equipment WellingtonBoots("Wellington boots", {
+                                        {Attribute::ThunderExplosion, 10},
+                                    });
+
 
 /**
  * すべての装備品を格納する定数配列です。
@@ -98,8 +106,8 @@ constexpr Equipment EnchantedGloves("Enchanted gloves", {
  * @note この配列はconstexprとして定義されているため、コンパイル時に初期化され、実行時に変更することはできません。
  * @note 配列内の順序は、装備品管理や計算処理で一貫性を保つために重要です。
  */
-constexpr std::array<Equipment, 3> allEquipments = {
-    DarkShield, EtherealArmour, EnchantedGloves
+constexpr std::array<Equipment, 4> allEquipments = {
+    DarkShield, EtherealArmour, EnchantedGloves, RadTights
 };
 
 /**

@@ -17,7 +17,7 @@
  */
 struct Player {
     int hp = 0;
-    double maxHp = 0;
+    int maxHp = 0;
     int atk = 0;
     int defaultATK = 0;
     int def = 0;
@@ -56,6 +56,9 @@ struct Player {
     int SpecialAntidoteCount = 2;
     bool acrobaticStar = false;
     int acrobaticStarTurn = 0;
+    int DazzleTurns = -1;
+    int BarrierLevel = 0;
+    int BarrierTurns = -1;//25%
 
     /**
      * @brief プレイヤーが生存しているかを判定する関数
@@ -95,7 +98,7 @@ struct Player {
      */
     static void heal(Player &obj, int amount) {
         obj.hp += amount;
-        obj.hp = std::min(static_cast<int>(obj.maxHp), obj.hp);
+        obj.hp = std::min(obj.maxHp, obj.hp);
     }
 };
 

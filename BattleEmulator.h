@@ -112,6 +112,10 @@ public:
     static constexpr int DOUBLE_TROUBLE = 80;// 往復びんた
     static constexpr int ZAMMLE = 81; //ドルクマ
     static constexpr int CRACKLE_ENEMY = 82; //ヒャダルコ
+    static constexpr int MAGIC_BARRIER = 83; //マジックバリア
+    static constexpr int BOOM = 84; //イオラ
+    static constexpr int WHIRLWIND = 85; //突風
+    static constexpr int DAZZLE = 86; //マヌーサ
 
 
     static void ResetTurnProcessed();
@@ -156,7 +160,7 @@ private:
     static int callAttackFun(int32_t Id, int *position, Player *players, int attacker, int defender,
                              uint64_t *NowState);
 
-    static double FUN_021dbc04(int baseHp, double maxHp);
+    static double FUN_021dbc04(int baseHp, int maxHp);
 
     static int ProcessEnemyRandomAction2A(int *position);
 

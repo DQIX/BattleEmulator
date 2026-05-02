@@ -28,11 +28,11 @@ jobs:
       # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
-    - name: Build ebe_lv21_v2
-      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target ebe_lv21_v2
+    - name: Build silya_lv22_v2
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target silya_lv22_v2
 
-    - name: echo SHA256 ebe_lv21_v2
-      run: Get-FileHash -Algorithm SHA256 -Path "${{github.workspace}}/build/${{env.BUILD_TYPE}}/ebe_lv21_v2.exe"
+    - name: echo SHA256 silya_lv22_v2
+      run: Get-FileHash -Algorithm SHA256 -Path "${{github.workspace}}/build/${{env.BUILD_TYPE}}/silya_lv22_v2.exe"
 
     - name: Copy License file
       run: Copy-Item -Path "${{github.workspace}}/LICENSE" -Destination "${{github.workspace}}/build/${{env.BUILD_TYPE}}/"
@@ -49,7 +49,7 @@ jobs:
         # Artifact name
         name: erusionn_v
         path: |
-          ${{github.workspace}}/build/${{env.BUILD_TYPE}}/ebe_lv21_v2.exe
-          ${{github.workspace}}/build/${{env.BUILD_TYPE}}/ebe_lv21_v2.pdb
+          ${{github.workspace}}/build/${{env.BUILD_TYPE}}/silya_lv22_v2.exe
+          ${{github.workspace}}/build/${{env.BUILD_TYPE}}/silya_lv22_v2.pdb
           ${{github.workspace}}/build/${{env.BUILD_TYPE}}/LICENSE
           ${{github.workspace}}/build/${{env.BUILD_TYPE}}/image/**
