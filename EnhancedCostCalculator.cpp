@@ -66,7 +66,7 @@ double EnhancedCostCalculator::calculateStatusEffectCost(const Genome &genome) {
     statusCost -= genome.AllyPlayer.TensionLevel * getActionCost(SimpleParameterOptimizerNode::TensionWeight);
 
     // Special abilities
-    if (genome.AllyPlayer.specialCharge) statusCost -= getActionCost(SimpleParameterOptimizerNode::ActHeight);
+    if (genome.AllyPlayer.specialCharge) statusCost -= getActionCost(SimpleParameterOptimizerNode::SpHeight);
 
     return statusCost;
 }
@@ -92,40 +92,40 @@ double EnhancedCostCalculator::calculateResourceCost(const Genome &genome) {
 #else
 
 constexpr std::array<double, 201> GENOME = {
-    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 27 */ 0.292473,
-        0.0,0.0,
-        /* 30 */ 4.12226,
-        0.0,0.0,
-        /* 33 */ -5.75301,
-        /* 34 */ 1.29358,
-        0.0,
-        /* 36 */ 4.72987,
-        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 50 */ 9.9061,
-        0.0,0.0,
-        /* 53 */ 2.73898,
-        0.0,
-        /* 55 */ -0.742484,    0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 62 */ -3.11715,    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 150 */ 3.4622,
-        /* 151 */ 15.5156,
-        /* 152 */ 2.13489,
-        /* 153 */ 6.81214,
-        /* 154 */ 0.702205,
-        /* 155 */ -6.19784,
-        /* 156 */ -2.59225,
-        /* 157 */ 7.33453,
-        /* 158 */ 2.01295,
-        /* 159 */ 5.29603,
-        /* 160 */ 2.1953,
-        /* 161 */ 8.36977,
-        /* 162 */ 3.40512,
-        /* 163 */ -1.08646,
-        /* 164 */ 1.49109,
-        /* 165 */ 4.47899,
-        /* 166 */ -0.27755,    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
-    };
+    /* 0 */ 7.31445,
+    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+    /* 27 */ 4.98101,
+    0.0,0.0,
+    /* 30 */ 1.64718,
+    0.0,0.0,
+    /* 33 */ 2.60711,
+    /* 34 */ -4.35767,    0.0,
+    /* 36 */ 10.4021,
+    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+    /* 50 */ 10.3242,
+    0.0,0.0,
+    /* 53 */ 2.59507,
+    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+    /* 62 */ -2.72349,    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+    /* 150 */ -0.246484,
+    /* 151 */ 2.33597,
+    /* 152 */ -12.4332,
+    /* 153 */ 6.58416,
+    /* 154 */ 0.319325,
+    /* 155 */ 4.53437,
+    /* 156 */ 6.57293,
+    /* 157 */ 1.31029,
+    /* 158 */ 1.67595,
+    /* 159 */ 3.20994,
+    /* 160 */ 4.73081,
+    /* 161 */ 9.31199,
+    /* 162 */ 5.69125,
+    /* 163 */ -1.42268,
+    /* 164 */ -0.362692,
+    /* 165 */ 0.12509,
+    /* 166 */ 5.96106,
+    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+};
 double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, double preGCost) {
     // Base cost is turn number (maintains depth-first preference)
     double gCost = preGCost + GENOME[SimpleParameterOptimizerNode::turnHeignt];
@@ -181,8 +181,8 @@ double EnhancedCostCalculator::calculateStatusEffectCost(const Genome &genome) {
     statusCost -= genome.AllyPlayer.TensionLevel * GENOME[SimpleParameterOptimizerNode::TensionWeight];
 
     // Special abilities
-    if (genome.AllyPlayer.acrobaticStar) statusCost -= GENOME[SimpleParameterOptimizerNode::SpHeight];
-    if (genome.AllyPlayer.specialCharge) statusCost -= GENOME[SimpleParameterOptimizerNode::ActHeight];
+    //if (genome.AllyPlayer.acrobaticStar) statusCost -= GENOME[SimpleParameterOptimizerNode::SpHeight];
+    if (genome.AllyPlayer.specialCharge) statusCost -= GENOME[SimpleParameterOptimizerNode::SpHeight];
 
     return statusCost;
 }
