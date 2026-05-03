@@ -87,6 +87,10 @@ std::vector<ResultStructure> InputBuilder::makeStructure() {
     return results;
 }
 
+void InputBuilder::clear() {
+    inputs.clear();
+}
+
 /**
  * インデックスに基づいて入力組み合わせを生成し、結果リストに追加します。
  * 再帰的に実行され、すべての可能な組み合わせを列挙します。
