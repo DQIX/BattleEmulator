@@ -1729,6 +1729,11 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
             players[0].specialCharge = false;
             players[0].DazzleLevel = 0;
             players[0].DazzleTurns = -1;
+            if(players[0].BuffLevel < 0){
+                players[0].BuffLevel = 0;
+                players[0].BuffTurns = -1;
+                RecalculateBuff(players);
+            }
             break;
         case BattleEmulator::ATTACK_ALLY:
         case BattleEmulator::MERCURIAL_THRUST:

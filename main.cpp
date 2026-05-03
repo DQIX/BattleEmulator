@@ -391,8 +391,8 @@ namespace{
     NOINLINE bool ProcessInputBuilder(const int argc, char* argv[]){
         // 4番目以降の引数を `push()` に入れる
         for(int i = 4; i < argc; ++i){
-            if(isMatchStrWithTrim(argv[i], "t") || isMatchStrWithTrim(argv[i], "p")){
-                builder.push(InputBuilder::TYPE_PSYCHE_UP_ENEMY, InputBuilder::PREFIX_PSYCHE_UP_ENEMY);
+            if(isMatchStrWithTrim(argv[i], "M") || isMatchStrWithTrim(argv[i], "m")){
+                builder.push(InputBuilder::TYPE_MAGIC_BARRIER, InputBuilder::PREFIX_MAGIC_BARRIER);
                 continue;
             }
             if(isMatchStrWithTrim(argv[i], "b") || isMatchStrWithTrim(argv[i], "s") || isMatchStrWithTrim(argv[i], "ab")
