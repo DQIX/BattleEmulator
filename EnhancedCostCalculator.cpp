@@ -60,6 +60,7 @@ double EnhancedCostCalculator::calculateStatusEffectCost(const Genome &genome) {
     if (genome.AllyPlayer.paralysis) statusCost += getActionCost(SimpleParameterOptimizerNode::paralysisWeight);
     if (genome.AllyPlayer.sleeping) statusCost += getActionCost(SimpleParameterOptimizerNode::sleepWeight);
     if (genome.AllyPlayer.isStunned) statusCost += getActionCost(SimpleParameterOptimizerNode::inactiveWeight);
+    if (genome.AllyPlayer.DazzleLevel) statusCost += getActionCost(SimpleParameterOptimizerNode::inactiveWeight);
 
     // Positive status effects (bonuses - negative cost)
     statusCost -= genome.AllyPlayer.BuffLevel * getActionCost(SimpleParameterOptimizerNode::BuffWeight);
@@ -67,7 +68,9 @@ double EnhancedCostCalculator::calculateStatusEffectCost(const Genome &genome) {
     statusCost -= genome.AllyPlayer.TensionLevel * getActionCost(SimpleParameterOptimizerNode::TensionWeight);
 
     // Special abilities
-    if (genome.AllyPlayer.specialCharge) statusCost -= getActionCost(SimpleParameterOptimizerNode::ActHeight);
+    //if (genome.AllyPlayer.acrobaticStar) statusCost -= getActionCost(SimpleParameterOptimizerNode::ActHeight);
+    if (genome.AllyPlayer.specialCharge) statusCost -= getActionCost(SimpleParameterOptimizerNode::SpHeight);
+    if (genome.AllyPlayer.DazzleLevel > 0) statusCost += getActionCost(SimpleParameterOptimizerNode::DazzleWeight); // 追加
 
     return statusCost;
 }
@@ -95,40 +98,41 @@ double EnhancedCostCalculator::calculateResourceCost(const Genome &genome) {
 #else
 constexpr std::array<double, 201> GENOME = {
     0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 27 */ 1.62501,
+        /* 27 */ 7.31132,
         0.0,0.0,
-        /* 30 */ 7.5857,
+        /* 30 */ 5.49539,
         0.0,0.0,
-        /* 33 */ -1.73149,
-        /* 34 */ -0.957736,    0.0,
-        /* 36 */ 7.8957,
+        /* 33 */ 0.191569,
+        /* 34 */ -7.21,    0.0,
+        /* 36 */ 5.34431,
         0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 49 */ -1.25643,
-        /* 50 */ 5.82616,
+        /* 49 */ -0.599354,
+        /* 50 */ 5.79251,
         0.0,
-        /* 52 */ 1.12026,
-        /* 53 */ 2.65016,
+        /* 52 */ 6.59792,
+        /* 53 */ 2.87158,
         0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 62 */ -1.62081,    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 150 */ 0.82181,
-        /* 151 */ 6.90146,
-        /* 152 */ -4.11337,
-        /* 153 */ 1.56812,
-        /* 154 */ 0.1694,
-        /* 155 */ -1.1226,
-        /* 156 */ 3.98818,
-        /* 157 */ 2.12945,
-        /* 158 */ 1.39256,
-        /* 159 */ -3.70097,
-        /* 160 */ 4.35968,
-        /* 161 */ 2.32119,
-        /* 162 */ 1.57115,
-        /* 163 */ 1.82689,
-        /* 164 */ -0.359419,
-        /* 165 */ 1.98467,
-        /* 166 */ 2.24294,
-        /* 167 */ 0.842564,
-        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+        /* 62 */ -5.07892,    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+        /* 150 */ 3.346,
+        /* 151 */ 8.14256,
+        /* 152 */ -7.75965,
+        /* 153 */ 3.10257,
+        /* 154 */ 0.739992,
+        /* 155 */ 0.710903,
+        /* 156 */ -1.56872,
+        /* 157 */ 0.25156,
+        /* 158 */ -0.130522,
+        /* 159 */ -1.566,
+        /* 160 */ 1.90898,
+        /* 161 */ 7.5152,
+        /* 162 */ 3.61422,
+        /* 163 */ 2.28552,
+        /* 164 */ -0.985291,
+        /* 165 */ 2.3845,
+        /* 166 */ -1.46316,
+        /* 167 */ 0.370212,
+        /* 168 */ 2.18253,
+        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
     };
 double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, double preGCost) {
     // Base cost is turn number (maintains depth-first preference)
@@ -185,8 +189,9 @@ double EnhancedCostCalculator::calculateStatusEffectCost(const Genome &genome) {
     statusCost -= genome.AllyPlayer.TensionLevel * GENOME[SimpleParameterOptimizerNode::TensionWeight];
 
     // Special abilities
-    if (genome.AllyPlayer.acrobaticStar) statusCost -= GENOME[SimpleParameterOptimizerNode::SpHeight];
-    if (genome.AllyPlayer.specialCharge) statusCost -= GENOME[SimpleParameterOptimizerNode::ActHeight];
+   // if (genome.AllyPlayer.acrobaticStar) statusCost -= GENOME[SimpleParameterOptimizerNode::SpHeight];
+    if (genome.AllyPlayer.specialCharge) statusCost -= GENOME[SimpleParameterOptimizerNode::SpHeight];
+    if (genome.AllyPlayer.DazzleLevel > 0) statusCost += GENOME[SimpleParameterOptimizerNode::DazzleWeight]; // 追加
 
     return statusCost;
 }

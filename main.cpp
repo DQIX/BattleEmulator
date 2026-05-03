@@ -974,10 +974,12 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 0x07275dff;
+    uint64_t seed = 0x1008;
 
     int actions[350] = {
         BattleEmulator::BUFF,
+        BattleEmulator::PSYCHE_UP_ALLY,
+        BattleEmulator::PSYCHE_UP_ALLY,
         -1,
     };
     SearchRequest(BasePlayers, seed, actions, THREAD_COUNT, true);

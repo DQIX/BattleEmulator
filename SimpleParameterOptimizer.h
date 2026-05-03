@@ -17,7 +17,7 @@
 #include "BattleEmulator.h"
 
 static constexpr int MAX_ACTION_ID = 512;
-static constexpr int ids = 28;
+static constexpr int ids = 29;
 static constexpr double DEFAULT_ACTION_COST = 1.0;
 static constexpr double DEFAULT_STEP = 0.5; // 変異の基本スケール
 
@@ -137,6 +137,7 @@ public:
     static constexpr int TensionWeight = 165;
     static constexpr int AntidoteWeight = 166;
     static constexpr int MagicWaterCost = 167;
+    static constexpr int DazzleWeight = 168; // 追加
 };
 
 #endif // SIMPLE_PARAMETER_OPTIMIZER_H

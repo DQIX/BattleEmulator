@@ -56,6 +56,7 @@ static constexpr std::array<int, ids> TUNE_IDS = {
     SimpleParameterOptimizerNode::TensionWeight,
     SimpleParameterOptimizerNode::AntidoteWeight,
     SimpleParameterOptimizerNode::MagicWaterCost,
+    SimpleParameterOptimizerNode::DazzleWeight, // 追加
 };
 
 // action cost テーブル（一次真実源）
@@ -126,7 +127,7 @@ static int buildActionsWithRandomInserts(
 
 // --- ヘルパ関数 ---
 static void initActionCostsIfNeeded() {
-    static bool inited = false;
+    thread_local static bool inited = false;
     if (inited) return;
     for (int i = 0; i < MAX_ACTION_ID; ++i) s_actionCosts[i] = DEFAULT_ACTION_COST;
     inited = true;
