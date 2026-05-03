@@ -3,7 +3,7 @@
 //
 
 #ifndef NEWDIRECTORY_DEBUG_H
-#define NEWDIRECTORY_DEBUG_H
+#define xNEWDIRECTORY_DEBUG_H
 
 // DEBUGが未定義の場合、デフォルトで無効になるように設定
 #define DEBUG 1

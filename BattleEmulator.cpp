@@ -429,7 +429,7 @@ bool BattleEmulator::Main(int* position, int RunCount, const int32_t Gene[350], 
 
 #ifdef DEBUG2
         std::cout << "c: " << counterJ << ", " << (*position) << std::endl;
-        if((*position) == 711){
+        if((*position) == 331){
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -1717,16 +1717,18 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
             (*position)++; //0x02158584 会心
             (*position)++; //0x021ec6f8 不明
             (*position)++; //0x02157f58 ニセ回避
-            baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
+            baseDamage = FUN_0207564c(position, players[attacker].atk, players[attacker].def);
             if(baseDamage == 0){
                 baseDamage = lcg::getPercent(position, 2); //0x021e81a0
             }
             if(baseDamage != 0){
                 (*position)++; //不明 0x021e54fc
             }
-            baseDamage = static_cast<int>(std::round(players[attacker].maxHp * 0.4));
+            baseDamage = std::max(static_cast<int>(std::round(players[attacker].maxHp * 0.4)), 75);//(*code 24) 021e1cc4
             resetCombo(NowState);
             players[0].specialCharge = false;
+            players[0].DazzleLevel = 0;
+            players[0].DazzleTurns = -1;
             break;
         case BattleEmulator::ATTACK_ALLY:
         case BattleEmulator::MERCURIAL_THRUST:

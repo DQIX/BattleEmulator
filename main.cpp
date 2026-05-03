@@ -334,7 +334,7 @@ namespace{
             buildDate << ", " << buildTime << " UTC/GMT, Compiler: " << compiler << multiThreading << std::endl;
 #elif defined(NO_OPTIMIZATION)
         std::cout << "dq9 Ragin' Contagion battle emulator " << version << " (No optimization), Build date: " <<
-            buildDate << ", " << buildTime << " UTC/GMT, Compiler: " << compiler << multiThreading << std::endl;
+            buildDate << ", " << buildTime << " UTC/GMT, Compiler: " << compiler <<std::endl;
 #else
         std::cout << "dq9 Corvus battle emulator" << version << " (Unknown build configuration), Build date: " <<
             buildDate << ", " << buildTime << " UTC, Compiler: " << compiler << std::endl;
@@ -867,7 +867,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 
     //AI Warning: This is code related to debug2
-    uint64_t time1 = 0x071935b9;
+    uint64_t time1 = 0x7572e7a;
 
     int dummy[100];
     lcg::init(time1, false);
@@ -904,19 +904,8 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 
     //AI Warning: This is code related to debug2
     int32_t gene1[350] = {
-        BattleEmulator::BUFF,
-        BattleEmulator::BUFF,
-        BattleEmulator::MIDHEAL,
-        BattleEmulator::MIDHEAL,
-        BattleEmulator::MIDHEAL,
-        BattleEmulator::MIDHEAL,
-        BattleEmulator::MIDHEAL,
-        BattleEmulator::MIDHEAL,
-        BattleEmulator::MIDHEAL,
-        BattleEmulator::MIDHEAL,
-        BattleEmulator::MIDHEAL,
-        BattleEmulator::MIDHEAL,
-        BattleEmulator::HEAL,
+        30, 62, 62, 62, 62, 52, 33, 27, 34, 34,
+        BattleEmulator::ATTACK_ALLY,
     };
     //gene1[19-1] = BattleEmulator::DEFENCE;
     int counter = 0;
@@ -962,7 +951,7 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 0x071b9d22;
+    uint64_t seed = 0x07572e7a;
 
     int actions[350] = {
         BattleEmulator::BUFF,
