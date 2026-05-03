@@ -261,6 +261,9 @@ namespace{
                         action == BattleEmulator::SLEEPING)){
                         sp = "---------------";
                     }
+                    if(action == BattleEmulator::INACTIVE_ALLY && !defenseFlag){
+                        sp = "---------------";
+                    }
                     if((action == BattleEmulator::CURE_SLEEPING || action == BattleEmulator::CURE_PARALYSIS)){
                         sp = "---------------";
                     }
