@@ -188,7 +188,7 @@ const char* BattleEmulator::getActionName(int actionId){
         case BattleEmulator::MERA_ZOMA:
             return "Mera Zoma";
         case BattleEmulator::DOUBLE_UP:
-            return "Double up";
+            return "!Double up";
         case BattleEmulator::MULTITHRUST:
             return "Multithrust";
 
