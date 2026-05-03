@@ -57,8 +57,10 @@ struct Player {
     bool acrobaticStar = false;
     int acrobaticStarTurn = 0;
     int DazzleTurns = -1;
+    int DazzleLevel = 0;
     int BarrierLevel = 0;
     int BarrierTurns = -1;//25%
+    bool isStunned = false;
 
     /**
      * @brief プレイヤーが生存しているかを判定する関数

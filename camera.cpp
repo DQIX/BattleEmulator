@@ -20,7 +20,7 @@ void camera::Main(int *position, const int32_t actions[5], uint64_t * NowState) 
         int32_t after = actions[i];
         if (after == BattleEmulator::ATTACK_ALLY) {
             onFreeCameraMove(position, after, preemptive ? 1 : 0, NowState);
-        } else if (after == BattleEmulator::MERCURIAL_THRUST || after == BattleEmulator::ATTACK_ENEMY || after == BattleEmulator::MIRACLE_SLASH || after ==
+        } else if (after == BattleEmulator::MERCURIAL_THRUST || after == BattleEmulator::MIRACLE_SLASH || after ==
                    BattleEmulator::DRAGON_SLASH || after == BattleEmulator::DOUBLE_TROUBLE) {
             (*position)++;//追尾カメラ
         }
@@ -50,7 +50,7 @@ void camera::onFreeCameraMove(int *position, const int action, const int param5,
             auto ret = lcg::getPercent(position, 5 - counter);
             if (ret == 0 || counter == 5) {
                 counter = 0;
-                (*position) += 1;
+                (*position) += 3;
             } else {
                 counter++;
             }
@@ -59,11 +59,13 @@ void camera::onFreeCameraMove(int *position, const int action, const int param5,
             if (counter == 0) {
                 (*position)++;//引数5が1なら強制的に実行
                 counter = 0;
+                (*position) += 2;
                 break;
             }
             (*position)++;
             counter = 0;
             (*position)++;
+            (*position) += 2;
         }
     } while (false);
     (*NowState) &= ~0xf00;

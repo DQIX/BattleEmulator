@@ -71,21 +71,21 @@ constexpr Equipment DarkShield("Magic shield", {
                                });
 
 //せいれいのよろい
-constexpr Equipment EtherealArmour("Enchanted shield", {
-                                       {Attribute::Fire, 15},
-                                       {Attribute::Ice, 15},
-                                       {Attribute::Wind, 15},
-                                       {Attribute::ThunderExplosion, 15},
-                                       {Attribute::Darkness, 12},
+constexpr Equipment EtherealArmour("magic armor", {
+                                       {Attribute::Fire, 12},
+                                       {Attribute::Ice, 12},
+                                       {Attribute::Wind, 12},
+                                       {Attribute::ThunderExplosion, 12},
+                                       {Attribute::Darkness, 10},
                                    });
 
 //せいれいのこて
-constexpr Equipment EnchantedGloves("Enchanted gloves", {
-                                        {Attribute::Fire, 7},
-                                        {Attribute::Ice, 7},
-                                        {Attribute::Wind, 7},
-                                        {Attribute::ThunderExplosion, 7},
-                                        {Attribute::Darkness, 7},
+constexpr Equipment EnchantedGloves("magic gloves", {
+                                        {Attribute::Fire, 5},
+                                        {Attribute::Ice, 5},
+                                        {Attribute::Wind, 5},
+                                        {Attribute::ThunderExplosion, 5},
+                                        {Attribute::Darkness, 5},
                                     });
 
 constexpr Equipment RadTights("Rad Tights", {
@@ -106,8 +106,8 @@ constexpr Equipment WellingtonBoots("Wellington boots", {
  * @note この配列はconstexprとして定義されているため、コンパイル時に初期化され、実行時に変更することはできません。
  * @note 配列内の順序は、装備品管理や計算処理で一貫性を保つために重要です。
  */
-constexpr std::array<Equipment, 4> allEquipments = {
-    DarkShield, EtherealArmour, EnchantedGloves, RadTights
+constexpr std::array<Equipment, 5> allEquipments = {
+    DarkShield, EtherealArmour, EnchantedGloves, RadTights,WellingtonBoots
 };
 
 /**

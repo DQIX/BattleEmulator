@@ -89,7 +89,7 @@ namespace{
             82, false, false, 0, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             6, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-            false, -1, 0, -1, 0, false, 1, 1, 1, -1, 0, -1, false, 2, false, -1
+            false, -1, 0, -1, 0, false, 0, 0, 2, -1, 0, -1, false, 0, false, -1
         }, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 
         // プレイヤー2
@@ -98,7 +98,7 @@ namespace{
             255, false, false, 0, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             0, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-            false, -1, 0, -1, 0, false, 0, 0, 0, -1, 0, -1, false, 2, false, -1
+            false, -1, 0, -1, 0, false, 0, 0, 2, -1, 0, -1, false, 0, false, -1
         } // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
     };
 #endif
@@ -154,7 +154,7 @@ namespace{
         bool initiative_tmp, def_f = false;
         std::string eAction[2], aAction, sp, tmpState, DEFTurn1, specialChargeTurn1,
                     ahp2,
-                    ehp2, amp2, poisonTurn1, SpeedTurn1, tmp_state;
+                    ehp2, amp2, tmp_state;
         auto counter = 0;
         // データのループ
         for(int i = 0; i < result.position; ++i){
@@ -172,8 +172,8 @@ namespace{
             auto SpeedTurn = result.SpeedTurn[i];
             auto defenseFlag = result.defenseFlag[i];
             int amp = -1;
-            if(i >= 2){
-                amp = result.amp[i - 1];
+            if(i >= 1){
+                amp = result.amp[i];
             }
 
             auto special = gene[turn];
@@ -222,11 +222,11 @@ namespace{
                 initiative_tmp = false;
                 counter = 0;
                 DEFTurn1 = "";
-                poisonTurn1 = "";
-                SpeedTurn1 = "";
                 specialChargeTurn1 = "";
                 tmp_state = "";
+                //amp2 = std::to_string(amp);
             }
+
 
             // 敵か味方の行動を適切な変数に格納
             if(isEnemy){
@@ -236,19 +236,12 @@ namespace{
                 ahp2 = std::to_string(ahp1);
             }
             else{
-                ehp2 = std::to_string(ehp1);
                 amp2 = std::to_string(amp);
+                ehp2 = std::to_string(ehp1);
                 aAction = BattleEmulator::getActionName(action);
                 aDamage = damage;
                 if(DEFTurn >= 0){
                     DEFTurn1 = std::to_string(DEFTurn);
-                }
-                if(poisonTurn >= 0){
-                    poisonTurn1 = std::to_string(poisonTurn);
-                }
-
-                if(SpeedTurn >= 0){
-                    SpeedTurn1 = std::to_string(SpeedTurn);
                 }
                 if(specialChargeTurn > 0){
                     specialChargeTurn1 = std::to_string(specialChargeTurn);
@@ -911,8 +904,14 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
     //AI Warning: This is code related to debug2
     int32_t gene1[350] = {
         BattleEmulator::BUFF,
+        BattleEmulator::PSYCHE_UP_ALLY,
         BattleEmulator::BUFF,
-        BattleEmulator::ATTACK_ALLY
+        BattleEmulator::PSYCHE_UP_ALLY,
+        BattleEmulator::SPECIAL_MEDICINE,
+        BattleEmulator::PSYCHE_UP_ALLY,
+        BattleEmulator::PSYCHE_UP_ALLY,
+        BattleEmulator::DOUBLE_UP,
+        BattleEmulator::MULTITHRUST,
     };
     //gene1[19-1] = BattleEmulator::DEFENCE;
     int counter = 0;
@@ -958,7 +957,7 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 0x1af41c64b;
+    uint64_t seed = 0x071cf30b;
 
     int actions[350] = {
         BattleEmulator::BUFF,

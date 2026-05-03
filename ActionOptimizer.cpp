@@ -55,6 +55,11 @@ constexpr ActionEntry ACTION_TABLE[] = {
 			return g.AllyPlayer.SpecialMedicineCount > 0;
 		},
 		[](const Genome&, const Genome&){ return true; }
+	{
+		BattleEmulator::MAGIC_WATER, [](const Genome& g){
+			return g.AllyPlayer.MagicWaterCount > 0;
+		},
+		[](const Genome&, const Genome&){ return true; }
 	},
 	{
 		BattleEmulator::FLEE_ALLY, [](const Genome&){ return true; },
@@ -92,6 +97,16 @@ constexpr ActionEntry ACTION_TABLE[] = {
 		BattleEmulator::DEFENCE,
 		[](const Genome&){ return true; },
 		[](const Genome&, const Genome&){ return true; }
+	},
+	{
+		BattleEmulator::ATTACK_ALLY,
+		[](const Genome& g){ return g.EnemyPlayer.hp <= 120; },
+		[](const Genome& b, const Genome& a){ return b.EnemyPlayer.hp != a.EnemyPlayer.hp; }
+	},
+	{
+		BattleEmulator::GOSPEL_SONG,
+		[](const Genome& g){ return g.AllyPlayer.DazzleLevel != 0; },
+		[](const Genome& b, const Genome& a){ return true; }
 	},
 };
 
