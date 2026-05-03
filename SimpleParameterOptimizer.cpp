@@ -55,6 +55,7 @@ static constexpr std::array<int, ids> TUNE_IDS = {
     SimpleParameterOptimizerNode::AtkBuffWeight,
     SimpleParameterOptimizerNode::TensionWeight,
     SimpleParameterOptimizerNode::AntidoteWeight,
+    SimpleParameterOptimizerNode::MagicWaterCost,
 };
 
 // action cost テーブル（一次真実源）

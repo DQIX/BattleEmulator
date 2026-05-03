@@ -837,6 +837,7 @@ int main(int argc, char* argv[]){
     int actions1[350] = {};
     auto counter1 = 0;
     actions1[counter1++] = BattleEmulator::BUFF;
+    actions1[counter1++] = BattleEmulator::PSYCHE_UP_ALLY;
     actions1[counter1] = -1;
     SimpleParameterOptimizer::optimize(BasePlayers, 0x12345, actions1, 100000, counter1);
     return 0;

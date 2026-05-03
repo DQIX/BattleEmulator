@@ -81,6 +81,8 @@ double EnhancedCostCalculator::calculateResourceCost(const Genome &genome) {
         resourceCost += (1.0 - mpRatio) * getActionCost(SimpleParameterOptimizerNode::ResourceHPCost); // Penalty for low MP
     }
 
+    resourceCost += (2 - genome.AllyPlayer.MagicWaterCount) * getActionCost(SimpleParameterOptimizerNode::MagicWaterCost);
+
     // Item count considerations (rough estimates)
     if (genome.AllyPlayer.SpecialMedicineCount <= 1 && genome.AllyPlayer.SpecialAntidoteCount <= 1) {
         resourceCost += getActionCost(SimpleParameterOptimizerNode::NoResourceCost); // Penalty for low healing items
@@ -91,42 +93,43 @@ double EnhancedCostCalculator::calculateResourceCost(const Genome &genome) {
 
 
 #else
-
 constexpr std::array<double, 201> GENOME = {
-    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 27 */ 0.292473,
-        0.0,0.0,
-        /* 30 */ 4.12226,
-        0.0,0.0,
-        /* 33 */ -5.75301,
-        /* 34 */ 1.29358,
-        0.0,
-        /* 36 */ 4.72987,
-        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 50 */ 9.9061,
-        0.0,0.0,
-        /* 53 */ 2.73898,
-        0.0,
-        /* 55 */ -0.742484,    0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 62 */ -3.11715,    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 150 */ 3.4622,
-        /* 151 */ 15.5156,
-        /* 152 */ 2.13489,
-        /* 153 */ 6.81214,
-        /* 154 */ 0.702205,
-        /* 155 */ -6.19784,
-        /* 156 */ -2.59225,
-        /* 157 */ 7.33453,
-        /* 158 */ 2.01295,
-        /* 159 */ 5.29603,
-        /* 160 */ 2.1953,
-        /* 161 */ 8.36977,
-        /* 162 */ 3.40512,
-        /* 163 */ -1.08646,
-        /* 164 */ 1.49109,
-        /* 165 */ 4.47899,
-        /* 166 */ -0.27755,    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
-    };
+    /* 0 */ -1.11,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+    /* 27 */ 5.00458,
+    0.0,0.0,
+    /* 30 */ 6.9864,
+    0.0,0.0,
+    /* 33 */ 1.18987,
+    /* 34 */ 2.39421,
+    0.0,
+    /* 36 */ 17.5756,
+    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+    /* 49 */ -2.25635,
+    /* 50 */ 13.4895,
+    0.0,
+    /* 52 */ 11.5333,
+    /* 53 */ 5.27497,
+    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+    /* 62 */ -1.53614,    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+    /* 150 */ -0.657536,
+    /* 151 */ 9.84948,
+    /* 152 */ -7.91256,
+    /* 153 */ -0.803141,
+    /* 154 */ -0.496131,
+    /* 155 */ -0.992193,
+    /* 156 */ 7.72802,
+    /* 157 */ 8.72972,
+    /* 158 */ -1.65048,
+    /* 159 */ 6.49379,
+    /* 160 */ 1.67261,
+    /* 161 */ -4.62266,
+    /* 162 */ 4.41387,
+    /* 163 */ 1.08738,
+    /* 164 */ 0.999516,
+    /* 165 */ -0.85134,
+    /* 166 */ 7.42789,
+    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+};
 double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, double preGCost) {
     // Base cost is turn number (maintains depth-first preference)
     double gCost = preGCost + GENOME[SimpleParameterOptimizerNode::turnHeignt];
@@ -196,6 +199,8 @@ double EnhancedCostCalculator::calculateResourceCost(const Genome &genome) {
         double mpRatio = static_cast<double>(genome.AllyPlayer.mp) / genome.AllyPlayer.maxMp;
         resourceCost += (1.0 - mpRatio) * GENOME[SimpleParameterOptimizerNode::ResourceHPCost]; // Penalty for low MP
     }
+
+    resourceCost += (2 - genome.AllyPlayer.MagicWaterCount) * GENOME[SimpleParameterOptimizerNode::MagicWaterCost];
 
     // Item count considerations (rough estimates)
     if (genome.AllyPlayer.SpecialMedicineCount <= 1 && genome.AllyPlayer.SpecialAntidoteCount <= 1) {
