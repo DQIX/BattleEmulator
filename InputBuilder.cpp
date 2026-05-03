@@ -69,6 +69,10 @@ void InputBuilder::push(int damage, const char prefix) {
     inputs.push_back(entry);
 }
 
+void InputBuilder::clear() {
+    inputs.clear();
+}
+
 /**
  * 入力データから構造体の組み合わせを生成します。各入力エントリの候補数を確認し、
  * 曖昧な候補が4つ以上存在する場合は例外をスローします。

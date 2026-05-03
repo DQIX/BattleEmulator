@@ -36,6 +36,7 @@ public:
 
 
     void push(int damage, char prefix);
+    void clear();
 
     std::vector<ResultStructure> makeStructure();
 
