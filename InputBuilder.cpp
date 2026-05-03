@@ -19,8 +19,14 @@ void InputBuilder::push(int damage, const char prefix) {
     InputEntry entry;
     entry.damage = damage;
 
-    if (prefix == PREFIX_PSYCHE_UP_ENEMY) {
-        entry.candidates.push_back(BattleEmulator::PSYCHE_UP);
+    if (prefix == PREFIX_MAGIC_BARRIER) {
+        entry.candidates.push_back(BattleEmulator::MAGIC_BARRIER);
+    } else if (prefix == PREFIX_WHIRLWIND) {
+        entry.candidates.push_back(BattleEmulator::WHIRLWIND);
+    }else if (prefix == PREFIX_DAZZLE) {
+        entry.candidates.push_back(BattleEmulator::DAZZLE);
+    } else if (prefix == PREFIX_BOOM) {
+        entry.candidates.push_back(BattleEmulator::BOOM);
     } else if (prefix == PREFIX_BUFF_ALLY) {
         entry.candidates.push_back(BattleEmulator::BUFF);
     } else if (prefix == PREFIX_SPECIAL_MEDICINE) {
@@ -33,6 +39,8 @@ void InputBuilder::push(int damage, const char prefix) {
         entry.candidates.push_back(BattleEmulator::PSYCHE_UP_ALLY);
     } else if (prefix == PREFIX_MULTITHRUST) {
         entry.candidates.push_back(BattleEmulator::MULTITHRUST);
+    }  else if (prefix == PREFIX_INACTIVE) {
+        entry.candidates.push_back(BattleEmulator::INACTIVE_ALLY);
     } else if (damage == 0) {
         entry.candidates.push_back(BattleEmulator::ATTACK_ENEMY);
     } else
@@ -112,8 +120,8 @@ void InputBuilder::generateCombinations(size_t index, ResultStructure current, s
     const InputEntry &entry = inputs[index];
     for (int candidate: entry.candidates) {
         ResultStructure next = current; // 既にAII_damageが追加済み
-        if (candidate == BattleEmulator::ATTACK_ENEMY || candidate == BattleEmulator::PSYCHE_UP || candidate ==
-            BattleEmulator::UNKNOWN_ACTION || candidate == BattleEmulator::SWEET_BREATH) {
+        if (candidate == BattleEmulator::ATTACK_ENEMY || candidate == BattleEmulator::DAZZLE || candidate == BattleEmulator::BOOM || candidate == BattleEmulator::WHIRLWIND || candidate ==
+            BattleEmulator::UNKNOWN_ACTION || candidate == BattleEmulator::MAGIC_BARRIER) {
             next.Edamage[next.EdamageCounter++] = entry.damage;
         } else {
             next.Aactions[next.AactionsCounter++] = candidate;

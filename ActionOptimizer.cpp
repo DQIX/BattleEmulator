@@ -106,7 +106,7 @@ constexpr ActionEntry ACTION_TABLE[] = {
 	},
 	{
 		BattleEmulator::GOSPEL_SONG,
-		[](const Genome& g){ return g.AllyPlayer.DazzleLevel != 0; },
+		[](const Genome& g){ return g.AllyPlayer.specialChargeTurn >= 1 && g.AllyPlayer.DazzleLevel != 0; },
 		[](const Genome& b, const Genome& a){ return true; }
 	},
 };

@@ -391,8 +391,24 @@ namespace{
     NOINLINE bool ProcessInputBuilder(const int argc, char* argv[]){
         // 4番目以降の引数を `push()` に入れる
         for(int i = 4; i < argc; ++i){
-            if(isMatchStrWithTrim(argv[i], "M") || isMatchStrWithTrim(argv[i], "m")){
+            if(isMatchStrWithTrim(argv[i], "m")){
                 builder.push(InputBuilder::TYPE_MAGIC_BARRIER, InputBuilder::PREFIX_MAGIC_BARRIER);
+                continue;
+            }
+            if (isMatchStrWithTrim(argv[i], "y") || isMatchStrWithTrim(argv[i], "Y")) {
+                builder.push(InputBuilder::TYPE_INACTIVE, InputBuilder::PREFIX_INACTIVE);
+                continue;
+            }
+            if(isMatchStrWithTrim(argv[i], "t")){
+                builder.push(InputBuilder::TYPE_WHIRLWIND, InputBuilder::PREFIX_WHIRLWIND);
+                continue;
+            }
+            if(isMatchStrWithTrim(argv[i], "d")){
+                builder.push(InputBuilder::TYPE_DAZZLE, InputBuilder::PREFIX_DAZZLE);
+                continue;
+            }
+            if(isMatchStrWithTrim(argv[i], "i")){
+                builder.push(InputBuilder::TYPE_BOOM, InputBuilder::PREFIX_BOOM);
                 continue;
             }
             if(isMatchStrWithTrim(argv[i], "b") || isMatchStrWithTrim(argv[i], "s") || isMatchStrWithTrim(argv[i], "ab")
@@ -400,14 +416,17 @@ namespace{
                 builder.push(InputBuilder::TYPE_BUFF_ALLY, InputBuilder::PREFIX_BUFF_ALLY);
                 continue;
             }
-            if(isMatchStrWithTrim(argv[i], "h") || isMatchStrWithTrim(argv[i], "d") || isMatchStrWithTrim(argv[i], "ah")
-                || isMatchStrWithTrim(argv[i], "ad")){
+            if(isMatchStrWithTrim(argv[i], "h") ||  isMatchStrWithTrim(argv[i], "ah")){
                 builder.push(InputBuilder::TYPE_PRE_SPECIAL_MEDICINE, InputBuilder::PREFIX_SPECIAL_MEDICINE);
                 builder.push(InputBuilder::TYPE_SPECIAL_MEDICINE, InputBuilder::PREFIX_SPECIAL_MEDICINE);
                 continue;
             }
             if(isMatchStrWithTrim(argv[i], "at") || isMatchStrWithTrim(argv[i], "AP")){
                 builder.push(InputBuilder::TYPE_PSYCHE_UP_ALLY, InputBuilder::PREFIX_PSYCHE_UP_ALLY);
+                continue;
+            }
+            if(isMatchStrWithTrim(argv[i], "am") || isMatchStrWithTrim(argv[i], "AM")){
+                builder.push(InputBuilder::TYPE_MULTITHRUST, InputBuilder::PREFIX_MULTITHRUST);
                 continue;
             }
             auto [prefix, damage] = toABCint(argv[i]);
@@ -651,6 +670,9 @@ namespace{
         time2 = time2 << 16;
         int32_t gene[350] = {0};
 
+        time1 = 0x1006;
+        time2 = 0x10000;
+
         for(int i = 0; i < 350; ++i){
             gene[i] = aActions[i];
             if(aActions[i] == -1){
@@ -838,8 +860,9 @@ int main(int argc, char* argv[]){
     auto counter1 = 0;
     actions1[counter1++] = BattleEmulator::BUFF;
     actions1[counter1++] = BattleEmulator::PSYCHE_UP_ALLY;
+    actions1[counter1++] = BattleEmulator::PSYCHE_UP_ALLY;
     actions1[counter1] = -1;
-    SimpleParameterOptimizer::optimize(BasePlayers, 0x12345, actions1, 100000, counter1);
+    SimpleParameterOptimizer::optimize(BasePlayers, 0x1007, actions1, 100000, counter1);
     return 0;
 #endif
 
@@ -867,7 +890,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 
     //AI Warning: This is code related to debug2
-    uint64_t time1 = 0x07206c0f;
+    uint64_t time1 = 0x1006;
 
     int dummy[100];
     lcg::init(time1, false);
@@ -904,18 +927,7 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 
     //AI Warning: This is code related to debug2
     int32_t gene1[350] = {
-        BattleEmulator::BUFF,
-        BattleEmulator::MIDHEAL,
-        BattleEmulator::BUFF,
-        BattleEmulator::ATTACK_ALLY,
-        BattleEmulator::PSYCHE_UP_ALLY,
-        BattleEmulator::PSYCHE_UP_ALLY,
-        BattleEmulator::PSYCHE_UP_ALLY,
-        BattleEmulator::PSYCHE_UP_ALLY,
-        BattleEmulator::PSYCHE_UP_ALLY,
-        BattleEmulator::DOUBLE_UP,
-        BattleEmulator::SPECIAL_MEDICINE,
-        BattleEmulator::BUFF,
+        30, 62, 62, 62, 30, 27, 33, 62, 53, 34, 34,
         BattleEmulator::MULTITHRUST,
     };
     //gene1[19-1] = BattleEmulator::DEFENCE;

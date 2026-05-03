@@ -595,21 +595,45 @@ bool BattleEmulator::Main(int* position, int RunCount, const int32_t Gene[350], 
                     else if(mode != -1 && mode != -2){
                         if(
                             c == ATTACK_ENEMY ||
-                            c == PSYCHE_UP ||
-                            c == CRACKLE_ENEMY ||
-                            c == ZAMMLE ||
-                            c == DOUBLE_TROUBLE
+                            c == MAGIC_BARRIER ||
+                            c == WHIRLWIND ||
+                            c == DAZZLE ||
+                            c == BOOM
                         ){
                             if(damages[exCounter] == -1){
                                 startTurn = counterJ;
                                 return true;
                             }
 
-                            if(damages[exCounter] == InputBuilder::TYPE_PSYCHE_UP_ENEMY){
-                                if(c != PSYCHE_UP){
+                            if (c == WHIRLWIND) {
+                                if (damages[exCounter] == InputBuilder::TYPE_WHIRLWIND) {
+                                    exCounter++;
+                                }
+                                if (damages[exCounter] == InputBuilder::TYPE_INACTIVE) {
+                                    if (players[0].isStunned){
+                                        exCounter++;
+                                    } else {
+                                        return false;
+                                    }
+                                }
+                            }else if(damages[exCounter] == InputBuilder::TYPE_MAGIC_BARRIER){
+                                if(c != MAGIC_BARRIER){
                                     return false;
                                 }
                                 exCounter++;
+                            }else if(damages[exCounter] == InputBuilder::TYPE_DAZZLE){
+                                if(c != DAZZLE){
+                                    return false;
+                                }
+                                exCounter++;
+                            } else if(damages[exCounter] == InputBuilder::TYPE_BOOM){
+                                if(c != BOOM){
+                                    return false;
+                                }
+                                exCounter++;
+                                if(damages[exCounter++] != basedamage){
+                                    return false;
+                                }
                             }
                             else if(damages[exCounter++] != basedamage){
                                 return false;
