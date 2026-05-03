@@ -835,10 +835,10 @@ int main(int argc, char* argv[]){
 
 #if defined(OPTIMIZE_MODE)
     int actions1[350] = {};
-    auto counter = 0;
-    actions1[counter++] = BattleEmulator::BUFF;
-    actions1[counter] = -1;
-    SimpleParameterOptimizer::optimize(BasePlayers, 0x12345, actions1, 100000, counter);
+    auto counter1 = 0;
+    actions1[counter1++] = BattleEmulator::BUFF;
+    actions1[counter1] = -1;
+    SimpleParameterOptimizer::optimize(BasePlayers, 0x12345, actions1, 100000, counter1);
     return 0;
 #endif
 
@@ -904,14 +904,18 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
     //AI Warning: This is code related to debug2
     int32_t gene1[350] = {
         BattleEmulator::BUFF,
-        BattleEmulator::PSYCHE_UP_ALLY,
         BattleEmulator::BUFF,
-        BattleEmulator::PSYCHE_UP_ALLY,
-        BattleEmulator::SPECIAL_MEDICINE,
-        BattleEmulator::PSYCHE_UP_ALLY,
-        BattleEmulator::PSYCHE_UP_ALLY,
-        BattleEmulator::DOUBLE_UP,
-        BattleEmulator::MULTITHRUST,
+        BattleEmulator::MIDHEAL,
+        BattleEmulator::MIDHEAL,
+        BattleEmulator::MIDHEAL,
+        BattleEmulator::MIDHEAL,
+        BattleEmulator::MIDHEAL,
+        BattleEmulator::MIDHEAL,
+        BattleEmulator::MIDHEAL,
+        BattleEmulator::MIDHEAL,
+        BattleEmulator::MIDHEAL,
+        BattleEmulator::MIDHEAL,
+        BattleEmulator::HEAL,
     };
     //gene1[19-1] = BattleEmulator::DEFENCE;
     int counter = 0;

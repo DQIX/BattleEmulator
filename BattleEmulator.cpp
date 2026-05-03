@@ -1020,7 +1020,11 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
             players[attacker].TensionLevel = 0;
             baseDamage = 0;
             break;
-        case MIDHEAL:
+        case MIDHEAL:{
+            auto nomp = false;
+            if(players[attacker].mp <= 0){
+                nomp = true;
+            }
             players[attacker].mp -= 4;
             (*position) += 2;
             (*position)++; //0x021ec6f8 不明
@@ -1067,8 +1071,16 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
                 }
             }
             resetCombo(NowState);
+            if(nomp){
+                baseDamage = 0;
+            }
             break;
+        }
         case MULTITHRUST: {
+            auto nomp = false;
+            if(players[attacker].mp <= 0){
+                nomp = true;
+            }
             players[attacker].mp -= 4;
             attackCount = lcg::intRangeRand(position, 3, 4);
             (*position)++;
@@ -1165,6 +1177,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
 
             if(players[attacker].TensionLevel != 0){
                 players[attacker].TensionLevel = 0;
+            }
+            if(nomp){
+                return 0;
             }
 
             resetCombo(NowState);
@@ -1335,8 +1350,12 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
             baseDamage = 0;
             resetCombo(NowState);
             break;
-        case BattleEmulator::BUFF:
-            players[0].mp -= 3;
+        case BattleEmulator::BUFF:{
+            auto nomp = false;
+            if(players[attacker].mp <= 0){
+                nomp = true;
+            }
+            players[attacker].mp -= 3;
             (*position) += 2;
             (*position)++; // 関係ない
             (*position)++; // 会心判定
@@ -1359,7 +1378,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
                 }
             }
 
-            if(players[0].BuffLevel != 2){
+            if(players[0].BuffLevel != 2 && !nomp){
                 players[0].BuffLevel++;
                 players[0].BuffTurns = 7;
                 RecalculateBuff(players);
@@ -1368,6 +1387,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
             baseDamage = 0;
             resetCombo(NowState);
             break;
+        }
         case BattleEmulator::DOUBLE_UP:
             (*position) += 2;
             (*position)++; //関係ない
@@ -1645,7 +1665,11 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
             process7A8(position, baseDamage, players, defender);
             break;
         }
-        case BattleEmulator::HEAL:
+        case BattleEmulator::HEAL:{
+            auto nomp = false;
+            if(players[attacker].mp <= 0){
+                nomp = true;
+            }
             players[attacker].mp -= 2;
             (*position) += 2;
             (*position)++; //関係ない
@@ -1683,7 +1707,11 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
                 }
             }
             resetCombo(NowState);
+            if(nomp){
+                return 0;
+            }
             break;
+        }
         case GOSPEL_SONG:
             (*position) += 2;
             (*position)++; //0x02158584 会心

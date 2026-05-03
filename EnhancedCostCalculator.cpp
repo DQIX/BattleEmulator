@@ -59,6 +59,7 @@ double EnhancedCostCalculator::calculateStatusEffectCost(const Genome &genome) {
     // Negative status effects (penalties)
     if (genome.AllyPlayer.paralysis) statusCost += getActionCost(SimpleParameterOptimizerNode::paralysisWeight);
     if (genome.AllyPlayer.sleeping) statusCost += getActionCost(SimpleParameterOptimizerNode::sleepWeight);
+    if (genome.AllyPlayer.isStunned) statusCost += getActionCost(SimpleParameterOptimizerNode::inactiveWeight);
 
     // Positive status effects (bonuses - negative cost)
     statusCost -= genome.AllyPlayer.BuffLevel * getActionCost(SimpleParameterOptimizerNode::BuffWeight);
@@ -173,7 +174,7 @@ double EnhancedCostCalculator::calculateStatusEffectCost(const Genome &genome) {
     // Negative status effects (penalties)
     if (genome.AllyPlayer.paralysis) statusCost += GENOME[SimpleParameterOptimizerNode::paralysisWeight];
     if (genome.AllyPlayer.sleeping) statusCost += GENOME[SimpleParameterOptimizerNode::sleepWeight];
-    if (genome.AllyPlayer.PoisonEnable) statusCost += GENOME[SimpleParameterOptimizerNode::poisonWeight];
+    if (genome.AllyPlayer.isStunned) statusCost += GENOME[SimpleParameterOptimizerNode::inactiveWeight];
 
     // Positive status effects (bonuses - negative cost)
     statusCost -= genome.AllyPlayer.BuffLevel * GENOME[SimpleParameterOptimizerNode::BuffWeight];

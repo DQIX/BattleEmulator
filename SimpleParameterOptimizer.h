@@ -17,7 +17,7 @@
 #include "BattleEmulator.h"
 
 static constexpr int MAX_ACTION_ID = 512;
-static constexpr int ids = 26;
+static constexpr int ids = 28;
 static constexpr double DEFAULT_ACTION_COST = 1.0;
 static constexpr double DEFAULT_STEP = 0.5; // 変異の基本スケール
 

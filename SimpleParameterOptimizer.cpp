@@ -36,6 +36,8 @@ static constexpr std::array<int, ids> TUNE_IDS = {
     BattleEmulator::BUFF,
     BattleEmulator::MULTITHRUST,
     BattleEmulator::DEFENCE,
+    BattleEmulator::MAGIC_WATER,
+    BattleEmulator::GOSPEL_SONG,
     SimpleParameterOptimizerNode::turnHeignt,
     SimpleParameterOptimizerNode::enemyHpWeight,
     SimpleParameterOptimizerNode::playerHpWeight,
@@ -212,19 +214,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
 
     applyActionCostsToCostParams();
 
-    // 初期評価
-    int baseTurn = testParameters(players, seed, actions, turns);
-    result.bestTurn = baseTurn;
-    result.testCount = 1;
-    result.found = (baseTurn < 9999);
-    std::cout << "[SimpleParameterOptimizer GA] initial turn = " << baseTurn << std::endl;
-
-    if (baseTurn <= 5) {
-        applyActionCostsToCostParams();
-        result.bestTurn = baseTurn;
-        result.found = true;
-        return result;
-    }
+    std::cout << "[SimpleParameterOptimizer GA] initial turn " << std::endl;
 
     // GA 初期化
     std::random_device rd;
@@ -300,7 +290,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
 
         // constexpr 配列リテラルとして出力
         std::cout << "constexpr std::array<double, " << (MAX_ID + 1)
-                  << "> GENOME = {\n";
+                  << "> GENOME = {" << std::endl;
 
         auto flag = false;
         auto flag1 = false;
@@ -329,7 +319,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
             }
         }
 
-        std::cout << "\n};\n";
+        std::cout << "\n};" << std::endl;
 
         // --- ここから並列評価ブロック ---
         // 未評価 index を収集（予算も考慮）
@@ -585,7 +575,7 @@ int SimpleParameterOptimizer::testParameters(
         if (actions[i] == -1) { gene[i] = -1; break; }
     }
 
-    auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
+    auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 1000, gene, 0);
 
     if (genome.EnemyPlayer.hp <= 0) {
         return genome.turn - 1;

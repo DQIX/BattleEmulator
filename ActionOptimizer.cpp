@@ -55,6 +55,7 @@ constexpr ActionEntry ACTION_TABLE[] = {
 			return g.AllyPlayer.SpecialMedicineCount > 0;
 		},
 		[](const Genome&, const Genome&){ return true; }
+	},
 	{
 		BattleEmulator::MAGIC_WATER, [](const Genome& g){
 			return g.AllyPlayer.MagicWaterCount > 0;
@@ -199,7 +200,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
 	Player CopedPlayers3[2];
 
-	for(int i = 0; i < 10; ++i){
+	for(int i = 0; i < 1; ++i){
 		if(!solutionFound){
 			maxGenerations *= 2;
 		}
