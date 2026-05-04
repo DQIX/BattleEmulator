@@ -308,123 +308,6 @@ void showHeader(){
 
 
 //int main(int argc, char *argv[]) {
-int main(){
-	showHeader();
-
-	//https://zenn.dev/reputeless/books/standard-cpp-for-competitive-programming/viewer/library-ios-iomanip#3.1-c-%E8%A8%80%E8%AA%9E%E3%81%AE%E5%85%A5%E5%87%BA%E5%8A%9B%E3%82%B9%E3%83%88%E3%83%AA%E3%83%BC%E3%83%A0%E3%81%A8%E3%81%AE%E5%90%8C%E6%9C%9F%E3%82%92%E7%84%A1%E5%8A%B9%E3%81%AB%E3%81%99%E3%82%8B
-	//std::cin.tie(0)->sync_with_stdio(0);
-
-
-
-#if defined(OPTIMIZE_MODE)
-	int actions1[350] = {};
-	auto counter1 = 0;
-	actions1[counter1++] = BattleEmulator::BUFF;
-	actions1[counter1++] = BattleEmulator::MAGIC_MIRROR;
-	actions1[counter1++] = BattleEmulator::PSYCHE_UP_ALLY;
-	actions1[counter1] = -1;
-	SimpleParameterOptimizer::optimize(copiedPlayers, 0x112345, actions1, 100000, counter1);
-	return 0;
-#endif
-
-
-#ifdef DEBUG2
-	//THIS DEBUG CODE!
-	//THIS DEBUG CODE
-	uint64_t time1 = 0x932ca66;
-
-	int dummy[100];
-	lcg::init(time1);
-	int* position1 = new int(1);
-	/*
-	    *NowStateの各ビットの使用状況は下記の通りである。
-	    +-+-+-+-+-+-+-+-+- (* NowState) -+-+-+-+-+-+-+-+-+
-	       |            Name            |     size      |
-	    0  | Current Rotation Table     |     4bit      |
-	    4  | Rotation Internal State    |     4bit      |
-	    8  | Free Camera State          |     4bit      |
-	    12 | Turn Count Processed       |     20bit     |
-	    32 | Combo Previous Attack Id   |     2byte     |
-	    40 | Combo Counter              |     1byte     |
-	    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	                                 合計 6Byte
-	*/
-	auto* NowState = new uint64_t(0); //エミュレーターの内部ステートを表すint
-
-	Player players1[2];
-	//int32_t gene1[350] = {0};
-	//THIS DEBUG CODE!
-	int32_t gene1[350] = {30, 31, 62, 62, 50, 53, 62, 30, 31, 34, 53, 33, 31, 34, 34, 34, 34, 53,};
-	//gene1[19-1] = BattleEmulator::DEFENCE;
-	int counter = 0;
-
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::MAGIC_MIRROR;
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::DOUBLE_UP;
-	// gene1[counter++] = BattleEmulator::DOUBLE_UP;
-	// gene1[counter++] = BattleEmulator::DOUBLE_UP;
-	// gene1[counter++] = BattleEmulator::DEFENDING_CHAMPION;
-	// gene1[counter++] = BattleEmulator::DEFENDING_CHAMPION;
-	// gene1[counter++] = BattleEmulator::MAGIC_MIRROR;
-	// gene1[counter++] = BattleEmulator::MULTITHRUST;
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::MULTITHRUST;
-	// gene1[counter++] = BattleEmulator::MULTITHRUST;
-	// gene1[counter++] = BattleEmulator::MULTITHRUST;
-	// gene1[counter++] = BattleEmulator::MORE_HEAL;
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::MAGIC_MIRROR;
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::DOUBLE_UP;
-	// gene1[counter++] = BattleEmulator::MULTITHRUST;
-	// gene1[counter++] = BattleEmulator::MULTITHRUST;
-	// gene1[counter++] = BattleEmulator::MULTITHRUST;
-
-	//for (int i = 0; i < 10; ++i) {
-	(*NowState) = BattleEmulator::TYPE_2A;
-	(*position1) = 1;
-	BattleResult dummy1;
-	std::memcpy(players1, copiedPlayers, sizeof(players1));
-	BattleEmulator::Main(position1, 30, gene1, players1, &dummy1, time1, dummy, dummy, -1, NowState);
-
-	std::stringstream ss1;
-	ss1 << time1 << " ";
-	std::cout << dumpTable(dummy1, gene1, -1) << std::endl;
-	//}
-	delete position1;
-	delete NowState;
-
-	return 0;
-#endif
-
-#ifdef DEBUG3
-	uint64_t time1 = 0x11029ull;
-
-	auto counter = 0;
-	int actions[350] = {0};
-	actions[counter++] = BattleEmulator::BUFF;
-	actions[counter++] = BattleEmulator::MAGIC_MIRROR;
-	actions[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-	actions[counter] = -1;
-
-	std::stringstream ss;
-	SearchRequest(copiedPlayers, time1, actions, false, ss);
-	std::cout << ss.str();
-	return 0;
-#endif
-
-	mainLoop(copiedPlayers);
-	return 0;
-}
 
 bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream &ss){
 	int32_t gene[350] = {0};
@@ -509,7 +392,7 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
     tryUpdate(rrC, genomeC, resultC);
     tryUpdate(rrD, genomeD, resultD);
 
-    ss << dumpTable(*chosenResult, chosenGenome->actions, 0) << std::endl;
+    ss << dumpTable(*chosenResult, chosenGenome->actions, BattleEmulator::getStartTurn()) << std::endl;
 
     ss << "0x" << std::hex << seed << std::dec << ": ";
 
@@ -815,6 +698,7 @@ namespace {
     int damages5[MAX] = {0};
     // aActions[] は味方行動（ホイミ、味方攻撃、麻痺の場合は PARALYSIS）を格納する
     int eActions5[MAX] = {0};
+	int startturn = 0;
 
     std::string wasmLastDump;
     std::string wasmLastError;
@@ -879,7 +763,7 @@ namespace {
     		int position = 1;
     		uint64_t nowState = 0;
     		BattleEmulator::Main(&position, 100, aActions5, players, &res, seed, nullptr, nullptr, -1, &nowState);
-    		ss << dumpTable(res, aActions5, turns);
+    		ss << dumpTable(res, aActions5, BattleEmulator::getStartTurn());
     		return ss.str();
     	}
     	std::cout << ss.str();
@@ -938,3 +822,119 @@ EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed
 }
 }
 #endif
+
+int main(){
+	showHeader();
+
+	//https://zenn.dev/reputeless/books/standard-cpp-for-competitive-programming/viewer/library-ios-iomanip#3.1-c-%E8%A8%80%E8%AA%9E%E3%81%AE%E5%85%A5%E5%87%BA%E5%8A%9B%E3%82%B9%E3%83%88%E3%83%AA%E3%83%BC%E3%83%A0%E3%81%A8%E3%81%AE%E5%90%8C%E6%9C%9F%E3%82%92%E7%84%A1%E5%8A%B9%E3%81%AB%E3%81%99%E3%82%8B
+	//std::cin.tie(0)->sync_with_stdio(0);
+
+#if defined(OPTIMIZE_MODE)
+	int actions1[350] = {};
+	auto counter1 = 0;
+	actions1[counter1++] = BattleEmulator::BUFF;
+	actions1[counter1++] = BattleEmulator::MAGIC_MIRROR;
+	actions1[counter1++] = BattleEmulator::PSYCHE_UP_ALLY;
+	actions1[counter1] = -1;
+	SimpleParameterOptimizer::optimize(copiedPlayers, 0x112345, actions1, 100000, counter1);
+	return 0;
+#endif
+
+
+#ifdef DEBUG2
+	//THIS DEBUG CODE!
+	//THIS DEBUG CODE
+	uint64_t time1 = 0x932ca66;
+
+	int dummy[100];
+	lcg::init(time1);
+	int* position1 = new int(1);
+	/*
+	    *NowStateの各ビットの使用状況は下記の通りである。
+	    +-+-+-+-+-+-+-+-+- (* NowState) -+-+-+-+-+-+-+-+-+
+	       |            Name            |     size      |
+	    0  | Current Rotation Table     |     4bit      |
+	    4  | Rotation Internal State    |     4bit      |
+	    8  | Free Camera State          |     4bit      |
+	    12 | Turn Count Processed       |     20bit     |
+	    32 | Combo Previous Attack Id   |     2byte     |
+	    40 | Combo Counter              |     1byte     |
+	    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	                                 合計 6Byte
+	*/
+	auto* NowState = new uint64_t(0); //エミュレーターの内部ステートを表すint
+
+	Player players1[2];
+	//int32_t gene1[350] = {0};
+	//THIS DEBUG CODE!
+	int32_t gene1[350] = {30, 31, 62, 62, 50, 53, 62, 30, 31, 34, 53, 33, 31, 34, 34, 34, 34, 53,};
+	//gene1[19-1] = BattleEmulator::DEFENCE;
+	int counter = 0;
+
+	// gene1[counter++] = BattleEmulator::BUFF;
+	// gene1[counter++] = BattleEmulator::BUFF;
+	// gene1[counter++] = BattleEmulator::BUFF;
+	// gene1[counter++] = BattleEmulator::BUFF;
+	// gene1[counter++] = BattleEmulator::BUFF;
+	// gene1[counter++] = BattleEmulator::BUFF;
+	// gene1[counter++] = BattleEmulator::BUFF;
+	// gene1[counter++] = BattleEmulator::BUFF;
+	// gene1[counter++] = BattleEmulator::BUFF;
+	// gene1[counter++] = BattleEmulator::MAGIC_MIRROR;
+	// gene1[counter++] = BattleEmulator::BUFF;
+	// gene1[counter++] = BattleEmulator::DOUBLE_UP;
+	// gene1[counter++] = BattleEmulator::DOUBLE_UP;
+	// gene1[counter++] = BattleEmulator::DOUBLE_UP;
+	// gene1[counter++] = BattleEmulator::DEFENDING_CHAMPION;
+	// gene1[counter++] = BattleEmulator::DEFENDING_CHAMPION;
+	// gene1[counter++] = BattleEmulator::MAGIC_MIRROR;
+	// gene1[counter++] = BattleEmulator::MULTITHRUST;
+	// gene1[counter++] = BattleEmulator::BUFF;
+	// gene1[counter++] = BattleEmulator::MULTITHRUST;
+	// gene1[counter++] = BattleEmulator::MULTITHRUST;
+	// gene1[counter++] = BattleEmulator::MULTITHRUST;
+	// gene1[counter++] = BattleEmulator::MORE_HEAL;
+	// gene1[counter++] = BattleEmulator::BUFF;
+	// gene1[counter++] = BattleEmulator::MAGIC_MIRROR;
+	// gene1[counter++] = BattleEmulator::BUFF;
+	// gene1[counter++] = BattleEmulator::DOUBLE_UP;
+	// gene1[counter++] = BattleEmulator::MULTITHRUST;
+	// gene1[counter++] = BattleEmulator::MULTITHRUST;
+	// gene1[counter++] = BattleEmulator::MULTITHRUST;
+
+	//for (int i = 0; i < 10; ++i) {
+	(*NowState) = BattleEmulator::TYPE_2A;
+	(*position1) = 1;
+	BattleResult dummy1;
+	std::memcpy(players1, copiedPlayers, sizeof(players1));
+	BattleEmulator::Main(position1, 30, gene1, players1, &dummy1, time1, dummy, dummy, -1, NowState);
+
+	std::stringstream ss1;
+	ss1 << time1 << " ";
+	std::cout << dumpTable(dummy1, gene1, -1) << std::endl;
+	//}
+	delete position1;
+	delete NowState;
+
+	return 0;
+#endif
+
+#ifdef DEBUG3
+	uint64_t time1 = 0x11029ull;
+
+	auto counter = 0;
+	int actions[350] = {0};
+	actions[counter++] = BattleEmulator::BUFF;
+	actions[counter++] = BattleEmulator::MAGIC_MIRROR;
+	actions[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	actions[counter] = -1;
+
+	std::stringstream ss;
+	SearchRequest(copiedPlayers, time1, actions, false, ss);
+	std::cout << ss.str();
+	return 0;
+#endif
+
+	mainLoop(copiedPlayers);
+	return 0;
+}
