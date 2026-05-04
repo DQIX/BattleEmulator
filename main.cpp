@@ -398,7 +398,7 @@ int main(){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x1003;
+	uint64_t time1 = 0x1006;
 
 	auto counter = 0;
 	int actions[350] = {0};
@@ -449,20 +449,21 @@ bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActi
     BattleResult resultA, resultB, resultC;
 
     // 勝利フラグと確定した敵残HPを返す
-    struct RunResult {
-        bool win;
-        int enemyHp;   // 勝利時は0確定だが念のためメモ化
-        int turn;
-    };
+	struct RunResult {
+		bool win;
+		int enemyHp;   // 使わなくなったが一応残す
+		int turn;
+		int position;
+	};
 
-    auto runMain = [&](const Genome& g, BattleResult& res) -> RunResult {
-        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
-        int position = 1;
-        uint64_t nowState = 0;
-        BattleEmulator::Main(&position, 100, g.actions, players, &res, seed, nullptr, nullptr, -1, &nowState);
-        bool win = players[1].hp <= 0;
-        return { win, players[1].hp, res.turn };
-    };
+	auto runMain = [&](const Genome& g, BattleResult& res) -> RunResult {
+		Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
+		int position = 1;
+		uint64_t nowState = 0;
+		BattleEmulator::Main(&position, 100, g.actions, players, &res, seed, nullptr, nullptr, -1, &nowState);
+		bool win = players[1].hp <= 0;
+		return { win, players[1].hp, res.turn, res.position };
+	};
 
     auto rrA = runMain(genomeA, resultA);
     auto rrB = runMain(genomeB, resultB);
@@ -474,10 +475,9 @@ bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActi
 
     // 勝利したもの同士でターン数→敵残HP（メモ化済み）で比較
     // 負けたものは無条件で除外
-    auto isBetter = [](const RunResult& a, const RunResult& b) -> bool {
-        // 勝ち同士の比較のみ想定（負けは呼び出し側で弾く）
-        if (a.turn != b.turn) return a.turn < b.turn;
-        return a.enemyHp < b.enemyHp;
+	auto isBetter = [](const RunResult& a, const RunResult& b) -> bool {
+		if (a.turn != b.turn) return a.turn < b.turn;
+		return a.position < b.position;  // 同ターンなら行動数が少ない方
     };
 
     const Genome* chosenGenome = nullptr;
