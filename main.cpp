@@ -545,15 +545,15 @@ namespace {
         auto [turnProcessed,genome] =
         ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 1500, gene, numThreads, Dropbug);
 #elif defined(erusionn_lv21)
-        auto [turnProcessed,genome] =
-                ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 350, gene, numThreads, Dropbug);
+        auto genome =
+                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 500, gene, numThreads);
 #endif
 
 #ifdef DEBUG
         auto t3 = std::chrono::high_resolution_clock::now();
         auto elapsed_time1 =
                 std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
-        PerformanceDebug("Searcher multi", turnProcessed, static_cast<double>(elapsed_time1), 0);
+        PerformanceDebug("Searcher multi", BattleEmulator::getTurnProcessed(), static_cast<double>(elapsed_time1), 0);
 #endif
 
         if (genome.turn >= 100) {
