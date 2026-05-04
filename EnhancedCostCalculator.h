@@ -16,7 +16,8 @@ public:
     enum class CostTable {
         TableA, // 元のGENOME_A
         TableB, // GENOME_B
-        TableC  // 新しいGENOME_C
+        TableC,  // 新しいGENOME_C
+        TableD,  // 新しいGENOME_C
     };
 #if !defined(OPTIMIZE_MODE)
     // コストテーブルを切り替える（探索開始前に1回だけ呼ぶ）

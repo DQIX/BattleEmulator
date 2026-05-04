@@ -256,6 +256,60 @@ static constexpr std::array<double, 201> GENOME_C = {
         0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
     };
 
+constexpr std::array<double, 201> GENOME_D = {
+    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+        /* 27 */ 0.93932,
+        0.0,0.0,
+        /* 30 */ 2.434,
+        /* 31 */ -1.91128,
+        /* 32 */ 4.47898,
+        /* 33 */ -2.57949,
+        /* 34 */ 0.743278,
+        0.0,
+        /* 36 */ 0.977298,
+        /* 37 */ 1.65166,
+        /* 38 */ 4.12193,
+        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+        /* 48 */ 2.33098,
+        0.0,
+        /* 50 */ -1.18916,
+        0.0,
+        /* 52 */ 0.841975,
+        /* 53 */ 2.31697,
+        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+        /* 62 */ -0.246927,
+        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+        /* 150 */ 0.848033,
+        /* 151 */ 1.06417,
+        /* 152 */ 3.90284,
+        /* 153 */ -1.1343,
+        /* 154 */ 0.438199,
+        /* 155 */ 1.86857,
+        /* 156 */ -1.32214,
+        /* 157 */ -1.52786,
+        /* 158 */ 0.68191,
+        /* 159 */ 3.21787,
+        /* 160 */ -0.441893,
+        /* 161 */ -1.76501,
+        /* 162 */ -1.48211,
+        /* 163 */ -0.254381,
+        /* 164 */ -0.498795,
+        /* 165 */ 3.56129,
+        /* 166 */ 1.02365,
+        /* 167 */ 2.02183,
+        0.0,
+        /* 169 */ -3.16709,
+        /* 170 */ -1.73203,
+        /* 171 */ 3.57121,
+        /* 172 */ 6.00524,
+        /* 173 */ 0.777189,
+        /* 174 */ -0.650682,
+        /* 175 */ 2.35656,
+        /* 176 */ 4.48436,
+        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    };
+
+
 // ---- staticメンバの実体 ----
 const double* EnhancedCostCalculator::s_genome = GENOME_A.data();
 
@@ -302,27 +356,14 @@ double EnhancedCostCalculator::calculateHCost(const Genome &genome, double enemy
     // Status effect penalties/bonuses
     hCost += calculateStatusEffectCost(genome) * s_genome[SimpleParameterOptimizerNode::StatusEffectWeight];
 
-
-    uint8_t state = NowState & 0xf;
-    if(state == BattleEmulator::TYPE_2A){
-        hCost += s_genome[SimpleParameterOptimizerNode::TYPE_2AWeight];
-    }else if(state == BattleEmulator::TYPE_2B){
-        hCost += s_genome[SimpleParameterOptimizerNode::TYPE_2BWeight];
-    }else if(state == BattleEmulator::TYPE_2C){
-        hCost += s_genome[SimpleParameterOptimizerNode::TYPE_2CWeight];
-    }else if(state == BattleEmulator::TYPE_2D){
-        hCost += s_genome[SimpleParameterOptimizerNode::TYPE_2DWeight];
-    }else if(state == BattleEmulator::TYPE_2E){
-        hCost += s_genome[SimpleParameterOptimizerNode::TYPE_2EWeight];
-    }
-
     return hCost;
 }
 
 void EnhancedCostCalculator::setCostTable(CostTable table) {
     if (table == CostTable::TableA)      s_genome = GENOME_A.data();
     else if (table == CostTable::TableB) s_genome = GENOME_B.data();
-    else                                 s_genome = GENOME_C.data();
+    else if (table == CostTable::TableC) s_genome = GENOME_C.data();
+    else                                 s_genome = GENOME_D.data();
 }
 double EnhancedCostCalculator::calculateStatusEffectCost(const Genome &genome) {
     double statusCost = 0.0;

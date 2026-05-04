@@ -398,7 +398,7 @@ int main(){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x1006;
+	uint64_t time1 = 0x11029ull;
 
 	auto counter = 0;
 	int actions[350] = {0};
@@ -446,7 +446,12 @@ bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActi
     EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableC);
     Genome genomeC = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
 
-    BattleResult resultA, resultB, resultC;
+	// --- TableC で探索 ---
+	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableD);
+	Genome genomeD = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
+
+
+    BattleResult resultA, resultB, resultC, resultD;
 
     // 勝利フラグと確定した敵残HPを返す
 	struct RunResult {
@@ -468,8 +473,9 @@ bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActi
     auto rrA = runMain(genomeA, resultA);
     auto rrB = runMain(genomeB, resultB);
     auto rrC = runMain(genomeC, resultC);
+    auto rrD = runMain(genomeD, resultD);
 
-    if (!rrA.win && !rrB.win && !rrC.win) {
+    if (!rrA.win && !rrB.win && !rrC.win && !rrD.win) {
         return false;
     }
 
@@ -493,21 +499,42 @@ bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActi
         }
     };
 
+	//A（ケース1）: ためる・すてみ → Multithrust のテンション蓄積戦法
+	//B（ケース3）: メラゾーマ反射しながら長期消耗戦
+	//C（ケース2）: 最短ルートでメラゾーマ反射 → 最速決着
     tryUpdate(rrA, genomeA, resultA);
     tryUpdate(rrB, genomeB, resultB);
     tryUpdate(rrC, genomeC, resultC);
+    tryUpdate(rrD, genomeD, resultD);
 
     std::cout << dumpTable(*chosenResult, chosenGenome->actions, 0) << std::endl;
 
     std::cout << "0x" << std::hex << seed << std::dec << ": ";
 
-    for (auto i = 0; i < 100; ++i) {
-        if (chosenGenome->actions[i] == 0 || chosenGenome->actions[i] == -1) {
-            break;
-        }
-        std::cout << chosenGenome->actions[i] << ", ";
-    }
-    std::cout << std::endl;
+	for (auto i = 0; i < 100; ++i) {
+		if (chosenGenome->actions[i] == 0 || chosenGenome->actions[i] == -1) {
+			break;
+		}
+		std::cout << chosenGenome->actions[i] << ", ";
+	}
+	std::cout << std::endl;
+
+	// --- 各テーブルの結果をログ出力 ---
+	auto printRunResult = [&](const char* label, const RunResult& rr) {
+		std::cout << "[" << label << "] ";
+		if (rr.win) {
+			std::cout << "Win  turn=" << (rr.turn + 1) << " position=" << rr.position;
+		} else {
+			std::cout << "Lose";
+		}
+		std::cout << std::endl;
+	};
+	printRunResult("TableA", rrA);
+	printRunResult("TableB", rrB);
+	printRunResult("TableC", rrC);
+	printRunResult("TableD", rrD);
+
+
 #endif
 
 	//探索成功
