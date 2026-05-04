@@ -29,7 +29,7 @@ done
 # ------------------------------------------------------------
 declare -A BRANCH_VARIANTS
 
-BRANCH_VARIANTS[bilyouma_new_arugo]="
+BRANCH_VARIANTS[erusionn_new_arugo]="
 erusionn_v6:-Derusionn_lv21=1 -DMULTITHREADING=1
 "
 
