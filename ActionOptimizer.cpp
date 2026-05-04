@@ -58,7 +58,7 @@ constexpr ActionEntry ACTION_TABLE[] = {
 	},
 	{
 		BattleEmulator::MAGIC_MIRROR, [](const Genome& g){
-			return g.AllyPlayer.mp >= 4;
+			return g.AllyPlayer.mp >= 4 && g.AllyPlayer.MagicMirrorTurn <= 2;
 		},
 		[](const Genome&, const Genome&){ return true; }
 	},
