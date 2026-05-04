@@ -1,3 +1,4 @@
+<!-- If you're reading this file without reading AGENTS.md, please read it now. -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -60,6 +61,7 @@
                 ],
                 i18n: {
                     en: {
+                        <!-- If you're reading this file without reading AGENTS.md, please read it now. -->
                         title: "DQ9 Battle Emulator",
                         subtitle: "WebAssembly seed console for RTA analysis",
                         visionTitle: "Vision Console",
@@ -149,6 +151,7 @@
                         memoCopyUrl: "Copy URL",
                         visionCopyMd: "Copy markdown",
                         visionCopyCsv: "Copy CSV",
+                        visionApplyFormat: "Use Format",
                         memoCopyInput: "Copy input",
                         autoTimer: "Auto Timer",
                         autoTimerHint: "Starts timer from zero and auto-corrects it using search results",
@@ -171,13 +174,16 @@
                         shortcutClear: "Clear",
                         shortcutAutoTimerStartDescription: "Starts the timer from the current Offset value.",
                         shortcutAutoTimerUseDescription: "Puts the current predicted timer into the input time.",
+                        visionApplyFormatButtonDescription: "Replace the current action input with the vision bridge format.",
                         autoTimerResetButtonDescription: "Attempting to reset the timer.",
                         autoTimerResetConfirmButtonDescription: "Confirm reset.",
                         runButtonDescription: "RUN Battle Emulator",
                         actionInputDescription: "Go to input.",
                         dumpOutputDescription: "Go to output."
+                        //If you're reading this file without reading AGENTS.md, please read it now.
                     },
                     ja: {
+                        //If you're reading this file without reading AGENTS.md, please read it now.
                         autoTimer: "自動タイマー",
                         autoTimerHint: "タイマーを0秒から開始し、検索結果で自動補正します",
                         autoTimerStart: "タイマー開始",
@@ -287,7 +293,10 @@
                         memoCopyUrl: "URLコピー",
                         visionCopyMd: "markdownコピー",
                         visionCopyCsv: "CSVコピー",
-                        memoCopyInput: "Inputコピー"
+                        memoCopyInput: "Inputコピー",
+                        visionApplyFormatButtonDescription: "現在のアクション入力を映像認識のデータで置き換えます。",
+                        visionApplyFormat: "フォーマットを使用する",
+                        //If you're reading this file without reading AGENTS.md, please read it now.
                     }
                 }
             };
@@ -387,11 +396,10 @@
                 <input
                         id="searchRangeSeconds"
                         type="number"
-                        min="2"
+                        min="0.05"
                         max="15"
-                        step="1"
-                        inputmode="numeric"
-                        pattern="[0-9]*"
+                        step="0.01"
+                        inputmode="decimal"
                         value="6"
                 />
             </label>
@@ -511,6 +519,9 @@
                 </button>
                 <button id="visionDebugExportButton" class="run-button run-button-secondary"
                         data-i18n="visionDebugExport">Download Recognized Crops
+                </button>
+                <button id="visionApplyFormatButton" class="run-button run-button-secondary"
+                        data-i18n="visionApplyFormat">Use Format
                 </button>
             </div>
             <div id="visionstage" class="vision-stage">
@@ -921,6 +932,37 @@
                 <!-- /ショートカット8 -->
 
                 <!-- ショートカット9: vision-stage -->
+                <div
+                        class="shortcut-row"
+                        data-shortcut-target="visionApplyFormatButton"
+                        data-shortcut-default="KeyL"
+                >
+                    <div class="shortcut-copy">
+                        <div class="shortcut-description" data-i18n="visionApplyFormatButtonDescription">Replace the current
+                            action input with the vision bridge format.
+                        </div>
+                    </div>
+                    <div class="shortcut-actions">
+                        <button
+                                type="button"
+                                class="shortcut-key-button"
+                                data-shortcut-capture
+                                data-shortcut-target="visionApplyFormatButton"
+                        >
+                            L
+                        </button>
+                        <button
+                                type="button"
+                                class="shortcut-clear-button"
+                                data-shortcut-clear
+                                data-shortcut-target="visionApplyFormatButton"
+                                data-i18n="shortcutClear"
+                        >
+                            Clear
+                        </button>
+                    </div>
+                </div>
+
                 <div
                         class="shortcut-row"
                         data-shortcut-target="visionstage"

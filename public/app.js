@@ -34,6 +34,7 @@ const ui = {
     memoCopyMarkdown: document.getElementById("memoCopyMarkdown"),
     memoCopyCsv: document.getElementById("memoCopyCsv"),
     visionConnectButton: document.getElementById("visionConnectButton"),
+    visionApplyFormatButton: document.getElementById("visionApplyFormatButton"),
     visionstage: document.getElementById("visionstage")
 };
 
@@ -98,6 +99,8 @@ const state = {
 };
 
 const logLines = [];
+const SEARCH_RANGE_SECONDS_PATTERN = /^(?:0\.(?:0[5-9]|[1-9]\d)|(?:[1-9]|1[0-4])(?:\.\d{1,2})?|15(?:\.0{1,2})?)$/;
+const SEARCH_RANGE_SECONDS_PARTIAL_PATTERN = /^(?:|0|0\.|0\.\d{0,2}|[1-9](?:\.\d{0,2})?|1[0-4](?:\.\d{0,2})?|15(?:\.0{0,2})?)$/;
 
 function getDictionary() {
     const config = window.APP_CONFIG || {};
@@ -141,6 +144,13 @@ function formatActionTime(totalSeconds) {
 
 function formatFractionDigits(value) {
     return String(value).padStart(4, "0");
+}
+
+function formatSearchRangeSeconds(value) {
+    if (!Number.isFinite(value)) {
+        return String(DEFAULT_SEARCH_RANGE_SECONDS);
+    }
+    return value.toFixed(2).replace(/\.?0+$/, "");
 }
 
 function normalizeFractionDigits(value) {
@@ -617,11 +627,15 @@ function normalizeOffsetSeconds(value) {
 }
 
 function normalizeSearchRangeSeconds(value) {
-    const parsed = Number.parseInt(value, 10);
+    const text = String(value ?? "").trim();
+    if (!SEARCH_RANGE_SECONDS_PATTERN.test(text)) {
+        return DEFAULT_SEARCH_RANGE_SECONDS;
+    }
+    const parsed = Number(text);
     if (!Number.isFinite(parsed)) {
         return DEFAULT_SEARCH_RANGE_SECONDS;
     }
-    return Math.min(15, Math.max(2, parsed));
+    return parsed;
 }
 
 function loadOffsetSeconds() {
@@ -668,7 +682,7 @@ function setSearchRangeSeconds(value) {
     const normalized = normalizeSearchRangeSeconds(value);
     state.searchRangeSeconds = normalized;
     if (ui.searchRangeSeconds) {
-        ui.searchRangeSeconds.value = String(normalized);
+        ui.searchRangeSeconds.value = formatSearchRangeSeconds(normalized);
     }
     localStorage.setItem(SEARCH_RANGE_STORAGE_KEY, String(normalized));
 }
@@ -1074,6 +1088,9 @@ function updateAutoTimerButtons() {
     }
     if (ui.autoTimerResetConfirmButton) {
         ui.autoTimerResetConfirmButton.disabled = !hasAnchor || state.running;
+    }
+    if (ui.offsetSeconds) {
+        ui.offsetSeconds.disabled = state.running || hasAnchor;
     }
     ui.autoTimerStartButton.disabled = state.running || hasAnchor;
 }
@@ -1728,6 +1745,25 @@ function applyAutoTimerToInput() {
     ui.actionInput.focus();
 }
 
+function applyVisionBattleFormatText(formatText) {
+    if (!ui.actionInput) {
+        return false;
+    }
+    const formatted = String(formatText || "").trim();
+    if (!formatted) {
+        return false;
+    }
+    const currentValue = ui.actionInput.value || "";
+    const prefixMatch = currentValue.match(/^\s*\?\s+\?\s+\?(?=\s|$)/);
+    const prefix = prefixMatch ? prefixMatch[0].trim().replace(/\s+/g, " ") : "? ? ?";
+    ui.actionInput.value = `${prefix} ${formatted}`;
+    ui.actionInput.dispatchEvent(new Event("input", {bubbles: true}));
+    focusActionInputAtTop();
+    return true;
+}
+
+window.applyVisionBattleFormat = applyVisionBattleFormatText;
+
 ui.emulatorSelect.addEventListener("change", (event) => {
     setActiveEmulator(Number(event.target.value));
     ui.actionInput.value = "";
@@ -1904,6 +1940,12 @@ if (ui.offsetSeconds) {
 }
 
 if (ui.searchRangeSeconds) {
+    ui.searchRangeSeconds.addEventListener("input", (event) => {
+        if (SEARCH_RANGE_SECONDS_PARTIAL_PATTERN.test(event.target.value)) {
+            return;
+        }
+        event.target.value = formatSearchRangeSeconds(state.searchRangeSeconds);
+    });
     ui.searchRangeSeconds.addEventListener("change", (event) => {
         setSearchRangeSeconds(event.target.value);
     });

@@ -7,6 +7,7 @@
         connectButton: document.getElementById("visionConnectButton"),
         resetButton: document.getElementById("visionResetButton"),
         debugExportButton: document.getElementById("visionDebugExportButton"),
+        applyFormatButton: document.getElementById("visionApplyFormatButton"),
         video: document.getElementById("visionVideo"),
         overlay: document.getElementById("visionOverlay"),
         fpsValue: document.getElementById("visionFpsValue"),
@@ -322,6 +323,59 @@
         ["flee.png", 53],
         ["tokuyaku.png", 50]
     ]);
+    const ACTION_IDS = Object.freeze({
+        ATTACK_ENEMY: 1,
+        ULTRA_HIGH_SPEED_COMBO: 2,
+        SWITCH_2B: 3,
+        SWITCH_2C: 4,
+        LIGHTNING_STORM: 5,
+        CRITICAL_ATTACK: 6,
+        SKY_ATTACK: 8,
+        MERA_ZOMA: 9,
+        FREEZING_BLIZZARD: 10,
+        SWITCH_2A: 11,
+        LULLAB_EYE: 12,
+        SWITCH_2E: 13,
+        LAUGH: 15,
+        DISRUPTIVE_WAVE: 16,
+        BURNING_BREATH: 17,
+        DARK_BREATH: 18,
+        SWITCH_2D: 19,
+        INACTIVE_ENEMY: 21,
+        INACTIVE_ALLY: 22,
+        MEDICINAL_HERBS: 23,
+        PARALYSIS: 24,
+        ATTACK_ALLY: 25,
+        HEAL: 26,
+        DEFENCE: 27,
+        CURE_PARALYSIS: 28,
+        BUFF: 30,
+        MAGIC_MIRROR: 31,
+        MORE_HEAL: 32,
+        DOUBLE_UP: 33,
+        MULTITHRUST: 34,
+        SLEEPING: 35,
+        MIDHEAL: 36,
+        FULLHEAL: 37,
+        DEFENDING_CHAMPION: 38,
+        PSYCHE_UP: 39,
+        CURE_SLEEPING: 40,
+        MEDITATION: 41,
+        MAGIC_BURST: 42,
+        RESTORE_MP: 43,
+        MERCURIAL_THRUST: 44,
+        THUNDER_THRUST: 45,
+        TURN_SKIPPED: 46,
+        SAGE_ELIXIR: 47,
+        ELFIN_ELIXIR: 48,
+        MAGIC_WATER: 49,
+        SPECIAL_MEDICINE: 50,
+        DEAD: 51,
+        SONG: 52,
+        FLEE: 53,
+        PSYCHE_UP_ALLY: 62
+    });
+    const ACTIONS_BY_ID = ACTIONS;
 
     const state = {
         lang: document.documentElement.dataset.lang || "ja",
@@ -381,16 +435,18 @@
                 history: snapshot.history
             };
             const encoded = encodeBridgePayload(payload);
+            const formatted = buildBattleActionFormat(snapshot.history);
             window.postMessage(
                 {
                     type: "battle-emulator-vision-sync",
                     payload,
-                    encoded
+                    encoded,
+                    formatted
                 },
                 "*"
             );
             return {
-                encoded,
+                encoded: formatted,
                 key: "visionBridgeTurn"
             };
         }
@@ -1059,7 +1115,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function getActionLabel(actionId) {
-        const action = ACTIONS[actionId];
+        const action = ACTIONS_BY_ID[actionId];
         if (!action) {
             return `#${actionId}`;
         }
@@ -1338,7 +1394,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         if (erugioMain && sub.file === "attack.png" && main.score >= TEMPLATE_THRESHOLD && sub.score >= TEMPLATE_THRESHOLD) {
             return {
                 kind: "action",
-                actionId: 1,
+                actionId: ACTION_IDS.ATTACK_ENEMY,
                 detail: `${main.file} + attack.png`,
                 score: Math.min(main.score, sub.score)
             };
@@ -1348,7 +1404,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         if (erugioMain && sub.file === "uhsc.png" && main.score >= TEMPLATE_THRESHOLD && sub.score >= TEMPLATE_THRESHOLD) {
             return {
                 kind: "action",
-                actionId: 2,
+                actionId: ACTION_IDS.ULTRA_HIGH_SPEED_COMBO,
                 detail: `${main.file} + uhsc.png`,
                 score: Math.min(main.score, sub.score)
             };
@@ -1362,7 +1418,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             sub.file !== "uhsc.png" &&
             main.file !== "guard.png"
         ) {
-            return {kind: "action", actionId: 25, detail: `a_attack.png (${main.file || "-"})`, score: ally.score};
+            return {kind: "action", actionId: ACTION_IDS.ATTACK_ALLY, detail: `a_attack.png (${main.file || "-"})`, score: ally.score};
         }
 
         // 大防御 combo
@@ -1374,7 +1430,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         ) {
             return {
                 kind: "action",
-                actionId: 38,
+                actionId: ACTION_IDS.DEFENDING_CHAMPION,
                 detail: "defense_champion combo",
                 score: Math.min(main.score, sub.score)
             };
@@ -1382,7 +1438,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
         // daibougilyo: マダンテ後のsleeping2は大防御
         if (state.daibougilyo && main.file === "sleeping2.png" && main.score >= TEMPLATE_THRESHOLD) {
-            return {kind: "action", actionId: 38, detail: "madannte -> sleeping2 (daibougilyo)", score: main.score};
+            return {kind: "action", actionId: ACTION_IDS.DEFENDING_CHAMPION, detail: "madannte -> sleeping2 (daibougilyo)", score: main.score};
         }
 
         // 麻痺回復 = Paralysis + CareParalysis
@@ -1394,7 +1450,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         ) {
             return {
                 kind: "action",
-                actionId: 28,
+                actionId: ACTION_IDS.CURE_PARALYSIS,
                 detail: "Paralysis + CareParalysis",
                 score: Math.min(main.score, ally.score)
             };
@@ -1407,7 +1463,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             main.score >= TEMPLATE_THRESHOLD &&
             (!sub.file || sub.file !== "Paralysis2.png" || sub.score < TEMPLATE_THRESHOLD)
         ) {
-            return {kind: "action", actionId: 24, detail: "Paralysis", score: main.score};
+            return {kind: "action", actionId: ACTION_IDS.PARALYSIS, detail: "Paralysis", score: main.score};
         }
 
         // しんでしまった = sleeping2 + dead/dead2
@@ -1419,7 +1475,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         ) {
             return {
                 kind: "action",
-                actionId: 51,
+                actionId: ACTION_IDS.DEAD,
                 detail: `sleeping2 + ${ally.file}`,
                 score: Math.min(main.score, ally.score)
             };
@@ -1432,7 +1488,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             main.score >= TEMPLATE_THRESHOLD &&
             (!ally.file || (ally.file !== "dead.png" && ally.file !== "dead2.png") || ally.score < TEMPLATE_THRESHOLD)
         ) {
-            return {kind: "action", actionId: 35, detail: "sleeping2", score: main.score};
+            return {kind: "action", actionId: ACTION_IDS.SLEEPING, detail: "sleeping2", score: main.score};
         }
 
         // WakeUp系: Sleeping中かつ ActionIndex != 0 かつ slept未設定 → ターンスキップ
@@ -1445,7 +1501,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             state.actionIndex !== 0 &&
             !state.actionTaken
         ) {
-            return {kind: "action", actionId: 46, detail: main.file, score: main.score};
+            return {kind: "action", actionId: ACTION_IDS.TURN_SKIPPED, detail: main.file, score: main.score};
         }
 
         // WakeUp系: Sleeping中かつ ActionIndex == 0 → 眠り回復（sleptは問わない）
@@ -1457,7 +1513,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             state.actionIndex === 0 &&
             !state.actionTaken
         ) {
-            return {kind: "action", actionId: 40, detail: main.file, score: main.score};
+            return {kind: "action", actionId: ACTION_IDS.CURE_SLEEPING, detail: main.file, score: main.score};
         }
 
         // ためる
@@ -1465,16 +1521,16 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             if (target.file === "aha.png" && target.score >= TEMPLATE_THRESHOLD && !state.actionTaken) {
                 return {
                     kind: "action",
-                    actionId: 62,
+                    actionId: ACTION_IDS.PSYCHE_UP_ALLY,
                     detail: "tameru + aha",
                     score: Math.min(main.score, target.score)
                 };
             }
-            return {kind: "action", actionId: 39, detail: "tameru", score: main.score};
+            return {kind: "action", actionId: ACTION_IDS.PSYCHE_UP, detail: "tameru", score: main.score};
         }
 
         if (main.file === "sukara.png" && main.score >= TEMPLATE_THRESHOLD) {
-            return {kind: "action", actionId: 30, detail: "tameru", score: main.score};
+            return {kind: "action", actionId: ACTION_IDS.BUFF, detail: "tameru", score: main.score};
         }
 
         // ano.png: action記録なし、状態リセットのみ
@@ -1567,9 +1623,15 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         ui.historyBody.innerHTML = "";
         const rows = getTurnRows();
         if (!rows.length) {
+            if (ui.applyFormatButton) {
+                ui.applyFormatButton.disabled = true;
+            }
             ui.historyEmpty.hidden = false;
             ui.historyScroll.hidden = true;
             return;
+        }
+        if (ui.applyFormatButton) {
+            ui.applyFormatButton.disabled = false;
         }
         ui.historyEmpty.hidden = true;
         ui.historyScroll.hidden = false;
@@ -1596,12 +1658,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
     }
 
-    function buildConsoleCommand() {
+    function buildBattleActionFormat(historyEntries = state.history) {
         const enemyActions = [];
         const allyActions = [];
         const damages = [];
-        state.history.forEach((entry) => {
-            const action = ACTIONS[entry.actionId];
+        historyEntries.forEach((entry) => {
+            const action = ACTIONS_BY_ID[entry.actionId];
             if (!action || entry.damage === -1) {
                 return;
             }
@@ -1614,14 +1676,28 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 damages.push(entry.damage);
             }
         });
-        return `b 0 0 0 ${Math.max(0, state.turnIndex - 1)} ${enemyActions.join(" ")}-${allyActions.join(" ")}-${damages.join(" ")}-`;
+        return `${enemyActions.join(" ")}-${allyActions.join(" ")}-${damages.join(" ")}-`;
+    }
+
+    function buildConsoleCommand() {
+        return `b 0 0 0 ${Math.max(0, state.turnIndex - 1)} ${buildBattleActionFormat()}`;
     }
 
     function getDamageChannel(actionId) {
-        if (actionId === 2 || actionId === 34) {
+        if (actionId === ACTION_IDS.ULTRA_HIGH_SPEED_COMBO || actionId === ACTION_IDS.MULTITHRUST) {
             return 2;
         }
-        if ([1, 5, 8, 9, 10, 18, 25, 42, 44].includes(actionId)) {
+        if ([
+            ACTION_IDS.ATTACK_ENEMY,
+            ACTION_IDS.LIGHTNING_STORM,
+            ACTION_IDS.SKY_ATTACK,
+            ACTION_IDS.MERA_ZOMA,
+            ACTION_IDS.FREEZING_BLIZZARD,
+            ACTION_IDS.DARK_BREATH,
+            ACTION_IDS.ATTACK_ALLY,
+            ACTION_IDS.MAGIC_BURST,
+            ACTION_IDS.MERCURIAL_THRUST
+        ].includes(actionId)) {
             return 1;
         }
         return 0;
@@ -1666,7 +1742,13 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 (item) => item.turn === turn + 1 && item.slot === slotIndex + 1
             );
             if (entry) {
-                const sleepBreakActions = [1, 6, 5, 2, 8]; // ATTACK_ENEMY, CRITICAL_ATTACK, LIGHTNING_STORM, ULTRA_HIGH_SPEED_COMBO, SKY_ATTACK
+                const sleepBreakActions = [
+                    ACTION_IDS.ATTACK_ENEMY,
+                    ACTION_IDS.CRITICAL_ATTACK,
+                    ACTION_IDS.LIGHTNING_STORM,
+                    ACTION_IDS.ULTRA_HIGH_SPEED_COMBO,
+                    ACTION_IDS.SKY_ATTACK
+                ];
                 if (sleepBreakActions.includes(entry.actionId)) {
                     if (state.actionTaken || slotIndex === 2) {
                         state.sleeping = false;
@@ -1692,7 +1774,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 // 実際はダメージではなくactionIdを上書きする必要があるため別途処理
                 const entry = state.history.find((item) => item.turn === turn && item.slot === slotIndex + 1);
                 if (entry) {
-                    entry.actionId = 6; // CRITICAL_ATTACK
+                    entry.actionId = ACTION_IDS.CRITICAL_ATTACK;
                     renderHistory();
                 }
                 state.maybeCritical = -1;
@@ -1787,43 +1869,65 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         state.lastDamage2 = -1;
 
         // maybeCritical: 攻撃(敵)のとき記録
-        if (candidate.actionId === 1) {
+        if (candidate.actionId === ACTION_IDS.ATTACK_ENEMY) {
             state.maybeCritical = pendingSlotRef;
         } else if (!candidate.detail?.includes("attack.png")) {
             state.maybeCritical = -1;
         }
 
         // daibougilyo: マダンテかつActionTaken未設定のとき設定
-        if (candidate.actionId === 42 && !state.actionTaken) {
+        if (candidate.actionId === ACTION_IDS.MAGIC_BURST && !state.actionTaken) {
             state.daibougilyo = true;
         }
         // 大防御確定でdaibougilyoリセット
-        if (candidate.actionId === 38) {
+        if (candidate.actionId === ACTION_IDS.DEFENDING_CHAMPION) {
             state.daibougilyo = false;
         }
 
         // Sleeping状態の設定
-        if (candidate.actionId === 12) { // あやしいひとみ
+        if (candidate.actionId === ACTION_IDS.LULLAB_EYE) { // あやしいひとみ
             state.sleeping = true;
         }
-        if (candidate.actionId === 35) { // 眠っている！
+        if (candidate.actionId === ACTION_IDS.SLEEPING) { // 眠っている！
             state.sleeping = true;
             state.slept = true;
         }
-        if (candidate.actionId === 40 || candidate.actionId === 46) { // 眠り回復/ターンスキップ
+        if (
+            candidate.actionId === ACTION_IDS.CURE_SLEEPING ||
+            candidate.actionId === ACTION_IDS.TURN_SKIPPED
+        ) { // 眠り回復/ターンスキップ
             state.sleeping = false;
             state.slept = true;
         }
 
         // 麻痺系slept
-        if (candidate.actionId === 24 || candidate.actionId === 28) {
+        if (
+            candidate.actionId === ACTION_IDS.PARALYSIS ||
+            candidate.actionId === ACTION_IDS.CURE_PARALYSIS
+        ) {
             state.slept = true;
         }
 
         // ActionTaken設定が必要なaction
         const setsActionTaken = [
-            30, 31, 33, 34, 37, 40, 46, 47, 48, 49, 50, 52, 53, // buff/mirror/doubleup/multithrust/fullheal/cure_sleeping/turn_skipped/elixirs/song/flee
-            24, 28, 25, 35, 51                                    // paralysis/cure_paralysis/attack_ally/sleeping/dead
+            ACTION_IDS.BUFF,
+            ACTION_IDS.MAGIC_MIRROR,
+            ACTION_IDS.DOUBLE_UP,
+            ACTION_IDS.MULTITHRUST,
+            ACTION_IDS.FULLHEAL,
+            ACTION_IDS.CURE_SLEEPING,
+            ACTION_IDS.TURN_SKIPPED,
+            ACTION_IDS.SAGE_ELIXIR,
+            ACTION_IDS.ELFIN_ELIXIR,
+            ACTION_IDS.MAGIC_WATER,
+            ACTION_IDS.SPECIAL_MEDICINE,
+            ACTION_IDS.SONG,
+            ACTION_IDS.FLEE,
+            ACTION_IDS.PARALYSIS,
+            ACTION_IDS.CURE_PARALYSIS,
+            ACTION_IDS.ATTACK_ALLY,
+            ACTION_IDS.SLEEPING,
+            ACTION_IDS.DEAD
         ];
         if (setsActionTaken.includes(candidate.actionId)) {
             state.actionTaken = true;
@@ -2301,6 +2405,15 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             const text = historyToCsv();
             if (typeof copyText === "function") copyText(text);
         });
+        ui.applyFormatButton?.addEventListener("click", () => {
+            const formatText = buildBattleActionFormat();
+            if (!formatText.trim()) {
+                return;
+            }
+            if (typeof window.applyVisionBattleFormat === "function") {
+                window.applyVisionBattleFormat(formatText);
+            }
+        });
         const observer = new MutationObserver(() => {
             syncLanguage();
         });
@@ -2313,6 +2426,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     async function init() {
         updateTurnChip();
         renderHistory();
+        if (ui.applyFormatButton) {
+            ui.applyFormatButton.disabled = true;
+        }
         initMovementSafety();
         initEvents();
         try {
