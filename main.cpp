@@ -11,6 +11,7 @@
 #include "BattleEmulator.h"
 #include "debug.h"
 #include "ActionOptimizer.h"
+#include "EnhancedCostCalculator.h"
 #include "InputBuilder.h"
 
 #ifdef DEBUG
@@ -135,7 +136,7 @@ namespace{
 #endif
     }
 
-    std::string dumpTable(BattleResult& result, int32_t gene[350], int PastTurns);
+    std::string dumpTable(const BattleResult& result,const int32_t gene[350], int PastTurns);
 
     /**
      * バトル結果および対応するデータからテーブルを作成し、その内容を文字列として返します。
@@ -146,7 +147,7 @@ namespace{
      * @param PastTurns 結果の出力に含めない過去のターン数
      * @return 整形されたテーブルを表す文字列
      */
-    std::string dumpTable(BattleResult& result, int32_t gene[350], int PastTurns){
+    std::string dumpTable(const BattleResult& result, const int32_t gene[350], int PastTurns){
         std::stringstream ss6;
         printHeader(ss6);
         int currentTurn = -1;
@@ -505,7 +506,7 @@ namespace{
      * @param seed テーブル生成と表示に使用されるランダムシード値。
      * @param turns テーブル表示を省略するターン数(リリースバイナリでのみ使用)
      */
-    void dumpTableMain(BattleResult& result1, Genome& genome, uint64_t seed, int turns){
+    void dumpTableMain(const BattleResult& result1, const Genome& genome, uint64_t seed, int turns){
         std::cout << dumpTable(result1, genome.actions, turns) << std::endl;
 
         std::cout << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def <<
@@ -536,7 +537,7 @@ namespace{
             "Performance: " << std::fixed << std::setprecision(2) << performance << " mann turns/s" << std::endl;
     }
 
-    bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads,
+bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads,
                        bool Dropbug){
 #ifdef DEBUG
         auto t0 = std::chrono::high_resolution_clock::now();
@@ -554,8 +555,17 @@ namespace{
             }
             turns++;
         }
+
 #if defined(erusionn_lv21)
-        auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
+        Genome genomeA, genomeB;
+
+        // --- TableA で探索 ---
+        EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableA);
+        genomeA = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
+
+        // --- TableB で探索 ---
+        EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableB);
+        genomeB = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
 #endif
 
 #ifdef DEBUG
@@ -565,27 +575,46 @@ namespace{
         PerformanceDebug("Searcher multi", BattleEmulator::getTurnProcessed(), static_cast<double>(elapsed_time1), 0);
 #endif
 
-        if(genome.turn >= 100){
+        // --- 両方ともBattleEmulator::Mainを実行してresultで比較 ---
+        BattleResult resultA, resultB;
+
+        auto runMain = [&](const Genome& g, BattleResult& res) -> bool {
+            Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
+            int position = 1;
+            uint64_t nowState = 0;
+            BattleEmulator::Main(&position, 100, g.actions, players, &res, seed, nullptr, nullptr, -1, &nowState);
+            return players[1].hp <= 0; // 敵HP直接確認
+        };
+
+        bool winA = runMain(genomeA, resultA);
+        bool winB = runMain(genomeB, resultB);
+
+        const Genome* chosenGenome = nullptr;
+        const BattleResult* chosenResult = nullptr;
+
+        if (!winA && !winB) {
             return false;
+        } else if (winA && !winB) {
+            chosenGenome = &genomeA;
+            chosenResult = &resultA;
+        } else if (!winA && winB) {
+            chosenGenome = &genomeB;
+            chosenResult = &resultB;
+        } else {
+            // 両方勝利：ターン数が少ない方を採用、同じならehpの低い方
+            int lastEhpA = resultA.ehp[resultA.position - 1];
+            int lastEhpB = resultB.ehp[resultB.position - 1];
+            bool useA = (resultA.turn < resultB.turn) ||
+                        (resultA.turn == resultB.turn && lastEhpA <= lastEhpB);
+            chosenGenome  = useA ? &genomeA  : &genomeB;
+            chosenResult  = useA ? &resultA  : &resultB;
         }
-
-        BattleResult result1;
-        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
-
-        auto* position = new int(1);
-        auto* nowState = new uint64_t(0);
-
-        BattleEmulator::Main(position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
-                             nowState);
-
-        delete position;
-        delete nowState;
 
         std::cout << "foundTurn: " << foundTurn << ", " << turns << std::endl;
 #ifdef MINGW_BUILD
-        dumpTableMain(result1, genome, seed, foundTurn);
+        dumpTableMain(*chosenResult, *chosenGenome, seed, foundTurn);
 #else
-        dumpTableMain(result1, genome, seed, foundTurn);
+        dumpTableMain(*chosenResult, *chosenGenome, seed, foundTurn);
 #endif
 
         return true;
@@ -971,7 +1000,7 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 0x1008;
+    uint64_t seed = 0x1028;
 
     int actions[350] = {
         BattleEmulator::BUFF,
