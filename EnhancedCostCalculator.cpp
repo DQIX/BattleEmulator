@@ -147,12 +147,25 @@ constexpr std::array<double, 201> GENOME = {
         /* 175 */ 1.58306,
         /* 176 */ -3.39025,    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
     };
-double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, double preGCost) {
+double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, double preGCost, uint64_t NowState) {
     // Base cost is turn number (maintains depth-first preference)
     double gCost = preGCost + GENOME[SimpleParameterOptimizerNode::turnHeignt];
 
     // Add fine-grained action costs to break ties
     gCost += getActionCost(action);
+
+    uint8_t state = NowState & 0xf;
+    if(state == BattleEmulator::TYPE_2A){
+        gCost += GENOME[SimpleParameterOptimizerNode::TYPE_2AWeight];
+    }else if(state == BattleEmulator::TYPE_2B){
+        gCost += GENOME[SimpleParameterOptimizerNode::TYPE_2BWeight];
+    }else if(state == BattleEmulator::TYPE_2C){
+        gCost += GENOME[SimpleParameterOptimizerNode::TYPE_2CWeight];
+    }else if(state == BattleEmulator::TYPE_2D){
+        gCost += GENOME[SimpleParameterOptimizerNode::TYPE_2DWeight];
+    }else if(state == BattleEmulator::TYPE_2E){
+        gCost += GENOME[SimpleParameterOptimizerNode::TYPE_2EWeight];
+    }
 
     return gCost;
 }
