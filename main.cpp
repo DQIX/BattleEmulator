@@ -338,8 +338,6 @@ namespace {
 #elif defined(NO_OPTIMIZATION)
         std::cout << "dq9 Ragin' Contagion battle emulator " << version << " (No optimization), Build date: " << buildDate << ", " << buildTime << " UTC/GMT, Compiler: " << compiler << std::endl;
 #else
-        std::cout << "dq9 Corvus battle emulator" << version << " (Unknown build configuration), Build date: " << buildDate << ", " << buildTime   << " UTC, Compiler: " << compiler << std::endl;
-        << ", " << buildTime << std::endl;
 #endif
     }
 
