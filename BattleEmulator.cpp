@@ -380,7 +380,7 @@ constexpr int AttackTable2B[6] = {
  *   それ以外の場合はfalseを返します。（modeが -1 または -2の場合、常にfalse）
  */
 bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
-                          std::optional<BattleResult> &result,
+                          BattleResult* result,
                           uint64_t seed, const int eActions[350], const int damages[350], int mode,
                           uint64_t *NowState) {
     resetCombo(NowState);

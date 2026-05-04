@@ -130,7 +130,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
     // Execute one turn
     BattleEmulator::Main(position.get(), turns, actions, CopedPlayers,
-                         (std::optional<BattleResult> &) std::nullopt, seed,
+                        nullptr, seed,
                          nullptr, nullptr, -2, nowState.get());
 
     // Initialize starting node
@@ -292,7 +292,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
                 // Execute one turn
                 BattleEmulator::Main(position.get(), newGenome.turn - newGenome.processed, newGenome.actions, CopedPlayers3,
-                                     (std::optional<BattleResult> &) std::nullopt, seed,
+                                    nullptr, seed,
                                      nullptr, nullptr, -2, nowState.get());
 
                 if (CopedPlayers3[0].hp > 0) {

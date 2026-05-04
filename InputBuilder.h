@@ -38,6 +38,7 @@ public:
     void push(int damage, char prefix);
 
     std::vector<ResultStructure> makeStructure();
+    void clear();
 
 private:
     std::vector<InputEntry> inputs;
