@@ -355,7 +355,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
 		}
 		*/
 
-		constexpr int MAX_ID = 500;
+		constexpr int MAX_ID = 350;
 
 		std::vector<double> tmp(MAX_ID + 1, 0.0);
 

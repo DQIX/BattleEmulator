@@ -119,12 +119,14 @@ constexpr std::array<double, 201> GENOME = {
         /* 168 */ 2.18253,
         0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
     };
-double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, double preGCost, uint64_t NowState) {
+double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, double preGCost) {
     // Base cost is turn number (maintains depth-first preference)
     double gCost = preGCost + GENOME[SimpleParameterOptimizerNode::turnHeignt];
 
-    uint8_t state = NowState & 0xf;
-    return gCost + getActionCost(200 + action * state);
+    // Add fine-grained action costs to break ties
+    gCost += getActionCost(action);
+
+    return gCost;
 }
 
 double EnhancedCostCalculator::calculateHCost(const Genome &genome, double enemyMaxHp, double playerMaxHp, uint64_t NowState) {
