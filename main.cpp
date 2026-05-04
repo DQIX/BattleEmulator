@@ -60,14 +60,14 @@ std::string rtrim(const std::string& s);
 
 std::string trim(const std::string& s);
 
-bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream& ss);
+bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream& ss);
 
-uint64_t BruteForceRequest(const Player copiedPlayers[2], int hours, int minutes, int seconds, int turns,
+uint64_t BruteForceRequest(const Player copiedPlayers2[2], int hours, int minutes, int seconds, int turns,
                            int eActions[350],
                            int aActions[350], int damages[350]);
 
 
-void mainLoop(const Player copiedPlayers[2]);
+void mainLoop(const Player copiedPlayers2[2]);
 
 using namespace std;
 
@@ -426,14 +426,13 @@ int main(){
 	return 0;
 }
 
-bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream &ss){
+bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream &ss){
 	int32_t gene[350] = {0};
 	auto turns = 0;
-	for(int i = 0; i < 350; ++i){
+	for(int i = 0; i < 349; ++i){
 		gene[i] = aActions[i];
 		if(aActions[i] == -1){
 			gene[i] = -1;
-			gene[i + 1] = -1;
 			break;
 		}
 		turns++;
@@ -447,25 +446,25 @@ bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActi
 
     // --- TableA で探索 ---
     EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableA);
-    genomeA = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
+    genomeA = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
 
     // --- TableB で探索 ---
     EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableB);
-    genomeB = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
+    genomeB = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
 
     // --- TableC で探索 ---
     EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableC);
-    Genome genomeC = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
+    Genome genomeC = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
 
 	// --- TableC で探索 ---
 	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableD);
-	Genome genomeD = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
+	Genome genomeD = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
 
 
     BattleResult resultA, resultB, resultC, resultD;
 
 	auto runMain = [&](const Genome& g, BattleResult& res) -> RunResult {
-		Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
+		Player players[2] = {copiedPlayers2[0], copiedPlayers2[1]};
 		int position = 1;
 		uint64_t nowState = 0;
 		BattleEmulator::Main(&position, 100, g.actions, players, &res, seed, nullptr, nullptr, -1, &nowState);
@@ -545,7 +544,7 @@ bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActi
 }
 
 // ブルートフォースリクエスト関数
-[[nodiscard]] uint64_t BruteForceRequest(const Player copiedPlayers[2], int hours, int minutes, int seconds, int turns,
+[[nodiscard]] uint64_t BruteForceRequest(const Player copiedPlayers2[2], int hours, int minutes, int seconds, int turns,
                                          int eActions[350],
                                          int aActions[350], int damages[350]){
 	std::cout << "BruteForceRequest executed with time " << hours << ":" << minutes << ":" << seconds << std::endl;
@@ -560,23 +559,25 @@ bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActi
 	foundSeeds = 0;
 	FoundSeed = 0;
 
-	int totalSeconds = hours * 3600 + minutes * 60 + seconds;
-	totalSeconds = totalSeconds - 17;
+	uint64_t totalSeconds = hours * 3600 + minutes * 60 + seconds;
+	totalSeconds = totalSeconds;
 	//数字は探索範囲(秒)
-	auto time1 = static_cast<uint64_t>(floor((totalSeconds - 30) * (1 / 0.12515)));
+	auto time1 = static_cast<uint64_t>(floor((totalSeconds - 120) * (1 / 0.12515)));
 	time1 = time1 << 16;
 	std::cout << time1 << std::endl;
 
+
+
 	//数字は探索範囲(秒)
-	auto time2 = static_cast<uint64_t>(floor((totalSeconds + 30) * (1 / 0.125155)));
+	auto time2 = static_cast<uint64_t>(floor((totalSeconds + 120) * (1 / 0.125155)));
 	time2 = time2 << 16;
 	std::cout << time2 << std::endl;
 	int32_t gene[350] = {0};
-	for(int i = 0; i < 350; ++i){
+
+	for(int i = 0; i < 349; ++i){
 		gene[i] = aActions[i];
 		if(aActions[i] == -1){
 			gene[i] = -1;
-			gene[i + 1] = -1;
 			break;
 		}
 	}
@@ -673,11 +674,9 @@ void BruteForceMainLoop(const Player copiedPlayers[2], uint64_t start, uint64_t 
 void parseActions(const std::string& str, int actions[350]){
 	std::istringstream iss(str);
 	int value, index = 0;
-	while(iss >> value && index < 350){
+	while(iss >> value && index < 349){
 		actions[index++] = value;
 	}
-	actions[index++] = -1;
-	actions[index++] = -1;
 	actions[index++] = -1;
 }
 
