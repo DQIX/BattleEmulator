@@ -18,7 +18,9 @@
 #include <chrono>
 
 #endif
-
+#if defined(OPTIMIZE_MODE)
+#include "SimpleParameterOptimizer.h"
+#endif
 
 namespace {
     // MinGW/GCC用のnoinline属性
@@ -330,11 +332,11 @@ namespace {
         std::cout << "dq9 Ragin' Contagion battle emulator " << version << " (Optimized for O3), Build date: " <<
                 buildDate
                 << ", " <<
-                buildTime << " UTC/GMT, Compiler: " << compiler << multiThreading << std::endl;
+                buildTime << " UTC/GMT, Compiler: " << compiler << std::endl;
 #elif defined(OPTIMIZATION_O2_ENABLED)
-        std::cout << "dq9 Ragin' Contagion battle emulator " << version << " (Optimized for O2), Build date: " << buildDate << ", " << buildTime  << " UTC/GMT, Compiler: " << compiler << multiThreading << std::endl;
+        std::cout << "dq9 Ragin' Contagion battle emulator " << version << " (Optimized for O2), Build date: " << buildDate << ", " << buildTime  << " UTC/GMT, Compiler: " << compiler << std::endl;
 #elif defined(NO_OPTIMIZATION)
-        std::cout << "dq9 Ragin' Contagion battle emulator " << version << " (No optimization), Build date: " << buildDate << ", " << buildTime << " UTC/GMT, Compiler: " << compiler << multiThreading << std::endl;
+        std::cout << "dq9 Ragin' Contagion battle emulator " << version << " (No optimization), Build date: " << buildDate << ", " << buildTime << " UTC/GMT, Compiler: " << compiler << std::endl;
 #else
         std::cout << "dq9 Corvus battle emulator" << version << " (Unknown build configuration), Build date: " << buildDate << ", " << buildTime   << " UTC, Compiler: " << compiler << std::endl;
         << ", " << buildTime << std::endl;
@@ -558,14 +560,14 @@ namespace {
             return false;
         }
 
-        std::optional<BattleResult> result1;
+        BattleResult result1;
         result1 = BattleResult();
         Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
 
         auto *position = new int(1);
         auto *nowState = new uint64_t(0);
 
-        BattleEmulator::Main(position, 100, genome.actions, players, result1, seed, nullptr, nullptr, -1,
+        BattleEmulator::Main(position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
                              nowState);
 
         delete position;
@@ -573,9 +575,9 @@ namespace {
 
         std::cout << "foundTurn: " << foundTurn << ", " << turns << std::endl;
 #ifdef MINGW_BUILD
-        dumpTableMain(result1.value(), genome, seed, foundTurn);
+        dumpTableMain(result1, genome, seed, foundTurn);
 #else
-        dumpTableMain(result1.value(), genome, seed, foundTurn);
+        dumpTableMain(result1, genome, seed, foundTurn);
 #endif
 
         return true;
@@ -605,7 +607,7 @@ namespace {
 
 
             bool resultBool = BattleEmulator::Main(position, 20, gene, players,
-                                                   (std::optional<BattleResult> &) std::nullopt, seed, nullptr, damages,
+                                                  nullptr, seed, nullptr, damages,
                                                    maxElement,
                                                    nowState);
             if (resultBool) {
@@ -847,7 +849,7 @@ void testbattleemu() {
         (*position) = 1;
         Player players[2] = {BasePlayers[0], BasePlayers[1]};
         BattleEmulator::Main(position, 1, gene, players,
-                                               (std::optional<BattleResult> &) std::nullopt, seed, nullptr, nullptr,
+                                               nullptr, seed, nullptr, nullptr,
                                                -2,
                                                nowState);
     }
@@ -861,6 +863,17 @@ int main(int argc, char *argv[]) {
         showHeader();
         return 0;
     }
+
+#if defined(OPTIMIZE_MODE)
+    int actions1[350] = {};
+    auto counter1 = 0;
+    actions1[counter1++] = BattleEmulator::BUFF;
+    actions1[counter1++] = BattleEmulator::PSYCHE_UP_ALLY;
+    actions1[counter1++] = BattleEmulator::PSYCHE_UP_ALLY;
+    actions1[counter1] = -1;
+    SimpleParameterOptimizer::optimize(BasePlayers, 0x1060, actions1, 100000, counter1);
+    return 0;
+#endif
 
 #ifdef DEBUG
     auto t0 = std::chrono::high_resolution_clock::now();
@@ -964,18 +977,16 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 
     (*NowState) = 0;
     (*position1) = 1;
-    std::optional<BattleResult> dummy1;
-    dummy1 = BattleResult();
+    BattleResult dummy1;
     std::memcpy(players1, BasePlayers, sizeof(players1));
-    BattleEmulator::Main(position1, (counter == 0 ? 1000 : counter), gene1, players1, dummy1, time1, dummy, dummy, -1,
+    BattleEmulator::Main(position1, (counter == 0 ? 1000 : counter), gene1, players1, &dummy1, time1, dummy, dummy, -1,
                          NowState);
 
     std::stringstream ss1;
     ss1 << time1 << " ";
     std::cout << (*position1) << std::endl;
-    if (dummy1.has_value()) {
-        std::cout << dumpTable(dummy1.value(), gene1, -1) << std::endl;
-    }
+    std::cout << dumpTable(dummy1, gene1, -1) << std::endl;
+
 
     //}
     delete position1;
