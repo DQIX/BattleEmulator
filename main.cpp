@@ -562,14 +562,14 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 	uint64_t totalSeconds = hours * 3600 + minutes * 60 + seconds;
 	totalSeconds = totalSeconds;
 	//数字は探索範囲(秒)
-	auto time1 = static_cast<uint64_t>(floor((totalSeconds - 120) * (1 / 0.12515)));
+	auto time1 = static_cast<uint64_t>(floor((totalSeconds - 8) * (1 / 0.12515)));
 	time1 = time1 << 16;
 	std::cout << time1 << std::endl;
 
 
 
 	//数字は探索範囲(秒)
-	auto time2 = static_cast<uint64_t>(floor((totalSeconds + 120) * (1 / 0.125155)));
+	auto time2 = static_cast<uint64_t>(floor((totalSeconds + 8) * (1 / 0.125155)));
 	time2 = time2 << 16;
 	std::cout << time2 << std::endl;
 	int32_t gene[350] = {0};
@@ -811,10 +811,10 @@ std::string trim(const std::string& s){
 #endif
 namespace {
     const int MAX = 350;
-    int aActions[MAX] = {0};
-    int damages[MAX] = {0};
+    int aActions5[MAX] = {0};
+    int damages5[MAX] = {0};
     // aActions[] は味方行動（ホイミ、味方攻撃、麻痺の場合は PARALYSIS）を格納する
-    int eActions[MAX] = {0};
+    int eActions5[MAX] = {0};
 
     std::string wasmLastDump;
     std::string wasmLastError;
@@ -845,9 +845,9 @@ namespace {
     	}
 
     	// 各アクション配列に値を代入
-    	parseActions(eActionsStr, eActions);
-    	parseActions(aActionsStr, aActions);
-    	parseActions(damagesStr, damages);
+    	parseActions(eActionsStr, eActions5);
+    	parseActions(aActionsStr, aActions5);
+    	parseActions(damagesStr, damages5);
 
         return true;
     }
@@ -858,7 +858,7 @@ namespace {
         BattleEmulator::ResetTurnProcessed();
 
     	std::stringstream ss;
-    	if(!SearchRequest(copiedPlayers, seed, aActions, true, ss)){
+    	if(!SearchRequest(copiedPlayers, seed, aActions5, true, ss)){
     		ss << std::endl;
     		ss << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
     		ss << "      **YOU WILL NOW LOSE!**       " << std::endl;
@@ -866,7 +866,7 @@ namespace {
     		ss << std::endl;
 
     		auto turns = 0;
-		    for(int a_action : aActions){
+		    for(int a_action : aActions5){
 			    if(a_action == -1){
 				    break;
 			    }
@@ -878,8 +878,8 @@ namespace {
     		lcg::init(seed);
     		int position = 1;
     		uint64_t nowState = 0;
-    		BattleEmulator::Main(&position, 100, aActions, players, &res, seed, nullptr, nullptr, -1, &nowState);
-    		ss << dumpTable(res, aActions, turns);
+    		BattleEmulator::Main(&position, 100, aActions5, players, &res, seed, nullptr, nullptr, -1, &nowState);
+    		ss << dumpTable(res, aActions5, turns);
     		return ss.str();
     	}
     	std::cout << ss.str();
@@ -906,7 +906,7 @@ EMSCRIPTEN_KEEPALIVE uint64_t wasm_bruteforce_range(int resultIndex, uint64_t st
     foundSeeds = 0;
     FoundSeed = 0;
 
-    BruteForceMainLoop(copiedPlayers, startSeed, endSeed, aActions, damages, eActions);
+    BruteForceMainLoop(copiedPlayers, startSeed, endSeed, aActions5, damages5, eActions5);
     wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
 
     if (foundSeeds == 1) {
