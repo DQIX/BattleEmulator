@@ -34,7 +34,7 @@ uint64_t EnhancedHashCalculator::computeStateHash(const Genome &genome) {
     hash = mixHash(hash, (genome.AllyPlayer.sleeping ? 1ULL : 0ULL) << 47);
     
     // // Buff levels that significantly impact combat
-    hash = mixHash(hash, static_cast<uint64_t>(genome.EnemyPlayer.BuffLevel) << 44);
+    // hash = mixHash(hash, static_cast<uint64_t>(genome.AllyPlayer.BuffLevel) << 44);
     // hash = mixHash(hash, static_cast<uint64_t>(genome.AllyPlayer.AtkBuffLevel) << 40);
     // hash = mixHash(hash, static_cast<uint64_t>(genome.AllyPlayer.TensionLevel) << 36);
     //

@@ -16,6 +16,10 @@
 
 #endif
 
+#if defined(OPTIMIZE_MODE)
+#include "SimpleParameterOptimizer.h"
+#endif
+
 int toint(char *string);
 
 //void processResult(const Player *copiedPlayers, const uint64_t seed, std::string input);
@@ -298,6 +302,17 @@ int main() {
         } // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
     };
 
+#if defined(OPTIMIZE_MODE)
+    int actions1[350] = {};
+    auto counter1 = 0;
+    actions1[counter1++] = BattleEmulator::BUFF;
+    actions1[counter1++] = BattleEmulator::BUFF;
+    actions1[counter1++] = BattleEmulator::PSYCHE_UP_ALLY;
+    actions1[counter1] = -1;
+    SimpleParameterOptimizer::optimize(copiedPlayers, 0x1007, actions1, 100000, counter1);
+    return 0;
+#endif
+
 
 #ifdef DEBUG2
     //THIS DEBUG CODE!
@@ -363,17 +378,13 @@ int main() {
     //for (int i = 0; i < 10; ++i) {
         (*NowState) = BattleEmulator::TYPE_2A;
         (*position1) = 1;
-        std::optional<BattleResult> dummy1;
-        dummy1 = BattleResult();
+        BattleResult dummy1;
         std::memcpy(players1, copiedPlayers, sizeof(players1));
-        BattleEmulator::Main(position1, 30, gene1, players1, dummy1, time1, dummy, dummy, -1, NowState);
+        BattleEmulator::Main(position1, 30, gene1, players1, &dummy1, time1, dummy, dummy, -1, NowState);
 
         std::stringstream ss1;
         ss1 << time1 << " ";
-
-        if (dummy1.has_value()) {
-            std::cout << dumpTable(dummy1.value(), gene1, -1) << std::endl;
-        }
+        std::cout << dumpTable(dummy1, gene1, -1) << std::endl;
     //}
     delete position1;
     delete NowState;
@@ -416,29 +427,26 @@ bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActi
     Genome bestGenome;
     int maxTurns = INT_MAX - 1;
 
-    std::optional<BattleResult> result1;
+    BattleResult result1;
     result1 = BattleResult();
 
-    auto *position = new int(1);
-    auto *nowState = new uint64_t(0);
+    int position = 1;
+    uint64_t nowState = 0;
 
-    auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 200000, gene, 0);
+    auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 20000, gene, 0);
 
     Player players[2];
     players[0] = copiedPlayers[0];
     players[1] = copiedPlayers[1];
 
-    (*position) = 1;
-    (*nowState) = 0;
-    result1->clear();
-    BattleEmulator::Main(position, turns + 100, genome.actions, players, result1, seed, nullptr, nullptr, -1,
-                         nowState);
+    BattleEmulator::Main(&position, turns + 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
+                         &nowState);
 
 
     if (players[0].hp >= 0 && players[1].hp == 0 && players[0].mp >= 0) {
-        if (result1->turn < maxTurns) {
-            maxTurns = result1->turn;
-            bestResult = result1.value();
+        if (result1.turn < maxTurns) {
+            maxTurns = result1.turn;
+            bestResult = result1;
             bestGenome = genome;
         }
     }
@@ -531,7 +539,7 @@ bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActi
 
 
         bool resultBool = BattleEmulator::Main(position, turns, gene, players,
-                                               (optional<BattleResult> &) std::nullopt, seed, eActions, damages,
+                                              nullptr, seed, eActions, damages,
                                                maxElement,
                                                nowState);
         if (resultBool) {

@@ -15,7 +15,7 @@ public:
     static double calculateGCost(const Genome &genome, int action, double preGCost);
     
     // Calculate enhanced h-cost with multiple factors
-    static double calculateHCost(const Genome &genome, double enemyMaxHp, double playerMaxHp);
+    static double calculateHCost(const Genome &genome, double enemyMaxHp, double playerMaxHp, uint64_t NowState);
     
 private:
     // Get action-specific cost modifier

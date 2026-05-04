@@ -45,15 +45,46 @@ add_executable(newDirectory main.cpp
         ActionOptimizer.cpp
         ActionOptimizer.h
         Genome.h
-        ActionBanManager.h
         EnhancedCostCalculator.h
         EnhancedCostCalculator.cpp
         EnhancedHashCalculator.h
         EnhancedHeapQueue.h
         EnhancedHeapQueue.cpp
         EnhancedHashCalculator.cpp
-
+        SimpleParameterOptimizer.cpp
+        SimpleParameterOptimizer.h
+        LinearIdPool.h
 )
+
+
+add_executable(newDirectory_opt main.cpp
+        lcg.cpp
+        lcg.h
+        BattleEmulator.cpp
+        BattleEmulator.h
+        Player.h
+        camera.cpp
+        camera.h
+        debug.cpp
+        debug.h
+        BattleResult.h
+        Equipment.h
+        ActionOptimizer.cpp
+        ActionOptimizer.h
+        Genome.h
+        EnhancedCostCalculator.h
+        EnhancedCostCalculator.cpp
+        EnhancedHashCalculator.h
+        EnhancedHeapQueue.h
+        EnhancedHeapQueue.cpp
+        EnhancedHashCalculator.cpp
+        SimpleParameterOptimizer.cpp
+        SimpleParameterOptimizer.h
+        LinearIdPool.h
+)
+
+target_compile_definitions(newDirectory_opt PRIVATE OPTIMIZE_MODE=1)  # `#define MULTITHREADING` を適用
+
 
 string(TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)
 string(TIMESTAMP BUILD_TIME "%H:%M:%S" UTC)
