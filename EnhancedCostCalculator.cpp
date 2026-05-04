@@ -11,14 +11,11 @@
 
 #include "SimpleParameterOptimizer.h"
 
-double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, double preGCost) {
+double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, double preGCost, uint64_t NowState) {
     // Base cost is turn number (maintains depth-first preference)
     double gCost = preGCost + getActionCost(SimpleParameterOptimizerNode::turnHeignt);
-
-    // Add fine-grained action costs to break ties
-    gCost += getActionCost(action);
-
-    return gCost;
+    uint8_t state = NowState & 0xf;
+    return gCost + getActionCost(200 + action * state);
 }
 
 double EnhancedCostCalculator::calculateHCost(const Genome &genome, double enemyMaxHp, double playerMaxHp, uint64_t NowState) {
@@ -40,20 +37,6 @@ double EnhancedCostCalculator::calculateHCost(const Genome &genome, double enemy
 
     // Status effect penalties/bonuses
     hCost += calculateStatusEffectCost(genome) * getActionCost(SimpleParameterOptimizerNode::StatusEffectWeight);
-
-    uint8_t state = NowState & 0xf;
-    if(state == BattleEmulator::TYPE_2A){
-        hCost += getActionCost(SimpleParameterOptimizerNode::TYPE_2AWeight);
-    }else if(state == BattleEmulator::TYPE_2B){
-        hCost += getActionCost(SimpleParameterOptimizerNode::TYPE_2BWeight);
-    }else if(state == BattleEmulator::TYPE_2C){
-        hCost += getActionCost(SimpleParameterOptimizerNode::TYPE_2CWeight);
-    }else if(state == BattleEmulator::TYPE_2D){
-        hCost += getActionCost(SimpleParameterOptimizerNode::TYPE_2DWeight);
-    }else if(state == BattleEmulator::TYPE_2E){
-        hCost += getActionCost(SimpleParameterOptimizerNode::TYPE_2EWeight);
-    }
-
 
     return hCost;
 }
@@ -100,52 +83,41 @@ double EnhancedCostCalculator::calculateResourceCost(const Genome &genome) {
 #else
 constexpr std::array<double, 201> GENOME = {
     0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 27 */ 9.88917,
+        /* 27 */ 7.31132,
         0.0,0.0,
-        /* 30 */ 3.60465,
-        /* 31 */ 0.576804,
-        /* 32 */ 2.19479,
-        /* 33 */ 0.254891,
-        /* 34 */ -6.27332,    0.0,
-        /* 36 */ 7.39393,
-        /* 37 */ -1.04044,
-        /* 38 */ 4.0962,
-        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 48 */ 1.5655,
+        /* 30 */ 5.49539,
+        0.0,0.0,
+        /* 33 */ 0.191569,
+        /* 34 */ -7.21,    0.0,
+        /* 36 */ 5.34431,
+        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+        /* 49 */ -0.599354,
+        /* 50 */ 5.79251,
         0.0,
-        /* 50 */ 4.10429,
-        0.0,
-        /* 52 */ 8.45207,
-        /* 53 */ 3.98702,
+        /* 52 */ 6.59792,
+        /* 53 */ 2.87158,
         0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 62 */ -4.8271,    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 150 */ 2.96167,
-        /* 151 */ 6.90143,
-        /* 152 */ -11.7555,
-        /* 153 */ 4.44984,
-        /* 154 */ -0.84775,
-        /* 155 */ 4.94577,
-        /* 156 */ 0.361404,
-        /* 157 */ 0.25446,
-        /* 158 */ 1.63997,
-        /* 159 */ 0.78949,
-        /* 160 */ 1.24957,
-        /* 161 */ 9.04731,
-        /* 162 */ 4.84598,
-        /* 163 */ 3.50198,
-        /* 164 */ -0.355148,
-        /* 165 */ 2.39853,
-        /* 166 */ -2.33442,
-        /* 167 */ 1.46917,
-        0.0,
-        /* 169 */ 4.11091,
-        /* 170 */ 0.0985327,
-        /* 171 */ 0.0399625,
-        /* 172 */ 2.26377,
-        /* 173 */ -0.881738,
-        /* 174 */ -4.48033,
-        /* 175 */ 1.58306,
-        /* 176 */ -3.39025,    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+        /* 62 */ -5.07892,    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+        /* 150 */ 3.346,
+        /* 151 */ 8.14256,
+        /* 152 */ -7.75965,
+        /* 153 */ 3.10257,
+        /* 154 */ 0.739992,
+        /* 155 */ 0.710903,
+        /* 156 */ -1.56872,
+        /* 157 */ 0.25156,
+        /* 158 */ -0.130522,
+        /* 159 */ -1.566,
+        /* 160 */ 1.90898,
+        /* 161 */ 7.5152,
+        /* 162 */ 3.61422,
+        /* 163 */ 2.28552,
+        /* 164 */ -0.985291,
+        /* 165 */ 2.3845,
+        /* 166 */ -1.46316,
+        /* 167 */ 0.370212,
+        /* 168 */ 2.18253,
+        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
     };
 double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, double preGCost) {
     // Base cost is turn number (maintains depth-first preference)

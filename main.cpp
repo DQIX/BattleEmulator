@@ -393,7 +393,7 @@ int main() {
 #endif
 
 #ifdef DEBUG3
-    uint64_t time1 = 0x3611D5E47;
+    uint64_t time1 = 0x3611D5E47+4;
 
     auto counter = 0;
     int actions[350] = {0};
@@ -433,7 +433,7 @@ bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActi
     int position = 1;
     uint64_t nowState = 0;
 
-    auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 20000, gene, 0);
+    auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 50000, gene, 0);
 
     Player players[2];
     players[0] = copiedPlayers[0];
