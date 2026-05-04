@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <sstream>
 #include <fstream>
+#include <vector>
 
 #include "lcg.h"
 #include "BattleEmulator.h"
@@ -21,6 +22,34 @@
 #include "SimpleParameterOptimizer.h"
 #endif
 
+const Player copiedPlayers[2] = {
+	// プレイヤー1
+	{
+		309, 309.0, 312, 312, 298, 298, 193, 234, 165, // 最初のメンバー
+		165, false, false, 0, false, 0, -1,
+		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
+		3, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
+		false, -1, 0, -1, 0, false, 1, 1, 1
+	}, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
+
+	// プレイヤー2
+	{
+		4800, 4800.0, 248, 248, 278, 278, 157, 0, 255, // 最初のメンバー
+		255, false, false, 0, false, 0, -1,
+		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
+		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
+		false, -1, 0, -1, 0, false, 0, 0, 0
+	} // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
+};
+
+// 勝利フラグと確定した敵残HPを返す
+struct RunResult {
+	bool win;
+	int enemyHp;   // 使わなくなったが一応残す
+	int turn;
+	int position;
+};
+
 int toint(char* string);
 
 //void processResult(const Player *copiedPlayers, const uint64_t seed, std::string input);
@@ -31,7 +60,7 @@ std::string rtrim(const std::string& s);
 
 std::string trim(const std::string& s);
 
-bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], bool dropbug);
+bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream& ss);
 
 uint64_t BruteForceRequest(const Player copiedPlayers[2], int hours, int minutes, int seconds, int turns,
                            int eActions[350],
@@ -287,25 +316,7 @@ int main(){
 	//https://zenn.dev/reputeless/books/standard-cpp-for-competitive-programming/viewer/library-ios-iomanip#3.1-c-%E8%A8%80%E8%AA%9E%E3%81%AE%E5%85%A5%E5%87%BA%E5%8A%9B%E3%82%B9%E3%83%88%E3%83%AA%E3%83%BC%E3%83%A0%E3%81%A8%E3%81%AE%E5%90%8C%E6%9C%9F%E3%82%92%E7%84%A1%E5%8A%B9%E3%81%AB%E3%81%99%E3%82%8B
 	//std::cin.tie(0)->sync_with_stdio(0);
 
-	const Player copiedPlayers[2] = {
-		// プレイヤー1
-		{
-			309, 309.0, 312, 312, 298, 298, 193, 234, 165, // 最初のメンバー
-			165, false, false, 0, false, 0, -1,
-			// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-			3, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-			false, -1, 0, -1, 0, false, 1, 1, 1
-		}, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 
-		// プレイヤー2
-		{
-			4800, 4800.0, 248, 248, 278, 278, 157, 0, 255, // 最初のメンバー
-			255, false, false, 0, false, 0, -1,
-			// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-			8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-			false, -1, 0, -1, 0, false, 0, 0, 0
-		} // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
-	};
 
 #if defined(OPTIMIZE_MODE)
 	int actions1[350] = {};
@@ -407,7 +418,9 @@ int main(){
 	actions[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
 	actions[counter] = -1;
 
-	SearchRequest(copiedPlayers, time1, actions, false);
+	std::stringstream ss;
+	SearchRequest(copiedPlayers, time1, actions, false, ss);
+	std::cout << ss.str();
 	return 0;
 #endif
 
@@ -415,7 +428,7 @@ int main(){
 	return 0;
 }
 
-bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], bool dropbug){
+bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream &ss){
 	int32_t gene[350] = {0};
 	auto turns = 0;
 	for(int i = 0; i < 350; ++i){
@@ -452,14 +465,6 @@ bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActi
 
 
     BattleResult resultA, resultB, resultC, resultD;
-
-    // 勝利フラグと確定した敵残HPを返す
-	struct RunResult {
-		bool win;
-		int enemyHp;   // 使わなくなったが一応残す
-		int turn;
-		int position;
-	};
 
 	auto runMain = [&](const Genome& g, BattleResult& res) -> RunResult {
 		Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
@@ -507,27 +512,27 @@ bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActi
     tryUpdate(rrC, genomeC, resultC);
     tryUpdate(rrD, genomeD, resultD);
 
-    std::cout << dumpTable(*chosenResult, chosenGenome->actions, 0) << std::endl;
+    ss << dumpTable(*chosenResult, chosenGenome->actions, 0) << std::endl;
 
-    std::cout << "0x" << std::hex << seed << std::dec << ": ";
+    ss << "0x" << std::hex << seed << std::dec << ": ";
 
 	for (auto i = 0; i < 100; ++i) {
 		if (chosenGenome->actions[i] == 0 || chosenGenome->actions[i] == -1) {
 			break;
 		}
-		std::cout << chosenGenome->actions[i] << ", ";
+		ss << chosenGenome->actions[i] << ", ";
 	}
-	std::cout << std::endl;
+	ss << std::endl;
 
 	// --- 各テーブルの結果をログ出力 ---
 	auto printRunResult = [&](const char* label, const RunResult& rr) {
-		std::cout << "[" << label << "] ";
+		ss << "[" << label << "] ";
 		if (rr.win) {
-			std::cout << "Win  turn=" << (rr.turn + 1) << " position=" << rr.position;
+			ss << "Win  turn=" << (rr.turn + 1) << " position=" << rr.position;
 		} else {
-			std::cout << "Lose";
+			ss << "Lose";
 		}
-		std::cout << std::endl;
+		ss << std::endl;
 	};
 	printRunResult("TableA", rrA);
 	printRunResult("TableB", rrB);
@@ -637,6 +642,35 @@ bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActi
 	return 0;
 }
 
+
+void BruteForceMainLoop(const Player copiedPlayers[2], uint64_t start, uint64_t end, int gene[350],
+						int damages[350], int eaction1[350]) {
+	int *position = new int(1);
+	auto *nowState = new uint64_t(0);
+	int maxElement = 350;
+	for (uint64_t seed = start; seed < end; ++seed) {
+		BattleEmulator::resetStartTurn();
+		lcg::init(seed);
+		(*nowState) = 0;
+		(*position) = 1;
+		Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
+
+
+		bool resultBool = BattleEmulator::Main(position, 100, gene, players,
+											  nullptr, seed, eaction1,
+											   damages,
+											   maxElement,
+											   nowState);
+		if (resultBool) {
+			std::cout << seed << std::endl;
+			FoundSeed = seed;
+			foundSeeds++;
+		}
+	}
+	delete position;
+	delete nowState;
+}
+
 // 入力文字列を配列に分割するヘルパー関数
 void parseActions(const std::string& str, int actions[350]){
 	std::istringstream iss(str);
@@ -710,13 +744,15 @@ void mainLoop(const Player copiedPlayers[2]){
 
 			auto seed = BruteForceRequest(copiedPlayers, hours, minutes, seconds, turns, eActions, aActions, damages);
 			if(foundSeeds == 1){
-				if(!SearchRequest(copiedPlayers, seed, aActions, true)){
+				std::stringstream ss2;
+				if(!SearchRequest(copiedPlayers, seed, aActions, true, ss2)){
 					std::cout << std::endl;
 					std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
 					std::cout << "      **YOU WILL NOW LOSE!**       " << std::endl;
 					std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
 					std::cout << std::endl;
 				}
+				std::cout << ss2.str();
 			}
 			continue;
 		}
@@ -765,3 +801,143 @@ std::string rtrim(const std::string& s){
 std::string trim(const std::string& s){
 	return rtrim(ltrim(s));
 }
+
+
+#if defined(MINGW_BUILD)
+#define __EMSCRIPTEN__
+#define EMSCRIPTEN_KEEPALIVE
+#endif
+
+#ifdef __EMSCRIPTEN__
+#if !defined(MINGW_BUILD) && !defined(MSVC_BUILD)
+#include <emscripten/emscripten.h>
+#endif
+namespace {
+    const int MAX = 350;
+    int aActions[MAX] = {0};
+    int damages[MAX] = {0};
+    // aActions[] は味方行動（ホイミ、味方攻撃、麻痺の場合は PARALYSIS）を格納する
+    int eActions[MAX] = {0};
+
+    std::string wasmLastDump;
+    std::string wasmLastError;
+    uint64_t wasmLastTurnProcessed = 0;
+
+    bool buildResultsFromInput(const char *input) {
+        wasmLastError.clear();
+        if (input == nullptr) {
+            wasmLastError = "input is null";
+            return false;
+        }
+
+    	std::stringstream ss2(input);
+
+    	// Read the three action strings separated by '-' delimiters
+    	std::string eActionsStr, aActionsStr, damagesStr;
+    	if(!std::getline(ss2, eActionsStr, '-')){
+    		std::cerr << "Error: failed to read eActions." << std::endl;
+    		return false;
+    	}
+    	if(!std::getline(ss2, aActionsStr, '-')){
+    		std::cerr << "Error: failed to read aActions." << std::endl;
+    		return false;
+    	}
+    	if(!std::getline(ss2, damagesStr, '-')){
+    		std::cerr << "Error: failed to read damages." << std::endl;
+    		return false;
+    	}
+
+    	// 各アクション配列に値を代入
+    	parseActions(eActionsStr, eActions);
+    	parseActions(aActionsStr, aActions);
+    	parseActions(damagesStr, damages);
+
+        return true;
+    }
+
+    std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed, int numThreads, bool dropbug) {
+        lcg::init(seed, true);
+
+        BattleEmulator::ResetTurnProcessed();
+
+    	std::stringstream ss;
+    	if(!SearchRequest(copiedPlayers, seed, aActions, true, ss)){
+    		ss << std::endl;
+    		ss << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
+    		ss << "      **YOU WILL NOW LOSE!**       " << std::endl;
+    		ss << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
+    		ss << std::endl;
+
+    		auto turns = 0;
+		    for(int a_action : aActions){
+			    if(a_action == -1){
+				    break;
+			    }
+		    	turns++;
+		    }
+
+    		BattleResult res;
+    		Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
+    		lcg::init(seed);
+    		int position = 1;
+    		uint64_t nowState = 0;
+    		BattleEmulator::Main(&position, 100, aActions, players, &res, seed, nullptr, nullptr, -1, &nowState);
+    		ss << dumpTable(res, aActions, turns);
+    		return ss.str();
+    	}
+    	std::cout << ss.str();
+        wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
+        return ss.str();
+    }
+}
+
+extern "C" {
+EMSCRIPTEN_KEEPALIVE int wasm_prepare_input(const char *input) {;
+    if (!buildResultsFromInput(input)) {
+        return 0;
+    }
+
+    return 1;
+}
+
+EMSCRIPTEN_KEEPALIVE const char *wasm_get_last_error() {
+    return wasmLastError.c_str();
+}
+
+EMSCRIPTEN_KEEPALIVE uint64_t wasm_bruteforce_range(int resultIndex, uint64_t startSeed, uint64_t endSeed) {
+    BattleEmulator::ResetTurnProcessed();
+    foundSeeds = 0;
+    FoundSeed = 0;
+
+    BruteForceMainLoop(copiedPlayers, startSeed, endSeed, aActions, damages, eActions);
+    wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
+
+    if (foundSeeds == 1) {
+        return FoundSeed;
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE uint64_t wasm_get_turn_processed() {
+    return wasmLastTurnProcessed;
+}
+
+EMSCRIPTEN_KEEPALIVE int wasm_get_found_seeds() {
+    return foundSeeds;
+}
+
+EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed, int numThreads, int dropbug) {
+    BattleEmulator::ResetTurnProcessed();
+    if (resultIndex < 0) {
+        wasmLastError = "invalid result index";
+        wasmLastDump.clear();
+        return wasmLastDump.c_str();
+    }
+
+    wasmLastDump = buildDumpOutput(copiedPlayers, seed, numThreads,
+                                   dropbug != 0);
+    wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
+    return wasmLastDump.c_str();
+}
+}
+#endif

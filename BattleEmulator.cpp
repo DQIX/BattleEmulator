@@ -25,6 +25,33 @@ constexpr double Ally_TensionTable[4] = {1.5, 2.5, 4.0, 6.0};
 constexpr int Ally_TensionLevel = 1 + static_cast<int>(Ally_Level / 10.0);
 constexpr int shieldGuardP = 9; //盾ガード率 9%
 
+
+
+thread_local int threadTurnProcessed = 0;
+thread_local int startTurn = 0;
+
+void BattleEmulator::resetStartTurn() {
+    startTurn = 0;
+}
+
+int BattleEmulator::getStartTurn() {
+    return startTurn;
+}
+
+void BattleEmulator::ResetTurnProcessed() {
+    threadTurnProcessed = 0;
+}
+
+int BattleEmulator::getTurnProcessed() {
+    return threadTurnProcessed;
+}
+
+inline void BattleEmulator::processTurn() {
+    // ここでturnProcessedをインクリメントする処理を追加
+    threadTurnProcessed++;
+}
+
+
 void inline BattleEmulator::resetCombo(uint64_t *NowState) {
     (*NowState) &= ~(0xFFF00000000);
 }
@@ -177,6 +204,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         RunCount++;
     }
     for (int counterJ = startPos; counterJ < RunCount; ++counterJ) {
+        processTurn();
         if (genePosition != -1) {
             genePosition = counterJ - 1;
         }

@@ -107,6 +107,16 @@ public:
 
     static int roundCustom(double value);
 
+	static void ResetTurnProcessed();
+
+	static int getTurnProcessed();
+
+	static void processTurn();
+
+	static void resetStartTurn();
+	static int getStartTurn();
+
+
 private:
     static int ProcessMagicBurst(int *position);
 
