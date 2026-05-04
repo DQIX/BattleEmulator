@@ -14,12 +14,14 @@
 class EnhancedCostCalculator {
 public:
     enum class CostTable {
-        TableA, // 元のGENOME
-        TableB  // 新しいGENOME
+        TableA, // 元のGENOME_A
+        TableB, // GENOME_B
+        TableC  // 新しいGENOME_C
     };
-
+#if !defined(OPTIMIZE_MODE)
     // コストテーブルを切り替える（探索開始前に1回だけ呼ぶ）
     static void setCostTable(CostTable table);
+#endif
 
     // Calculate enhanced g-cost with action-specific costs
     static double calculateGCost(const Genome &genome, int action, double preGCost, uint64_t NoState);
@@ -30,11 +32,14 @@ public:
 private:
     // アクティブなテーブルへのポインタ（切り替えの実体）
     static const double* s_genome;
-
+#if !defined(OPTIMIZE_MODE)
     // Get action-specific cost modifier（インライン化でホットパスを最速に）
     static inline double getActionCost(int action) {
         return (action >= 0 && action < 201) ? s_genome[action] : 0.0;
     }
+#else
+    static double getActionCost(int action);
+#endif
     
     // Calculate status effect penalties/bonuses
     static double calculateStatusEffectCost(const Genome &genome);

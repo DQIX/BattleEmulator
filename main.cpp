@@ -311,9 +311,10 @@ int main(){
 	int actions1[350] = {};
 	auto counter1 = 0;
 	actions1[counter1++] = BattleEmulator::BUFF;
-	actions1[counter1++] = BattleEmulator::BUFF;
+	actions1[counter1++] = BattleEmulator::MAGIC_MIRROR;
+	actions1[counter1++] = BattleEmulator::PSYCHE_UP_ALLY;
 	actions1[counter1] = -1;
-	SimpleParameterOptimizer::optimize(copiedPlayers, 0x1013, actions1, 100000, counter1);
+	SimpleParameterOptimizer::optimize(copiedPlayers, 0x112345, actions1, 100000, counter1);
 	return 0;
 #endif
 
@@ -397,12 +398,12 @@ int main(){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x1000;
+	uint64_t time1 = 0x1003;
 
 	auto counter = 0;
 	int actions[350] = {0};
 	actions[counter++] = BattleEmulator::BUFF;
-	actions[counter++] = BattleEmulator::BUFF;
+	actions[counter++] = BattleEmulator::MAGIC_MIRROR;
 	actions[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
 	actions[counter] = -1;
 
@@ -431,63 +432,84 @@ bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActi
 
 	Genome genomeA, genomeB;
 
-	// --- TableA で探索 ---
-	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableA);
-	genomeA = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
+#if !defined(OPTIMIZE_MODE)
 
-	// --- TableB で探索 ---
-	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableB);
-	genomeB = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
+    // --- TableA で探索 ---
+    EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableA);
+    genomeA = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
 
-	// --- 両方ともBattleEmulator::Mainを実行してresultで比較 ---
-	BattleResult resultA, resultB;
+    // --- TableB で探索 ---
+    EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableB);
+    genomeB = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
 
-	auto runMain = [&](const Genome& g, BattleResult& res) -> bool{
-		Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
-		int position = 1;
-		uint64_t nowState = 0;
-		BattleEmulator::Main(&position, 100, g.actions, players, &res, seed, nullptr, nullptr, -1, &nowState);
-		return players[1].hp <= 0; // 敵HP直接確認
-	};
+    // --- TableC で探索 ---
+    EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableC);
+    Genome genomeC = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
 
-	bool winA = runMain(genomeA, resultA);
-	bool winB = runMain(genomeB, resultB);
+    BattleResult resultA, resultB, resultC;
 
-	const Genome* chosenGenome = nullptr;
-	const BattleResult* chosenResult = nullptr;
+    // 勝利フラグと確定した敵残HPを返す
+    struct RunResult {
+        bool win;
+        int enemyHp;   // 勝利時は0確定だが念のためメモ化
+        int turn;
+    };
 
-	if(!winA && !winB){
-		return false;
-	}
-	if(winA && !winB){
-		chosenGenome = &genomeA;
-		chosenResult = &resultA;
-	}
-	else if(!winA && winB){
-		chosenGenome = &genomeB;
-		chosenResult = &resultB;
-	}
-	else{
-		// 両方勝利：ターン数が少ない方を採用、同じならehpの低い方
-		int lastEhpA = resultA.ehp[resultA.position - 1];
-		int lastEhpB = resultB.ehp[resultB.position - 1];
-		bool useA = (resultA.turn < resultB.turn) ||
-			(resultA.turn == resultB.turn && lastEhpA <= lastEhpB);
-		chosenGenome = useA ? &genomeA : &genomeB;
-		chosenResult = useA ? &resultA : &resultB;
-	}
+    auto runMain = [&](const Genome& g, BattleResult& res) -> RunResult {
+        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
+        int position = 1;
+        uint64_t nowState = 0;
+        BattleEmulator::Main(&position, 100, g.actions, players, &res, seed, nullptr, nullptr, -1, &nowState);
+        bool win = players[1].hp <= 0;
+        return { win, players[1].hp, res.turn };
+    };
 
-	std::cout << dumpTable(*chosenResult, chosenGenome->actions, 0) << std::endl;
+    auto rrA = runMain(genomeA, resultA);
+    auto rrB = runMain(genomeB, resultB);
+    auto rrC = runMain(genomeC, resultC);
 
-	std::cout << "0x" << std::hex << seed << std::dec << ": ";
+    if (!rrA.win && !rrB.win && !rrC.win) {
+        return false;
+    }
 
-	for(auto i = 0; i < 100; ++i){
-		if(chosenGenome->actions[i] == 0 || chosenGenome->actions[i] == -1){
-			break;
-		}
-		std::cout << chosenGenome->actions[i] << ", ";
-	}
-	std::cout << std::endl;
+    // 勝利したもの同士でターン数→敵残HP（メモ化済み）で比較
+    // 負けたものは無条件で除外
+    auto isBetter = [](const RunResult& a, const RunResult& b) -> bool {
+        // 勝ち同士の比較のみ想定（負けは呼び出し側で弾く）
+        if (a.turn != b.turn) return a.turn < b.turn;
+        return a.enemyHp < b.enemyHp;
+    };
+
+    const Genome* chosenGenome = nullptr;
+    const BattleResult* chosenResult = nullptr;
+    const RunResult* chosenRR = nullptr;
+
+    auto tryUpdate = [&](const RunResult& rr, const Genome& g, const BattleResult& r) {
+        if (!rr.win) return;  // 負けは無価値
+        if (chosenRR == nullptr || isBetter(rr, *chosenRR)) {
+            chosenGenome = &g;
+            chosenResult = &r;
+            chosenRR = &rr;
+        }
+    };
+
+    tryUpdate(rrA, genomeA, resultA);
+    tryUpdate(rrB, genomeB, resultB);
+    tryUpdate(rrC, genomeC, resultC);
+
+    std::cout << dumpTable(*chosenResult, chosenGenome->actions, 0) << std::endl;
+
+    std::cout << "0x" << std::hex << seed << std::dec << ": ";
+
+    for (auto i = 0; i < 100; ++i) {
+        if (chosenGenome->actions[i] == 0 || chosenGenome->actions[i] == -1) {
+            break;
+        }
+        std::cout << chosenGenome->actions[i] << ", ";
+    }
+    std::cout << std::endl;
+#endif
+
 	//探索成功
 	return true;
 }
