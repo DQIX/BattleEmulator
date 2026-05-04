@@ -274,6 +274,10 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
 			const Genome currentGenome = Pool.get(currentNode.nodeId);
 
+			if (currentGenome.turn > 50) {
+				continue;
+			}
+
 			if(currentGenome.AllyPlayer.paralysis || currentGenome.AllyPlayer.sleeping){
 				Genome newGenome = currentGenome;
 				newGenome.actions[currentGenome.turn - 1] = BattleEmulator::ATTACK_ALLY;
