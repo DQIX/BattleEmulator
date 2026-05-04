@@ -211,13 +211,54 @@ static uint64_t evaluateGenome(
     return totalFitness;
 }
 
+// --- 遺伝子ダンプ: improvement 時に呼ぶ ---
+static void dumpGenome(const GAGenome &g, uint64_t bestTurn) {
+    constexpr int MAX_ID = 200;
+
+    std::vector<double> tmp(MAX_ID + 1, 0.0);
+    for (size_t i = 0; i < g.genes.size(); ++i) {
+        int id = TUNE_IDS[i];
+        if (id >= 0 && id <= MAX_ID) tmp[id] = g.genes[i];
+    }
+
+    std::cout << "[GA] improvement bestTurn=" << bestTurn << " -> genome dump:\n";
+    std::cout << "constexpr std::array<double, " << (MAX_ID + 1) << "> GENOME = {\n";
+
+    bool prevWasNonZero = false;
+    bool needIndent = false;
+    for (int id = 0; id <= MAX_ID; ++id) {
+        if (tmp[id] != 0.0 && prevWasNonZero) {
+            std::cout << "\n";
+            needIndent = true;
+        }
+        if (tmp[id] != 0.0) {
+            std::cout << "    /* " << id << " */ " << tmp[id];
+        } else {
+            if (needIndent) {
+                std::cout << "    ";
+                needIndent = false;
+            }
+            std::cout << "0.0";
+        }
+        if (id != MAX_ID) std::cout << ",";
+        if (tmp[id] != 0.0) {
+            std::cout << "\n";
+            prevWasNonZero = false;
+            needIndent = true;
+        } else {
+            prevWasNonZero = true;
+        }
+    }
+    std::cout << "\n};\n" << std::endl;
+}
+
 OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t seed,
                                                const int actions[350], int maxTests, int turns)
 {
     initActionCostsIfNeeded();
 
     OptimResult result;
-    result.bestTurn = 9999;
+    result.bestTurn = 9999999;
     result.testCount = 0;
     result.found = false;
 
@@ -256,49 +297,10 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
     // get current start values
 // ===== 変更後 =====
     // GENOME 配列を初期値として使用
-constexpr std::array<double, 201> GENOME = {
-    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 27 */ 7.31132,
-        0.0,0.0,
-        /* 30 */ 5.49539,
-        0.0,0.0,
-        /* 33 */ 0.191569,
-        /* 34 */ -7.21,    0.0,
-        /* 36 */ 5.34431,
-        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 49 */ -0.599354,
-        /* 50 */ 5.79251,
-        0.0,
-        /* 52 */ 6.59792,
-        /* 53 */ 2.87158,
-        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 62 */ -5.07892,    0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 150 */ 3.346,
-        /* 151 */ 8.14256,
-        /* 152 */ -7.75965,
-        /* 153 */ 3.10257,
-        /* 154 */ 0.739992,
-        /* 155 */ 0.710903,
-        /* 156 */ -1.56872,
-        /* 157 */ 0.25156,
-        /* 158 */ -0.130522,
-        /* 159 */ -1.566,
-        /* 160 */ 1.90898,
-        /* 161 */ 7.5152,
-        /* 162 */ 3.61422,
-        /* 163 */ 2.28552,
-        /* 164 */ -0.985291,
-        /* 165 */ 2.3845,
-        /* 166 */ -1.46316,
-        /* 167 */ 0.370212,
-        /* 168 */ 2.18253,
-        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
-    };
     std::vector<double> startVals(geneCount);
     for (size_t i = 0; i < geneCount; ++i) {
         int aid = TUNE_IDS[i];
-        // GENOME のインデックス範囲内なら GENOME から、外れたら DEFAULT_ACTION_COST にフォールバック
-        startVals[i] = (aid >= 0 && aid < static_cast<int>(GENOME.size())) ? GENOME[aid] : DEFAULT_ACTION_COST;
+        startVals[i] = (aid >= 0 && aid < MAX_ACTION_ID) ? s_actionCosts[aid] : DEFAULT_ACTION_COST;
     }
 
     std::normal_distribution<double> normDist(0.0, DEFAULT_STEP * 5.0);
@@ -331,49 +333,6 @@ constexpr std::array<double, 201> GENOME = {
             std::cout << "[GA] evalSeeds changed" << std::endl;
         }
         */
-
-        constexpr int MAX_ID = 200;
-
-        std::vector<double> tmp(MAX_ID + 1, 0.0);
-
-        // id → 値 を埋める
-        for (size_t i = 0; i < population[0].genes.size(); ++i) {
-            int id = TUNE_IDS[i];
-            tmp[id] = population[0].genes[i];
-        }
-
-        // constexpr 配列リテラルとして出力
-        std::cout << "constexpr std::array<double, " << (MAX_ID + 1)
-                  << "> GENOME = {" << std::endl;
-
-        auto flag = false;
-        auto flag1 = false;
-        for (int id = 0; id <= MAX_ID; ++id) {
-            if (tmp[id] != 0.0 && flag) {
-                std::cout << "\n";
-                flag1 = true;
-            }
-            if (tmp[id] != 0.0) {
-                std::cout << "    /* " << id << " */ " << tmp[id];
-            } else {
-                if (flag1) {
-                    std::cout << "    ";
-                    flag1 = false;
-                }
-                std::cout << "0.0";
-            }
-            if (id != MAX_ID)
-                std::cout << ",";
-            if (tmp[id] > 0.0) {
-                std::cout << "\n";
-                flag = false;
-                flag1 = true;
-            } else {
-                flag = true;
-            }
-        }
-
-        std::cout << "\n};" << std::endl;
 
         // --- ここから並列評価ブロック ---
         // 未評価 index を収集（予算も考慮）
@@ -437,8 +396,7 @@ constexpr std::array<double, 201> GENOME = {
                     if (r.measuredTurns < result.bestTurn) {
                         result.bestTurn = r.measuredTurns;
                         result.found = true;
-                        std::cout << "[GA] improvement -> bestTurn=" << result.bestTurn << std::endl;
-                        std::cout << std::endl;
+                        dumpGenome(population[r.index], result.bestTurn);
                     }
 
                     if (evaluations >= maxEvaluations) break;
