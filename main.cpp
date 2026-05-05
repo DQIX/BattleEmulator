@@ -22,6 +22,8 @@
 #include "SimpleParameterOptimizer.h"
 #endif
 
+thread_local int startturn = 0;
+
 const Player copiedPlayers[2] = {
 	// プレイヤー1
 	{
@@ -529,30 +531,27 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 
 void BruteForceMainLoop(const Player copiedPlayers[2], uint64_t start, uint64_t end, int gene[350],
 						int damages[350], int eaction1[350]) {
-	int *position = new int(1);
-	auto *nowState = new uint64_t(0);
 	int maxElement = 350;
 	for (uint64_t seed = start; seed < end; ++seed) {
 		BattleEmulator::resetStartTurn();
 		lcg::init(seed);
-		(*nowState) = 0;
-		(*position) = 1;
+		int position = 1;
+		uint64_t nowState = 0;
 		Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
 
 
-		bool resultBool = BattleEmulator::Main(position, 100, gene, players,
+		bool resultBool = BattleEmulator::Main(&position, 100, gene, players,
 											  nullptr, seed, eaction1,
 											   damages,
 											   maxElement,
-											   nowState);
+											   &nowState);
 		if (resultBool) {
 			std::cout << seed << std::endl;
 			FoundSeed = seed;
 			foundSeeds++;
+			startturn = BattleEmulator::getStartTurn();
 		}
 	}
-	delete position;
-	delete nowState;
 }
 
 // 入力文字列を配列に分割するヘルパー関数
@@ -700,7 +699,6 @@ namespace {
     int damages5[MAX] = {0};
     // aActions[] は味方行動（ホイミ、味方攻撃、麻痺の場合は PARALYSIS）を格納する
     int eActions5[MAX] = {0};
-	int startturn = 0;
 
     std::string wasmLastDump;
     std::string wasmLastError;
@@ -794,7 +792,7 @@ EMSCRIPTEN_KEEPALIVE uint64_t wasm_bruteforce_range(int resultIndex, uint64_t st
 
     BruteForceMainLoop(copiedPlayers, startSeed, endSeed, aActions5, damages5, eActions5);
     wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
-	startturn = BattleEmulator::getStartTurn();
+
 
     if (foundSeeds == 1) {
         return FoundSeed;
