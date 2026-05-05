@@ -8,19 +8,26 @@
 - For RTA Players
 
 ## Disclaimer
+
 This project does not distribute or include any copyrighted game data.<br>
 Our battle emulator is designed to avoid including any copyrighted data.<br>
-The terms and conditions for avoiding conflicts on the Battle Emulator can be [viewed here](https://www.dropbox.com/scl/fi/ljf4ij06fux9s2527dnyp/DQ9_BattleEmu_Readme.txt?rlkey=o5xmzegriye8krmni3ma7zg82&st=1x0aowuh&dl=0) (Japanese)
-
+The terms and conditions for avoiding conflicts on the Battle Emulator can
+be [viewed here](https://www.dropbox.com/scl/fi/ljf4ij06fux9s2527dnyp/DQ9_BattleEmu_Readme.txt?rlkey=o5xmzegriye8krmni3ma7zg82&st=1x0aowuh&dl=0) (
+Japanese)
 
 ## What is our goal?
-Our goal is to create a fully debugged battle emulator with many story bosses, and we will continue to move forward with this goal.  
-Our team dedicates significant time to debugging to ensure the battle emulator perfectly matches actual gameplay on the hardware.　　
+
+Our goal is to create a fully debugged battle emulator with many story bosses, and we will continue to move forward with
+this goal.  
+Our team dedicates significant time to debugging to ensure the battle emulator perfectly matches actual gameplay on the
+hardware.
 
 ## RTA chart and input method for argument parser
+
 https://note.com/zeppeki0711/n/neac461916cc8
 
 # Quick Start
+
 ## Try Online!
 
 Run the battle emulator on your CPU in your browser!<br>
@@ -44,7 +51,9 @@ Run the battle emulator on your CPU in your browser!<br>
 5. Enjoy!
 
 ## Contribution
+
 ### What you need
+
 - JetBrains Clion(Free!) or virtual studio code 2026 c++ mode
 - DeSmuME Nightly with Lua scripting
 - [lua51.dll](https://sourceforge.net/projects/luabinaries/files/5.1.5/Tools%20Executables/lua-5.1.5_Win64_bin.zip/download)
@@ -54,37 +63,38 @@ Run the battle emulator on your CPU in your browser!<br>
 - DQ9 Japanese ROM
 - Boss Save Data
 
-Interested in contributing? Hit us up on Twitter!  
+Interested in contributing? Hit us up on Twitter!
 
 https://x.com/Daisuke76897125
 
 ## branches
-This repository manages the battle emulator in branches<br>
-Note that v6 🔍⚡ is better than v7 💥🐎 and abandons    
-  
-|                                              Branch                                              |              Bosses               | Target                                                                                                               　       | Optimizer |
-|:------------------------------------------------------------------------------------------------:|:---------------------------------:|------------------------------------------------------------------------------------------------------------------------------|-----------|
-|    [reokonn_lv8_new_arugo](https://github.com/DQIX/BattleEmulator/tree/reokonn_lv8_new_arugo)    |           Wight Knight            | [Minstrel lv8](https://github.com/DQIX/BattleEmulator/blob/reokonn_lv8_new_arugo/image/reokonn_lv8_v3.png)                   | v6 🔍⚡    |
-| [reokonn_lv8_new_arugo_v2](https://github.com/DQIX/BattleEmulator/tree/reokonn_lv8_new_arugo_v2) |           Wight Knight            | [Minstrel lv8](https://github.com/DQIX/BattleEmulator/blob/reokonn_lv8_new_arugo_v2/image/reokonn_lv8_v3.png)                | v7 💥🐎   |
-|     [yo2_lv5_algorithm_v4](https://github.com/DQIX/BattleEmulator/tree/yo2_lv5_algorithm_v4)     |               Morag               | [Minstrel lv10](https://github.com/DQIX/BattleEmulator/blob/yo2_lv5_algorithm_v4/image/isilyudaru_lv10.png)                  | v6 🔍⚡    |
-|     [yo2_lv5_algorithm_v2](https://github.com/DQIX/BattleEmulator/tree/yo2_lv5_new_arugo_v2)     |               Morag               | [Minstrel lv10](https://github.com/DQIX/BattleEmulator/blob/yo2_lv5_new_arugo_v2/image/isilyudaru_lv10.png)                  | v7 💥🐎   |
-|       [bilyouma_new_arugo](https://github.com/DQIX/BattleEmulator/tree/bilyouma_new_arugo)       |         Ragin' Contagion          | [Minstrel lv15 sp22](https://github.com/DQIX/BattleEmulator/blob/bilyouma_new_arugo/image/bilyouma_metaru1_lv15_sp22.png)    | v6 🔍⚡    |
-|    [bilyouma_new_arugo_v2](https://github.com/DQIX/BattleEmulator/tree/bilyouma_new_arugo_v2)    |         Ragin' Contagion          | [Minstrel lv15 sp22](https://github.com/DQIX/BattleEmulator/blob/bilyouma_new_arugo_v2/image/bilyouma_metaru1_lv15_sp22.png) | v7 💥🐎   |
-|      [zilyadama_new_arugo](https://github.com/DQIX/BattleEmulator/tree/zilyadama_new_arugo)      |          Master of Nu'un          | lv16_sp22_tamahagane_atk123_def86 or lv16_sp22_tamahagane_atk123_def86                                                       | v6 🔍⚡    |
-|   [nusisama1_v2_new_arugo](https://github.com/DQIX/BattleEmulator/tree/nusisama1_v2_new_arugo)   |            Lleviathan             | lv17_sp22_tamahane_atk125_def93 or lv17_sp22_hagane_atk108_def93                                                             | v6 🔍⚡    |
-|                   [zuo_v2](https://github.com/DQIX/BattleEmulator/tree/zuo_v2)                   |             Tyrantula             | n/a                                                                                                                          | v2 🦍     |
-|                    [anonn](https://github.com/DQIX/BattleEmulator/tree/anonn)                    |           Grand Lizzier           | n/a                                                                                                                          | v2 🦍     |
-|                 [erugiosu](https://github.com/DQIX/BattleEmulator/tree/erugiosu)                 |              Corvus               | n/a                                                                                                                          | v2 🦍     |
 
+This repository manages the battle emulator in branches<br>
+Note that v6 🔍⚡ is better than v7 💥🐎 and abandons
+
+|                                              Branch                                              |      Bosses      | Target                                                                                                               　       | Optimizer |
+|:------------------------------------------------------------------------------------------------:|:----------------:|------------------------------------------------------------------------------------------------------------------------------|-----------|
+|    [reokonn_lv8_new_arugo](https://github.com/DQIX/BattleEmulator/tree/reokonn_lv8_new_arugo)    |   Wight Knight   | [Minstrel lv8](https://github.com/DQIX/BattleEmulator/blob/reokonn_lv8_new_arugo/image/reokonn_lv8_v3.png)                   | v6 🔍🕛   |
+| [reokonn_lv8_new_arugo_v2](https://github.com/DQIX/BattleEmulator/tree/reokonn_lv8_new_arugo_v2) |   Wight Knight   | [Minstrel lv8](https://github.com/DQIX/BattleEmulator/blob/reokonn_lv8_new_arugo_v2/image/reokonn_lv8_v3.png)                | v7 💥🐎   |
+|     [yo2_lv5_algorithm_v4](https://github.com/DQIX/BattleEmulator/tree/yo2_lv5_algorithm_v4)     |      Morag       | [Minstrel lv10](https://github.com/DQIX/BattleEmulator/blob/yo2_lv5_algorithm_v4/image/isilyudaru_lv10.png)                  | v6 🔍🕛   |
+|     [yo2_lv5_algorithm_v2](https://github.com/DQIX/BattleEmulator/tree/yo2_lv5_new_arugo_v2)     |      Morag       | [Minstrel lv10](https://github.com/DQIX/BattleEmulator/blob/yo2_lv5_new_arugo_v2/image/isilyudaru_lv10.png)                  | v7 💥🐎   |
+|       [bilyouma_new_arugo](https://github.com/DQIX/BattleEmulator/tree/bilyouma_new_arugo)       | Ragin' Contagion | [Minstrel lv15 sp22](https://github.com/DQIX/BattleEmulator/blob/bilyouma_new_arugo/image/bilyouma_metaru1_lv15_sp22.png)    | v6 🔍⚡    |
+|    [bilyouma_new_arugo_v2](https://github.com/DQIX/BattleEmulator/tree/bilyouma_new_arugo_v2)    | Ragin' Contagion | [Minstrel lv15 sp22](https://github.com/DQIX/BattleEmulator/blob/bilyouma_new_arugo_v2/image/bilyouma_metaru1_lv15_sp22.png) | v7 💥🐎   |
+|      [zilyadama_new_arugo](https://github.com/DQIX/BattleEmulator/tree/zilyadama_new_arugo)      | Master of Nu'un  | lv16_sp22_tamahagane_atk123_def86 or lv16_sp22_tamahagane_atk123_def86                                                       | v6 🔍⚡    |
+|   [nusisama1_v2_new_arugo](https://github.com/DQIX/BattleEmulator/tree/nusisama1_v2_new_arugo)   |    Lleviathan    | lv17_sp22_tamahane_atk125_def93 or lv17_sp22_hagane_atk108_def93                                                             | v6 🔍⚡    |
+|         [zuo_v2_new_arugo](https://github.com/DQIX/BattleEmulator/tree/zuo_v2_new_arugo)         |    Tyrantula     | n/a                                                                                                                          | v6 🔍⚡    |
+|          [anonn_new_arugo](https://github.com/DQIX/BattleEmulator/tree/anonn_new_arugo)          |  Grand Lizzier   | n/a                                                                                                                          | v6 🔍⚡    |
+|       [erugiosu_new_arugo](https://github.com/DQIX/BattleEmulator/tree/erugiosu_new_arugo)       |      Corvus      | n/a                                                                                                                          | v6 🔍⚡    |
 
 ## Optimization Algorithms
 
-|    ver    |       used        | description                                                                           |
-|:---------:|:-----------------:|---------------------------------------------------------------------------------------|
-|   v2 🦍   | Best-first search | Used by Corvus for compatibility with older battle emulators                          |
-|   v4 🔍   |   A* algorithm    | Much better than v2. Maintenance costs are quite high when porting. Maximum 2 million |
-|  v6 🔍⚡   |   A* algorithm+   | A* algorithm with reduced maintenance costs                                           |
-|  v7 💥🐎  | Brute force+beam  | 5-turn brute force-based + beam search algorithm. Discontinued because it lost to v6. |
+|   ver   |       used        | description                                                                           |
+|:-------:|:-----------------:|---------------------------------------------------------------------------------------|
+|  v2 🦍  | Best-first search | Used by Corvus for compatibility with older battle emulators                          |
+|  v4 🔍  |   A* algorithm    | Much better than v2. Maintenance costs are quite high when porting. Maximum 2 million |
+| v6 🔍🕛 |   A* algorithm+   | Legacy v6                                                                             |
+| v6 🔍⚡  |   A* algorithm+   | A* algorithm with reduced maintenance costs                                           |
+| v7 💥🐎 | Brute force+beam  | 5-turn brute force-based + beam search algorithm. Discontinued because it lost to v6. |
 
 ## Benchmark
 
@@ -112,60 +122,76 @@ Note that v6 🔍⚡ is better than v7 💥🐎 and abandons
 | nusisama1_v2_new_arugo |   Lleviathan    |       193.32       |    3,076.08     |         292.21          |       3,846.15       |
 
 ## Known Issues
+
 ### The random number scaling in the Battle Emulator is not mathematically exact.
 
 The Battle Emulator scales the random value using the following integer-based formula for performance reasons:
+
 ```math
 $$
 ((\text{seed} \gg 32) \cdot \text{max}) \gg 32
 $$
 
 ```
-The mathematically ideal form would be:  
+
+The mathematically ideal form would be:
+
 ```math
 $$
 ((\text{seed} \gg 32) / 4294967295) \cdot \text{max}
 $$
 ```
+
 Because the implementation uses integer shifting instead of exact division,  
 a small quantization error occurs. The maximum deviation is less than $`1 / 2^{32}`$.  
-This is because the implementation effectively divides by $`2^{32}`$ instead of $`2^{32} - 1`$.  
-   
-For consistency reasons, the constant $`2^{32}`$ is also used in other random number calculations.  
+This is because the implementation effectively divides by $`2^{32}`$ instead of $`2^{32} - 1`$.
+
+For consistency reasons, the constant $`2^{32}`$ is also used in other random number calculations.
 
 ### There is no standard for version matching between battle emulators
 
-Battle emulators are effectively snapshots of the latest implementation at the time of development, and there is no mechanism to automatically synchronize versions.  
+Battle emulators are effectively snapshots of the latest implementation at the time of development, and there is no
+mechanism to automatically synchronize versions.
 
-For example, [erugiosu](https://github.com/DQIX/BattleEmulator/tree/erugiosu) is significantly outdated and does not support the latest algorithms. Even within the _new_arugo series, multiple internal versions exist.  
+For example, [erugiosu](https://github.com/DQIX/BattleEmulator/tree/erugiosu) is significantly outdated and does not
+support the latest algorithms. Even within the _new_arugo series, multiple internal versions exist.
 
-In general, newer versions tend to have improved processing speed and more refined algorithms. When the gap between versions becomes too large, a reimplementation is sometimes performed to bridge the differences between versions.  
+In general, newer versions tend to have improved processing speed and more refined algorithms. When the gap between
+versions becomes too large, a reimplementation is sometimes performed to bridge the differences between versions.
 
 ## help wanted
+
 - [ ] An algorithm that always outputs the optimal solution without using heuristics
 - [ ] Accurate implementation of more story boss battle emulators
 - [ ] Those who can spare a lot of time and manpower for debugging
 
 ## Q&A
+
 ### What regions does Battle Emulator target?
+
 Targeted and tested only in JP
 
 ### Why is this free and open source?
-It's available for free thanks to volunteers who have dedicated significant amounts of their personal time and money to making the Battle Emulator accurate
+
+It's available for free thanks to volunteers who have dedicated significant amounts of their personal time and money to
+making the Battle Emulator accurate
 
 ### Why c++?
+
 C++ was chosen because it is the fastest language and allows for highly optimized algorithms<br>
 It is thanks to C++ that the brute force can be completed in 1 seconds<br>
 
 ### How can you manage a 48-bit brute force in 1 second?
+
 The initial seed of the C table in DQ9 is based on a timer that starts when the game launches.<br>  
 This results in $`2^{48}`$ possible combinations, and it increments approximately 520,000 times per second.<br>
 The 48-bit counter is structured as follows:<br>
+
 - The lower 16 bits come from CPU Timer 1.<br>
 - The upper 32 bits come from a software timer.<br>
-The upper 32-bit software timer increases about 7.920 times per second in practice.<br>
-However, for simplicity, this can be approximated as exactly 8.0000 increments per second:<br>
-<br>
+  The upper 32-bit software timer increases about 7.920 times per second in practice.<br>
+  However, for simplicity, this can be approximated as exactly 8.0000 increments per second:<br>
+  <br>
 
 ```math
 \frac{1}{8.0000} = 0.125
@@ -182,6 +208,7 @@ Using the idealized value:<br>
 ```math
 8.0000 \times 2^{16} = 524{,}288
 ```
+
 <br>
 Using the observed value:<br>
 <br>
@@ -189,6 +216,7 @@ Using the observed value:<br>
 ```math
 7.920 \times 2^{16} = 519{,}045.12
 ```
+
 <br>
 Both results are close to the previously mentioned figure of roughly 520,000 increments per second.<br>
 <br>
@@ -198,6 +226,7 @@ Under the simplified 8.0000 assumption, the approximate current seed can therefo
 ```math
 \left\lfloor \text{totalSeconds} \times (8.0000 \times 2^{16}) \right\rfloor
 ```
+
 <br>
 or equivalently:<br>
 <br>
@@ -205,50 +234,73 @@ or equivalently:<br>
 ```math
 \left\lfloor \text{totalSeconds} \times 524{,}288 \right\rfloor
 ```
+
 <br>
 This approximation makes the constant 0.125 a clean reciprocal representation of the upper timer frequency, while 7.920 represents the empirically observed effective rate in real conditions.<br>
 
 ### Why is brute force used to identify the seed?
+
 As explained above, this repository uses brute force with early exits to identify the seed efficiently.  
-The RNG table is based on a 64-bit LCG, which makes approaches such as rainbow tables impractical. Sequential storage access would become a bottleneck, and any bug fix or implementation change would require rebuilding the entire table. This results in poor maintainability and inefficient workflows.  
-In addition, there are approximately 519,045 possible seed candidates per second. If these were quantized into lookup tables matched against damage values, the required storage size would easily reach the terabyte range.  
-Because modern CPUs can process brute force searches extremely quickly, direct enumeration with aggressive early termination is currently the most practical, maintainable, and fastest solution.  
+The RNG table is based on a 64-bit LCG, which makes approaches such as rainbow tables impractical. Sequential storage
+access would become a bottleneck, and any bug fix or implementation change would require rebuilding the entire table.
+This results in poor maintainability and inefficient workflows.  
+In addition, there are approximately 519,045 possible seed candidates per second. If these were quantized into lookup
+tables matched against damage values, the required storage size would easily reach the terabyte range.  
+Because modern CPUs can process brute force searches extremely quickly, direct enumeration with aggressive early
+termination is currently the most practical, maintainable, and fastest solution.
 
 ### Why is the searcher algorithm so slow?
-The Battle Emulator can execute 13 to 17 million times per second, but the v4 and v6 searcher algorithms are based on a very slow priority queue.<br>
-Even with optimizations such as malloc and fixed memory allocation using LinearIdPool.h, which is present in some of the source code, the extremely slow speed cannot be overcome.<br>
-In v7, the search algorithm switched to brute force, allowing it to achieve 17 million turns per second, but since it used heuristics it could not exceed A*(v6), so it was abandoned.<br>
+
+The Battle Emulator can execute 13 to 17 million times per second, but the v4 and v6 searcher algorithms are based on a
+very slow priority queue.<br>
+Even with optimizations such as malloc and fixed memory allocation using LinearIdPool.h, which is present in some of the
+source code, the extremely slow speed cannot be overcome.<br>
+In v7, the search algorithm switched to brute force, allowing it to achieve 17 million turns per second, but since it
+used heuristics it could not exceed A*(v6), so it was abandoned.<br>
 
 ### Why does the API for each battle emulator differ?
-The Battle Emulator started out in an incomplete state, gradually incorporating various techniques and ergonomic APIs, and since it's not possible to deploy ideas to each branch at the same time, differences in implementation arise.<br>
+
+The Battle Emulator started out in an incomplete state, gradually incorporating various techniques and ergonomic APIs,
+and since it's not possible to deploy ideas to each branch at the same time, differences in implementation arise.<br>
 
 ### Why one boss per branch?
-Although many battle mechanics are shared and could technically be combined into a single executable, doing so would require externalizing a large number of battle-dependent parameters. A fully generalized and complete decompilation of the battle system would significantly increase code size and blur the separation between the emulator and the original game logic.<br>
-By isolating one boss per branch, each boss can maintain its own constexpr values, constants, action selection logic, and argument parser independently. Each branch effectively becomes a self-contained black box.<br>
-This separation greatly simplifies maintenance, reduces unintended cross-effects between bosses, and allows boss-specific optimizations without increasing overall structural complexity.<br>
-The emulator focuses strictly on precise RNG position tracking and damage calculation. By ignoring unrelated game systems, it preserves both compactness and execution speed.<br>
+
+Although many battle mechanics are shared and could technically be combined into a single executable, doing so would
+require externalizing a large number of battle-dependent parameters. A fully generalized and complete decompilation of
+the battle system would significantly increase code size and blur the separation between the emulator and the original
+game logic.<br>
+By isolating one boss per branch, each boss can maintain its own constexpr values, constants, action selection logic,
+and argument parser independently. Each branch effectively becomes a self-contained black box.<br>
+This separation greatly simplifies maintenance, reduces unintended cross-effects between bosses, and allows
+boss-specific optimizations without increasing overall structural complexity.<br>
+The emulator focuses strictly on precise RNG position tracking and damage calculation. By ignoring unrelated game
+systems, it preserves both compactness and execution speed.<br>
 
 ### Why not use machine learning?
 
-Machine learning is mainly useful when you need to make good decisions without knowing the future.  
+Machine learning is mainly useful when you need to make good decisions without knowing the future.
 
-That is not the case here. In this project, future outcomes can be simulated exactly, so the problem is better treated as combinatorial optimization: searching a huge number of possible action sequences and finding the fastest winning route. Because the future is known through simulation, search algorithms are a much better fit than machine learning.  
+That is not the case here. In this project, future outcomes can be simulated exactly, so the problem is better treated
+as combinatorial optimization: searching a huge number of possible action sequences and finding the fastest winning
+route. Because the future is known through simulation, search algorithms are a much better fit than machine learning.
 
 ### Why not use beam search?
 
-Beam search throws away branches early to keep the search fast. That sounds good, but it can remove paths that look weak now and become very strong later, such as routes that depend on future critical hits or favorable RNG swings.  
+Beam search throws away branches early to keep the search fast. That sounds good, but it can remove paths that look weak
+now and become very strong later, such as routes that depend on future critical hits or favorable RNG swings.
 
-Because of this, beam search could not outperform A* in practice, so it is not used.  
+Because of this, beam search could not outperform A* in practice, so it is not used.
 
 ### Why not use memory reading on real hardware?
 
-Because it would be cheating.  
+Because it would be cheating.
 
 ### Why use C++ instead of Rust or C?
- 
-Because the project owner knows C++ best.  
 
-It also provides the speed and low-level control needed for heavy optimization, so it was the practical choice for development.  
+Because the project owner knows C++ best.
+
+It also provides the speed and low-level control needed for heavy optimization, so it was the practical choice for
+development.
 
 ## Glossary
 
@@ -257,6 +309,7 @@ It also provides the speed and low-level control needed for heavy optimization, 
 https://en.wikipedia.org/wiki/Linear_congruential_generator
 
 ### CTable
+
 This is the third random number in the game and shares processing with the second random number, table B
 The update formula looks like this:
 
@@ -265,5 +318,7 @@ The update formula looks like this:
 ```
 
 ## Official image rules for this repository
-> このページで利用している株式会社スクウェア・エニックスを代表とする共同著作者が権利を所有する画像の転載・配布は禁止いたします。  
+
+>
+このページで利用している株式会社スクウェア・エニックスを代表とする共同著作者が権利を所有する画像の転載・配布は禁止いたします。
 > © 2009 ARMOR PROJECT/BIRD STUDIO/LEVEL-5/SQUARE ENIX All Rights Reserved.  
