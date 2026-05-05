@@ -146,6 +146,14 @@ function formatFractionDigits(value) {
     return String(value).padStart(4, "0");
 }
 
+function formatMemoFractionDigits(value) {
+    const digits = normalizeFractionDigits(value);
+    if (digits === null || digits === 0) {
+        return "0";
+    }
+    return formatFractionDigits(digits);
+}
+
 function formatSearchRangeSeconds(value) {
     if (!Number.isFinite(value)) {
         return String(DEFAULT_SEARCH_RANGE_SECONDS);
@@ -197,11 +205,9 @@ function updateAutoTimerFractionVisibility() {
     if (!ui.autoTimerFractionField) {
         return;
     }
-    const digits = getAutoTimerFractionDigits();
-    const hidden = digits === null || digits === 0;
-    ui.autoTimerFractionField.classList.toggle("is-hidden", hidden);
+    ui.autoTimerFractionField.classList.remove("is-hidden");
     if (ui.autoTimerFractionInput) {
-        ui.autoTimerFractionInput.disabled = hidden;
+        ui.autoTimerFractionInput.disabled = false;
     }
 }
 
@@ -210,16 +216,13 @@ function setAutoTimerFractionDigits(value, timeText = "") {
         return;
     }
     const digits = normalizeFractionDigits(value);
-    ui.autoTimerFractionInput.value = digits === null ? "" : formatFractionDigits(digits);
+    ui.autoTimerFractionInput.value = digits === null || digits === 0 ? "" : formatFractionDigits(digits);
     state.autoTimerFractionSourceTimeText = digits === null || digits === 0 ? "" : timeText;
     updateAutoTimerFractionVisibility();
 }
 
 function restartAutoTimerFractionHideTimer() {
     clearAutoTimerFractionHideTimer();
-    state.autoTimerFractionHideHandle = setTimeout(() => {
-        setAutoTimerFractionDigits(null, "");
-    }, AUTO_TIMER_FRACTION_HIDE_DELAY_MS);
 }
 
 function extractInputTimeText(text) {
@@ -255,6 +258,39 @@ function formatRealTimeDisplay(savedAt) {
     return `${formatDatePartsUTC(base)} UTC`;
 }
 
+function findMemoFractionDigitsForInput(inputText) {
+    const normalizedInput = String(inputText || "").trim();
+    const timeText = extractInputTimeText(normalizedInput);
+    if (!timeText || !state.memoList.length) {
+        return null;
+    }
+    const entry = state.memoList.find((item) => item.input === normalizedInput) ||
+        state.memoList.find((item) => item.timeText === timeText);
+    if (!entry) {
+        return null;
+    }
+    const digits = normalizeFractionDigits(entry.fractionDigits);
+    return digits === null ? 0 : digits;
+}
+
+function restoreAutoTimerFractionForInput(inputText) {
+    const timeText = extractInputTimeText(inputText);
+    if (!timeText) {
+        setAutoTimerFractionDigits(null, "");
+        return;
+    }
+    const currentDigits = getAutoTimerFractionDigits();
+    if (state.autoTimerFractionSourceTimeText === timeText && currentDigits !== null) {
+        return;
+    }
+    const digits = findMemoFractionDigitsForInput(inputText);
+    if (digits !== null && digits > 0) {
+        setAutoTimerFractionDigits(digits, timeText);
+        return;
+    }
+    setAutoTimerFractionDigits(null, "");
+}
+
 async function hashStringSHA256(text) {
     const data = new TextEncoder().encode(text);
     const buf = await crypto.subtle.digest("SHA-256", data);
@@ -284,6 +320,7 @@ async function buildMemoFingerprint(entry) {
     const payload = {
         input: entry.input,
         timeText: entry.timeText,
+        fractionDigits: entry.fractionDigits || 0,
         driftText: entry.driftText || "",
         offsetSeconds: entry.offsetSeconds,
         searchRangeSeconds: entry.searchRangeSeconds
@@ -298,6 +335,9 @@ function buildOverrideUrl(entry) {
     url.searchParams.set("offset", String(entry.offsetSeconds));
     url.searchParams.set("range", String(entry.searchRangeSeconds));
     url.searchParams.set("input", entry.input);
+    if (entry.fractionDigits > 0) {
+        url.searchParams.set("fraction", String(entry.fractionDigits));
+    }
     return url.toString();
 }
 
@@ -355,11 +395,15 @@ function renderSeedMemos(list) {
 
     list.forEach((entry) => {
         entry.memo = entry.memo || "";
+        entry.fractionDigits = normalizeFractionDigits(entry.fractionDigits) || 0;
         const row = document.createElement("tr");
         row.className = "memo-row";
 
         const cellTime = document.createElement("td");
         cellTime.textContent = entry.timeText;
+
+        const cellFraction = document.createElement("td");
+        cellFraction.textContent = formatMemoFractionDigits(entry.fractionDigits);
 
         const cellRealTime = document.createElement("td");
         cellRealTime.textContent = formatRealTimeDisplay(entry.savedAt);
@@ -406,6 +450,7 @@ function renderSeedMemos(list) {
         cellUrl.appendChild(copyUrl);
 
         row.appendChild(cellTime);
+        row.appendChild(cellFraction);
         row.appendChild(cellRealTime);
         row.appendChild(cellEmu);
         row.appendChild(cellOffset);
@@ -426,6 +471,7 @@ async function recordSeedMemo(parsed, inputText, driftText) {
         emulatorLabel: state.active.label,
         input: inputText,
         timeText: formatInputTime(parsed),
+        fractionDigits: getAutoTimerFractionDigits() || 0,
         driftText: driftText || "",
         offsetSeconds: state.offsetSeconds,
         searchRangeSeconds: state.searchRangeSeconds,
@@ -445,9 +491,10 @@ async function recordSeedMemo(parsed, inputText, driftText) {
 }
 
 function memoToMarkdown(list) {
-    const header = ["Time", "Real", "Emu", "Offset", "Range", "Drift", "Input", "Memo"];
+    const header = ["Time", "Fraction", "Real", "Emu", "Offset", "Range", "Drift", "Input", "Memo"];
     const rows = list.map((entry) => [
         entry.timeText,
+        formatMemoFractionDigits(entry.fractionDigits),
         formatRealTimeDisplay(entry.savedAt),
         entry.emulatorLabel,
         entry.offsetSeconds,
@@ -466,9 +513,10 @@ function memoToMarkdown(list) {
 
 function memoToCsv(list) {
     const escapeField = (value) => `"${String(value).replace(/"/g, '""')}"`;
-    const header = ["Time", "Real", "Emu", "Offset", "Range", "Drift", "Input", "Memo"];
+    const header = ["Time", "Fraction", "Real", "Emu", "Offset", "Range", "Drift", "Input", "Memo"];
     const rows = list.map((entry) => [
         entry.timeText,
+        formatMemoFractionDigits(entry.fractionDigits),
         formatRealTimeDisplay(entry.savedAt),
         entry.emulatorLabel,
         entry.offsetSeconds,
@@ -522,6 +570,15 @@ function parseUrlOverrides() {
         }
     }
 
+    if (params.has("fraction")) {
+        const fractionDigits = normalizeFractionDigits(params.get("fraction"));
+        if (fractionDigits !== null) {
+            overrides.fractionDigits = fractionDigits;
+            params.delete("fraction");
+            changed = true;
+        }
+    }
+
     if (changed) {
         history.replaceState(null, "", url.toString());
     }
@@ -548,6 +605,16 @@ function applyUrlOverrides(applyEmu) {
         }
         if (overrides.actionInput && ui.actionInput) {
             ui.actionInput.value = overrides.actionInput;
+            if (typeof overrides.fractionDigits === "number" && ui.autoTimerFractionInput) {
+                setAutoTimerFractionDigits(
+                    overrides.fractionDigits,
+                    extractInputTimeText(overrides.actionInput)
+                );
+            } else {
+                restoreAutoTimerFractionForInput(overrides.actionInput);
+            }
+        } else if (typeof overrides.fractionDigits === "number" && ui.autoTimerFractionInput) {
+            setAutoTimerFractionDigits(overrides.fractionDigits, "");
         }
         state.urlOverridesAppliedNonEmu = true;
     }
@@ -572,29 +639,32 @@ function formatScaledSeconds(scaledValue, scale) {
 
 function computeSeedSecondsScaled(seed) {
     const shifted = seed >> 16n;
-    return (shifted * SEED_SECONDS_NUMERATOR) / SEED_SECONDS_DIVISOR;
+    const SCALE_RATIO = BigInt(AUTO_TIMER_FRACTION_SCALE) / SEED_TIME_SCALE; // 10000n / 100n = 100n
+    return (shifted * SEED_SECONDS_NUMERATOR * SCALE_RATIO) / SEED_SECONDS_DIVISOR;
 }
 
 function computeSeedTimeUnits(seed) {
-    return computeSeedSecondsScaled(seed) * BigInt(AUTO_TIMER_FRACTION_SCALE / Number(SEED_TIME_SCALE));
+    // computeSeedSecondsScaled が既に AUTO_TIMER_FRACTION_SCALE(10000) 倍スケールになったのでそのまま返す
+    return computeSeedSecondsScaled(seed);
 }
 
 function computeRealSecondsScaled(parsed, preciseTimeUnits = null) {
     if (preciseTimeUnits !== null) {
-        return preciseTimeUnits / BigInt(AUTO_TIMER_FRACTION_SCALE / Number(SEED_TIME_SCALE));
+        // preciseTimeUnits は既に AUTO_TIMER_FRACTION_SCALE(10000) 倍スケール
+        return preciseTimeUnits;
     }
     const totalSeconds = parsed.hours * 3600 + parsed.minutes * 60 + parsed.seconds;
-    return BigInt(totalSeconds) * SEED_TIME_SCALE;
+    return BigInt(totalSeconds) * BigInt(AUTO_TIMER_FRACTION_SCALE);
 }
 
 function computeSeedDriftText(seed, parsed, preciseTimeUnits = null) {
     const seedSecondsScaled = computeSeedSecondsScaled(seed);
     const realSecondsScaled = computeRealSecondsScaled(parsed, preciseTimeUnits);
     const driftScaled = realSecondsScaled - seedSecondsScaled;
-    return formatScaledSeconds(driftScaled, SEED_TIME_SCALE);
+    return formatScaledSeconds(driftScaled, BigInt(AUTO_TIMER_FRACTION_SCALE));
 }
 
-function setSeedValues(seedText, parsedTime) {
+function setSeedValues(seedText, parsedTime, preciseTimeUnits = null) {
     if (!seedText) {
         ui.seedHex.textContent = "-";
         ui.seedSpeed.textContent = "-";
@@ -604,7 +674,7 @@ function setSeedValues(seedText, parsedTime) {
     }
     const seed = BigInt(seedText);
     ui.seedHex.textContent = `0x${seed.toString(16)}`;
-    ui.seedDrift.textContent = parsedTime ? computeSeedDriftText(seed, parsedTime) : "-";
+    ui.seedDrift.textContent = parsedTime ? computeSeedDriftText(seed, parsedTime, preciseTimeUnits) : "-";
 }
 
 function clearOutputs() {
@@ -1484,6 +1554,7 @@ async function runSearch() {
         appendLog(parsed.error);
         return;
     }
+    restoreAutoTimerFractionForInput(input);
     const preciseTimeUnits = getPreciseSearchTimeUnits(parsed, input);
     const runStartedAtPerf = performance.now();
     const shouldCorrectAutoTimer = shouldApplyAutoTimerCorrection(parsed, input, runStartedAtPerf);
@@ -1599,7 +1670,7 @@ async function runSearch() {
             return;
         }
 
-        setSeedValues(foundSeed, parsed);
+        setSeedValues(foundSeed, parsed, preciseTimeUnits);
         setSeedState("found", totalFound);
         appendLog(`seed found ${foundSeed}`);
         if (bestSpeed && bestElapsed && bestTurns) {
@@ -1789,7 +1860,6 @@ if (ui.autoTimerFractionInput) {
     ui.autoTimerFractionInput.addEventListener("input", () => {
         const digits = normalizeFractionDigits(ui.autoTimerFractionInput.value);
         if (digits === null || digits === 0) {
-            clearAutoTimerFractionHideTimer();
             setAutoTimerFractionDigits(null, "");
             return;
         }
@@ -1989,11 +2059,13 @@ ui.actionInput.addEventListener("compositionstart", () => {
 ui.actionInput.addEventListener("compositionend", () => {
     composing = false;
     ui.actionInput.value = normalizeActionInput(ui.actionInput.value);
+    restoreAutoTimerFractionForInput(ui.actionInput.value);
 });
 
 ui.actionInput.addEventListener("input", () => {
     if (composing) return;
     ui.actionInput.value = normalizeActionInput(ui.actionInput.value);
+    restoreAutoTimerFractionForInput(ui.actionInput.value);
 });
 
 // テキスト選択は許可したまま、テキストのD&D（ドラッグで文字が移動/外部へD&D/ドロップで置換）だけ無効化する

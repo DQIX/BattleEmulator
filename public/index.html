@@ -138,6 +138,7 @@
                         memoSaveOnly: "Saved only when a single seed is found",
                         memoEmpty: "No memo entries yet",
                         memoTime: "Time",
+                        memoFraction: "Fraction",
                         memoRealTime: "Real",
                         memoEmu: "Emu",
                         memoOffset: "Offset",
@@ -280,6 +281,7 @@
                         memoSaveOnly: "シードが1件のときのみ保存",
                         memoEmpty: "メモがありません",
                         memoTime: "時間",
+                        memoFraction: "小数",
                         memoRealTime: "現実",
                         memoEmu: "Emu",
                         memoOffset: "Offset",
@@ -344,7 +346,7 @@
                         タイマー動作中にボスBGMまたは画面回転の瞬間に押してください。
                     </div>
                 </div>
-                <label id="autoTimerFractionField" class="auto-timer-fraction is-hidden">
+                <label id="autoTimerFractionField" class="auto-timer-fraction">
                     <span class="auto-timer-fraction-label" data-i18n="autoTimerFraction">Fraction (4 digits)</span>
                     <input
                             id="autoTimerFractionInput"
@@ -637,6 +639,7 @@
                     <table class="memo-grid">
                         <colgroup>
                             <col style="width: 80px"/>
+                            <col style="width: 70px"/>
                             <col style="width: 170px"/>
                             <col style="width: 140px"/>
                             <col style="width: 50px"/>
@@ -649,6 +652,7 @@
                         <thead>
                         <tr>
                             <th data-i18n="memoTime">Time</th>
+                            <th data-i18n="memoFraction">Fraction</th>
                             <th data-i18n="memoRealTime">Real</th>
                             <th data-i18n="memoEmu">Emu</th>
                             <th data-i18n="memoOffset">Offset</th>
