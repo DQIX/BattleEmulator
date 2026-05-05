@@ -22,7 +22,7 @@
 #include "SimpleParameterOptimizer.h"
 #endif
 
-thread_local int startturn = 0;
+int startturn = -1;
 
 const Player copiedPlayers[2] = {
 	// プレイヤー1
@@ -764,6 +764,7 @@ namespace {
     		uint64_t nowState = 0;
     		BattleEmulator::Main(&position, 100, aActions5, players, &res, seed, nullptr, nullptr, -1, &nowState);
     		ss << dumpTable(res, aActions5, startturn);
+    		ss << "startturn=" << startturn << std::endl;
     		return ss.str();
     	}
     	std::cout << ss.str();

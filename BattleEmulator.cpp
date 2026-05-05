@@ -28,7 +28,7 @@ constexpr int shieldGuardP = 9; //盾ガード率 9%
 
 
 thread_local int threadTurnProcessed = 0;
-thread_local int startTurn = 0;
+int startTurn = 0;
 
 void BattleEmulator::resetStartTurn() {
     startTurn = 0;
