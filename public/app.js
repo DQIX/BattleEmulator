@@ -99,7 +99,7 @@ const state = {
 };
 
 const logLines = [];
-const SEARCH_RANGE_SECONDS_PATTERN = /^(?:0\.(?:0[5-9]|[1-9]\d)|(?:[1-9]|1[0-4])(?:\.\d{1,2})?|15(?:\.0{1,2})?)$/;
+const SEARCH_RANGE_SECONDS_PATTERN = /^(?:0\.(?:0[1-9]|[1-9]\d?)|(?:[1-9]|1[0-4])(?:\.\d{1,2})?|15(?:\.0{1,2})?)$/;
 const SEARCH_RANGE_SECONDS_PARTIAL_PATTERN = /^(?:|0|0\.|0\.\d{0,2}|[1-9](?:\.\d{0,2})?|1[0-4](?:\.\d{0,2})?|15(?:\.0{0,2})?)$/;
 
 function getDictionary() {
@@ -1194,12 +1194,11 @@ function computeSeedRange(hours, minutes, seconds, offsetSeconds, preciseTimeUni
     const range = BigInt(normalizeSearchRangeSeconds(state.searchRangeSeconds) * AUTO_TIMER_FRACTION_SCALE);
     const unitScale = BigInt(AUTO_TIMER_FRACTION_SCALE);
     const numerator1 = 2n * (totalTimeUnits - offset) - range;
-    const time1 = (numerator1 * 100000n) / (2n * 12515n * unitScale);
     const numerator2 = 2n * (totalTimeUnits - offset) + range;
-    const time2 = (numerator2 * 1000000n) / (2n * 125155n * unitScale);
-    return {start: time1 * seedShift, end: time2 * seedShift};
+    const start = (numerator1 * 1000000n * seedShift) / (2n * 125155n * unitScale);
+    const end   = (numerator2 * 1000000n * seedShift) / (2n * 125155n * unitScale);
+    return { start, end };
 }
-
 function splitRange(start, end, threads) {
     const ranges = [];
     if (end <= start) {
