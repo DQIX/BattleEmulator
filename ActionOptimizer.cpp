@@ -128,6 +128,19 @@ constexpr ActionEntry ACTION_TABLE[] = {
 		[](const Genome& g){ return g.AllyPlayer.specialChargeTurn >= 1; },
 		[](const Genome& b, const Genome& a){ return true; }
 	},
+	{
+		BattleEmulator::INSULATE,
+		[](const Genome& g){
+#if !defined(OPTIMIZE_MODE)
+			if(
+				EnhancedCostCalculator::getCostTable() != EnhancedCostCalculator::CostTable::TableF &&
+				EnhancedCostCalculator::getCostTable() != EnhancedCostCalculator::CostTable::TableG
+			) return false;
+#endif
+			return g.AllyPlayer.InsulateLevel <= 1 && g.AllyPlayer.InsulateTurns <= 2;
+		},
+		[](const Genome& b, const Genome& a){ return true; }
+	},
 };
 
 // ★ ここが本体 ★
@@ -268,7 +281,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
 			const Genome currentGenome = Pool.get(currentNode.nodeId);
 
-			if (currentGenome.turn > 30) {
+			if(currentGenome.turn > 30){
 				continue;
 			}
 

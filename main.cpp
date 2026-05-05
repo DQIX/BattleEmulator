@@ -325,17 +325,15 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 
 	lcg::init(seed);
 
-	Genome genomeA, genomeB;
-
 #if !defined(OPTIMIZE_MODE)
 
     // --- TableA で探索 ---
     EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableA);
-    genomeA = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
+	Genome genomeA = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
 
     // --- TableB で探索 ---
     EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableB);
-    genomeB = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
+    Genome genomeB = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
 
     // --- TableC で探索 ---
     EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableC);
@@ -345,8 +343,16 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableD);
 	Genome genomeD = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
 
+	// --- TableC で探索 ---
+	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableF);
+	Genome genomeF = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
 
-    BattleResult resultA, resultB, resultC, resultD;
+	// --- TableC で探索 ---
+	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableG);
+	Genome genomeG = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
+
+
+    BattleResult resultA, resultB, resultC, resultD, resultF, resultG;
 
 	auto runMain = [&](const Genome& g, BattleResult& res) -> RunResult {
 		Player players[2] = {copiedPlayers2[0], copiedPlayers2[1]};
@@ -361,6 +367,8 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
     auto rrB = runMain(genomeB, resultB);
     auto rrC = runMain(genomeC, resultC);
     auto rrD = runMain(genomeD, resultD);
+    auto rrF = runMain(genomeF, resultF);
+    auto rrG = runMain(genomeG, resultG);
 
     if (!rrA.win && !rrB.win && !rrC.win && !rrD.win) {
         return false;
@@ -393,6 +401,8 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
     tryUpdate(rrB, genomeB, resultB);
     tryUpdate(rrC, genomeC, resultC);
     tryUpdate(rrD, genomeD, resultD);
+    tryUpdate(rrF, genomeF, resultF);
+    tryUpdate(rrG, genomeG, resultG);
 
     ss << dumpTable(*chosenResult, chosenGenome->actions, startturn) << std::endl;
 
@@ -420,6 +430,8 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 	printRunResult("TableB", rrB);
 	printRunResult("TableC", rrC);
 	printRunResult("TableD", rrD);
+	printRunResult("TableF", rrF);
+	printRunResult("TableG", rrG);
 
 
 #endif
@@ -837,7 +849,7 @@ int main(){
 	actions1[counter1++] = BattleEmulator::MAGIC_MIRROR;
 	actions1[counter1++] = BattleEmulator::PSYCHE_UP_ALLY;
 	actions1[counter1] = -1;
-	SimpleParameterOptimizer::optimize(copiedPlayers, 0x112345, actions1, 100000, counter1);
+	SimpleParameterOptimizer::optimize(copiedPlayers, 0x11066ull, actions1, 100000, counter1);
 	return 0;
 #endif
 
@@ -920,7 +932,7 @@ int main(){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x11029ull;
+	uint64_t time1 = 0x10102989ull;
 
 	auto counter = 0;
 	int actions[350] = {0};

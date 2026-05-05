@@ -18,7 +18,10 @@ public:
         TableB, // GENOME_B
         TableC,  // 新しいGENOME_C
         TableD,  // 新しいGENOME_C
+        TableF,  // 新しいGENOME_C
+        TableG,  // 新しいGENOME_C
     };
+    static CostTable getCostTable() noexcept;
 #if !defined(OPTIMIZE_MODE)
     // コストテーブルを切り替える（探索開始前に1回だけ呼ぶ）
     static void setCostTable(CostTable table);

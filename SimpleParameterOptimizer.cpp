@@ -42,6 +42,7 @@ static constexpr std::array<int, ids> TUNE_IDS = {
     BattleEmulator::ELFIN_ELIXIR,
     BattleEmulator::MAGIC_MIRROR,
     BattleEmulator::DEFENDING_CHAMPION,
+    BattleEmulator::INSULATE,
     SimpleParameterOptimizerNode::turnHeignt,
     SimpleParameterOptimizerNode::enemyHpWeight,
     SimpleParameterOptimizerNode::playerHpWeight,
@@ -276,37 +277,37 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
 
     const size_t geneCount = TUNE_IDS.size();
 
-    // ★ 追加：評価用 seed 生成関数（世代内で固定に使う）
-    auto makeEvalSeeds = [&](uint64_t base) {
-        std::array<uint64_t, GA_EVAL_SEEDS> s{};
-        s[0] = base;
-        s[1] = 0x1022ULL; // 波動2連パターンを必ず含める
-        s[2] = 0x1094ull; // 波動2連パターンを必ず含める
-        s[3] = 0x1040ull; // 波動2連パターンを必ず含める
-        s[4] = 0x1045ull; // 波動2連パターンを必ず含める
-        s[5] = 0x1069ull; // 波動2連パターンを必ず含める
-        s[6] = 0x11029ull; // 波動2連パターンを必ず含める
-
-        for (int i = 7; i < GA_EVAL_SEEDS; ++i) {
-            uint64_t r1 = static_cast<uint64_t>(rng());
-            uint64_t r2 = static_cast<uint64_t>(rng());
-            s[i] = base ^ (r1 << 32) ^ r2 ^ (0x9E3779B97F4A7C15ULL * static_cast<uint64_t>(i));
-        }
-
-        return s;
-    };
-
     // // ★ 追加：評価用 seed 生成関数（世代内で固定に使う）
     // auto makeEvalSeeds = [&](uint64_t base) {
     //     std::array<uint64_t, GA_EVAL_SEEDS> s{};
     //     s[0] = base;
-    //     for (int i = 1; i < GA_EVAL_SEEDS; ++i) {
+    //     s[1] = 0x1022ULL; // 波動2連パターンを必ず含める
+    //     s[2] = 0x1094ull; // 波動2連パターンを必ず含める
+    //     s[3] = 0x1040ull; // 波動2連パターンを必ず含める
+    //     s[4] = 0x1045ull; // 波動2連パターンを必ず含める
+    //     s[5] = 0x1069ull; // 波動2連パターンを必ず含める
+    //     s[6] = 0x11029ull; // 波動2連パターンを必ず含める
+    //
+    //     for (int i = 7; i < GA_EVAL_SEEDS; ++i) {
     //         uint64_t r1 = static_cast<uint64_t>(rng());
     //         uint64_t r2 = static_cast<uint64_t>(rng());
     //         s[i] = base ^ (r1 << 32) ^ r2 ^ (0x9E3779B97F4A7C15ULL * static_cast<uint64_t>(i));
     //     }
+    //
     //     return s;
     // };
+
+    // ★ 追加：評価用 seed 生成関数（世代内で固定に使う）
+    auto makeEvalSeeds = [&](uint64_t base) {
+        std::array<uint64_t, GA_EVAL_SEEDS> s{};
+        s[0] = base;
+        for (int i = 1; i < GA_EVAL_SEEDS; ++i) {
+            uint64_t r1 = static_cast<uint64_t>(rng());
+            uint64_t r2 = static_cast<uint64_t>(rng());
+            s[i] = base ^ (r1 << 32) ^ r2 ^ (0x9E3779B97F4A7C15ULL * static_cast<uint64_t>(i));
+        }
+        return s;
+    };
 
 
     std::array<uint64_t, GA_EVAL_SEEDS> evalSeeds = makeEvalSeeds(seed);
