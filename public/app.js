@@ -1754,8 +1754,8 @@ function applyVisionBattleFormatText(formatText) {
         return false;
     }
     const currentValue = ui.actionInput.value || "";
-    const prefixMatch = currentValue.match(/^\s*\?\s+\?\s+\?(?=\s|$)/);
-    const prefix = prefixMatch ? prefixMatch[0].trim().replace(/\s+/g, " ") : "? ? ?";
+    const prefixMatch = currentValue.match(/^\s*(\d+)\s+(\d+)\s+(\d+)(?=\s|$)/);
+    const prefix = prefixMatch ? `${prefixMatch[1]} ${prefixMatch[2]} ${prefixMatch[3]}` : "? ? ?";
     ui.actionInput.value = `${prefix} ${formatted}`;
     ui.actionInput.dispatchEvent(new Event("input", {bubbles: true}));
     focusActionInputAtTop();
