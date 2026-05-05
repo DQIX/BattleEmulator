@@ -321,6 +321,8 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 		turns++;
 	}
 
+	auto start = BattleEmulator::getStartTurn();
+
 	lcg::init(seed);
 
 	Genome genomeA, genomeB;
@@ -392,7 +394,7 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
     tryUpdate(rrC, genomeC, resultC);
     tryUpdate(rrD, genomeD, resultD);
 
-    ss << dumpTable(*chosenResult, chosenGenome->actions, BattleEmulator::getStartTurn()) << std::endl;
+    ss << dumpTable(*chosenResult, chosenGenome->actions, start) << std::endl;
 
     ss << "0x" << std::hex << seed << std::dec << ": ";
 
@@ -763,7 +765,7 @@ namespace {
     		int position = 1;
     		uint64_t nowState = 0;
     		BattleEmulator::Main(&position, 100, aActions5, players, &res, seed, nullptr, nullptr, -1, &nowState);
-    		ss << dumpTable(res, aActions5, BattleEmulator::getStartTurn());
+    		ss << dumpTable(res, aActions5, startturn);
     		return ss.str();
     	}
     	std::cout << ss.str();
@@ -792,6 +794,7 @@ EMSCRIPTEN_KEEPALIVE uint64_t wasm_bruteforce_range(int resultIndex, uint64_t st
 
     BruteForceMainLoop(copiedPlayers, startSeed, endSeed, aActions5, damages5, eActions5);
     wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
+	startturn = BattleEmulator::getStartTurn();
 
     if (foundSeeds == 1) {
         return FoundSeed;
