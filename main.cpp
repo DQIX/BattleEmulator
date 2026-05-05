@@ -849,7 +849,7 @@ int main(){
 	actions1[counter1++] = BattleEmulator::MAGIC_MIRROR;
 	actions1[counter1++] = BattleEmulator::PSYCHE_UP_ALLY;
 	actions1[counter1] = -1;
-	SimpleParameterOptimizer::optimize(copiedPlayers, 0x11066ull, actions1, 100000, counter1);
+	SimpleParameterOptimizer::optimize(copiedPlayers, 0x11060016ull, actions1, 100000, counter1);
 	return 0;
 #endif
 
@@ -943,6 +943,29 @@ int main(){
 
 	std::stringstream ss;
 	SearchRequest(copiedPlayers, time1, actions, false, ss);
+	ss << std::endl;
+
+	if(true){
+		SearchRequest(copiedPlayers, time1+1, actions, false, ss);
+		ss << std::endl;
+
+		SearchRequest(copiedPlayers, time1+2, actions, false, ss);
+		ss << std::endl;
+
+		SearchRequest(copiedPlayers, time1+6, actions, false, ss);
+		ss << std::endl;
+
+		SearchRequest(copiedPlayers, time1+10, actions, false, ss);
+		ss << std::endl;
+
+
+		SearchRequest(copiedPlayers, time1+40, actions, false, ss);
+		ss << std::endl;
+
+		SearchRequest(copiedPlayers, time1+70, actions, false, ss);
+		ss << std::endl;
+	}
+
 	std::cout << ss.str();
 	return 0;
 #endif
