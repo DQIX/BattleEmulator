@@ -768,6 +768,7 @@ namespace {
     		return ss.str();
     	}
     	std::cout << ss.str();
+    	ss << "startturn=" << startturn << std::endl;
         wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
         return ss.str();
     }
