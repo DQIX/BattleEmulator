@@ -323,8 +323,6 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 		turns++;
 	}
 
-	auto start = BattleEmulator::getStartTurn();
-
 	lcg::init(seed);
 
 	Genome genomeA, genomeB;
@@ -396,7 +394,7 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
     tryUpdate(rrC, genomeC, resultC);
     tryUpdate(rrD, genomeD, resultD);
 
-    ss << dumpTable(*chosenResult, chosenGenome->actions, start) << std::endl;
+    ss << dumpTable(*chosenResult, chosenGenome->actions, startturn) << std::endl;
 
     ss << "0x" << std::hex << seed << std::dec << ": ";
 
