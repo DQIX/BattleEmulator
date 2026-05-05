@@ -97,6 +97,7 @@ public:
     static constexpr int ITEM_USE = 60; //ドラゴン切り
     static constexpr int CRACK_ALLY = 61;
     static constexpr int PSYCHE_UP_ALLY = 62;
+    static constexpr int INSULATE = 63;//バーハ
 
 
     static bool

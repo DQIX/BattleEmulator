@@ -42,6 +42,8 @@ struct Player {
     int SageElixirCount = 1;
     int ElfinElixirCount = 1;
     int MagicWaterCount = 1;
+    int InsulateLevel = 0;
+    int InsulateTurns = -1;
 
     // 他のメンバー変数やメンバー関数を追加する可能性があります
 

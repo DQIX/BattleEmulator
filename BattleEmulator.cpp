@@ -173,6 +173,8 @@ std::string BattleEmulator::getActionName(int actionId) {
             return "gospel song";
         case BattleEmulator::FLEE_ALLY:
             return "Flee";
+        case BattleEmulator::INSULATE:
+            return "Insulate";
         case PSYCHE_UP_ALLY:
             return "Psyche up";
         case SPECIAL_MEDICINE:
@@ -231,7 +233,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 #ifdef DEBUG2
         DEBUG_COUT2((*position));
         //THIS DEBUG CODE!
-        if ((*position) == 701) { //THIS DEBUG CODE!
+        if ((*position) == 212) { //THIS DEBUG CODE!
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -691,6 +693,17 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                                 RecalculateBuff(players);
                             }
                         }
+                        players[0].InsulateTurns--;
+                        if (players[0].InsulateLevel != 0 && players[0].InsulateTurns <= 0) {
+                            //0x0215ac74 ins
+                            constexpr int probability[4] = {62, 75, 87, 100};
+                            auto probability1 = probability[std::abs(players[0].InsulateTurns)];
+                            auto probability2 = lcg::getPercent(position, 100);
+                            if (probability1 >= (probability2 + (probability1 == 75 ? 1 : 0))) {
+                                players[0].InsulateLevel = 0;
+                                RecalculateBuff(players);
+                            }
+                        }
                     }
                 } else {
                     if (mode == -1) {
@@ -783,6 +796,39 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
     auto attackCount = 0;
     bool defenseFlag = false; //防御した場合0x021e81a0のほうが優先度高いらしい。なんで
     switch (Id & 0xffff) {
+        case BattleEmulator::INSULATE:
+            players[0].mp -= 4;
+            (*position) += 2;
+            (*position)++; // 関係ない
+            (*position)++; // 会心判定
+            (*position)++; // 回避
+
+            baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[attacker].def);
+            if (baseDamage == 0) {
+                baseDamage = lcg::getPercent(position, 2); //0x021e81a0
+            }
+            if (baseDamage != 0) {
+                (*position)++; //不明 0x021e54fc
+            }
+
+            if (!players[0].specialCharge && !players[0].sleeping && !players[0].paralysis) {
+                (*position)++; //0x021ed7a8 必殺チャージ(敵) 0%
+                if (lcg::getPercent(position, 100) < 1) {
+                    //0x021edaf4
+                    players[attacker].specialCharge = true;
+                    players[attacker].specialChargeTurn = 8;
+                }
+            }
+
+            if (players[0].InsulateLevel != 2) {
+                players[0].InsulateLevel++;
+                players[0].InsulateTurns = 6;
+                RecalculateBuff(players);
+            }
+
+            baseDamage = 0;
+            resetCombo(NowState);
+            break;
         case PSYCHE_UP_ALLY:
             (*position) += 2;
             (*position)++; // 0x021ec6f8
@@ -1032,6 +1078,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position)++; //ニセ回避 0x02157f58
             baseDamage = FUN_021e8458_typeD(position, 10, 65);
             tmp = Equipments::applyDamageReduction(baseDamage, Attribute::Darkness);
+            tmp *= 1.0 - (players[0].InsulateLevel * 0.25);
 
             if (players[defender].TensionLevel == 4) {
                 tmp *= 0.5;
@@ -1382,7 +1429,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 
             baseDamage = FUN_021e8458_typeD(position, 15, 75);
             tmp = Equipments::applyDamageReduction(baseDamage, Attribute::Ice);
-
+            tmp *= 1.0 - (players[0].InsulateLevel * 0.25);
             if (!kaihi) {
                 (*position)++; //0x021e54fc 不明
             } else {

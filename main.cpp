@@ -866,15 +866,14 @@ int main(){
 	auto* NowState = new uint64_t(0); //エミュレーターの内部ステートを表すint
 
 	Player players1[2];
-	//int32_t gene1[350] = {0};
+	int32_t gene1[350] = {0};
 	//THIS DEBUG CODE!
-	int32_t gene1[350] = {30, 31, 62, 62, 50, 53, 62, 30, 31, 34, 53, 33, 31, 34, 34, 34, 34, 53,};
+	//int32_t gene1[350] = {30, 31, 62, 62, 50, 53, 62, 30, 31, 34, 53, 33, 31, 34, 34, 34, 34, 53,};
 	//gene1[19-1] = BattleEmulator::DEFENCE;
 	int counter = 0;
 
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::BUFF;
+	gene1[counter++] = BattleEmulator::INSULATE;
+	//gene1[counter++] = BattleEmulator::INSULATE;
 	// gene1[counter++] = BattleEmulator::BUFF;
 	// gene1[counter++] = BattleEmulator::BUFF;
 	// gene1[counter++] = BattleEmulator::BUFF;
