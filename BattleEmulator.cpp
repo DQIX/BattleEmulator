@@ -415,7 +415,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             if (mode != -1 && mode != -2) {
                 int need = eActions[exCounter1++];
                 if (need == -1) {
-                    startTurn = counterJ;
+                    startTurn = counterJ - 1;
                     return true;
                 }
                 if (need != enemyAction[counter]) {
@@ -533,7 +533,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             c == MAGIC_BURST
                         ) {
                             if (damages[exCounter] == -1) {
-                                startTurn = counterJ;
+                                startTurn = counterJ - 1;
                                 return true;
                             }
                             //                            int need = damages[exCounter++] - basedamage;
@@ -644,7 +644,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         if (mode != -1 && mode != -2) {
                             if (action == MULTITHRUST || action == ATTACK_ALLY || action == MERCURIAL_THRUST) {
                                 if (damages[exCounter] == -1) {
-                                    startTurn = counterJ;
+                                    startTurn = counterJ - 1;
                                     return true;
                                 }
                                 //int need = ;
