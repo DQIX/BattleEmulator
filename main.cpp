@@ -46,6 +46,28 @@ const Player copiedPlayers[2] = {
 	} // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 };
 
+#elif defined(SUPER)
+
+const Player copiedPlayers[2] = {
+	// プレイヤー1
+	{
+		309, 309.0, 312, 312, 299, 299, 193, 234, 165, // 最初のメンバー
+		165, false, false, 0, false, 0, -1,
+		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
+		3, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
+		false, -1, 0, -1, 0, false, 1, 1, 1
+	}, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
+
+	// プレイヤー2
+	{
+		4800, 4800.0, 248, 248, 278, 278, 157, 0, 255, // 最初のメンバー
+		255, false, false, 0, false, 0, -1,
+		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
+		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
+		false, -1, 0, -1, 0, false, 0, 0, 0
+	} // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
+};
+
 #endif
 
 
@@ -937,20 +959,20 @@ int main(){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x049b0d8a;
+	uint64_t time1 = 0x04a1ff68;
 
 	auto counter = 0;
 	int actions[350] = {0};
-	actions[counter++] = BattleEmulator::BUFF;
+	actions[counter++] = BattleEmulator::DEFENCE;
 	actions[counter++] = BattleEmulator::MAGIC_MIRROR;
-	actions[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	//actions[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
 	actions[counter] = -1;
 
 	std::stringstream ss;
 	SearchRequest(copiedPlayers, time1, actions, false, ss);
 	ss << std::endl;
 
-	if(true){
+	if(false){
 		SearchRequest(copiedPlayers, time1+1, actions, false, ss);
 		ss << std::endl;
 

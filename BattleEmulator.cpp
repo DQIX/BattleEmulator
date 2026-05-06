@@ -1840,7 +1840,13 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     kaihi = true;
                 }
             }
+#if defined(SUPER)
+            (*position)++;
+            if (false) {
+#else
             if (lcg::getPercent(position, 100) < 13 && !kaihi) {
+#endif
+
                 if (players[defender].paralysisLevel == 3) {
                     //std::cerr << "paralysisLevel == 2" << std::endl;
                 }

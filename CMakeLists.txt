@@ -64,6 +64,9 @@ target_compile_definitions(newDirectory_gouketu PRIVATE GOUKETU=1)
 add_executable(newDirectory_gouketu_opt ${SOURCES})
 target_compile_definitions(newDirectory_gouketu_opt PRIVATE GOUKETU=1 OPTIMIZE_MODE=1)  # `#define MULTITHREADING` を適用
 
+add_executable(newDirectory_super ${SOURCES})
+target_compile_definitions(newDirectory_super PRIVATE SUPER=1)
+
 
 string(TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)
 string(TIMESTAMP BUILD_TIME "%H:%M:%S" UTC)

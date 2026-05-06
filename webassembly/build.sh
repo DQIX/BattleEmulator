@@ -30,7 +30,8 @@ done
 declare -A BRANCH_VARIANTS
 
 BRANCH_VARIANTS[erugiosu_new_arugo]="
-erugiosu_v6: -DMULTITHREADING=1
+erugiosu_super: -DSUPER=1
+erugiosu_gouketu: -DGOUKETU=1
 "
 
 
