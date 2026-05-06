@@ -24,10 +24,12 @@
 
 int startturn = -1;
 
+#if defined(GOUKETU)
+
 const Player copiedPlayers[2] = {
 	// プレイヤー1
 	{
-		309, 309.0, 312, 312, 298, 298, 193, 234, 165, // 最初のメンバー
+		309, 309.0, 324, 324, 294, 294, 193, 234, 165, // 最初のメンバー
 		165, false, false, 0, false, 0, -1,
 		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
 		3, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
@@ -43,6 +45,9 @@ const Player copiedPlayers[2] = {
 		false, -1, 0, -1, 0, false, 0, 0, 0
 	} // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 };
+
+#endif
+
 
 // 勝利フラグと確定した敵残HPを返す
 struct RunResult {
@@ -849,7 +854,7 @@ int main(){
 	actions1[counter1++] = BattleEmulator::MAGIC_MIRROR;
 	actions1[counter1++] = BattleEmulator::PSYCHE_UP_ALLY;
 	actions1[counter1] = -1;
-	SimpleParameterOptimizer::optimize(copiedPlayers, 0x11060016ull, actions1, 100000, counter1);
+	SimpleParameterOptimizer::optimize(copiedPlayers, 0x11060049ull, actions1, 100000, counter1);
 	return 0;
 #endif
 
@@ -932,7 +937,7 @@ int main(){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x10102989ull;
+	uint64_t time1 = 0x049b0d8a;
 
 	auto counter = 0;
 	int actions[350] = {0};

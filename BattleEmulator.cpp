@@ -753,7 +753,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             return false;
         }
 
-        Player::heal(players[0], 25);
+        //Player::heal(players[0], 25);
     }
     if (mode != -1 && mode != -2) {
         startTurn = RunCount - 2;

@@ -30,7 +30,8 @@ if (MSVC AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_link_options(/INCREMENTAL:NO /DEBUG)  # INCREMENTAL LINKING は無効化
 endif ()
 
-add_executable(newDirectory main.cpp
+set(SOURCES
+        main.cpp
         lcg.cpp
         lcg.h
         BattleEmulator.cpp
@@ -56,34 +57,12 @@ add_executable(newDirectory main.cpp
         LinearIdPool.h
 )
 
+add_executable(newDirectory_gouketu ${SOURCES})
+target_compile_definitions(newDirectory_gouketu PRIVATE GOUKETU=1)
 
-add_executable(newDirectory_opt main.cpp
-        lcg.cpp
-        lcg.h
-        BattleEmulator.cpp
-        BattleEmulator.h
-        Player.h
-        camera.cpp
-        camera.h
-        debug.cpp
-        debug.h
-        BattleResult.h
-        Equipment.h
-        ActionOptimizer.cpp
-        ActionOptimizer.h
-        Genome.h
-        EnhancedCostCalculator.h
-        EnhancedCostCalculator.cpp
-        EnhancedHashCalculator.h
-        EnhancedHeapQueue.h
-        EnhancedHeapQueue.cpp
-        EnhancedHashCalculator.cpp
-        SimpleParameterOptimizer.cpp
-        SimpleParameterOptimizer.h
-        LinearIdPool.h
-)
 
-target_compile_definitions(newDirectory_opt PRIVATE OPTIMIZE_MODE=1)  # `#define MULTITHREADING` を適用
+add_executable(newDirectory_gouketu_opt ${SOURCES})
+target_compile_definitions(newDirectory_gouketu_opt PRIVATE GOUKETU=1 OPTIMIZE_MODE=1)  # `#define MULTITHREADING` を適用
 
 
 string(TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)
