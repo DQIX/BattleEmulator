@@ -167,6 +167,55 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             continue;
         }
 
+        auto preGcost = currentNode.gCost;
+
+        if(currentGenome.AllyPlayer.paralysis){
+            Genome newGenome = currentGenome;
+            newGenome.actions[currentGenome.turn - 1] = BattleEmulator::ATTACK_ALLY;
+            newGenome.Initialized = true;
+
+            // Copy for battle emulator execution
+            Player CopedPlayers1[2] = {currentGenome.AllyPlayer, currentGenome.EnemyPlayer};
+            *position = currentGenome.position;
+            *nowState = currentGenome.state;
+
+            // Execute one turn
+            BattleEmulator::Main(position.get(), newGenome.turn - newGenome.processed, newGenome.actions, CopedPlayers1,
+                                 nullptr, seed,
+                                 nullptr, nullptr, -2, nowState.get());
+
+            if (CopedPlayers1[0].hp > 0) {
+                // Update genome with results
+                newGenome.position = *position;
+                newGenome.state = *nowState;
+                newGenome.turn = currentGenome.turn + 1;
+                newGenome.processed = currentGenome.turn;
+                newGenome.AllyPlayer = CopedPlayers1[0];
+                newGenome.EnemyPlayer = CopedPlayers1[1];
+
+                // Calculate enhanced state hash
+                uint64_t newStateHash = EnhancedHashCalculator::computeStateHash(newGenome);
+
+                // Skip already explored states
+                if (closedSet.count(newStateHash)) {
+                    continue;
+                }
+
+                // Create new node with enhanced cost calculation
+                EnhancedAStarNode newNode;
+                newNode.genome = newGenome;
+                newNode.gCost = EnhancedCostCalculator::calculateGCost(newGenome, BattleEmulator::ATTACK_ALLY, preGcost);
+
+                newNode.hCost = EnhancedCostCalculator::calculateHCost(newGenome, enemyMaxHp, playerMaxHp);
+                newNode.fCost = newNode.gCost + newNode.hCost;
+                newNode.stateHash = newStateHash;
+
+                // Add to open set
+                openSet.push(newNode);
+            }
+            continue;
+        }
+
         // Generate possible actions
         std::vector<int> possibleActions;
 
@@ -191,8 +240,6 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
             currentGenome.AllyPlayer.acrobaticStar == false) {
             possibleActions.push_back(BattleEmulator::ACROBATIC_STAR);
         }
-
-        auto preGcost = currentNode.gCost;
 
         // Execute each action and generate new nodes
         for (int action: possibleActions) {
