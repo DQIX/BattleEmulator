@@ -267,6 +267,56 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
                 continue;
             }
 
+            if(currentGenome.AllyPlayer.inactive){
+               Genome newGenome = currentGenome;
+                newGenome.actions[currentGenome.turn - 1] = BattleEmulator::ATTACK_ALLY;
+                newGenome.Initialized = true;
+
+                // Copy for battle emulator execution
+                CopedPlayers3[0] = currentGenome.AllyPlayer;
+                CopedPlayers3[1] = currentGenome.EnemyPlayer;
+                *position = currentGenome.position;
+                *nowState = currentGenome.state;
+
+                // Execute one turn
+                BattleEmulator::Main(position.get(), newGenome.turn - newGenome.processed, newGenome.actions, CopedPlayers3,
+                                    nullptr, seed,
+                                     nullptr, nullptr, -2, nowState.get());
+
+                if (CopedPlayers3[0].hp > 0) {
+                    // Update genome with results
+                    newGenome.position = *position;
+                    newGenome.state = *nowState;
+                    newGenome.turn = currentGenome.turn + 1;
+                    newGenome.processed = currentGenome.turn;
+                    newGenome.AllyPlayer = CopedPlayers3[0];
+                    newGenome.EnemyPlayer = CopedPlayers3[1];
+
+                    // Calculate enhanced state hash
+                    uint64_t newStateHash = EnhancedHashCalculator::computeStateHash(newGenome);
+
+                    // Skip already explored states
+                    if (closedSet.count(newStateHash)) {
+                        continue;
+                    }
+
+                    // Create new node with enhanced cost calculation
+                    EnhancedAStarNode newNode{};
+                    newNode.gCost = EnhancedCostCalculator::calculateGCost(newGenome, BattleEmulator::ATTACK_ALLY, preGCost);
+                    newNode.hCost = EnhancedCostCalculator::calculateHCost(newGenome, enemyMaxHp, playerMaxHp);
+                    newNode.fCost = newNode.gCost + newNode.hCost;
+                    newNode.stateHash = newStateHash;
+                    newNode.allyHP = newGenome.AllyPlayer.hp;
+                    newNode.enemyHP = newGenome.EnemyPlayer.hp;
+                    newNode.nodeId = Pool.alloc(newGenome);
+
+                    // Add to open set
+                    openSet.push(newNode);
+                }
+                continue;
+            }
+
+
             // Execute each action and generate new nodes
             for (const auto& entry : ACTION_TABLE) {
                 if (!entry.condition(currentGenome)) {
