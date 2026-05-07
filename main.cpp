@@ -686,7 +686,7 @@ namespace {
         }
 #if defined(BattleEmulatorLV15)
         auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 8000, gene, 0);
+                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 20000, gene, 0);
 #endif
 
         auto turnProcessed = BattleEmulator::getTurnProcessed();
@@ -1299,7 +1299,7 @@ int main(int argc, char *argv[]) {
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed =  70094041+7;
+    uint64_t seed =  70094041+10;
 
     int actions[350] = {
         BattleEmulator::ATTACK_ALLY,
