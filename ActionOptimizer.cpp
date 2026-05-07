@@ -289,8 +289,8 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
 					// Add to open set
 					openSet.push(newNode);
-					continue;
 				}
+				continue;
 			}
 
 			// Turn limit check
