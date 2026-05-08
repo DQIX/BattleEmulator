@@ -70,23 +70,14 @@ namespace{
     const char* version = "v8.0.6_vK_v2";
 
     std::stringstream performanceLogger = std::stringstream();
-
-#if defined(BattleEmulatorLV19)
-    constexpr int THREAD_COUNT = 4;
-#elif defined(BattleEmulatorLV13)
-    constexpr int THREAD_COUNT = 5;
-#elif defined(erusionn_lv21)
-    constexpr int THREAD_COUNT = 5;
-#endif
     // `InputBuilder` インスタンス作成
     InputBuilder builder;
 
-#if defined(erusionn_lv21)
     constexpr Player BasePlayers[2] = {
         // プレイヤー1
         {
-            137, 143.0, 211, 211, 160, 160, 114, 114, 138, 88, // 最初のメンバー
-            88, false, false, 0, false, 0, -1,
+            297, 297.0, 296, 296, 266, 266, 184, 184, 227, 150, // 最初のメンバー
+            158, false, false, 0, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             6, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
             false, -1, 0, -1, 0, false, 1, 1, 1, -1, 0, -1, false, 2, false, -1
@@ -94,14 +85,13 @@ namespace{
 
         // プレイヤー2
         {
-            1680, 1680.0, 160, 160, 170, 170, 125, 125, 0, 255, // 最初のメンバー
+            2000, 2000.0, 206, 206, 214, 214, 138, 138, 0, 255, // 最初のメンバー
             255, false, false, 0, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             0, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
             false, -1, 0, -1, 0, false, 0, 0, 0, -1, 0, -1, false, 2, false, -1
         } // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
     };
-#endif
     /**
      * バトルログのヘッダー情報を文字列ストリームに書き込みます。
      * ヘッダーはターンや各種パラメータのラベルで構成され、フォーマット済みの表形式で出力されます。
@@ -326,11 +316,6 @@ namespace{
         compiler = "msBuild";
 #endif
 
-#if defined(MULTITHREADING)
-        std::string multiThreading = ", multithreading is supported, -j " + std::to_string(THREAD_COUNT);
-#elif defined(NO_MULTITHREADING)
-        std::string multiThreading = ", multithreading is disabled";
-#endif
 #if defined(OPTIMIZATION_O3_ENABLED)
         std::cout << "dq9 Ragin' Contagion battle emulator " << version << " (Optimized for O3), Build date: " <<
             buildDate
@@ -464,10 +449,10 @@ namespace{
                 auto seed = BruteForceRequest(BasePlayers, hours, minutes, seconds, result.AactionsCounter, aActions,
                                               damages);
                 if(foundSeeds == 1){
-                    auto test = SearchRequest(BasePlayers, seed, aActions, THREAD_COUNT, true);
+                    auto test = SearchRequest(BasePlayers, seed, aActions, 0, true);
                     if(!test){
                         std::cout << "The first search request failed." << std::endl;
-                        if(!SearchRequest(BasePlayers, seed, aActions, THREAD_COUNT, false)){
+                        if(!SearchRequest(BasePlayers, seed, aActions, 0, false)){
                             std::cout << "The second search request failed" << std::endl;
                         }
                     }
@@ -870,35 +855,11 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 
     //AI Warning: This is code related to debug2
-    uint64_t time1 = 0x1af41c64b;
+    uint64_t time1 = 0x07cbc53c;
 
     int dummy[100];
     lcg::init(time1, false);
     int* position1 = new int(1);
-
-    /*
-    ver: v8.0.6_vG_v2, atk: 220, def: 155, seed: 0x1000
-actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
-    */
-
-    //ver: v5.0.6_vE_aa, atk: 82, def: 90, seed: 0x416d71f, actions: 25, 25, 50, 25, 25, 61, 50, 61, 61, 27, 27, 25, 50, 25, 61, 25, 56, 61, 25, 61, 50, 53, 25,
-
-    //ver: v5.0.5_vD_aa, atk: 82, def: 90, seed: 0x416b4f2, actions: 25, 25, 25, 25, 50, 25, 25, 25, 25, 61, 50, 25, 56, 25, 25, 61, 27, 25, 61, 55, 25, 56, 27,
-    //ver: v5.0.5_vC_aa, atk: 82, def: 90, seed: 0x427227d, actions: 25, 35, 35, 25, 59, 50, 25, 50, 50, 25, 56, 25, 25, 25, 25, 50, 61, 25, 61, 56, 61, 61, 58,
-    /*
-        *NowStateの各ビットの使用状況は下記の通りである。
-        +-+-+-+-+-+-+-+-+- (* NowState) -+-+-+-+-+-+-+-+-+
-           |            Name            |     size      |
-        0  | Current Rotation Table     |     4bit      |
-        4  | Rotation Internal State    |     4bit      |
-        8  | Free Camera State          |     4bit      |
-        12 | Turn Count Processed       |     20bit     |
-        32 | Combo Previous Attack Id   |     2byte     |
-        40 | Combo Counter              |     1byte     |
-        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-                                     合計 6Byte
-    */
-
     auto* NowState = new uint64_t(0); //エミュレーターの内部ステートを表すint
 
     Player players1[2];
@@ -907,7 +868,16 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 
     //AI Warning: This is code related to debug2
     int32_t gene1[350] = {
-        30, 30, 62, 50, 62, 62, 33, 62, 27, 34, 34,
+        BattleEmulator::BUFF,
+        BattleEmulator::PSYCHE_UP_ALLY,
+        BattleEmulator::PSYCHE_UP_ALLY,
+        BattleEmulator::PSYCHE_UP_ALLY,
+        BattleEmulator::PSYCHE_UP_ALLY,
+        BattleEmulator::PSYCHE_UP_ALLY,
+        BattleEmulator::DOUBLE_UP,
+        BattleEmulator::FLEE_ALLY,
+        BattleEmulator::FLEE_ALLY,
+        BattleEmulator::MULTITHRUST,
         BattleEmulator::ATTACK_ALLY
     };
     //gene1[19-1] = BattleEmulator::DEFENCE;
@@ -954,13 +924,13 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 0x0c5a8c4b;
+    uint64_t seed = 0x0a6e83a9;
 
     int actions[350] = {
         BattleEmulator::BUFF,
         -1,
     };
-    SearchRequest(BasePlayers, seed, actions, THREAD_COUNT, true);
+    SearchRequest(BasePlayers, seed, actions, 0, true);
 
     std::cout << performanceLogger.rdbuf() << std::endl;
 
