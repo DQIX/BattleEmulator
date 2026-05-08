@@ -85,7 +85,7 @@ namespace{
     constexpr Player BasePlayers[2] = {
         // プレイヤー1
         {
-            143, 143.0, 220, 220, 155, 155, 114, 114, 138, 88, // 最初のメンバー
+            137, 143.0, 211, 211, 160, 160, 114, 114, 138, 88, // 最初のメンバー
             88, false, false, 0, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             6, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
@@ -954,7 +954,7 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 0x1af41c64b;
+    uint64_t seed = 0x0c5a8c4b;
 
     int actions[350] = {
         BattleEmulator::BUFF,
