@@ -49,20 +49,19 @@ void camera::onFreeCameraMove(int *position, const int action, const int param5,
             auto ret = lcg::getPercent(position, 5 - counter);
             if (ret == 0 || counter == 5) {
                 counter = 0;
-                (*position) += 1;
+                (*position) += 3;
             } else {
                 counter++;
             }
         } else {
             (*position)++;
             if (counter == 0) {
-                (*position)++;//引数5が1なら強制的に実行
+                (*position) += 3;//引数5が1なら強制的に実行
                 counter = 0;
                 break;
             }
-            (*position)++;
+            (*position) += 4;//
             counter = 0;
-            (*position)++;
         }
     } while (false);
     (*NowState) &= ~0xf00;

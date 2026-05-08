@@ -418,7 +418,7 @@ bool BattleEmulator::Main(int* position, int RunCount, const int32_t Gene[350], 
 
 #ifdef DEBUG2
 		std::cout << "c: " << counterJ << ", " << (*position) << std::endl;
-		if((*position) == 308){
+		if((*position) == 136){
 			std::cout << "!!" << std::endl;
 		}
 #endif
@@ -1205,6 +1205,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
 				}
 
 				tmp = tmp * 1.1; //1.1倍は雷属性になってるから
+				tmp *= players[defender].defence;
 				baseDamage = static_cast<int>(floor(tmp));
 
 				if(players[defender].TensionLevel == 4){
@@ -1220,6 +1221,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
 				else{
 					baseDamage = 0;
 				}
+
 
 				preHP[1] = std::max(0, preHP[1] - baseDamage);
 				totalDamage += baseDamage;
@@ -1779,14 +1781,10 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
 				kaisinn = true;
 			}
 
+			(*position)++;//みかわし
 			//みかわし(相手)
-			if((Id & 0xffff) != ITEM_USE && !players[0].paralysis && !players[0].isStunned){
-				if(lcg::getPercent(position, 100) < 2){
-					kaihi = true;
-				}
-				if(!kaihi){
-					(*position)++; //盾ガード(幼女は盾を持っていないので0%)
-				}
+			if(lcg::getPercent(position, 100) < 8){
+				tate = true;
 			}
 
 			(*position)++; //回避
@@ -1819,6 +1817,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
 				tmp *= 1.25;
 			}
 
+			tmp *= 1.1;//雷属性
+
 			if(players[attacker].TensionLevel != 0){
 				//TODO ダメージが正しいか調べる 特殊県産式の引数も調べる https://dragonquest9.com/?%E3%83%80%E3%83%A1%E3%83%BC%E3%82%B8%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6#tension
 				tmp *= Ally_TensionTable[players[attacker].TensionLevel - 1];
@@ -1835,6 +1835,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
 				}
 			}
 
+			tmp *= players[defender].defence;
 			baseDamage = static_cast<int>(floor(tmp));
 
 			if(players[defender].TensionLevel == 4){
@@ -1842,7 +1843,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
 				baseDamage = static_cast<int>(floor(tmp));
 			}
 
-			if(!kaihi){
+			if(!tate){
 				ProcessRage(position, baseDamage, players);
 				(*position)++; //目を覚ました
 				(*position)++; //不明
