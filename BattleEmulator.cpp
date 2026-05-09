@@ -420,7 +420,7 @@ bool BattleEmulator::Main(int* position, int RunCount, const int32_t Gene[350], 
 
 #ifdef DEBUG2
 		std::cout << "c: " << counterJ << ", " << (*position) << std::endl;
-		if((*position) == 68){
+		if((*position) == 131){
 			std::cout << "!!" << std::endl;
 		}
 #endif
@@ -453,7 +453,7 @@ bool BattleEmulator::Main(int* position, int RunCount, const int32_t Gene[350], 
 			}
 			(*position) += 2;
 		}
-		if(enemyAction == DESPERATE_ATTACK){
+		if(enemyAction == DESPERATE_ATTACK || enemyAction == BURNING_BREATH){
 			(*position) += 2;
 		}
 		(*position)++; //0x02160d64
@@ -1010,7 +1010,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
 
 			resetCombo(NowState);
 			break;
-			        case BattleEmulator::MORE_HEAL:
+		case BattleEmulator::MORE_HEAL:
             players[attacker].mp -= 8;
             (*position) += 2;
             (*position)++; //関係ない
@@ -1163,7 +1163,6 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
 					kaihi = true;
 				}
 			}
-			(*position)++;
 			if (lcg::getPercent(position, 100) < 13 && !kaihi) {
 				if(players[defender].paralysisLevel == 3){
 					//std::cerr << "paralysisLevel == 2" << std::endl;

@@ -855,7 +855,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 
     //AI Warning: This is code related to debug2
-    uint64_t time1 = 0x07f16f2e;
+    uint64_t time1 = 0xa6e83bf;
 
     int dummy[100];
     lcg::init(time1, false);
@@ -868,15 +868,8 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
     //AI Warning: This is code related to debug2
     int32_t gene1[350] = {
-        BattleEmulator::BUFF,
-        BattleEmulator::MORE_HEAL,
-        BattleEmulator::MORE_HEAL,
-        BattleEmulator::MORE_HEAL,
-        BattleEmulator::MULTITHRUST,
-        BattleEmulator::MULTITHRUST,
-        BattleEmulator::MULTITHRUST,
-        BattleEmulator::MULTITHRUST,
-        BattleEmulator::MULTITHRUST,
+        30, 62, 62, 62, 62, 53, 33, 34,
+        BattleEmulator::ATTACK_ALLY
     };
     //gene1[19-1] = BattleEmulator::DEFENCE;
     int counter = 0;
@@ -922,7 +915,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 0x0a6e83a9+6;
+    uint64_t seed = 0x0a6e83a9+22;
 
     int actions[350] = {
         BattleEmulator::BUFF,
