@@ -1850,12 +1850,14 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 if (players[defender].paralysisLevel == 3) {
                     //std::cerr << "paralysisLevel == 2" << std::endl;
                 }
-                players[defender].paralysis = true;
-                players[defender].paralysisTurns = 4;
-                players[defender].paralysisLevel++;
-                players[0].sleeping = false;
-                players[0].sleepingTurn = -1;
-                players[0].TensionLevel = 0;
+                if(players[defender].TensionLevel != 4){
+                    players[defender].paralysis = true;
+                    players[defender].paralysisTurns = 4;
+                    players[defender].paralysisLevel++;
+                    players[0].sleeping = false;
+                    players[0].sleepingTurn = -1;
+                    players[0].TensionLevel = 0;
+                }
                 baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
                 if (baseDamage == 0) {
                     baseDamage = lcg::getPercent(position, 2); // 0x021e81a0
