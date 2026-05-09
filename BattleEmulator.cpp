@@ -1127,7 +1127,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
 				}
 			}
 			(*position)++;
-			if(false){
+			if (lcg::getPercent(position, 100) < 13 && !kaihi) {
 				if(players[defender].paralysisLevel == 3){
 					//std::cerr << "paralysisLevel == 2" << std::endl;
 				}
@@ -1674,7 +1674,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
 
 				//0x021e34e8
 				//TODO: 0ダメージ時の順番
-				if((Id & 0xffff) == HEART_BREAKER && lcg::getPercent(position, 100) < 6.2500){//0x021e34e8
+				if((Id & 0xffff) == HEART_BREAKER && lcg::getPercent(position, 100) < 18.7500){//0x021e34e8
 					/**
 					float: 0x020756e4 00000000 0x414e0000 193
 					0x021e81a0 0x00000002 194

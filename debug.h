@@ -25,7 +25,7 @@
 #endif
 
 //THIS DEBUG CODE!
-#define DEBUG2 1
+//#define DEBUG2 1
 
 #ifdef DEBUG2
 #define DEBUG_COUT2(x) std::cout << x << std::endl
@@ -34,7 +34,7 @@
 #endif
 
 //THIS DEBUG CODE!
-//#define DEBUG3 1
+#define DEBUG3 1
 
 #ifdef DEBUG3
 #define DEBUG_COUT3(x) std::cout << x << std::endl
