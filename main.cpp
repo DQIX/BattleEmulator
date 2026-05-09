@@ -84,7 +84,7 @@ namespace {
     constexpr Player BasePlayers[2] = {
         // プレイヤー1
         {
-            131, 131.0, 205, 205, 146, 146, 105, 105, 120, 70, // 最初のメンバー
+            131, 131.0, 205, 205, 144, 144, 105, 105, 120, 70, // 最初のメンバー
             70, false, false, 0, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             5, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns

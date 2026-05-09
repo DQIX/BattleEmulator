@@ -899,7 +899,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position) += 2;
             (*position)++; //会心
             (*position)++; //不明
-            if (lcg::getPercent(position, 100) < 11) {
+            if (lcg::getPercent(position, 100) < 34) {
                 if (players[defender].TensionLevel != 4) {
                     players[defender].isStunned = true;
                     players[defender].TensionLevel = 0;
