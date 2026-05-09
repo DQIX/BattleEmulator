@@ -1010,7 +1010,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
             (*position) += 2;
             (*position)++; //会心 0x02158584
             (*position)++; //関係ない 0x021ec6f8
-            if(lcg::getPercent(position, 100) < 31){
+            if(lcg::getPercent(position, 100) < 62){
                 //0x02157f58 回避
                 baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
                 if(baseDamage == 0){
@@ -1586,7 +1586,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
             (*position) += 2;
             (*position)++; //会心
             (*position)++; //不明
-            if(lcg::getPercent(position, 100) < 13){
+            if(lcg::getPercent(position, 100) < 38){
                 if(players[defender].TensionLevel != 4){
                     players[defender].isStunned = true;
                     players[defender].TensionLevel = 0;
