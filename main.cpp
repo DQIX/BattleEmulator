@@ -938,7 +938,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 
 	//AI Warning: This is code related to debug2
-	uint64_t time1 = 0xa6e83bf;
+	uint64_t time1 = 0xa902bcf;
 
 	int dummy[100];
 	lcg::init(time1, false);
@@ -951,7 +951,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 	//AI Warning: This is code related to debug2
 	int32_t gene1[350] = {
-		30, 62, 62, 62, 62, 53, 33, 34,
+		39, 33, 62, 62, 62, 34,
 		BattleEmulator::ATTACK_ALLY
 	};
 	//gene1[19-1] = BattleEmulator::DEFENCE;
@@ -998,10 +998,11 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 #endif
 
 #ifdef DEBUG3
-	uint64_t seed = 0x0a7642b3;
+	uint64_t seed = 0x0a7865c2;
 
 	int actions[350] = {
-		BattleEmulator::ATTACK_ALLY,
+		BattleEmulator::PSYCHE_UP_ALLY,
+		BattleEmulator::PSYCHE_UP_ALLY,
 		-1,
 	};
 	std::stringstream ss2;
