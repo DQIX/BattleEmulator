@@ -470,6 +470,8 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
         nextGen.reserve(GA_POPULATION);
         for (int e = 0; e < eliteCount; ++e) nextGen.push_back(population[e]);
 
+        dumpGenome(population[0], result.bestTurn);
+
         // ルーレット／トーナメント: シンプルにトーナメント選択
         auto tournamentSelect = [&](int k)->const GAGenome& {
             int best = static_cast<int>(rng() % GA_POPULATION);
