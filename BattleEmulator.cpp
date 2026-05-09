@@ -271,6 +271,8 @@ const char* BattleEmulator::getActionName(int actionId){
 			return "Blockenspiel";
 		case DESPERATE_ATTACK:
 			return "Desperate";
+		case INACTIVE_ALLY:
+			return "Inactive";
 		default:
 			return "Unknown Action";
 	}
@@ -418,7 +420,7 @@ bool BattleEmulator::Main(int* position, int RunCount, const int32_t Gene[350], 
 
 #ifdef DEBUG2
 		std::cout << "c: " << counterJ << ", " << (*position) << std::endl;
-		if((*position) == 136){
+		if((*position) == 68){
 			std::cout << "!!" << std::endl;
 		}
 #endif
@@ -1618,6 +1620,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
 				(*position)++; //不明
 			}
 			process7A8(position, baseDamage, players, defender);
+			resetCombo(NowState);
 			break;
 		}
 		case BattleEmulator::ATTACK_ENEMY:
@@ -1671,7 +1674,15 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
 
 				//0x021e34e8
 				//TODO: 0ダメージ時の順番
-				if((Id & 0xffff) == HEART_BREAKER && lcg::getPercent(position, 100) < 6.2500){
+				if((Id & 0xffff) == HEART_BREAKER && lcg::getPercent(position, 100) < 6.2500){//0x021e34e8
+					/**
+					float: 0x020756e4 00000000 0x414e0000 193
+					0x021e81a0 0x00000002 194
+					0damage, 021e81a0: 1
+					0x021e34e8 0x00000064 195
+					0x02158ac4 0x00000064 196
+					doku, 02158ad0: 100/0
+					 */
 					players[defender].isStunned = true;
 				}
 
@@ -1979,7 +1990,7 @@ int BattleEmulator::FUN_0207564c(int* position, int atk, int def){
 #endif
 
 void BattleEmulator::process7A8(int* position, int baseDamage, Player players[2], int defender){
-	if(players[defender].paralysis || players[defender].sleeping || players[defender].specialCharge
+	if(players[defender].paralysis || players[defender].sleeping || players[defender].specialCharge || players[defender].isStunned
 		|| players[defender].hp <= baseDamage){
 		return;
 	}
