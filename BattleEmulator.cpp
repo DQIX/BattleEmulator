@@ -626,6 +626,24 @@ bool BattleEmulator::Main(int* position, int RunCount, const int32_t Gene[350], 
 					//--------start_FUN_02158dfc-------
 					if(!players[0].paralysis && !players[0].sleeping){
 						(*position) += 1;
+					} else if (players[0].paralysis) {
+						action = PARALYSIS;
+						//if (players[0].paralysisTurns != 0) {
+						players[0].paralysisTurns--;
+						//}
+						if (players[0].paralysisTurns <= 0) {
+							int paralysisTable[4] = {62, 75, 87, 100};
+							auto probability1 = paralysisTable[std::abs(players[0].paralysisTurns)];
+							auto probability2 = lcg::getPercent(position, 100);
+							if (probability1 >= (probability2 + (probability1 == 75 ? 1 : 0))) {
+								// 0.5 < 0.65
+								players[0].paralysis = false;
+								players[0].paralysisLevel = 0;
+								action = CURE_PARALYSIS;
+							}
+						} else {
+							(*position) += 1;
+						}
 					}
 					else if(players[0].sleeping){
 						action = SLEEPING;
@@ -1051,7 +1069,26 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
             }
             resetCombo(NowState);
             break;
+		case BattleEmulator::CURE_PARALYSIS:
+			(*position) += 2;
+			(*position)++; //関係ない
+			(*position)++; //会心
+			(*position)++; //回避
+			FUN_0207564c(position, players[attacker].defaultATK, players[defender].def); // 0x021e81a0要検討
+			(*position)++; //不明 0x021e54fc?
+			if (!players[attacker].specialCharge && !players[attacker].sleeping && !players[attacker].paralysis) {
+				(*position)++; //必殺チャージ(敵)
+				if (lcg::getPercent(position, 100) < 1) {
+					//0x021ed7a8
+					players[attacker].specialCharge = true;
+					players[attacker].specialChargeTurn = 8;
+				}
+			}
+			baseDamage = 0;
+			resetCombo(NowState);
+			break;
 		case BattleEmulator::INACTIVE_ENEMY:
+		case BattleEmulator::PARALYSIS:
 		case BattleEmulator::INACTIVE_ALLY:
 			(*position) += 2;
 			(*position)++; //関係ない
