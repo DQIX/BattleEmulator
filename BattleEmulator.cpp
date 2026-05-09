@@ -945,6 +945,41 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
 	auto attackCount = 0;
 	bool defenseFlag = false; //防御した場合0x021e81a0のほうが優先度高いらしい。なんで
 	switch(Id & 0xffff){
+		case FULLHEAL:
+			players[attacker].mp -= 24;
+			(*position) += 2;
+			(*position)++; //不明　0x021ec6f8
+			(*position)++; //会心
+			(*position)++; //ニセ回避 0x02157f58
+			baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[attacker].def);
+			if (baseDamage == 0) {
+				baseDamage = lcg::getPercent(position, 2); //0x021e81a0
+			}
+			if (baseDamage != 0) {
+				(*position)++; //関係ない 0x021e54fc???
+			}
+
+			//0x021eb8c8, randIntRange: 0x021eb8f0 怒り狂っている場合←の消費が発生しない。
+
+			if (!players[0].specialCharge && !players[0].paralysis && !players[0].sleeping) {
+				(*position)++; //0x021ed7a8
+			}
+
+			if (!players[1].rage) {
+				(*position)++; //0x021eb8c8
+			}
+			(*position)++; //? 0x021eb8f0
+			if (!players[0].specialCharge && !players[0].paralysis && !players[0].sleeping) {
+				if (lcg::getPercent(position, 100) < 1) {
+					// 0x021edaf4
+					players[attacker].specialCharge = true;
+					players[attacker].specialChargeTurn = 8;
+				}
+			}
+			players[attacker].mp -= 28;
+			resetCombo(NowState);
+			return 999;
+			break;
 		case BattleEmulator::CRITICAL_ATTACK:
 			(*position) += 2;
 			(*position)++; // アクロバットスターとか
@@ -1714,7 +1749,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
 					/**
 					float: 0x020756e4 00000000 0x414e0000 193
 					0x021e81a0 0x00000002 194
-					0damage, 021e81a0: 1
+					0damage, 021e81a0: 1f
 					0x021e34e8 0x00000064 195
 					0x02158ac4 0x00000064 196
 					doku, 02158ad0: 100/0
