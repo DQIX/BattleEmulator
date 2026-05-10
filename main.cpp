@@ -1097,26 +1097,10 @@ namespace{
 	std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed, const ResultStructure& result, int numThreads, bool dropbug){
 		lcg::init(seed, true);
 
-		int32_t gene[350] = {0};
-		int turns = 0;
-		for(int i = 0; i < 349; ++i){
-			if(i < result.AactionsCounter){
-				gene[i] = result.Aactions[i];
-				turns++;
-				continue;
-			}
-			gene[i] = -1;
-			gene[i + 1] = -1;
-			break;
-		}
-		if(result.AactionsCounter >= 349){
-			gene[349] = -1;
-		}
-
 		BattleEmulator::ResetTurnProcessed();
 
 		std::stringstream ss;
-		if(!SearchRequest(copiedPlayers, seed, gene, ss)){
+		if(!SearchRequest(copiedPlayers, seed, aActions2, ss)){
 			ss << std::endl;
 			ss << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
 			ss << "      **YOU WILL NOW LOSE!**       " << std::endl;
@@ -1124,7 +1108,7 @@ namespace{
 			ss << std::endl;
 
 			auto turns = 0;
-			for(int a_action : gene){
+			for(int a_action : aActions2){
 				if(a_action == -1){
 					break;
 				}
@@ -1136,8 +1120,8 @@ namespace{
 			lcg::init(seed);
 			int position = 1;
 			uint64_t nowState = 0;
-			BattleEmulator::Main(&position, 100, gene, players, &res, seed, nullptr, nullptr, -1, &nowState);
-			ss << dumpTable(res, gene, foundTurn);
+			BattleEmulator::Main(&position, 100, aActions2, players, &res, seed, nullptr, nullptr, -1, &nowState);
+			ss << dumpTable(res, aActions2, foundTurn);
 			ss << "startturn=" << foundTurn << std::endl;
 			return ss.str();
 		}
