@@ -1676,15 +1676,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
 			(*position)++; //0x021ec6f8
 			(*position)++; //0x00000064 回避
 			//TODO: ダメージ
-			baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
-			//防御が適応される時期を調べる
-			if(baseDamage == 0){
-				// && players[0].defence != 0.1
-				baseDamage = lcg::getPercent(position, 2); //TODO: 0x021e81a0
-				if(baseDamage == 1){
-					defenseFlag = true;
-				}
-			}
+			FUN_0207564c(position, players[attacker].atk, players[defender].def);
 			auto dm = lcg::floatRand(position, 0.9000, 1.1000);
 			constexpr double bairitu = 15 * 2.5;
 			auto bairitu2 = 1.0;
