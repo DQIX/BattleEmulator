@@ -59,6 +59,7 @@ SRC_FILES=(
 
 EMCC_FLAGS=(
   -std=c++20
+  -O3
   -sALLOW_MEMORY_GROWTH=1
   -sENVIRONMENT=worker,web
   -sWASM_BIGINT=1
@@ -73,20 +74,8 @@ EMCC_FLAGS=(
   "-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','UTF8ToString']"
 )
 
-
 EMCC_FLAGS+=(
-  -DNDEBUG
-  -D_LIBCPP_ASSERTIONS=1
-  -D_LIBCPP_ENABLE_ASSERTIONS=1
-
   -sASSERTIONS=1
-  -sSAFE_HEAP=1
-
-  -O0
-  -g3
-
-  -gsource-map
-  -sDEMANGLE_SUPPORT=1
 )
 
 
