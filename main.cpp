@@ -655,11 +655,10 @@ namespace{
         time2 = time2 << 16;
         int32_t gene[350] = {0};
 
-        for(int i = 0; i < 350; ++i){
+        for(int i = 0; i < 349; ++i){
             gene[i] = aActions[i];
             if(aActions[i] == -1){
                 gene[i] = -1;
-                gene[i + 1] = -1;
                 break;
             }
         }
@@ -1108,7 +1107,6 @@ namespace {
                 continue;
             }
             gene[i] = -1;
-            gene[i + 1] = -1;
             break;
         }
         if (result.AactionsCounter >= 349) {
