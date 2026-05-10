@@ -1,3 +1,4 @@
+#include <cassert>
 #include <iostream>
 #include <cstring>
 #include <cmath>
@@ -37,9 +38,9 @@ namespace{
 #endif
 
 	// 勝利フラグと確定した敵残HPを返す
-	struct RunResult {
+	struct RunResult{
 		bool win;
-		int enemyHp;   // 使わなくなったが一応残す
+		int enemyHp; // 使わなくなったが一応残す
 		int turn;
 		int position;
 	};
@@ -373,168 +374,188 @@ namespace{
 		std::cerr << "error: Not enough argc!!" << std::endl;
 	}
 
-	void pla(int &enemyConsecutive, int *aActions, int &aActionsIndex, bool EnemyPresent) {
-       // 連続敵行動が3件以上の場合、眠り判定を行う
-       if (enemyConsecutive >= 3) {
-           while (enemyConsecutive >= 1) {
-               aActions[aActionsIndex++] = BattleEmulator::PARALYSIS;
-               enemyConsecutive -= 1;
-           }
-       }
-       enemyConsecutive = 0;
-   }
+	void pla(int& enemyConsecutive, int* aActions, int& aActionsIndex, bool EnemyPresent){
+		// 連続敵行動が3件以上の場合、眠り判定を行う
+		if(enemyConsecutive >= 3){
+			while(enemyConsecutive >= 1){
+				aActions[aActionsIndex++] = BattleEmulator::PARALYSIS;
+				enemyConsecutive -= 1;
+			}
+		}
+		enemyConsecutive = 0;
+	}
 
-   NOINLINE bool ProcessInputBuilder(const int argc, char *argv[], int *aActions, int *values) {
-        // 最初の3件は時間情報のため、最低でも4件必要
-        if (argc < 4) {
-            return false;
-        }
+	NOINLINE bool ProcessInputBuilder(const int argc, char* argv[], int* aActions, int* values){
+		// 最初の3件は時間情報のため、最低でも4件必要
+		if(argc < 4){
+			return false;
+		}
 
-        int counter2 = 0;
+		int counter2 = 0;
 
-        // 行動引数は argv[4] 以降
-        int totalActions = argc - 4;
-        // 1ターンあたりの上限行動数（3件）
-        constexpr int actionsPerTurn = 2;
+		// 行動引数は argv[4] 以降
+		int totalActions = argc - 4;
+		// 1ターンあたりの上限行動数（3件）
+		constexpr int actionsPerTurn = 2;
 
-        // ターン数は、totalActions を actionsPerTurn で割った商＋余りがあれば1ターンとして計上
-        int turns = totalActions / actionsPerTurn;
-        int remainder = totalActions % actionsPerTurn;
-        if (remainder > 0) {
-            turns++;
-        }
+		// ターン数は、totalActions を actionsPerTurn で割った商＋余りがあれば1ターンとして計上
+		int turns = totalActions / actionsPerTurn;
+		int remainder = totalActions % actionsPerTurn;
+		if(remainder > 0){
+			turns++;
+		}
 
-       int enemyConsecutive = 0; // 複数ターンにわたる敵連続行動数
-       int tokenIndex = 4; // 最初の行動引数の位置
-       int enemyActions = 0; // このターン内の敵の行動数
-       int offset = 0;
-       int aActionsIndex = 0;
+		int enemyConsecutive = 0; // 複数ターンにわたる敵連続行動数
+		int tokenIndex = 4; // 最初の行動引数の位置
+		int enemyActions = 0; // このターン内の敵の行動数
+		int offset = 0;
+		int aActionsIndex = 0;
 
-        for (int turn = 0; turn < turns; turn++) {
-            if (argc <= tokenIndex) {
-                break;
-            }
-            bool allyPresent = false; // このターンに味方行動があるかのフラグ
-            bool EnemyPresent = false; // このターンに味方行動があるかのフラグ
-            int turnCouner = 0;
-
-
-            // 現ターンの行動数（最後のターンは3未満の場合があるので調整）
-            int actionsThisTurn = actionsPerTurn;
-            if ((turn == turns - 1) && (remainder > 0)) {
-                actionsThisTurn = remainder;
-            }
-
-            // 現ターン分のトークンを処理
-            for (int j = 0; j < actionsThisTurn; j++) {
-                if (argc <= tokenIndex) {
-                    break;
-                }
-                const char *token = argv[tokenIndex++];
-                if (isMatchStrWithTrim(token, "h") || isMatchStrWithTrim(token, "ah")) {
-                    // 回復は明示的な味方行動
-                    enemyConsecutive += enemyActions;
-                    pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
-                    enemyActions = 0;
-                    aActions[aActionsIndex++] = BattleEmulator::SPECIAL_MEDICINE;
-                    values[counter2++] = InputBuilder::TYPE_PRE_SPECIAL_MEDICINE;
-                    values[counter2++] = InputBuilder::TYPE_SPECIAL_MEDICINE;
-                    allyPresent = true;
-                    foundTurnOffset = 0;
-                } else if (isMatchStrWithTrim(token, "at")) {
-                	// 回復は明示的な味方行動
-                	enemyConsecutive += enemyActions;
-               	pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
-               	enemyActions = 0;
-               	aActions[aActionsIndex++] = BattleEmulator::PSYCHE_UP_ALLY;
-                	values[counter2++] = InputBuilder::TYPE_PSYCHE_UP_ALLY;
-                	allyPresent = true;
-                	foundTurnOffset = 0;
-                } else if (isMatchStrWithTrim(token, "as") || isMatchStrWithTrim(token, "s") || isMatchStrWithTrim(token, "ab") || isMatchStrWithTrim(token, "b")) {
-                	// 回復は明示的な味方行動
-                	enemyConsecutive += enemyActions;
-               	pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
-               	enemyActions = 0;
-               	aActions[aActionsIndex++] = BattleEmulator::BUFF;
-                	values[counter2++] = InputBuilder::TYPE_BUFF_ALLY;
-                	allyPresent = true;
-                	foundTurnOffset = 0;
-                } else if (isMatchStrWithTrim(token, "f")) {
-                	// 回復は明示的な味方行動
-                	enemyConsecutive += enemyActions;
-               	pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
-               	enemyActions = 0;
-               	aActions[aActionsIndex++] = BattleEmulator::FULLHEAL;
-                	values[counter2++] = InputBuilder::TYPE_FULLHEAL;
-                	allyPresent = true;
-                	foundTurnOffset = 0;
-                } else if (isMatchStrWithTrim(token, "i")) {
-                	// 回復は明示的な味方行動
-                	values[counter2++] = InputBuilder::TYPE_BURNING_BREATH;
-                	enemyActions++;
-                	EnemyPresent = true;
-                } else if (isMatchStrWithTrim(token, "y")) {
-                    aActions[aActionsIndex++] = BattleEmulator::INACTIVE_ALLY;
-                    allyPresent = true;
-                    offset++;
-                    if (remainder > 0) {
-                        remainder--;
-                    } else {
-                        turns++;
-                    }
-                    foundTurnOffset++;
-                    break;
-                } else if (isMatchStrWithTrim(token, "r")) {
-                    enemyConsecutive += enemyActions;
-                    pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
-                    enemyActions = 0;
-                } else {
-                    // 上記以外は toABCint による分解処理
-                    auto [prefix, tmp] = toABCint(token);
-
-                    foundTurnOffset = 0;
-
-                    // 味方行動の条件（今回は prefix == 'a' が味方とする）
-                    if (prefix == 'a') {
-                        enemyConsecutive += enemyActions;
-                        pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
-                        enemyActions = 0;
-                        aActions[aActionsIndex++] = BattleEmulator::ATTACK_ALLY;
-                        values[counter2++] = InputBuilder::TYPE_ATTACK_ALLY;
-                        values[counter2++] = tmp;
-                        allyPresent = true;
-                    } else if (prefix == 'h') {
-                        enemyConsecutive += enemyActions;
-                        pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
-                        enemyActions = 0;
-                        aActions[aActionsIndex++] = BattleEmulator::HEAL;
-                        values[counter2++] = InputBuilder::TYPE_HEAL;
-                        values[counter2++] = tmp;
-                        allyPresent = true;
-                    } else {
-                        values[counter2++] = tmp;
-                        enemyActions++;
-                        EnemyPresent = true;
-                    }
-                }
-            } // 1ターン分の処理終了
-            //0 2 21 a19 9 11 16 13 13 r
-            //0 2 18 15 a16 y 14 11 9 11
-            //0 2 42 a17 11 10 a18 12 10 9 13 r
-            if ((enemyActions == 2 || enemyActions == 3) && ((tokenIndex - 3 - enemyActions) % 2 == offset % 2)) {
-                enemyActions--;
-            }
-        }
-
-        enemyConsecutive += enemyActions;
-        pla(enemyConsecutive, aActions, aActionsIndex, false);
-
-        aActions[aActionsIndex] = -1;
-        values[counter2] = -1;
+		for(int turn = 0; turn < turns; turn++){
+			if(argc <= tokenIndex){
+				break;
+			}
+			bool allyPresent = false; // このターンに味方行動があるかのフラグ
+			bool EnemyPresent = false; // このターンに味方行動があるかのフラグ
+			int turnCouner = 0;
 
 
-        return true;
-    }
+			// 現ターンの行動数（最後のターンは3未満の場合があるので調整）
+			int actionsThisTurn = actionsPerTurn;
+			if((turn == turns - 1) && (remainder > 0)){
+				actionsThisTurn = remainder;
+			}
+
+			// 現ターン分のトークンを処理
+			for(int j = 0; j < actionsThisTurn; j++){
+				if(argc <= tokenIndex){
+					break;
+				}
+				const char* token = argv[tokenIndex++];
+				if(isMatchStrWithTrim(token, "h") || isMatchStrWithTrim(token, "ah")){
+					// 回復は明示的な味方行動
+					enemyConsecutive += enemyActions;
+					pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
+					enemyActions = 0;
+					aActions[aActionsIndex++] = BattleEmulator::SPECIAL_MEDICINE;
+					values[counter2++] = InputBuilder::TYPE_PRE_SPECIAL_MEDICINE;
+					values[counter2++] = InputBuilder::TYPE_SPECIAL_MEDICINE;
+					allyPresent = true;
+					foundTurnOffset = 0;
+				}
+				else if(isMatchStrWithTrim(token, "at")){
+					// 回復は明示的な味方行動
+					enemyConsecutive += enemyActions;
+					pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
+					enemyActions = 0;
+					aActions[aActionsIndex++] = BattleEmulator::PSYCHE_UP_ALLY;
+					values[counter2++] = InputBuilder::TYPE_PSYCHE_UP_ALLY;
+					allyPresent = true;
+					foundTurnOffset = 0;
+				}
+				else if(isMatchStrWithTrim(token, "as") || isMatchStrWithTrim(token, "s") || isMatchStrWithTrim(token, "ab") || isMatchStrWithTrim(token, "b")){
+					// 回復は明示的な味方行動
+					enemyConsecutive += enemyActions;
+					pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
+					enemyActions = 0;
+					aActions[aActionsIndex++] = BattleEmulator::BUFF;
+					values[counter2++] = InputBuilder::TYPE_BUFF_ALLY;
+					allyPresent = true;
+					foundTurnOffset = 0;
+				}
+				else if(isMatchStrWithTrim(token, "f") || isMatchStrWithTrim(token, "af")){
+					// 回復は明示的な味方行動
+					enemyConsecutive += enemyActions;
+					pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
+					enemyActions = 0;
+					aActions[aActionsIndex++] = BattleEmulator::FULLHEAL;
+					values[counter2++] = InputBuilder::TYPE_FULLHEAL;
+					allyPresent = true;
+					foundTurnOffset = 0;
+				}
+				else if(isMatchStrWithTrim(token, "i")){
+					// 回復は明示的な味方行動
+					values[counter2++] = InputBuilder::TYPE_BURNING_BREATH;
+					enemyActions++;
+					EnemyPresent = true;
+				}else if(isMatchStrWithTrim(token, "m") || isMatchStrWithTrim(token, "am")){
+					enemyConsecutive += enemyActions;
+					pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
+					enemyActions = 0;
+					aActions[aActionsIndex++] = BattleEmulator::MIDHEAL;
+					values[counter2++] = InputBuilder::TYPE_MIDHEAL;
+					allyPresent = true;
+					foundTurnOffset = 0;
+				}
+				else if(isMatchStrWithTrim(token, "y")){
+					aActions[aActionsIndex++] = BattleEmulator::INACTIVE_ALLY;
+					allyPresent = true;
+					offset++;
+					if(remainder > 0){
+						remainder--;
+					}
+					else{
+						turns++;
+					}
+					foundTurnOffset++;
+					break;
+				}
+				else if(isMatchStrWithTrim(token, "r")){
+					enemyConsecutive += enemyActions;
+					pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
+					enemyActions = 0;
+				}
+				else{
+					// 上記以外は toABCint による分解処理
+					auto [prefix, tmp] = toABCint(token);
+
+					assert(tmp != -1);
+
+					foundTurnOffset = 0;
+
+					// 味方行動の条件（今回は prefix == 'a' が味方とする）
+					if(prefix == 'a'){
+						enemyConsecutive += enemyActions;
+						pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
+						enemyActions = 0;
+						aActions[aActionsIndex++] = BattleEmulator::ATTACK_ALLY;
+						values[counter2++] = InputBuilder::TYPE_ATTACK_ALLY;
+						values[counter2++] = tmp;
+						allyPresent = true;
+					}
+					else if(prefix == 'h'){
+						enemyConsecutive += enemyActions;
+						pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
+						enemyActions = 0;
+						aActions[aActionsIndex++] = BattleEmulator::HEAL;
+						values[counter2++] = InputBuilder::TYPE_HEAL;
+						values[counter2++] = tmp;
+						allyPresent = true;
+					}
+					else{
+						values[counter2++] = tmp;
+						enemyActions++;
+						EnemyPresent = true;
+					}
+				}
+			} // 1ターン分の処理終了
+			//0 2 21 a19 9 11 16 13 13 r
+			//0 2 18 15 a16 y 14 11 9 11
+			//0 2 42 a17 11 10 a18 12 10 9 13 r
+			if((enemyActions == 2 || enemyActions == 3) && ((tokenIndex - 3 - enemyActions) % 2 == offset % 2)){
+				enemyActions--;
+			}
+		}
+
+		enemyConsecutive += enemyActions;
+		pla(enemyConsecutive, aActions, aActionsIndex, false);
+
+		aActions[aActionsIndex] = -1;
+		values[counter2] = -1;
+
+
+		return true;
+	}
 
 	/**
 	 * このexeのメインロジック。
@@ -556,16 +577,14 @@ namespace{
 				int damages[350] = {0};
 
 				// Aactions をスタックにコピー
-				for(int i = 0; i < result.AactionsCounter; ++i){
-					aActions[i] = result.Aactions[i];
+				for(int i = 0; i < 349; ++i){
+					aActions[i] = aActions2[i];
 				}
-				aActions[result.AactionsCounter] = -1;
 
 				// AII_damage をスタックにコピー
-				for(int i = 0; i < result.AII_damageCounter; ++i){
-					damages[i] = result.AII_damage[i];
+				for(int i = 0; i < 349; ++i){
+					damages[i] = value2[i];
 				}
-				damages[result.AII_damageCounter] = -1;
 
 
 				FoundSeed = 0;
@@ -759,61 +778,61 @@ namespace{
 		return true;
 	}
 
-    /**
-     * 指定された範囲のシードを使って総当たりを行い、一致するシード知を探索します。
-     * 各シードごとにバトルシミュレーションを実行し、条件を満たす場合はシードを記録します。
-     *
-     * @param copiedPlayers バトルに使用するプレイヤーデータ（コピーされた配列）
-     * @param start シード探索の開始位置
-     * @param end シード探索の終了位置
-     * @param gene バトルシミュレーションに使用する遺伝子データの配列
-     * @param damages バトル中に発生するダメージを記録する配列
-     */
-    void BruteForceMainLoop(const Player copiedPlayers[2], uint64_t start, uint64_t end, int gene[350],
-                            int damages[350]){
-        int* position = new int(1);
-        auto* nowState = new uint64_t(0);
-        int maxElement = 350;
-        for(uint64_t seed = start; seed < end; ++seed){
-            BattleEmulator::resetStartTurn();
-            lcg::init(seed);
-            (*nowState) = 0;
-            (*position) = 1;
-            Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
+	/**
+	 * 指定された範囲のシードを使って総当たりを行い、一致するシード知を探索します。
+	 * 各シードごとにバトルシミュレーションを実行し、条件を満たす場合はシードを記録します。
+	 *
+	 * @param copiedPlayers バトルに使用するプレイヤーデータ（コピーされた配列）
+	 * @param start シード探索の開始位置
+	 * @param end シード探索の終了位置
+	 * @param gene バトルシミュレーションに使用する遺伝子データの配列
+	 * @param damages バトル中に発生するダメージを記録する配列
+	 */
+	void BruteForceMainLoop(const Player copiedPlayers[2], uint64_t start, uint64_t end, int gene[350],
+	                        int damages[350]){
+		int* position = new int(1);
+		auto* nowState = new uint64_t(0);
+		int maxElement = 350;
+		for(uint64_t seed = start; seed < end; ++seed){
+			BattleEmulator::resetStartTurn();
+			lcg::init(seed);
+			(*nowState) = 0;
+			(*position) = 1;
+			Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
 
 
-            bool resultBool = BattleEmulator::Main(position, 20, gene, players,
-                                                   nullptr, seed, nullptr, damages,
-                                                   maxElement,
-                                                   nowState);
-            if(resultBool){
-                std::cout << seed << std::endl;
-                FoundSeed = seed;
-                foundSeeds++;
-                foundTurn = BattleEmulator::getStartTurn();
-            }
-        }
-        delete position;
-        delete nowState;
-    }
+			bool resultBool = BattleEmulator::Main(position, 20, gene, players,
+			                                       nullptr, seed, nullptr, damages,
+			                                       maxElement,
+			                                       nowState);
+			if(resultBool){
+				std::cout << seed << std::endl;
+				FoundSeed = seed;
+				foundSeeds++;
+				foundTurn = BattleEmulator::getStartTurn();
+			}
+		}
+		delete position;
+		delete nowState;
+	}
 
-    /**
-     * 指定されたプレイヤーペアと時間パラメータ、行動データを使って、総当たりを実行しシード値を探索します。
-     * 実行結果として、探索されたシード値を返却します。また、デバッグモードで実行時間およびパフォーマンスを記録します。
-     * 複数のシード値が見つかった場合は、0を返します
-     *
-     * @param copiedPlayers プレイヤーのデータを格納した配列（2人分）
-     * @param hours         現在の時間（時）
-     * @param minutes       現在の時間（分）
-     * @param seconds       現在の時間（秒）
-     * @param turns         バトルのターン数
-     * @param aActions      各ターンの行動データが格納された配列
-     * @param damages       各ターンでのダメージデータが格納された配列
-     * @return 見つかったシード値（見つからない場合は0を返す）
-     */
-    [[nodiscard]] uint64_t BruteForceRequest(const Player copiedPlayers[2], int hours, int minutes, int seconds,
-                                             int turns,
-                                             int aActions[350], int damages[350]){
+	/**
+	 * 指定されたプレイヤーペアと時間パラメータ、行動データを使って、総当たりを実行しシード値を探索します。
+	 * 実行結果として、探索されたシード値を返却します。また、デバッグモードで実行時間およびパフォーマンスを記録します。
+	 * 複数のシード値が見つかった場合は、0を返します
+	 *
+	 * @param copiedPlayers プレイヤーのデータを格納した配列（2人分）
+	 * @param hours         現在の時間（時）
+	 * @param minutes       現在の時間（分）
+	 * @param seconds       現在の時間（秒）
+	 * @param turns         バトルのターン数
+	 * @param aActions      各ターンの行動データが格納された配列
+	 * @param damages       各ターンでのダメージデータが格納された配列
+	 * @return 見つかったシード値（見つからない場合は0を返す）
+	 */
+	[[nodiscard]] uint64_t BruteForceRequest(const Player copiedPlayers[2], int hours, int minutes, int seconds,
+	                                         int turns,
+	                                         int aActions[350], int damages[350]){
 #ifdef DEBUG
 		auto t0 = std::chrono::high_resolution_clock::now();
 #endif
@@ -1053,7 +1072,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 
 	//AI Warning: This is code related to debug2
-	uint64_t time1 = 0x0aa5cecc;
+	uint64_t time1 = 0xb0005;
 
 	int dummy[100];
 	lcg::init(time1, false);
@@ -1066,7 +1085,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 	//AI Warning: This is code related to debug2
 	int32_t gene1[350] = {
-		30, 62, 62, 62, 62, 33, 34,
+		30, 62, 33, 62, 62, 62, 34,
 		BattleEmulator::ATTACK_ALLY
 	};
 	//gene1[19-1] = BattleEmulator::DEFENCE;
@@ -1121,7 +1140,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 		-1,
 	};
 	std::stringstream ss2;
-	SearchRequest(BasePlayers, seed, actions,ss2);
+	SearchRequest(BasePlayers, seed, actions, ss2);
 	std::cout << ss2.str() << std::endl;
 
 	std::cout << performanceLogger.rdbuf() << std::endl;
@@ -1142,7 +1161,6 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 		std::cerr << "Invalid time parameters" << std::endl;
 		return 1;
 	}
-
 
 
 	if(!ProcessInputBuilder(argc, argv, aActions2, value2)){
@@ -1199,9 +1217,9 @@ namespace{
 		return tokens;
 	}
 
-	bool buildResultsFromInput(const char *input) {
+	bool buildResultsFromInput(const char* input){
 		wasmLastError.clear();
-		if (input == nullptr) {
+		if(input == nullptr){
 			wasmLastError = "input is null";
 			return false;
 		}
@@ -1213,19 +1231,19 @@ namespace{
 		argvStorage.push_back("0");
 		argvStorage.push_back("0");
 		argvStorage.push_back("0");
-		for (const auto &token : tokens) {
-			if (!token.empty()) {
+		for(const auto& token : tokens){
+			if(!token.empty()){
 				argvStorage.push_back(token);
 			}
 		}
 
-		std::vector<char *> argv;
+		std::vector<char*> argv;
 		argv.reserve(argvStorage.size());
-		for (auto &arg : argvStorage) {
-			argv.push_back(const_cast<char *>(arg.c_str()));
+		for(auto& arg : argvStorage){
+			argv.push_back(const_cast<char*>(arg.c_str()));
 		}
 
-		if (!ProcessInputBuilder(static_cast<int>(argv.size()), argv.data(), aActions2, value2)) {
+		if(!ProcessInputBuilder(static_cast<int>(argv.size()), argv.data(), aActions2, value2)){
 			wasmLastError = "input parse failed";
 			return false;
 		}
@@ -1249,7 +1267,7 @@ namespace{
 		damages[result.AII_damageCounter] = -1;
 	}
 
-	std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed, const ResultStructure& result, int numThreads, bool dropbug) {
+	std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed, const ResultStructure& result, int numThreads, bool dropbug){
 		lcg::init(seed, true);
 
 		int32_t gene[350] = {0};

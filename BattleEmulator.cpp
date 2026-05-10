@@ -420,7 +420,7 @@ bool BattleEmulator::Main(int* position, int RunCount, const int32_t Gene[350], 
 
 #ifdef DEBUG2
 		std::cout << "c: " << counterJ << ", " << (*position) << std::endl;
-		if((*position) == 131){
+		if((*position) == 99){
 			std::cout << "!!" << std::endl;
 		}
 #endif
@@ -751,6 +751,11 @@ bool BattleEmulator::Main(int* position, int RunCount, const int32_t Gene[350], 
 									return false;
 								}
 							}
+							if(action == MIDHEAL){
+								if(damages[exCounter++] != InputBuilder::TYPE_MIDHEAL){
+									return false;
+								}
+							}
 							if(damages[exCounter] == -1){
 								startTurn = counterJ;
 								return true;
@@ -762,7 +767,10 @@ bool BattleEmulator::Main(int* position, int RunCount, const int32_t Gene[350], 
 						Player::reduceHp(players[1], basedamage);
 
 						if(mode != -1 && mode != -2){
-							if(damages[exCounter] == InputBuilder::TYPE_PSYCHE_UP_ALLY){
+							//休んだ場合は、入力後に休みが来る場合がある
+							if((action == INACTIVE_ALLY) && (damages[exCounter] == InputBuilder::TYPE_PSYCHE_UP_ALLY || damages[exCounter] == InputBuilder::TYPE_BUFF_ALLY)){
+								exCounter++;
+							}else if(damages[exCounter] == InputBuilder::TYPE_PSYCHE_UP_ALLY){
 								if(action != PSYCHE_UP_ALLY){
 									return false;
 								}
