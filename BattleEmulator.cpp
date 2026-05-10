@@ -565,11 +565,12 @@ bool BattleEmulator::Main(int* position, int RunCount, const int32_t Gene[350], 
 				}
 				else if(mode != -1 && mode != -2){
 					if(
+						c == HEART_BREAKER ||
 						c == ATTACK_ENEMY ||
-						c == PSYCHE_UP ||
-						c == CRACKLE_ENEMY ||
-						c == ZAMMLE ||
-						c == DOUBLE_TROUBLE
+						c == DESPERATE_ATTACK ||
+						c == BLOCKENSPIEL ||
+						c == BURNING_BREATH ||
+						c == CRITICAL_ATTACK
 					){
 						if(damages[exCounter] == -1){
 							startTurn = counterJ;
