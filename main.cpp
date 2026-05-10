@@ -1033,152 +1033,6 @@ namespace{
 	}
 }
 
-int main(int argc, char* argv[]){
-	if(argc == 2 && isMatchStrWithTrim(argv[1], "h")){
-		showHeader();
-		return 0;
-	}
-
-#if defined(OPTIMIZE_MODE)
-	int actions1[350] = {};
-	auto counter = 0;
-	actions1[counter++] = BattleEmulator::BUFF;
-	actions1[counter] = -1;
-	SimpleParameterOptimizer::optimize(BasePlayers, 0x0a7642b3, actions1, 100000, counter);
-	return 0;
-#endif
-
-#ifdef DEBUG
-	auto t0 = std::chrono::high_resolution_clock::now();
-#endif
-
-
-	//https://zenn.dev/reputeless/books/standard-cpp-for-competitive-programming/viewer/library-ios-iomanip#3.1-c-%E8%A8%80%E8%AA%9E%E3%81%AE%E5%85%A5%E5%87%BA%E5%8A%9B%E3%82%B9%E3%83%88%E3%83%AA%E3%83%BC%E3%83%A0%E3%81%A8%E3%81%AE%E5%90%8C%E6%9C%9F%E3%82%92%E7%84%A1%E5%8A%B9%E3%81%AB%E3%81%99%E3%82%8B
-	//std::cin.tie(0)->sync_with_stdio(0);
-
-
-#ifdef DEBUG2
-	//time1 = 0x199114b2;
-	//time1 = 0x226d97a6;
-	//time1 = 0x1c2a9bda;
-	//time1 = 0x1aa6c05d;
-	//3838815720
-	//3839393442
-
-	/*
-	ver: v8.0.6_vG_v2, atk: 220, def: 155, seed: 0x1001
-actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
-	    */
-
-
-	//AI Warning: This is code related to debug2
-	uint64_t time1 = 0xb0005;
-
-	int dummy[100];
-	lcg::init(time1, false);
-	int* position1 = new int(1);
-	auto* NowState = new uint64_t(0); //エミュレーターの内部ステートを表すint
-
-	Player players1[2];
-
-	//0x22e2dbaf:
-
-	//AI Warning: This is code related to debug2
-	int32_t gene1[350] = {
-		30, 62, 33, 62, 62, 62, 34,
-		BattleEmulator::ATTACK_ALLY
-	};
-	//gene1[19-1] = BattleEmulator::DEFENCE;
-	int counter = 0;
-	// int32_t gene1[350] = {0};
-	//  gene1[counter++] = BattleEmulator::BUFF;
-	//  gene1[counter++] = BattleEmulator::BUFF;
-	//  gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
-	//  gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-	//  gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-	//  gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-	//  gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-	//  gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-	//  gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
-	// gene1[counter++] = BattleEmulator::DEFENCE;
-	// gene1[counter++] = BattleEmulator::DEFENCE;
-	// gene1[counter++] = BattleEmulator::DEFENCE;
-	// gene1[counter++] = BattleEmulator::DEFENCE;
-	// gene1[counter++] = BattleEmulator::DEFENCE;
-	// gene1[counter++] = BattleEmulator::DEFENCE;
-	// gene1[counter++] = BattleEmulator::DEFENCE;
-	// gene1[counter++] = BattleEmulator::DEFENCE;
-	// gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-	// gene1[counter++] = BattleEmulator::MERCURIAL_THRUST;
-	// gene1[counter++] = BattleEmulator::MERCURIAL_THRUST;
-
-	(*NowState) = 0;
-	(*position1) = 1;
-	BattleResult dummy1;
-	std::memcpy(players1, BasePlayers, sizeof(players1));
-	BattleEmulator::Main(position1, (counter == 0 ? 1000 : counter), gene1, players1, &dummy1, time1, dummy, dummy, -1,
-	                     NowState);
-
-	std::stringstream ss1;
-	ss1 << time1 << " ";
-	std::cout << (*position1) << std::endl;
-	std::cout << dumpTable(dummy1, gene1, -1) << std::endl;
-
-	//}
-	delete position1;
-	delete NowState;
-
-	return 0;
-#endif
-
-#ifdef DEBUG3
-	uint64_t seed = 0x0ac040ac;
-
-	int actions[350] = {
-		BattleEmulator::PSYCHE_UP_ALLY,
-		BattleEmulator::PSYCHE_UP_ALLY,
-		-1,
-	};
-	std::stringstream ss2;
-	SearchRequest(BasePlayers, seed, actions, ss2);
-	std::cout << ss2.str() << std::endl;
-
-	std::cout << performanceLogger.rdbuf() << std::endl;
-
-	return 0;
-#endif
-	if(argc < 5){
-		help(argv[0]);
-		return 1;
-	}
-
-	// 戦闘発生時間の取得
-	const int hours = toint(argv[1]);
-	const int minutes = toint(argv[2]);
-	const int seconds = toint(argv[3]);
-
-	if(hours < 0 || minutes < 0 || seconds < 0){
-		std::cerr << "Invalid time parameters" << std::endl;
-		return 1;
-	}
-
-
-	if(!ProcessInputBuilder(argc, argv, aActions2, value2)){
-		return 1;
-	}
-	auto exitCode = ProgramMain(hours, minutes, seconds);
-	std::cout << performanceLogger.rdbuf();
-#ifdef DEBUG
-	auto t1 = std::chrono::high_resolution_clock::now();
-	auto elapsed_time =
-		std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
-	std::cout << "elapsed time: " << double(elapsed_time) / 1000 << " ms" << std::endl;
-#endif
-
-	return exitCode;
-}
-
-
 #if defined(MINGW_BUILD)
 #define __EMSCRIPTEN__
 #define EMSCRIPTEN_KEEPALIVE
@@ -1326,7 +1180,7 @@ EMSCRIPTEN_KEEPALIVE int wasm_prepare_input(const char* input){
 	if(!buildResultsFromInput(input)){
 		return 0;
 	}
-	return static_cast<int>(wasmResults.size());
+	return 1;
 }
 
 EMSCRIPTEN_KEEPALIVE const char* wasm_get_last_error(){
@@ -1374,3 +1228,149 @@ EMSCRIPTEN_KEEPALIVE const char* wasm_search_dump(int resultIndex, uint64_t seed
 }
 }
 #endif
+
+int main(int argc, char* argv[]){
+	if(argc == 2 && isMatchStrWithTrim(argv[1], "h")){
+		showHeader();
+		return 0;
+	}
+
+	return 0;
+#if defined(OPTIMIZE_MODE)
+	int actions1[350] = {};
+	auto counter = 0;
+	actions1[counter++] = BattleEmulator::BUFF;
+	actions1[counter] = -1;
+	SimpleParameterOptimizer::optimize(BasePlayers, 0x0a7642b3, actions1, 100000, counter);
+	return 0;
+#endif
+
+#ifdef DEBUG
+	auto t0 = std::chrono::high_resolution_clock::now();
+#endif
+
+
+	//https://zenn.dev/reputeless/books/standard-cpp-for-competitive-programming/viewer/library-ios-iomanip#3.1-c-%E8%A8%80%E8%AA%9E%E3%81%AE%E5%85%A5%E5%87%BA%E5%8A%9B%E3%82%B9%E3%83%88%E3%83%AA%E3%83%BC%E3%83%A0%E3%81%A8%E3%81%AE%E5%90%8C%E6%9C%9F%E3%82%92%E7%84%A1%E5%8A%B9%E3%81%AB%E3%81%99%E3%82%8B
+	//std::cin.tie(0)->sync_with_stdio(0);
+
+
+#ifdef DEBUG2
+	//time1 = 0x199114b2;
+	//time1 = 0x226d97a6;
+	//time1 = 0x1c2a9bda;
+	//time1 = 0x1aa6c05d;
+	//3838815720
+	//3839393442
+
+	/*
+	ver: v8.0.6_vG_v2, atk: 220, def: 155, seed: 0x1001
+actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
+	    */
+
+
+	//AI Warning: This is code related to debug2
+	uint64_t time1 = 0xb0005;
+
+	int dummy[100];
+	lcg::init(time1, false);
+	int* position1 = new int(1);
+	auto* NowState = new uint64_t(0); //エミュレーターの内部ステートを表すint
+
+	Player players1[2];
+
+	//0x22e2dbaf:
+
+	//AI Warning: This is code related to debug2
+	int32_t gene1[350] = {
+		30, 62, 33, 62, 62, 62, 34,
+		BattleEmulator::ATTACK_ALLY
+	};
+	//gene1[19-1] = BattleEmulator::DEFENCE;
+	int counter = 0;
+	// int32_t gene1[350] = {0};
+	//  gene1[counter++] = BattleEmulator::BUFF;
+	//  gene1[counter++] = BattleEmulator::BUFF;
+	//  gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
+	//  gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+	//  gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+	//  gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+	//  gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+	//  gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+	//  gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
+	// gene1[counter++] = BattleEmulator::DEFENCE;
+	// gene1[counter++] = BattleEmulator::DEFENCE;
+	// gene1[counter++] = BattleEmulator::DEFENCE;
+	// gene1[counter++] = BattleEmulator::DEFENCE;
+	// gene1[counter++] = BattleEmulator::DEFENCE;
+	// gene1[counter++] = BattleEmulator::DEFENCE;
+	// gene1[counter++] = BattleEmulator::DEFENCE;
+	// gene1[counter++] = BattleEmulator::DEFENCE;
+	// gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	// gene1[counter++] = BattleEmulator::MERCURIAL_THRUST;
+	// gene1[counter++] = BattleEmulator::MERCURIAL_THRUST;
+
+	(*NowState) = 0;
+	(*position1) = 1;
+	BattleResult dummy1;
+	std::memcpy(players1, BasePlayers, sizeof(players1));
+	BattleEmulator::Main(position1, (counter == 0 ? 1000 : counter), gene1, players1, &dummy1, time1, dummy, dummy, -1,
+	                     NowState);
+
+	std::stringstream ss1;
+	ss1 << time1 << " ";
+	std::cout << (*position1) << std::endl;
+	std::cout << dumpTable(dummy1, gene1, -1) << std::endl;
+
+	//}
+	delete position1;
+	delete NowState;
+
+	return 0;
+#endif
+
+#ifdef DEBUG3
+	uint64_t seed = 0x0ac040ac;
+
+	int actions[350] = {
+		BattleEmulator::PSYCHE_UP_ALLY,
+		BattleEmulator::PSYCHE_UP_ALLY,
+		-1,
+	};
+	std::stringstream ss2;
+	SearchRequest(BasePlayers, seed, actions, ss2);
+	std::cout << ss2.str() << std::endl;
+
+	std::cout << performanceLogger.rdbuf() << std::endl;
+
+	return 0;
+#endif
+	if(argc < 5){
+		help(argv[0]);
+		return 1;
+	}
+
+	// 戦闘発生時間の取得
+	const int hours = toint(argv[1]);
+	const int minutes = toint(argv[2]);
+	const int seconds = toint(argv[3]);
+
+	if(hours < 0 || minutes < 0 || seconds < 0){
+		std::cerr << "Invalid time parameters" << std::endl;
+		return 1;
+	}
+
+
+	if(!ProcessInputBuilder(argc, argv, aActions2, value2)){
+		return 1;
+	}
+	auto exitCode = ProgramMain(hours, minutes, seconds);
+	std::cout << performanceLogger.rdbuf();
+#ifdef DEBUG
+	auto t1 = std::chrono::high_resolution_clock::now();
+	auto elapsed_time =
+		std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+	std::cout << "elapsed time: " << double(elapsed_time) / 1000 << " ms" << std::endl;
+#endif
+
+	return exitCode;
+}
