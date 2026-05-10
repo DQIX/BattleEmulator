@@ -855,17 +855,6 @@ namespace{
 
 		auto time2 = static_cast<uint64_t>(floor((totalSeconds + 8.5) * (1 / 0.125155)));
 		time2 = time2 << 16;
-		int32_t gene[350] = {0};
-
-		for(int i = 0; i < 350; ++i){
-			gene[i] = aActions[i];
-			if(aActions[i] == -1){
-				gene[i] = -1;
-				gene[i + 1] = -1;
-				break;
-			}
-		}
-
 		/*
 		*NowStateの各ビットの使用状況は下記の通りである。
 		+-+-+-+-+-+-+-+-+- (* NowState) -+-+-+-+-+-+-+-+-+
@@ -1105,22 +1094,6 @@ namespace{
 		return true;
 	}
 
-
-	void fillArraysFromResult(const ResultStructure& result, int aActions[350], int damages[350]){
-		for(int i = 0; i < 350; ++i){
-			aActions[i] = 0;
-			damages[i] = 0;
-		}
-		for(int i = 0; i < result.AactionsCounter; ++i){
-			aActions[i] = result.Aactions[i];
-		}
-		aActions[result.AactionsCounter] = -1;
-		for(int i = 0; i < result.AII_damageCounter; ++i){
-			damages[i] = result.AII_damage[i];
-		}
-		damages[result.AII_damageCounter] = -1;
-	}
-
 	std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed, const ResultStructure& result, int numThreads, bool dropbug){
 		lcg::init(seed, true);
 
@@ -1188,11 +1161,6 @@ EMSCRIPTEN_KEEPALIVE const char* wasm_get_last_error(){
 }
 
 EMSCRIPTEN_KEEPALIVE uint64_t wasm_bruteforce_range(int resultIndex, uint64_t startSeed, uint64_t endSeed){
-	if(resultIndex < 0 || resultIndex >= static_cast<int>(wasmResults.size())){
-		wasmLastError = "invalid result index";
-		return 0;
-	}
-
 	BattleEmulator::ResetTurnProcessed();
 	foundSeeds = 0;
 	FoundSeed = 0;
@@ -1215,12 +1183,6 @@ EMSCRIPTEN_KEEPALIVE int wasm_get_found_seeds(){
 
 EMSCRIPTEN_KEEPALIVE const char* wasm_search_dump(int resultIndex, uint64_t seed, int numThreads, int dropbug){
 	BattleEmulator::ResetTurnProcessed();
-	if(resultIndex < 0 || resultIndex >= static_cast<int>(wasmResults.size())){
-		wasmLastError = "invalid result index";
-		wasmLastDump.clear();
-		return wasmLastDump.c_str();
-	}
-
 	wasmLastDump = buildDumpOutput(BasePlayers, seed, wasmResults[static_cast<size_t>(resultIndex)], numThreads,
 	                               dropbug != 0);
 	wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
@@ -1235,7 +1197,6 @@ int main(int argc, char* argv[]){
 		return 0;
 	}
 
-	return 0;
 #if defined(OPTIMIZE_MODE)
 	int actions1[350] = {};
 	auto counter = 0;
