@@ -470,15 +470,17 @@ bool BattleEmulator::Main(int* position, int RunCount, const int32_t Gene[350], 
 		}
 
 		int32_t actionTable = -1;
+		int32_t requestedAction = -1;
 
 		if(Gene[genePosition] == 0 || Gene[genePosition] == -1){
 			genePosition = -1;
 			//throw std::invalid_argument("GenePosition is invalid");
 		}
 		if(genePosition != -1 && Gene[genePosition] != 0 && Gene[genePosition] != -1){
+			requestedAction = Gene[genePosition] & 0xffff;
 			actionTable = Gene[genePosition];
 			if(actionTable == TURN_SKIPPED || actionTable == SLEEPING || actionTable == CURE_SLEEPING || actionTable ==
-				CURE_PARALYSIS || actionTable == PARALYSIS){
+				CURE_PARALYSIS || actionTable == PARALYSIS || actionTable == INACTIVE_ALLY){
 				actionTable = ATTACK_ALLY;
 			}
 		}
@@ -577,7 +579,12 @@ bool BattleEmulator::Main(int* position, int RunCount, const int32_t Gene[350], 
 							return true;
 						}
 
-						if(damages[exCounter] == InputBuilder::TYPE_PSYCHE_UP_ENEMY){
+						if(c == BURNING_BREATH){
+							if(damages[exCounter++] != InputBuilder::TYPE_BURNING_BREATH){
+								return false;
+							}
+						}
+						else if(damages[exCounter] == InputBuilder::TYPE_PSYCHE_UP_ENEMY){
 							if(c != PSYCHE_UP){
 								return false;
 							}
@@ -587,6 +594,7 @@ bool BattleEmulator::Main(int* position, int RunCount, const int32_t Gene[350], 
 							return false;
 						}
 						if(damages[exCounter] == -1){
+							//const int pendingActionIndex = (t == 1 && player0_has_initiative) ? counterJ : counterJ - 1;
 							startTurn = counterJ;
 							return true;
 						}
@@ -672,6 +680,11 @@ bool BattleEmulator::Main(int* position, int RunCount, const int32_t Gene[350], 
 						players[0].defence = 1.0;
 						action = INACTIVE_ALLY;
 					}
+					if(mode != -1 && mode != -2 && (requestedAction == INACTIVE_ALLY || action == INACTIVE_ALLY)){
+						if(action != requestedAction){
+							return false;
+						}
+					}
 
 					//--------end_FUN_02158dfc-------
 					basedamage = callAttackFun(action, position, players, 0, 1, NowState);
@@ -732,6 +745,17 @@ bool BattleEmulator::Main(int* position, int RunCount, const int32_t Gene[350], 
 								}
 							}
 						}
+						else if(mode != -1 && mode != -2){
+							if(action == FULLHEAL){
+								if(damages[exCounter++] != InputBuilder::TYPE_FULLHEAL){
+									return false;
+								}
+							}
+							if(damages[exCounter] == -1){
+								startTurn = counterJ;
+								return true;
+							}
+						}
 						Player::heal(players[0], basedamage);
 					}
 					else{
@@ -764,7 +788,7 @@ bool BattleEmulator::Main(int* position, int RunCount, const int32_t Gene[350], 
 									return true;
 								}
 								//int need = ;
-								if(damages[exCounter++] != -6){
+								if(damages[exCounter++] != InputBuilder::TYPE_ATTACK_ALLY){
 									return false;
 								}
 								if(damages[exCounter++] != basedamage){

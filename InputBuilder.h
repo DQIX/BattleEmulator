@@ -15,6 +15,8 @@ class InputBuilder {
 public:
     static constexpr int TYPE_SPECIAL_MEDICINE = -5;
     static constexpr int TYPE_PRE_SPECIAL_MEDICINE = -4;
+    static constexpr int TYPE_ATTACK_ALLY = -3;
+    static constexpr int TYPE_HEAL = -2;
     static constexpr int TYPE_PSYCHE_UP_ENEMY = -6;
     static constexpr int TYPE_BUFF_ALLY = -7;
     static constexpr int TYPE_PSYCHE_UP_ALLY = -8;

@@ -25,7 +25,6 @@
 
 int aActions2[350];
 int value2[350];
-int valuesIndex2;
 
 namespace{
 	// MinGW/GCC用のnoinline属性
@@ -374,18 +373,18 @@ namespace{
 		std::cerr << "error: Not enough argc!!" << std::endl;
 	}
 
-	void pla(int &enemyConsecutive, int *aActions, int &valuesIndex, bool EnemyPresent) {
-        // 連続敵行動が3件以上の場合、眠り判定を行う
-        if (enemyConsecutive >= 3) {
-            while (enemyConsecutive >= 1) {
-                aActions[valuesIndex++] = BattleEmulator::PARALYSIS;
-                enemyConsecutive -= 1;
-            }
-        }
-        enemyConsecutive = 0;
-    }
+	void pla(int &enemyConsecutive, int *aActions, int &aActionsIndex, bool EnemyPresent) {
+       // 連続敵行動が3件以上の場合、眠り判定を行う
+       if (enemyConsecutive >= 3) {
+           while (enemyConsecutive >= 1) {
+               aActions[aActionsIndex++] = BattleEmulator::PARALYSIS;
+               enemyConsecutive -= 1;
+           }
+       }
+       enemyConsecutive = 0;
+   }
 
-    NOINLINE bool ProcessInputBuilder(const int argc, char *argv[], int *aActions, int *values, int &valuesIndex) {
+   NOINLINE bool ProcessInputBuilder(const int argc, char *argv[], int *aActions, int *values) {
         // 最初の3件は時間情報のため、最低でも4件必要
         if (argc < 4) {
             return false;
@@ -405,10 +404,11 @@ namespace{
             turns++;
         }
 
-        int enemyConsecutive = 0; // 複数ターンにわたる敵連続行動数
-        int tokenIndex = 4; // 最初の行動引数の位置
-        int enemyActions = 0; // このターン内の敵の行動数
-        int offset = 0;
+       int enemyConsecutive = 0; // 複数ターンにわたる敵連続行動数
+       int tokenIndex = 4; // 最初の行動引数の位置
+       int enemyActions = 0; // このターン内の敵の行動数
+       int offset = 0;
+       int aActionsIndex = 0;
 
         for (int turn = 0; turn < turns; turn++) {
             if (argc <= tokenIndex) {
@@ -434,9 +434,9 @@ namespace{
                 if (isMatchStrWithTrim(token, "h") || isMatchStrWithTrim(token, "ah")) {
                     // 回復は明示的な味方行動
                     enemyConsecutive += enemyActions;
-                    pla(enemyConsecutive, aActions, valuesIndex, EnemyPresent);
+                    pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
                     enemyActions = 0;
-                    aActions[valuesIndex++] = BattleEmulator::SPECIAL_MEDICINE;
+                    aActions[aActionsIndex++] = BattleEmulator::SPECIAL_MEDICINE;
                     values[counter2++] = InputBuilder::TYPE_PRE_SPECIAL_MEDICINE;
                     values[counter2++] = InputBuilder::TYPE_SPECIAL_MEDICINE;
                     allyPresent = true;
@@ -444,27 +444,27 @@ namespace{
                 } else if (isMatchStrWithTrim(token, "at")) {
                 	// 回復は明示的な味方行動
                 	enemyConsecutive += enemyActions;
-                	pla(enemyConsecutive, aActions, valuesIndex, EnemyPresent);
-                	enemyActions = 0;
-                	aActions[valuesIndex++] = BattleEmulator::PSYCHE_UP_ALLY;
+               	pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
+               	enemyActions = 0;
+               	aActions[aActionsIndex++] = BattleEmulator::PSYCHE_UP_ALLY;
                 	values[counter2++] = InputBuilder::TYPE_PSYCHE_UP_ALLY;
                 	allyPresent = true;
                 	foundTurnOffset = 0;
                 } else if (isMatchStrWithTrim(token, "as") || isMatchStrWithTrim(token, "s") || isMatchStrWithTrim(token, "ab") || isMatchStrWithTrim(token, "b")) {
                 	// 回復は明示的な味方行動
                 	enemyConsecutive += enemyActions;
-                	pla(enemyConsecutive, aActions, valuesIndex, EnemyPresent);
-                	enemyActions = 0;
-                	aActions[valuesIndex++] = BattleEmulator::BUFF;
+               	pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
+               	enemyActions = 0;
+               	aActions[aActionsIndex++] = BattleEmulator::BUFF;
                 	values[counter2++] = InputBuilder::TYPE_BUFF_ALLY;
                 	allyPresent = true;
                 	foundTurnOffset = 0;
                 } else if (isMatchStrWithTrim(token, "f")) {
                 	// 回復は明示的な味方行動
                 	enemyConsecutive += enemyActions;
-                	pla(enemyConsecutive, aActions, valuesIndex, EnemyPresent);
-                	enemyActions = 0;
-                	aActions[valuesIndex++] = BattleEmulator::FULLHEAL;
+               	pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
+               	enemyActions = 0;
+               	aActions[aActionsIndex++] = BattleEmulator::FULLHEAL;
                 	values[counter2++] = InputBuilder::TYPE_FULLHEAL;
                 	allyPresent = true;
                 	foundTurnOffset = 0;
@@ -474,7 +474,7 @@ namespace{
                 	enemyActions++;
                 	EnemyPresent = true;
                 } else if (isMatchStrWithTrim(token, "y")) {
-                    aActions[valuesIndex++] = BattleEmulator::INACTIVE_ALLY;
+                    aActions[aActionsIndex++] = BattleEmulator::INACTIVE_ALLY;
                     allyPresent = true;
                     offset++;
                     if (remainder > 0) {
@@ -486,7 +486,7 @@ namespace{
                     break;
                 } else if (isMatchStrWithTrim(token, "r")) {
                     enemyConsecutive += enemyActions;
-                    pla(enemyConsecutive, aActions, valuesIndex, EnemyPresent);
+                    pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
                     enemyActions = 0;
                 } else {
                     // 上記以外は toABCint による分解処理
@@ -497,18 +497,18 @@ namespace{
                     // 味方行動の条件（今回は prefix == 'a' が味方とする）
                     if (prefix == 'a') {
                         enemyConsecutive += enemyActions;
-                        pla(enemyConsecutive, aActions, valuesIndex, EnemyPresent);
+                        pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
                         enemyActions = 0;
-                        aActions[valuesIndex++] = BattleEmulator::ATTACK_ALLY;
-                        values[counter2++] = -3;
+                        aActions[aActionsIndex++] = BattleEmulator::ATTACK_ALLY;
+                        values[counter2++] = InputBuilder::TYPE_ATTACK_ALLY;
                         values[counter2++] = tmp;
                         allyPresent = true;
                     } else if (prefix == 'h') {
                         enemyConsecutive += enemyActions;
-                        pla(enemyConsecutive, aActions, valuesIndex, EnemyPresent);
+                        pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
                         enemyActions = 0;
-                        aActions[valuesIndex++] = BattleEmulator::HEAL;
-                        values[counter2++] = -2;
+                        aActions[aActionsIndex++] = BattleEmulator::HEAL;
+                        values[counter2++] = InputBuilder::TYPE_HEAL;
                         values[counter2++] = tmp;
                         allyPresent = true;
                     } else {
@@ -527,9 +527,9 @@ namespace{
         }
 
         enemyConsecutive += enemyActions;
-        pla(enemyConsecutive, aActions, valuesIndex, false);
+        pla(enemyConsecutive, aActions, aActionsIndex, false);
 
-        aActions[valuesIndex] = -1;
+        aActions[aActionsIndex] = -1;
         values[counter2] = -1;
 
 
@@ -1145,7 +1145,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 
 
-	if(!ProcessInputBuilder(argc, argv, aActions2, value2, valuesIndex2)){
+	if(!ProcessInputBuilder(argc, argv, aActions2, value2)){
 		return 1;
 	}
 	auto exitCode = ProgramMain(hours, minutes, seconds);
@@ -1225,7 +1225,7 @@ namespace{
 			argv.push_back(const_cast<char *>(arg.c_str()));
 		}
 
-		if (!ProcessInputBuilder(static_cast<int>(argv.size()), argv.data(), aActions2, value2, valuesIndex2)) {
+		if (!ProcessInputBuilder(static_cast<int>(argv.size()), argv.data(), aActions2, value2)) {
 			wasmLastError = "input parse failed";
 			return false;
 		}
@@ -1291,7 +1291,7 @@ namespace{
 			lcg::init(seed);
 			int position = 1;
 			uint64_t nowState = 0;
-			BattleEmulator::Main(&position, 100, aActions5, players, &res, seed, nullptr, nullptr, -1, &nowState);
+			BattleEmulator::Main(&position, 100, gene, players, &res, seed, nullptr, nullptr, -1, &nowState);
 			ss << dumpTable(res, gene, foundTurn);
 			ss << "startturn=" << foundTurn << std::endl;
 			return ss.str();
