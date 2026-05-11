@@ -135,6 +135,7 @@
                         elapsed: "Elapsed",
                         preload: "Preload",
                         memoTable: "Seed Memo",
+                        memoSeed: "Seed",
                         memoSaveOnly: "Saved only when a single seed is found",
                         memoEmpty: "No memo entries yet",
                         memoTime: "Time",
@@ -278,6 +279,7 @@
                         elapsed: "経過",
                         preload: "プリロード",
                         memoTable: "シードメモ",
+                        memoSeed: "シード",
                         memoSaveOnly: "シードが1件のときのみ保存",
                         memoEmpty: "メモがありません",
                         memoTime: "時間",
@@ -638,6 +640,7 @@
                 <div id="memoScroll" class="memo-scroll" hidden>
                     <table class="memo-grid">
                         <colgroup>
+                            <col style="width: 130px"/>
                             <col style="width: 80px"/>
                             <col style="width: 70px"/>
                             <col style="width: 170px"/>
@@ -651,6 +654,7 @@
                         </colgroup>
                         <thead>
                         <tr>
+                            <th data-i18n="memoSeed">Seed</th>
                             <th data-i18n="memoTime">Time</th>
                             <th data-i18n="memoFraction">Fraction</th>
                             <th data-i18n="memoRealTime">Real</th>
@@ -666,6 +670,28 @@
                         <tbody id="memoTableBody"></tbody>
                     </table>
                 </div>
+                <template id="memoRowTemplate">
+                    <tr class="memo-row">
+                        <td data-memo-field="seed"></td>
+                        <td data-memo-field="time"></td>
+                        <td data-memo-field="fraction"></td>
+                        <td data-memo-field="real"></td>
+                        <td data-memo-field="emu"></td>
+                        <td data-memo-field="offset"></td>
+                        <td data-memo-field="range"></td>
+                        <td data-memo-field="drift"></td>
+                        <td class="memo-input">
+                            <span data-memo-field="input-text"></span>
+                            <a href="#" class="memo-copy" data-memo-field="copy-input">Copy input</a>
+                        </td>
+                        <td>
+                            <input type="text" class="memo-note-input" data-memo-field="note"/>
+                        </td>
+                        <td>
+                            <a href="#" class="memo-link" data-memo-field="copy-url">Copy URL</a>
+                        </td>
+                    </tr>
+                </template>
             </div>
         </section>
         <section class="panel panel-shortcuts" style="--delay: 300ms">

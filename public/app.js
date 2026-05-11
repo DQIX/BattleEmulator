@@ -29,6 +29,7 @@ const ui = {
     langSelect: document.getElementById("langSelect"),
     preloadToggle: document.getElementById("preloadToggle"),
     memoTableBody: document.getElementById("memoTableBody"),
+    memoRowTemplate: document.getElementById("memoRowTemplate"),
     memoEmpty: document.getElementById("memoEmpty"),
     memoScroll: document.getElementById("memoScroll"),
     memoCopyMarkdown: document.getElementById("memoCopyMarkdown"),
@@ -318,6 +319,7 @@ function saveSeedMemos(list) {
 
 async function buildMemoFingerprint(entry) {
     const payload = {
+        seed: entry.seed ?? "",
         input: entry.input,
         timeText: entry.timeText,
         fractionDigits: entry.fractionDigits || 0,
@@ -381,7 +383,7 @@ function setSeedState(text, count) {
 }
 
 function renderSeedMemos(list) {
-    if (!ui.memoTableBody || !ui.memoEmpty || !ui.memoScroll) {
+    if (!ui.memoTableBody || !ui.memoEmpty || !ui.memoScroll || !ui.memoRowTemplate) {
         return;
     }
     ui.memoTableBody.innerHTML = "";
@@ -395,79 +397,46 @@ function renderSeedMemos(list) {
 
     list.forEach((entry) => {
         entry.memo = entry.memo || "";
+        entry.seed = entry.seed ?? "";
         entry.fractionDigits = normalizeFractionDigits(entry.fractionDigits) || 0;
-        const row = document.createElement("tr");
-        row.className = "memo-row";
+        const row = ui.memoRowTemplate.content.firstElementChild.cloneNode(true);
+        row.querySelector("[data-memo-field='seed']").textContent = entry.seed;
+        row.querySelector("[data-memo-field='time']").textContent = entry.timeText;
+        row.querySelector("[data-memo-field='fraction']").textContent = formatMemoFractionDigits(entry.fractionDigits);
+        row.querySelector("[data-memo-field='real']").textContent = formatRealTimeDisplay(entry.savedAt);
+        row.querySelector("[data-memo-field='emu']").textContent = entry.emulatorLabel;
+        row.querySelector("[data-memo-field='offset']").textContent = String(entry.offsetSeconds);
+        row.querySelector("[data-memo-field='range']").textContent = String(entry.searchRangeSeconds);
+        row.querySelector("[data-memo-field='drift']").textContent = entry.driftText || "-";
 
-        const cellTime = document.createElement("td");
-        cellTime.textContent = entry.timeText;
-
-        const cellFraction = document.createElement("td");
-        cellFraction.textContent = formatMemoFractionDigits(entry.fractionDigits);
-
-        const cellRealTime = document.createElement("td");
-        cellRealTime.textContent = formatRealTimeDisplay(entry.savedAt);
-
-        const cellEmu = document.createElement("td");
-        cellEmu.textContent = entry.emulatorLabel;
-
-        const cellOffset = document.createElement("td");
-        cellOffset.textContent = String(entry.offsetSeconds);
-
-        const cellRange = document.createElement("td");
-        cellRange.textContent = String(entry.searchRangeSeconds);
-
-        const cellDrift = document.createElement("td");
-        cellDrift.textContent = entry.driftText || "-";
-
-        const cellInput = document.createElement("td");
-        cellInput.className = "memo-input";
-        const inputText = document.createElement("span");
+        const inputText = row.querySelector("[data-memo-field='input-text']");
         inputText.textContent = entry.input;
         inputText.title = entry.input;
-        const copyInput = document.createElement("a");
+        const copyInput = row.querySelector("[data-memo-field='copy-input']");
         copyInput.href = "#";
         copyInput.className = "memo-copy";
         copyInput.dataset.copyInput = entry.id;
         copyInput.textContent = t("memoCopyInput", "Copy input");
-        cellInput.appendChild(inputText);
-        cellInput.appendChild(copyInput);
 
-        const cellNote = document.createElement("td");
-        const noteInput = document.createElement("input");
-        noteInput.type = "text";
-        noteInput.className = "memo-note-input";
+        const noteInput = row.querySelector("[data-memo-field='note']");
         noteInput.value = entry.memo;
         noteInput.dataset.memoId = entry.id;
-        cellNote.appendChild(noteInput);
 
-        const cellUrl = document.createElement("td");
-        const copyUrl = document.createElement("a");
+        const copyUrl = row.querySelector("[data-memo-field='copy-url']");
         copyUrl.href = buildOverrideUrl(entry);
         copyUrl.className = "memo-link";
         copyUrl.dataset.copyUrl = entry.id;
         copyUrl.textContent = t("memoCopyUrl", "Copy URL");
-        cellUrl.appendChild(copyUrl);
-
-        row.appendChild(cellTime);
-        row.appendChild(cellFraction);
-        row.appendChild(cellRealTime);
-        row.appendChild(cellEmu);
-        row.appendChild(cellOffset);
-        row.appendChild(cellRange);
-        row.appendChild(cellDrift);
-        row.appendChild(cellInput);
-        row.appendChild(cellNote);
-        row.appendChild(cellUrl);
         ui.memoTableBody.appendChild(row);
     });
 }
 
-async function recordSeedMemo(parsed, inputText, driftText) {
+async function recordSeedMemo(parsed, inputText, driftText, seedText) {
     if (!state.active || !parsed) {
         return;
     }
     const entry = {
+        seed: seedText ?? "",
         emulatorLabel: state.active.label,
         input: inputText,
         timeText: formatInputTime(parsed),
@@ -491,8 +460,9 @@ async function recordSeedMemo(parsed, inputText, driftText) {
 }
 
 function memoToMarkdown(list) {
-    const header = ["Time", "Fraction", "Real", "Emu", "Offset", "Range", "Drift", "Input", "Memo"];
+    const header = ["Seed", "Time", "Fraction", "Real", "Emu", "Offset", "Range", "Drift", "Input", "Memo"];
     const rows = list.map((entry) => [
+        entry.seed ?? "",
         entry.timeText,
         formatMemoFractionDigits(entry.fractionDigits),
         formatRealTimeDisplay(entry.savedAt),
@@ -513,8 +483,9 @@ function memoToMarkdown(list) {
 
 function memoToCsv(list) {
     const escapeField = (value) => `"${String(value).replace(/"/g, '""')}"`;
-    const header = ["Time", "Fraction", "Real", "Emu", "Offset", "Range", "Drift", "Input", "Memo"];
+    const header = ["Seed", "Time", "Fraction", "Real", "Emu", "Offset", "Range", "Drift", "Input", "Memo"];
     const rows = list.map((entry) => [
+        entry.seed ?? "",
         entry.timeText,
         formatMemoFractionDigits(entry.fractionDigits),
         formatRealTimeDisplay(entry.savedAt),
@@ -1724,7 +1695,7 @@ async function runSearch() {
         if (shouldCorrectAutoTimer) {
             applySearchResultAutoTimerCorrection(BigInt(foundSeed));
         }
-        recordSeedMemo(parsed, input, driftText);
+        recordSeedMemo(parsed, input, driftText, foundSeed);
 
         appendLog("dump table ready");
         searchClient.terminate();
