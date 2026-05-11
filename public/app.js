@@ -660,7 +660,7 @@ function computeRealSecondsScaled(parsed, preciseTimeUnits = null) {
 function computeSeedDriftText(seed, parsed, preciseTimeUnits = null) {
     const seedSecondsScaled = computeSeedSecondsScaled(seed);
     const realSecondsScaled = computeRealSecondsScaled(parsed, preciseTimeUnits);
-    const driftScaled = realSecondsScaled - seedSecondsScaled;
+    const driftScaled = seedSecondsScaled - realSecondsScaled;
     return formatScaledSeconds(driftScaled, BigInt(AUTO_TIMER_FRACTION_SCALE));
 }
 
@@ -1542,8 +1542,6 @@ async function runSearch() {
     const threads = Math.max(1, Math.min(32, parseIntValue(ui.threads) || 4));
     const rawInput = ui.actionInput.value;
     const input = rawInput.trim();
-    const useAppliedOffset = Boolean(state.autoTimerAppliedPrefix) && rawInput.startsWith(state.autoTimerAppliedPrefix);
-
     if (!input) {
         appendLog("input is empty");
         return;
@@ -1563,7 +1561,7 @@ async function runSearch() {
         parsed.hours,
         parsed.minutes,
         parsed.seconds,
-        useAppliedOffset ? 0 : state.offsetSeconds,
+        state.offsetSeconds,
         preciseTimeUnits
     );
     const ranges = splitRange(start, end, threads);
@@ -1806,7 +1804,10 @@ function applyAutoTimerToInput() {
         inputText: ui.actionInput.value,
         timeText,
         fractionDigits: preciseTime.fraction,
-        preciseTimeUnitsAtUse: BigInt(preciseTime.wholeSeconds * AUTO_TIMER_FRACTION_SCALE + preciseTime.fraction),
+        preciseTimeUnitsAtUse: BigInt(
+            (preciseTime.wholeSeconds + normalizeOffsetSeconds(state.offsetSeconds)) * AUTO_TIMER_FRACTION_SCALE
+            + preciseTime.fraction
+        ),
         offsetSecondsAtUse: state.offsetSeconds
     };
     setAutoTimerFractionDigits(preciseTime.fraction, timeText);

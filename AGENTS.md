@@ -33,32 +33,7 @@
 
 When modifying the UI, read interface-design-main/.claude/skills/interface-design/SKILL.md.
 A UI description is not a specification report. When adding a description, you should write about what the user should expect and what they should input, rather than just saying "it's based on xx" or "it uses performance.now()".
-In a UI description, you need to explain what it is, what happens as a result, and what the user needs to do.
-
-## mcp server
-
-Use these tools if you feel it's necessary. Of course, it's perfectly fine to complete everything using only commands.
-In particular, `get_symbol_info` should be superior to a Blue Force-style search.
-
-execute_run_configuration
-get_run_configurations
-get_file_problems
-get_project_dependencies
-get_project_modules
-create_new_file
-find_files_by_glob
-find_files_by_name_keyword
-get_all_open_file_paths
-list_directory_tree
-open_file_in_editor
-reformat_file
-get_file_text_by_path
-replace_text_in_file
-search_in_files_by_regex
-get_symbol_info
-rename_refactoring
-execute_terminal_command
-get_repositories
+In a UI description, you need to explain what it is, what happens as a result, and what the user needs to do
 
 # build command
 cmake -S . -B cmake-build-release2 -G Ninja -DCMAKE_BUILD_TYPE=Release
