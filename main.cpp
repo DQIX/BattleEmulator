@@ -801,11 +801,6 @@ namespace {
 			(*position) = 1;
 			Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
 
-			if (seed == 720903) {
-				std::cout << "Seed: " << seed << std::endl;
-			}
-
-
 			bool resultBool = BattleEmulator::Main(position, 20, gene, players,
 			                                       nullptr, seed, nullptr, damages,
 			                                       maxElement,
