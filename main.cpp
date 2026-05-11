@@ -540,7 +540,6 @@ namespace {
             gene[i] = aActions[i];
             if (aActions[i] == -1) {
                 gene[i] = -1;
-                gene[i + 1] = -1;
                 break;
             }
             turns++;
@@ -636,7 +635,6 @@ namespace {
             gene[i] = aActions[i];
             if (aActions[i] == -1) {
                 gene[i] = -1;
-                gene[i + 1] = -1;
                 break;
             }
         }
@@ -1049,7 +1047,6 @@ namespace {
                 continue;
             }
             gene[i] = -1;
-            gene[i + 1] = -1;
             break;
         }
         if (result.AactionsCounter >= 349) {
