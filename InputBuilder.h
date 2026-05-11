@@ -24,6 +24,9 @@ public:
     static constexpr int TYPE_FULLHEAL = -10;
     static constexpr int TYPE_MIDHEAL = -11;
     static constexpr int TYPE_BURNING_BREATH = -12;
+    static constexpr int TYPE_HEART_BREAKER = -13;
+    static constexpr int TYPE_DESPERATE_ATTACK = -14;
+    static constexpr int TYPE_CRITICAL_ATTACK = -15;
 
     static constexpr char PREFIX_SPECIAL_MEDICINE = 'h';
     static constexpr char PREFIX_PSYCHE_UP_ENEMY = 'p';
