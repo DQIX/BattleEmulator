@@ -29,6 +29,7 @@
 * Minimize the number of differences during editing. If this is not possible, break it down into smaller parts.
 * Please submit the differences one file at a time, if possible.
 * It's a waste of tokens, so you don't need to check the entire diff with git diff and submit the line numbers to me.
+* Do not install additional software without permission. Permission means not just displaying a message, but interrupting the process to prompt the user for permission to install and completing the task.
 
 
 When modifying the UI, read interface-design-main/.claude/skills/interface-design/SKILL.md.
