@@ -550,7 +550,6 @@ bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActi
             gene[i] = aActions[i];
             if(aActions[i] == -1){
                 gene[i] = -1;
-                gene[i + 1] = -1;
                 break;
             }
             turns++;
