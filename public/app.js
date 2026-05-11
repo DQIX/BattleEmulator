@@ -660,7 +660,8 @@ function computeRealSecondsScaled(parsed, preciseTimeUnits = null) {
 function computeSeedDriftText(seed, parsed, preciseTimeUnits = null) {
     const seedSecondsScaled = computeSeedSecondsScaled(seed);
     const realSecondsScaled = computeRealSecondsScaled(parsed, preciseTimeUnits);
-    const driftScaled = seedSecondsScaled - realSecondsScaled;
+    const offsetScaled = BigInt(normalizeOffsetSeconds(state.offsetSeconds) * AUTO_TIMER_FRACTION_SCALE);
+    const driftScaled = realSecondsScaled - seedSecondsScaled - offsetScaled;
     return formatScaledSeconds(driftScaled, BigInt(AUTO_TIMER_FRACTION_SCALE));
 }
 
