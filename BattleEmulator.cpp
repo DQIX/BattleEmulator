@@ -416,7 +416,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
 #ifdef DEBUG2
 		std::cout << "c: " << counterJ << ", " << (*position) << std::endl;
-		if ((*position) == 131) {
+		if ((*position) == 151) {
 			std::cout << "!!" << std::endl;
 		}
 #endif
@@ -1754,26 +1754,11 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 						baseDamage = lcg::getPercent(position, 2); //TODO: 0x021e81a0
 						if (baseDamage == 1) {
 							defenseFlag = true;
-						} else {
+						} else if ((Id) != BattleEmulator::HEART_BREAKER){
+							//みかわし、盾ガードの場合は0x021ed7a8が発生し、ここのコルーチンの場合7a8が呼ばれない。
 							return 0;
 						}
 					}
-
-					//0x021e34e8
-					//TODO: 0ダメージ時の順番
-					if ((Id & 0xffff) == HEART_BREAKER && lcg::getPercent(position, 100) < 18.7500) {
-						//0x021e34e8
-						/**
-						float: 0x020756e4 00000000 0x414e0000 193
-						0x021e81a0 0x00000002 194
-						0damage, 021e81a0: 1f
-						0x021e34e8 0x00000064 195
-						0x02158ac4 0x00000064 196
-						doku, 02158ad0: 100/0
-						 */
-						players[defender].isStunned = true;
-					}
-
 
 					if (baseDamage != 0) {
 						tmp = static_cast<double>(baseDamage);
@@ -1792,6 +1777,21 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 					}
 
 					if (baseDamage != 0) {
+						//0x021e34e8
+						//TODO: 0ダメージ時の順番
+						if ((Id & 0xffff) == HEART_BREAKER && lcg::getPercent(position, 100) < 18.7500) {
+							//0x021e34e8
+							/**
+							float: 0x020756e4 00000000 0x414e0000 193
+							0x021e81a0 0x00000002 194
+							0damage, 021e81a0: 1f
+							0x021e34e8 0x00000064 195
+							0x02158ac4 0x00000064 196
+							doku, 02158ad0: 100/0
+							 */
+							players[defender].isStunned = true;
+						}
+
 						(*position)++; //目を覚ました
 						(*position)++; //不明
 					}
