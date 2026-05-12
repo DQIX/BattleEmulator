@@ -1230,10 +1230,10 @@ function getPreciseSearchTimeUnits(parsed, rawInput) {
 function computeSeedRange(hours, minutes, seconds, offsetSeconds, preciseTimeUnits = null) {
     const seedShift = 65536n;
     const totalTimeUnits = preciseTimeUnits === null
-        ? BigInt((hours * 3600 + minutes * 60 + seconds) * AUTO_TIMER_FRACTION_SCALE)
+        ? BigInt(Math.floor((hours * 3600 + minutes * 60 + seconds) * AUTO_TIMER_FRACTION_SCALE))
         : preciseTimeUnits;
-    const offset = BigInt(normalizeOffsetSeconds(offsetSeconds) * AUTO_TIMER_FRACTION_SCALE);
-    const range = BigInt(normalizeSearchRangeSeconds(state.searchRangeSeconds) * AUTO_TIMER_FRACTION_SCALE);
+    const offset = BigInt(Math.floor(normalizeOffsetSeconds(offsetSeconds) * AUTO_TIMER_FRACTION_SCALE));
+    const range = BigInt(Math.floor(normalizeSearchRangeSeconds(state.searchRangeSeconds) * AUTO_TIMER_FRACTION_SCALE));
     const unitScale = BigInt(AUTO_TIMER_FRACTION_SCALE);
     const numerator1 = 2n * (totalTimeUnits - offset) - range;
     const numerator2 = 2n * (totalTimeUnits - offset) + range;
