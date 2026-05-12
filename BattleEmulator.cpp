@@ -1778,7 +1778,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 
 					if (baseDamage != 0) {
 						//0x021e34e8
-						//TODO: 0ダメージ時の順番
+						//テンションが100の場合、軽減後に判定され、0ダメージなら判定が発生しない。
 						if ((Id & 0xffff) == HEART_BREAKER && lcg::getPercent(position, 100) < 18.7500) {
 							//0x021e34e8
 							/**
