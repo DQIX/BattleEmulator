@@ -1754,9 +1754,6 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 						baseDamage = lcg::getPercent(position, 2); //TODO: 0x021e81a0
 						if (baseDamage == 1) {
 							defenseFlag = true;
-						} else if ((Id) != BattleEmulator::HEART_BREAKER){
-							//みかわし、盾ガードの場合は0x021ed7a8が発生し、ここのコルーチンの場合7a8が呼ばれない。
-							return 0;
 						}
 					}
 

@@ -1216,7 +1216,8 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 
 	//AI Warning: This is code related to debug2
-	uint64_t time1 = 720912;
+	//AI Warning: This is code related to debug2
+	uint64_t time1 = 720911;
 
 	int dummy[100];
 	lcg::init(time1, false);
@@ -1229,14 +1230,8 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 	//AI Warning: This is code related to debug2
 	int32_t gene1[350] = {
-		BattleEmulator::BUFF,
-		BattleEmulator::BUFF,
-		BattleEmulator::PSYCHE_UP_ALLY,
-		BattleEmulator::PSYCHE_UP_ALLY,
-		BattleEmulator::PSYCHE_UP_ALLY,
-		BattleEmulator::PSYCHE_UP_ALLY,
-		BattleEmulator::MULTITHRUST,
-		BattleEmulator::ATTACK_ALLY,
+		30, 36, 62, 62, 30, 33, 62, 62, 50, 34,
+		BattleEmulator::ATTACK_ALLY
 	};
 	//gene1[19-1] = BattleEmulator::DEFENCE;
 	int counter = 0;
