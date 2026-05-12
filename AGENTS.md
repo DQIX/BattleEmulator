@@ -30,7 +30,10 @@
 * Please submit the differences one file at a time, if possible.
 * It's a waste of tokens, so you don't need to check the entire diff with git diff and submit the line numbers to me.
 * Do not install additional software without permission. Permission means not just displaying a message, but interrupting the process to prompt the user for permission to install and completing the task.
-
+* Do not read public/branches or public/emulators.json. These are automatically generated assets and should not be included in searches.
+* When implementing the UI, you should not insert anything from JavaScript at startup to prevent CLS issues. All elements are implemented in HTML, and optional elements are hidden by default (though their width is reserved).
+  * This doesn't mean you can't use dynamic elements in JavaScript. Dynamic additions using templates are still permitted.
+  * Furthermore, this does not mean that dynamic elements should not be initialized at startup.
 
 When modifying the UI, read interface-design-main/.claude/skills/interface-design/SKILL.md.
 A UI description is not a specification report. When adding a description, you should write about what the user should expect and what they should input, rather than just saying "it's based on xx" or "it uses performance.now()".
