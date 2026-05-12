@@ -801,10 +801,6 @@ namespace {
 			(*position) = 1;
 			Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
 
-			if (seed == 720909) {
-				std::cout << seed << std::endl;
-			}
-
 			bool resultBool = BattleEmulator::Main(position, 20, gene, players,
 			                                       nullptr, seed, nullptr, damages,
 			                                       maxElement,
@@ -873,8 +869,6 @@ namespace {
 		                             合計 6Byte
 		*/
 
-		time1 = 720909;
-		time2 = 720909+1;
 		BruteForceMainLoop(copiedPlayers, time1, time2, aActions2, value2);
 
 		std::cout << std::endl << "found: " << foundSeeds << std::endl;
@@ -1217,7 +1211,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 	//AI Warning: This is code related to debug2
 	//AI Warning: This is code related to debug2
-	uint64_t time1 = 720911;
+	uint64_t time1 = 720919;
 
 	int dummy[100];
 	lcg::init(time1, false);
@@ -1230,8 +1224,11 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 	//AI Warning: This is code related to debug2
 	int32_t gene1[350] = {
-		30, 36, 62, 62, 30, 33, 62, 62, 50, 34,
-		BattleEmulator::ATTACK_ALLY
+		BattleEmulator::BUFF,
+		BattleEmulator::PSYCHE_UP_ALLY,
+		BattleEmulator::PSYCHE_UP_ALLY,
+		BattleEmulator::PSYCHE_UP_ALLY,
+		BattleEmulator::PSYCHE_UP_ALLY,
 	};
 	//gene1[19-1] = BattleEmulator::DEFENCE;
 	int counter = 0;
@@ -1277,6 +1274,10 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 #endif
 
 #ifdef DEBUG3
+
+	auto t3 = std::chrono::high_resolution_clock::now();
+	BattleEmulator::ResetTurnProcessed();
+
 	uint64_t seed = 0x0ac040ac;
 
 	int actions[350] = {
@@ -1287,6 +1288,13 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 	std::stringstream ss2;
 	SearchRequest(BasePlayers, seed, actions, ss2);
 	std::cout << ss2.str() << std::endl;
+
+
+	auto t4 = std::chrono::high_resolution_clock::now();
+	auto elapsed_time1 =
+			std::chrono::duration_cast<std::chrono::microseconds>(t4 - t3).count();
+	PerformanceDebug("Searcher", BattleEmulator::getTurnProcessed(), static_cast<double>(elapsed_time1), 0);
+
 
 	std::cout << performanceLogger.rdbuf() << std::endl;
 

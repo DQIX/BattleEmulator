@@ -119,7 +119,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 	const auto playerMaxHp = static_cast<double>(players[0].maxHp);
 	//const auto playerMaxMP = static_cast<double>(players[0].maxMp);
 
-	LinearIdPool<Genome, 50000> Pool{};
+	LinearIdPool<Genome, 200000> Pool{};
 
 	// Enhanced A* priority queue and visited set
 	EnhancedHeapQueue openSet{};

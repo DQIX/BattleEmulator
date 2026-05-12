@@ -414,11 +414,13 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
 		tmpState = (*NowState);
 
+#if !defined(__EMSCRIPTEN__)
 #ifdef DEBUG2
 		std::cout << "c: " << counterJ << ", " << (*position) << std::endl;
 		if ((*position) == 151) {
 			std::cout << "!!" << std::endl;
 		}
+#endif
 #endif
 		int ehp = players[1].hp;
 		int ahp = players[0].hp;
