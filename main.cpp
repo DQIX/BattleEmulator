@@ -476,8 +476,8 @@ namespace {
 					enemyConsecutive += enemyActions;
 					pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
 					enemyActions = 0;
-					aActions[aActionsIndex++] = BattleEmulator::MIDHEAL;
-					values[counter2++] = InputBuilder::TYPE_MIDHEAL;
+					aActions[aActionsIndex++] = BattleEmulator::MORE_HEAL;
+					values[counter2++] = InputBuilder::TYPE_MORE_HEAL;
 					allyPresent = true;
 					foundTurnOffset = 0;
 				} else if (isMatchStrWithTrim(token, "y")) {
@@ -801,6 +801,10 @@ namespace {
 			(*position) = 1;
 			Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
 
+			if (seed == 720909) {
+				std::cout << seed << std::endl;
+			}
+
 			bool resultBool = BattleEmulator::Main(position, 20, gene, players,
 			                                       nullptr, seed, nullptr, damages,
 			                                       maxElement,
@@ -869,6 +873,8 @@ namespace {
 		                             合計 6Byte
 		*/
 
+		time1 = 720909;
+		time2 = 720909+1;
 		BruteForceMainLoop(copiedPlayers, time1, time2, aActions2, value2);
 
 		std::cout << std::endl << "found: " << foundSeeds << std::endl;
@@ -1210,7 +1216,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 
 	//AI Warning: This is code related to debug2
-	uint64_t time1 = 0xb0005;
+	uint64_t time1 = 720911;
 
 	int dummy[100];
 	lcg::init(time1, false);
@@ -1223,7 +1229,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 	//AI Warning: This is code related to debug2
 	int32_t gene1[350] = {
-		30, 62, 33, 62, 62, 62, 34,
+		30, 36, 62, 62, 30, 33, 62, 62, 50, 34,
 		BattleEmulator::ATTACK_ALLY
 	};
 	//gene1[19-1] = BattleEmulator::DEFENCE;

@@ -22,7 +22,7 @@ public:
     static constexpr int TYPE_PSYCHE_UP_ALLY = -8;
     static constexpr int TYPE_MULTITHRUST = -9;
     static constexpr int TYPE_FULLHEAL = -10;
-    static constexpr int TYPE_MIDHEAL = -11;
+    static constexpr int TYPE_MORE_HEAL = -11;
     static constexpr int TYPE_BURNING_BREATH = -12;
     static constexpr int TYPE_HEART_BREAKER = -13;
     static constexpr int TYPE_DESPERATE_ATTACK = -14;

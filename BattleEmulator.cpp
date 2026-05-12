@@ -416,7 +416,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
 #ifdef DEBUG2
 		std::cout << "c: " << counterJ << ", " << (*position) << std::endl;
-		if ((*position) == 99) {
+		if ((*position) == 131) {
 			std::cout << "!!" << std::endl;
 		}
 #endif
@@ -587,7 +587,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 							if (damages[exCounter++] != basedamage) {
 								return false;
 							}
-						}else if (damages[exCounter] == InputBuilder::TYPE_CRITICAL_ATTACK) {
+						} else if (damages[exCounter] == InputBuilder::TYPE_CRITICAL_ATTACK) {
 							if (c != CRITICAL_ATTACK) {
 								return false;
 							}
@@ -747,8 +747,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 									return false;
 								}
 							}
-							if (action == MIDHEAL) {
-								if (damages[exCounter++] != InputBuilder::TYPE_MIDHEAL) {
+							if (action == MORE_HEAL) {
+								if (damages[exCounter++] != InputBuilder::TYPE_MORE_HEAL) {
 									return false;
 								}
 							}
@@ -1754,6 +1754,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 						baseDamage = lcg::getPercent(position, 2); //TODO: 0x021e81a0
 						if (baseDamage == 1) {
 							defenseFlag = true;
+						} else {
+							return 0;
 						}
 					}
 
