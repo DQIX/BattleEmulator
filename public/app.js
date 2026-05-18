@@ -1809,7 +1809,6 @@ window.applyVisionBattleFormat = applyVisionBattleFormatText;
 
 ui.emulatorSelect.addEventListener("change", (event) => {
     setActiveEmulator(Number(event.target.value));
-    ui.actionInput.value = "";
     state.autoTimerAppliedPrefix = "";
     state.autoTimerLastUse = null;
     clearAutoTimerFractionHideTimer();
