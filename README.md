@@ -321,6 +321,143 @@ The update formula looks like this:
 \text{前の乱数} \times \text{0x5d588b656c078965} + \text{0x269ec3}\mod 2^{64}
 ```
 
+## flowchart
+
+```mermaid
+flowchart TD
+    subgraph Browser["Browser"]
+        UI["UI / Orchestrator (app.js)\n────────────────\nEmulator selector\nAction input / Offset / Range\nSeed Memo · Shortcut keys\n\nloadManifest() fetches emulators.json\nfetch/prefetch emulator.js as text\n(no direct C++ execution)"]
+
+        subgraph Timer["Auto Timer subsystem"]
+            T1["Start Timer\n(performance.now anchor)"]
+            T2["Tick loop\n(setTimeout ~1s)"]
+            T3["Use Timer → inject hh mm ss"]
+            T4["Auto-correction\n(seed drift feedback)"]
+            T1 --> T2 --> T3
+            T3 -.seed found.-> T4
+        end
+
+        Cache["Module cache\n(Map: url → jsText)\n\nprefetched by app.js"]
+
+        Memo["Seed Memo\n(localStorage, 200 entries)"]
+
+        subgraph WorkerPool["Web Worker pool (N threads)  [worker.js]"]
+            direction TB
+
+            WPIN["Worker message API\nprepare / bruteforce / search"]
+
+            subgraph EvalLayer["Dynamic emulator loader\ninside each Worker"]
+                EVAL["eval(jsText)\n\nEmscripten SINGLE_FILE\nWasm glue JS is executed here"]
+                MOD["Emscripten Module instance\nper worker"]
+                WASM["Wasm runtime / exports"]
+                EVAL --> MOD --> WASM
+            end
+
+            W1["Worker 1\nBruteForce"]
+            W2["Worker 2\nBruteForce"]
+            WN["Worker N …"]
+            WS["Winner worker\nA* Search"]
+
+            WPIN --> EVAL
+            WASM --> W1
+            WASM --> W2
+            WASM --> WN
+            WASM --> WS
+        end
+
+        subgraph Vision["Vision subsystem  [vision.js]"]
+            direction TB
+            CAM["Camera\n(getUserMedia\n1920×1080)"]
+            FRAME["Frame loop\n(requestVideoFrameCallback\nor rAF, 1–12 fps)"]
+            PROC["Processing canvas\n958×718 rescale"]
+
+            subgraph Matcher["Template Matcher"]
+                GPU["WebGpuTemplateMatcher\n(WGSL compute shader\n1 submit + 1 mapAsync)"]
+                CPU["CpuTemplateMatcher\n(JS fallback)"]
+            end
+
+            DAMAGE["Damage recognizer\ndigit template match\n(CPU, white-mask IoU)"]
+            CAND["pickCandidate\n4 slots: main/sub/ally/target\n→ action rule table"]
+            ACCEPT["acceptCandidate\nstate machine:\nActionTaken / sleeping\n/ slept / daibougilyo"]
+            HISTORY["Turn history\nturn x slot x actionId\nx damage"]
+            BRIDGE["BattleEmulatorBridge\nwindow.postMessage\nbase64url JSON"]
+            ASSETS["vision-assets.json\npre-baked binary masks\nfor templates + digits"]
+
+            CAM --> FRAME --> PROC
+            PROC --> Matcher
+            PROC --> DAMAGE
+            Matcher --> CAND
+            DAMAGE --> ACCEPT
+            CAND --> ACCEPT
+            ACCEPT --> HISTORY
+            HISTORY --> BRIDGE
+            ASSETS -.load on connect.-> Matcher
+        end
+    end
+
+    subgraph Static["Static hosting / public assets\nGitHub Pages publishes these files"]
+        Manifest["public/emulators.json\n\nprebuilt at publish time\nread by loadManifest()\nfetch('emulators.json', cache: no-store)"]
+        WasmJS["public/branches/.../emulator.js\nexample:\npublic/branches/bilyouma_new_arugo_v8/\nbilyouma_v8/emulator.js\n\nprebuilt Emscripten SINGLE_FILE JS\nper boss / branch"]
+    end
+
+    subgraph CppCore["C++ core compiled into Wasm\nbundled inside emulator.js\nnot called directly by app.js"]
+        direction TB
+        BE["BattleEmulator::Main\nLCG RNG + damage"]
+        IB["InputBuilder\n→ ResultStructure"]
+        AO["ActionOptimizer\nA* search"]
+        CC["EnhancedCostCalculator\ng / h cost"]
+        HC["EnhancedHashCalculator"]
+        LCG["lcg\n64-bit LCG"]
+
+        BE --> LCG
+        IB --> BE
+        AO --> BE
+        AO --> CC
+        AO --> HC
+    end
+
+    UI -- "loadManifest()" --> Manifest
+    Manifest -- "emulator entries\nname / url / meta" --> UI
+
+    UI -- "fetch emulator url\nas jsText" --> WasmJS
+    WasmJS -- "SINGLE_FILE JS text" --> Cache
+
+    UI -- "computeSeedRange / splitRange" --> WorkerPool
+    Cache -- "postMessage jsText\nselected emulator" --> WorkerPool
+
+    WorkerPool -- "prepare / bruteforce / search result" --> UI
+    WorkerPool -- "found seed" --> UI
+    WorkerPool -- "dump table" --> UI
+
+    WASM -. "exports call into" .-> CppCore
+    CppCore -. "compiled code runs\ninside Wasm runtime" .-> WASM
+
+    Timer --> UI
+    UI -- drift --> T4
+
+    UI --> Memo
+    Memo -.restore fraction / URL override.-> UI
+
+    BRIDGE -- "applyVisionBattleFormat\nwindow global" --> UI
+
+    classDef cpp fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+    classDef worker fill:#fef9c3,stroke:#ca8a04,color:#713f12
+    classDef static fill:#f0fdf4,stroke:#16a34a,color:#14532d
+    classDef timer fill:#fdf4ff,stroke:#a855f7,color:#4a044e
+    classDef memo fill:#fff7ed,stroke:#ea580c,color:#7c2d12
+    classDef vision fill:#f0f9ff,stroke:#0ea5e9,color:#0c4a6e
+    classDef eval fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+    classDef runtime fill:#ede9fe,stroke:#7c3aed,color:#3b0764
+
+    class BE,IB,AO,CC,HC,LCG cpp
+    class W1,W2,WN,WS,WPIN worker
+    class Manifest,WasmJS static
+    class T1,T2,T3,T4 timer
+    class Memo memo
+    class CAM,FRAME,PROC,GPU,CPU,DAMAGE,CAND,ACCEPT,HISTORY,BRIDGE,ASSETS vision
+    class EVAL eval
+    class MOD,WASM runtime
+```
 ## Official image rules for this repository
 
 >
