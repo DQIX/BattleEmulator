@@ -1229,6 +1229,8 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 		BattleEmulator::PSYCHE_UP_ALLY,
 		BattleEmulator::PSYCHE_UP_ALLY,
 		BattleEmulator::PSYCHE_UP_ALLY,
+		BattleEmulator::DOUBLE_UP,
+		BattleEmulator::MULTITHRUST,
 	};
 	//gene1[19-1] = BattleEmulator::DEFENCE;
 	int counter = 0;

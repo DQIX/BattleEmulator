@@ -306,7 +306,7 @@ inline void BattleEmulator::processTurn() {
 int enemyActions[6] = {
 	BattleEmulator::ATTACK_ENEMY, BattleEmulator::CHAIN_SWING,
 	BattleEmulator::PSYCHE_UP, BattleEmulator::CRITICAL_ATTACK,
-	BattleEmulator::ATTACK_ENEMY, BattleEmulator::CHAIN_SWING,
+	BattleEmulator::CHAIN_SWING, BattleEmulator::ATTACK_ENEMY,
 };
 
 //#endif
@@ -420,7 +420,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 #if !defined(__EMSCRIPTEN__)
 #ifdef DEBUG2
 		std::cout << "c: " << counterJ << ", " << (*position) << std::endl;
-		if ((*position) == 151) {
+		if ((*position) == 132) {
 			std::cout << "!!" << std::endl;
 		}
 #endif
@@ -449,26 +449,18 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 		int preAction = 0;
 		auto eme = FUN_0208aecc(position, NowState);
 		int enemyAction = enemyActions[eme];
-		if (enemyAction == ATTACK_ENEMY || enemyAction == CRITICAL_ATTACK || enemyAction == HEART_BREAKER) {
+		if (enemyAction == ATTACK_ENEMY || enemyAction == CRITICAL_ATTACK) {
 			if (!players[1].rage) {
 				(*position)++; //0x02156874 0x00000002 4 攻撃先
 			}
 			(*position) += 2;
 		}
-		if (enemyAction == CHAIN_SWING || enemyAction == BURNING_BREATH) {
+		if (enemyAction == CHAIN_SWING || enemyAction == PSYCHE_UP) {
 			(*position) += 2;
 		}
 		(*position)++; //0x02160d64
 
-		if (enemyAction == BLOCKENSPIEL) {
-			if (!players[1].rage) {
-				(*position)++; //0x02156874 0x00000002 4 攻撃先
-			}
-			(*position) += 2;
-			players[1].defence = 0.5;
-		} else {
-			players[1].defence = 1.0;
-		}
+		players[1].defence = 1.0;
 
 		int32_t actionTable = -1;
 		int32_t requestedAction = -1;
@@ -1278,9 +1270,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 				// 	kaihi = true;
 				// }
 				(*position)++;
-				if (lcg::getPercent(position, 100) < 8) {
-					tate = true;
-				}
+				(*position)++; //盾
 				(*position)++; //ニセ回避 0x02157f58 100%
 				baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
 
@@ -1871,9 +1861,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 
 			(*position)++; //みかわし
 			//みかわし(相手)
-			if (lcg::getPercent(position, 100) < 8) {
-				tate = true;
-			}
+			(*position)++; //盾
 
 			(*position)++; //回避
 			baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
@@ -2208,8 +2196,7 @@ void BattleEmulator::ProcessRage(int *position, int baseDamage, Player *players)
 		if (percent >= 0.5) {
 			if (!players[1].rage) {
 				(*position)++;
-				players[1].rage = true;
-				players[1].rageTurns = lcg::intRangeRand(position, 2, 4);
+				(*position)++;
 			} else {
 				(*position)++;
 			}
