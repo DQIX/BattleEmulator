@@ -1066,64 +1066,72 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 			resetCombo(NowState);
 			break;
 		case BattleEmulator::MORE_HEAL:
-			players[attacker].mp -= 8;
-			(*position) += 2;
-			(*position)++; //関係ない
-			if (lcg::getPercent(position, 0x2710) < 100) {
-				kaisinn = true;
-			}
-			(*position)++; //回避
-
-			baseDamage = FUN_021e8458_typeD(position, 20, CalculateMoreHealBase(players));
-			if (kaisinn) {
-				tmp1 = baseDamage * lcg::floatRand(position, 1.5, 2.0); //TODO
-			} else {
-				tmp1 = baseDamage;
-			}
-
-			if (players[attacker].TensionLevel != 0) {
-				//TODO ダメージが正しいか調べる 特殊県産式の引数も調べる https://dragonquest9.com/?%E3%83%80%E3%83%A1%E3%83%BC%E3%82%B8%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6#tension
-				tmp = baseDamage * Ally_TensionTable[players[attacker].TensionLevel - 1];
-				tmp += (players[attacker].TensionLevel * Ally_TensionLevel);
-				players[attacker].TensionLevel = 0;
-			} else {
-				tmp = baseDamage;
-			}
-
-			if (kaisinn) {
-				if (tmp * 1.2000 <= tmp1) {
-					tmp = tmp1;
-				} else {
-					tmp *= 1.2000;
-				}
-			}
-			baseDamage = static_cast<int>(floor(tmp));
-
-			(*position)++; //不明
-			if (!players[attacker].specialCharge) {
+			{
+				players[attacker].mp -= 8;
+				(*position) += 2;
 				(*position)++; //関係ない
-			}
-			//0x021eb8c8, randIntRange: 0x021eb8f0 怒り狂っている場合←の消費が発生しない。
-			if (!players[1].rage) {
-				(*position)++;
-			}
-			(*position)++; //?
-			if (kaisinn) {
-				if (!players[1].rage) {
-					(*position)++; //会心時特殊処理　0x021e54fc
-					(*position)++; //会心時特殊処理　0x021eb8c8
+				if (lcg::getPercent(position, 0x2710) < 100) {
+					kaisinn = true;
+				}
+				(*position)++; //回避
+
+				baseDamage = FUN_021e8458_typeD(position, 20, CalculateMoreHealBase(players));
+				if (kaisinn) {
+					tmp1 = baseDamage * lcg::floatRand(position, 1.5, 2.0); //TODO
 				} else {
-					(*position)++; //会心時特殊処理　既に怒り狂ってる場合は1消費になる
+					tmp1 = baseDamage;
 				}
-			}
-			if (!players[0].paralysis && !players[0].isStunned) {
-				if (!players[attacker].specialCharge && lcg::getPercent(position, 100) < 1) {
-					players[attacker].specialCharge = true;
-					players[attacker].specialChargeTurn = 8;
+
+				if (players[attacker].TensionLevel != 0) {
+					//TODO ダメージが正しいか調べる 特殊県産式の引数も調べる https://dragonquest9.com/?%E3%83%80%E3%83%A1%E3%83%BC%E3%82%B8%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6#tension
+					tmp = baseDamage * Ally_TensionTable[players[attacker].TensionLevel - 1];
+					tmp += (players[attacker].TensionLevel * Ally_TensionLevel);
+					players[attacker].TensionLevel = 0;
+				} else {
+					tmp = baseDamage;
 				}
+
+				if (kaisinn) {
+					if (tmp * 1.2000 <= tmp1) {
+						tmp = tmp1;
+					} else {
+						tmp *= 1.2000;
+					}
+				}
+				baseDamage = static_cast<int>(floor(tmp));
+
+				(*position)++; //不明
+				if (!players[attacker].specialCharge) {
+					(*position)++; //関係ない
+				}
+				//0x021eb8c8, randIntRange: 0x021eb8f0 怒り狂っている場合←の消費が発生しない。
+				if (!players[1].rage) {
+					(*position)++;
+				}
+				(*position)++; //?
+				if (kaisinn) {
+					if (!players[1].rage) {
+						auto p = lcg::getPercent(position, 100);
+						auto turns2 = lcg::intRangeRand(position, 3, 4);
+						if (p < 75) {
+							players[attacker].rage = true;
+							players[attacker].rageTurns = turns2;
+						}
+						//(*position)++; //会心時特殊処理　0x021e54fc
+						//(*position)++; //会心時特殊処理　0x021eb8c8
+					} else {
+						(*position)++; //会心時特殊処理　既に怒り狂ってる場合は1消費になる
+					}
+				}
+				if (!players[0].paralysis && !players[0].isStunned) {
+					if (!players[attacker].specialCharge && lcg::getPercent(position, 100) < 1) {
+						players[attacker].specialCharge = true;
+						players[attacker].specialChargeTurn = 8;
+					}
+				}
+				resetCombo(NowState);
+				break;
 			}
-			resetCombo(NowState);
-			break;
 		case BattleEmulator::CURE_PARALYSIS:
 			(*position) += 2;
 			(*position)++; //関係ない
@@ -1192,8 +1200,14 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 			(*position)++; //?
 			if (kaisinn) {
 				if (!players[1].rage) {
-					(*position)++; //会心時特殊処理　0x021e54fc
-					(*position)++; //会心時特殊処理　0x021eb8c8
+					auto p = lcg::getPercent(position, 100);
+					auto turns2 = lcg::intRangeRand(position, 3, 4);
+					if (p < 75) {
+						players[attacker].rage = true;
+						players[attacker].rageTurns = turns2;
+					}
+					// (*position)++; //会心時特殊処理　0x021e54fc
+					// (*position)++; //会心時特殊処理　0x021eb8c8
 				} else {
 					(*position)++; //会心時特殊処理　既に怒り狂ってる場合は1消費になる
 				}
@@ -1319,7 +1333,13 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 				}
 			}
 			if (hasKaisinn) {
-				(*position) += 2;
+				auto p = lcg::getPercent(position, 100);
+				auto turns2 = lcg::intRangeRand(position, 3, 4);
+				if (p < 75) {
+					players[attacker].rage = true;
+					players[attacker].rageTurns = turns2;
+				}
+				//(*position) += 2;
 			}
 			if (preHP[1] > 0) {
 				if (!players[attacker].specialCharge && lcg::getPercent(position, 100) < 1) {
@@ -1812,8 +1832,14 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 			(*position)++; //?
 			if (kaisinn) {
 				if (!players[1].rage) {
-					(*position)++; //会心時特殊処理　0x021e54fc
-					(*position)++; //会心時特殊処理　0x021eb8c8
+					auto p = lcg::getPercent(position, 100);
+					auto turns2 = lcg::intRangeRand(position, 3, 4);
+					if (p < 75) {
+						players[attacker].rage = true;
+						players[attacker].rageTurns = turns2;
+					}
+					// (*position)++; //会心時特殊処理　0x021e54fc
+					// (*position)++; //会心時特殊処理　0x021eb8c8
 				} else {
 					(*position)++; //会心時特殊処理　既に怒り狂ってる場合は1消費になる
 				}
@@ -1926,8 +1952,14 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 			}
 			if (kaisinn) {
 				if (!players[1].rage) {
-					(*position)++; //会心時特殊処理　0x021e54fc
-					(*position)++; //会心時特殊処理　0x021eb8c8
+					auto p = lcg::getPercent(position, 100);
+					auto turns2 = lcg::intRangeRand(position, 3, 4);
+					if (p < 75) {
+						players[attacker].rage = true;
+						players[attacker].rageTurns = turns2;
+					}
+					// (*position)++; //会心時特殊処理　0x021e54fc
+					// (*position)++; //会心時特殊処理　0x021eb8c8
 				} else {
 					(*position)++; //会心時特殊処理　既に怒り狂ってる場合は1消費になる
 				}
