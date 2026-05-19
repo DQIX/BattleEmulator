@@ -1,0 +1,52 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" role="img" xmlns="http://www.w3.org/2000/svg">
+<title>DQIX Battle Emulator – light</title>
+<desc>GitHub social preview card for DQIX Solo Travel Battle Emulator, light mode</desc>
+
+<rect width="1280" height="640" fill="#ffffff"/>
+<rect x="80" y="80" width="1120" height="480" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+<rect x="80" y="80" width="8" height="480" fill="#24292f" rx="3"/>
+
+<!-- Title -->
+<text x="112" y="172" font-family="sans-serif" font-size="22" font-weight="400" fill="#656d76" letter-spacing="5">DQIX SOLO TRAVEL</text>
+<text x="112" y="248" font-family="sans-serif" font-size="64" font-weight="700" fill="#1f2328">Battle Emulator</text>
+
+<line x1="112" y1="276" x2="1168" y2="276" stroke="#d0d7de" stroke-width="1.2"/>
+
+<!-- Catchcopy -->
+<text x="112" y="330" font-family="sans-serif" font-size="28" font-style="italic" fill="#656d76">Finds the fastest path to victory.</text>
+
+<line x1="112" y1="360" x2="1168" y2="360" stroke="#d0d7de" stroke-width="1.2"/>
+
+<!-- Badges row 1 -->
+<rect x="112" y="382" width="84"  height="40" rx="20" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="154" y="407" text-anchor="middle" font-family="sans-serif" font-size="22" font-weight="500" fill="#0969da">cpp</text>
+
+<rect x="208" y="382" width="84"  height="40" rx="20" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="250" y="407" text-anchor="middle" font-family="sans-serif" font-size="22" font-weight="500" fill="#1a7f37">dq9</text>
+
+<rect x="304" y="382" width="148" height="40" rx="20" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="378" y="407" text-anchor="middle" font-family="sans-serif" font-size="22" font-weight="500" fill="#9a6700">speedrun</text>
+
+<rect x="464" y="382" width="216" height="40" rx="20" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="572" y="407" text-anchor="middle" font-family="sans-serif" font-size="22" font-weight="500" fill="#6639ba">astar-algorithm</text>
+
+<rect x="692" y="382" width="192" height="40" rx="20" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="788" y="407" text-anchor="middle" font-family="sans-serif" font-size="22" font-weight="500" fill="#0550ae">webassembly</text>
+
+<rect x="896" y="382" width="176" height="40" rx="20" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="984" y="407" text-anchor="middle" font-family="sans-serif" font-size="22" font-weight="500" fill="#cf222e">brute-force</text>
+
+<!-- Badges row 2 -->
+<rect x="112" y="438" width="100" height="40" rx="20" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="162" y="463" text-anchor="middle" font-family="sans-serif" font-size="22" font-weight="500" fill="#656d76">armv5t</text>
+
+<rect x="224" y="438" width="328" height="40" rx="20" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="388" y="463" text-anchor="middle" font-family="sans-serif" font-size="22" font-weight="500" fill="#6639ba">reverse-engineering</text>
+
+<rect x="564" y="438" width="148" height="40" rx="20" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="638" y="463" text-anchor="middle" font-family="sans-serif" font-size="22" font-weight="500" fill="#0550ae">website</text>
+
+<!-- Footer -->
+<text x="112"  y="530" font-family="sans-serif" font-size="22" fill="#8c959f">solo-only · open source · JP region</text>
+<text x="1168" y="530" text-anchor="end" font-family="sans-serif" font-size="22" fill="#8c959f">Available at dqix.github.io/BattleEmulator</text>
+</svg>
