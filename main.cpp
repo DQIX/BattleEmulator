@@ -88,7 +88,7 @@ namespace {
 	constexpr Player BasePlayers[2] = {
 		// プレイヤー1
 		{
-			297, 297.0, 296, 296, 264, 264, 184, 184, 227, 150, // 最初のメンバー
+			297, 297.0, 306, 306, 278, 278, 184, 184, 230, 130, // 最初のメンバー
 			158, false, false, 0, false, 0, -1,
 			// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
 			6, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
@@ -97,8 +97,8 @@ namespace {
 
 		// プレイヤー2
 		{
-			2000, 2000.0, 206, 206, 214, 214, 138, 138, 0, 255, // 最初のメンバー
-			255, false, false, 0, false, 0, -1,
+			2470, 2470.0, 196, 196, 192, 192, 130, 130, 0, 40, // 最初のメンバー
+			40, false, false, 0, false, 0, -1,
 			// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
 			0, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
 			false, -1, 0, -1, 0, false, 0, 0, 0, -1, 0, -1, false, 2, false, -1
@@ -1211,7 +1211,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 	//AI Warning: This is code related to debug2
 	//AI Warning: This is code related to debug2
-	uint64_t time1 = 720919;
+	uint64_t time1 = 0x6b861bc8;
 
 	int dummy[100];
 	lcg::init(time1, false);

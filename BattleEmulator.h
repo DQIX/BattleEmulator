@@ -115,6 +115,7 @@ public:
     static constexpr int HEART_BREAKER = 83; //ハードブレイク
     static constexpr int DESPERATE_ATTACK = 84; //大地を揺さぶる
     static constexpr int BLOCKENSPIEL = 85; //シールドアタック
+    static constexpr int CHAIN_SWING = 86; //シールドアタック
 
 
     static void ResetTurnProcessed();

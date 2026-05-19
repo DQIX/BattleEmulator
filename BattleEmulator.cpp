@@ -9,6 +9,7 @@
 #include "BattleEmulator.h"
 
 #include <array>
+#include <cassert>
 
 #include "lcg.h"
 #include "Player.h"
@@ -270,6 +271,8 @@ const char *BattleEmulator::getActionName(int actionId) {
 			return "Desperate";
 		case INACTIVE_ALLY:
 			return "Inactive";
+		case CHAIN_SWING:
+			return "Chain Swing";
 		default:
 			return "Unknown Action";
 	}
@@ -300,14 +303,14 @@ inline void BattleEmulator::processTurn() {
 	threadTurnProcessed++;
 }
 
+int enemyActions[6] = {
+	BattleEmulator::ATTACK_ENEMY, BattleEmulator::CHAIN_SWING,
+	BattleEmulator::PSYCHE_UP, BattleEmulator::CRITICAL_ATTACK,
+	BattleEmulator::ATTACK_ENEMY, BattleEmulator::CHAIN_SWING,
+};
 
 //#endif
 
-constexpr int AttackTable2B[6] = {
-	BattleEmulator::CRACKLE_ENEMY, BattleEmulator::PSYCHE_UP,
-	BattleEmulator::DOUBLE_TROUBLE, BattleEmulator::PSYCHE_UP,
-	BattleEmulator::ATTACK_ENEMY, BattleEmulator::SWITCH_2A,
-};
 /**
  * @brief バトルシミュレーションのメイン処理。
  *
@@ -439,18 +442,20 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 			player0_has_initiative = false;
 		}
 
-		auto counter = 0;
-		int enemyAction = 0;
-		int preAction = 0;
-		enemyAction = ProcessEnemyRandomAction44(position);
 
+
+		auto counter = 0;
+
+		int preAction = 0;
+		auto eme = FUN_0208aecc(position, NowState);
+		int enemyAction = enemyActions[eme];
 		if (enemyAction == ATTACK_ENEMY || enemyAction == CRITICAL_ATTACK || enemyAction == HEART_BREAKER) {
 			if (!players[1].rage) {
 				(*position)++; //0x02156874 0x00000002 4 攻撃先
 			}
 			(*position) += 2;
 		}
-		if (enemyAction == DESPERATE_ATTACK || enemyAction == BURNING_BREATH) {
+		if (enemyAction == CHAIN_SWING || enemyAction == BURNING_BREATH) {
 			(*position) += 2;
 		}
 		(*position)++; //0x02160d64
@@ -1711,10 +1716,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 				break;
 			}
 		case BattleEmulator::ATTACK_ENEMY:
-		case BattleEmulator::SKY_ATTACK:
-		case BattleEmulator::POISON_ATTACK:
-		case BattleEmulator::BLOCKENSPIEL:
-		case HEART_BREAKER:
+		case BattleEmulator::CHAIN_SWING:
 			{
 				(*position) += 2;
 				(*position)++;
@@ -1730,13 +1732,17 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 				(*position)++; //回避
 
 				baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
+
+				if ((Id & 0xffff) == CHAIN_SWING) {
+					constexpr double base = 25 * 2.5;
+					auto rand2 = lcg::floatRand(position, 0.9, 1.1) * base;
+					baseDamage = static_cast<int>(rand2);
+				}
+
 				if (tate || kaihi) {
 					baseDamage = 0;
 				} else {
 					tmp = static_cast<double>(baseDamage);
-					if ((Id & 0xffff) == BattleEmulator::BLOCKENSPIEL) {
-						tmp = floor(tmp * 0.5);
-					}
 
 					//テンションがある場合、この時点でオフセットが計算されて、最低4ダメージが保証されて下の0x021e81a0でダメージがある判定になる。
 					//1*(1+(30/10))で4ダメージが保証されるけど、事前に計算して定数にしとく。
@@ -1776,21 +1782,6 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 					}
 
 					if (baseDamage != 0) {
-						//0x021e34e8
-						//テンションが100の場合、軽減後に判定され、0ダメージなら判定が発生しない。
-						if ((Id & 0xffff) == HEART_BREAKER && lcg::getPercent(position, 100) < 18.7500) {
-							//0x021e34e8
-							/**
-							float: 0x020756e4 00000000 0x414e0000 193
-							0x021e81a0 0x00000002 194
-							0damage, 021e81a0: 1f
-							0x021e34e8 0x00000064 195
-							0x02158ac4 0x00000064 196
-							doku, 02158ad0: 100/0
-							 */
-							players[defender].isStunned = true;
-						}
-
 						(*position)++; //目を覚ました
 						(*position)++; //不明
 					}
@@ -2249,21 +2240,24 @@ int BattleEmulator::ProcessMagicBurst(int *position) {
 	}
 }
 
-int BattleEmulator::FUN_0208aecc(int *position, uint64_t *NowState) {
-	uint64_t previousState = ((*NowState) >> 4) & 0xf;
-	if (previousState == 3) {
-		previousState = 0;
+int BattleEmulator::FUN_0208aecc(int* position, uint64_t* nowState)
+{
+	// 現在ステート取得 (4bit〜7bit)
+	uint8_t pre = ((*nowState >> 4) & 0xF);
+	if (pre == 3) {
+		pre = 0;
 	}
-	uint64_t r0_var2 = lcg::getSeed(position);
-	uint64_t r3_var3 = previousState;
-	uint64_t r2_var5 = r0_var2 & 0x1;
-	uint64_t r0_var6 = r3_var3 << 0x1 & 0xFFFFFFFF;
-	uint64_t r1_var7 = r0_var6 & 0xff;
-	uint64_t r0_var8 = r3_var3 + 0x1;
-	uint64_t r3_var9 = r1_var7 + r2_var5;
-	previousState = static_cast<int>(r0_var8);
-	uint64_t r3_var12 = r3_var9 & 0xff;
-	(*NowState) &= ~0xf0;
-	(*NowState) |= (previousState << 4);
-	return static_cast<int>(r3_var12);
+
+	// LCG の下位 1bit
+	uint8_t lcgBit = lcg::getSeed(position);
+
+	// 出力値
+	auto output = static_cast<uint8_t>(pre * 2 + lcgBit);
+	assert(output <= 6);
+
+	// 次ステート更新
+	uint8_t next = pre + 1;
+	*nowState = (*nowState & ~0xF0) | (static_cast<uint64_t>(next) << 4);
+
+	return output;
 }
