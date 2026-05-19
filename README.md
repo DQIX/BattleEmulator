@@ -326,30 +326,77 @@ The update formula looks like this:
 ```mermaid
 flowchart TD
     subgraph Browser["Browser"]
-        UI["UI / Orchestrator (app.js)\n────────────────\nEmulator selector\nAction input / Offset / Range\nSeed Memo · Shortcut keys\n\nloadManifest() fetches emulators.json\nfetch/prefetch emulator.js as text\n(no direct C++ execution)"]
+        direction TB
 
-        subgraph Timer["Auto Timer subsystem"]
-            T1["Start Timer\n(performance.now anchor)"]
-            T2["Tick loop\n(setTimeout ~1s)"]
-            T3["Use Timer → inject hh mm ss"]
-            T4["Auto-correction\n(seed drift feedback)"]
+        subgraph DOM["Browser DOM layer\nindex.html panels"]
+            direction TB
+
+            DOMNOTE["Static HTML / CSS panels\napp.js does not contain all markup\nit binds to existing DOM elements"]
+
+            P_TIMER["panel-auto-timer\n#autoTimerPreview\n#autoTimerStartButton\n#autoTimerUseButton\n#autoTimerResetButton\n#autoTimerFractionInput\n#autoTimerStatus"]
+
+            P_EMU["panel-emulator\n#emulatorSelect\n#emulatorStatus\n#offsetSeconds\n#searchRangeSeconds\n#emulatorMeta"]
+
+            P_INPUT["panel-input\n#threads\n#runButton\n#actionInput"]
+
+            P_DUMP["panel-dump\n#seedState\n#dumpOutput"]
+
+            P_VISION["panel-vision\n#visionCameraSelect\n#visionInspectRate\n#visionPermissionButton\n#visionConnectButton\n#visionOverlay\n#visionMatches\n#visionEncodedPayload"]
+
+            P_VISION_HISTORY["panel-vision-history\n#visionHistoryBody\nrecognized actions table"]
+
+            P_MEMO["panel-ledger-table / Seed Memo\n#memoTableBody\n#memoRowTemplate\n#memoCopyMarkdown\n#memoCopyCsv\nnote inputs / copy URL links"]
+
+            DOMNOTE --> P_TIMER
+            DOMNOTE --> P_EMU
+            DOMNOTE --> P_INPUT
+            DOMNOTE --> P_DUMP
+            DOMNOTE --> P_VISION
+            DOMNOTE --> P_VISION_HISTORY
+            DOMNOTE --> P_MEMO
+        end
+
+        subgraph AppJS["Application controller  [app.js]"]
+            direction TB
+
+            APPNOTE["app.js responsibilities\n────────────────\nquery DOM elements\nbind event listeners\nmanage state\ni18n / URL overrides\nload manifest\nprefetch emulator.js text\nsplit work across Workers\nrender results"]
+
+            UI["UI Orchestrator\nEmulator selector\nAction input\nOffset / Range\nRun Search\nDump Table updates"]
+
+            STATE["App state\nselected emulator\nlatest seed result\nworker jobs\ntimer anchor\nvision bridge payload"]
+
+            MEMOCTL["Seed Memo controller\nowned by app.js\nsave only when a single seed is found\nrender memo rows\ncopy Markdown / CSV\ncopy URL\neditable note field"]
+
+            LS["localStorage\nSeed Memo\nup to 200 entries"]
+
+            APPNOTE --> UI
+            APPNOTE --> STATE
+            STATE --> MEMOCTL
+            MEMOCTL <--> LS
+        end
+
+        subgraph Timer["Auto Timer subsystem\ncontrolled by app.js + DOM panel"]
+            direction TB
+            T1["Start Timer\nperformance.now anchor"]
+            T2["Tick loop\nsetTimeout ~1s"]
+            T3["Use Current Time\ninject hh mm ss"]
+            T4["Auto-correction\nseed drift feedback"]
             T1 --> T2 --> T3
             T3 -.seed found.-> T4
         end
 
-        Cache["Module cache\n(Map: url → jsText)\n\nprefetched by app.js"]
+        Cache["Module cache\nMap: url → jsText\n\napp.js prefetches emulator.js\nbut does not execute C++"]
 
-        Memo["Seed Memo\n(localStorage, 200 entries)"]
-
-        subgraph WorkerPool["Web Worker pool (N threads)  [worker.js]"]
+        subgraph WorkerPool["Web Worker pool  [worker.js]\nN threads"]
             direction TB
 
             WPIN["Worker message API\nprepare / bruteforce / search"]
 
             subgraph EvalLayer["Dynamic emulator loader\ninside each Worker"]
-                EVAL["eval(jsText)\n\nEmscripten SINGLE_FILE\nWasm glue JS is executed here"]
+                direction TB
+                EVAL["eval(jsText)\n\nforce-loads prebuilt\nEmscripten SINGLE_FILE glue JS"]
                 MOD["Emscripten Module instance\nper worker"]
-                WASM["Wasm runtime / exports"]
+                WASM["Wasm runtime / exports\ncreated after eval"]
                 EVAL --> MOD --> WASM
             end
 
@@ -365,21 +412,23 @@ flowchart TD
             WASM --> WS
         end
 
-        subgraph Vision["Vision subsystem  [vision.js]"]
+        subgraph Vision["Vision subsystem  [vision.js]\nDOM-backed camera console"]
             direction TB
-            CAM["Camera\n(getUserMedia\n1920×1080)"]
-            FRAME["Frame loop\n(requestVideoFrameCallback\nor rAF, 1–12 fps)"]
+
+            CAM["Camera\ngetUserMedia\n1920×1080"]
+            FRAME["Frame loop\nrequestVideoFrameCallback\nor rAF, 1–12 fps"]
             PROC["Processing canvas\n958×718 rescale"]
 
             subgraph Matcher["Template Matcher"]
-                GPU["WebGpuTemplateMatcher\n(WGSL compute shader\n1 submit + 1 mapAsync)"]
-                CPU["CpuTemplateMatcher\n(JS fallback)"]
+                direction TB
+                GPU["WebGpuTemplateMatcher\nWGSL compute shader\n1 submit + 1 mapAsync"]
+                CPU["CpuTemplateMatcher\nJS fallback"]
             end
 
-            DAMAGE["Damage recognizer\ndigit template match\n(CPU, white-mask IoU)"]
+            DAMAGE["Damage recognizer\ndigit template match\nCPU, white-mask IoU"]
             CAND["pickCandidate\n4 slots: main/sub/ally/target\n→ action rule table"]
             ACCEPT["acceptCandidate\nstate machine:\nActionTaken / sleeping\n/ slept / daibougilyo"]
-            HISTORY["Turn history\nturn x slot x actionId\nx damage"]
+            HISTORY["Turn history\nturn x slot x actionId x damage"]
             BRIDGE["BattleEmulatorBridge\nwindow.postMessage\nbase64url JSON"]
             ASSETS["vision-assets.json\npre-baked binary masks\nfor templates + digits"]
 
@@ -393,15 +442,32 @@ flowchart TD
             HISTORY --> BRIDGE
             ASSETS -.load on connect.-> Matcher
         end
+
+        DOM <-->|querySelector / input events / render| AppJS
+        P_TIMER <-->|buttons / fraction / status| Timer
+        P_MEMO <-->|render rows / note edits / copy actions| MEMOCTL
+        P_VISION <-->|camera controls / overlay / bridge payload| Vision
+        P_VISION_HISTORY <-->|render accepted actions| HISTORY
     end
 
-    subgraph Static["Static hosting / public assets\nGitHub Pages publishes these files"]
-        Manifest["public/emulators.json\n\nprebuilt at publish time\nread by loadManifest()\nfetch('emulators.json', cache: no-store)"]
-        WasmJS["public/branches/.../emulator.js\nexample:\npublic/branches/bilyouma_new_arugo_v8/\nbilyouma_v8/emulator.js\n\nprebuilt Emscripten SINGLE_FILE JS\nper boss / branch"]
-    end
-
-    subgraph CppCore["C++ core compiled into Wasm\nbundled inside emulator.js\nnot called directly by app.js"]
+    subgraph Static["Static hosting"]
         direction TB
+
+        STATICNOTE["Static hosting / public assets\npublished by GitHub Pages\nprebuilt before deployment"]
+
+        Manifest["public/emulators.json\n\nread at runtime as:\nfetch('emulators.json', cache: 'no-store')\n\ncontains emulator entries\nname / url / meta"]
+
+        WasmJS["public/branches/.../emulator.js\n\nexample:\npublic/branches/bilyouma_new_arugo_v8/\nbilyouma_v8/emulator.js\n\nprebuilt Emscripten SINGLE_FILE JS\nper boss / branch"]
+
+        STATICNOTE --> Manifest
+        STATICNOTE --> WasmJS
+    end
+
+    subgraph CppCore["C++ core"]
+        direction TB
+
+        CPPNOTE["C++ core compiled into Wasm\nbundled inside emulator.js\nnot called directly by app.js\nexecuted only through Worker eval + Wasm exports"]
+
         BE["BattleEmulator::Main\nLCG RNG + damage"]
         IB["InputBuilder\n→ ResultStructure"]
         AO["ActionOptimizer\nA* search"]
@@ -409,6 +475,9 @@ flowchart TD
         HC["EnhancedHashCalculator"]
         LCG["lcg\n64-bit LCG"]
 
+        CPPNOTE --> BE
+        CPPNOTE --> IB
+        CPPNOTE --> AO
         BE --> LCG
         IB --> BE
         AO --> BE
@@ -417,29 +486,27 @@ flowchart TD
     end
 
     UI -- "loadManifest()" --> Manifest
-    Manifest -- "emulator entries\nname / url / meta" --> UI
+    Manifest -- "emulator list" --> UI
 
-    UI -- "fetch emulator url\nas jsText" --> WasmJS
-    WasmJS -- "SINGLE_FILE JS text" --> Cache
+    UI -- "fetch selected / likely emulator url\nas text" --> WasmJS
+    WasmJS -- "jsText" --> Cache
 
     UI -- "computeSeedRange / splitRange" --> WorkerPool
     Cache -- "postMessage jsText\nselected emulator" --> WorkerPool
 
-    WorkerPool -- "prepare / bruteforce / search result" --> UI
-    WorkerPool -- "found seed" --> UI
-    WorkerPool -- "dump table" --> UI
+    WorkerPool -- "prepare complete\nbruteforce progress\nfound seed\nsearch result\ndump table" --> UI
 
-    WASM -. "exports call into" .-> CppCore
-    CppCore -. "compiled code runs\ninside Wasm runtime" .-> WASM
+    WASM -. "exports call into compiled code" .-> CppCore
+    CppCore -. "runs inside Wasm runtime" .-> WASM
 
-    Timer --> UI
-    UI -- drift --> T4
+    Timer --> STATE
+    STATE -- "latest confirmed seed / drift" --> T4
+    UI --> MEMOCTL
 
-    UI --> Memo
-    Memo -.restore fraction / URL override.-> UI
+    BRIDGE -- "applyVisionBattleFormat\nwindow global / app.js handler" --> UI
 
-    BRIDGE -- "applyVisionBattleFormat\nwindow global" --> UI
-
+    classDef dom fill:#f8fafc,stroke:#64748b,color:#0f172a
+    classDef app fill:#ecfeff,stroke:#0891b2,color:#164e63
     classDef cpp fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
     classDef worker fill:#fef9c3,stroke:#ca8a04,color:#713f12
     classDef static fill:#f0fdf4,stroke:#16a34a,color:#14532d
@@ -448,12 +515,15 @@ flowchart TD
     classDef vision fill:#f0f9ff,stroke:#0ea5e9,color:#0c4a6e
     classDef eval fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
     classDef runtime fill:#ede9fe,stroke:#7c3aed,color:#3b0764
+    classDef note fill:#ffffff,stroke:#94a3b8,color:#334155,stroke-dasharray: 4 3
 
-    class BE,IB,AO,CC,HC,LCG cpp
+    class DOMNOTE,P_TIMER,P_EMU,P_INPUT,P_DUMP,P_VISION,P_VISION_HISTORY,P_MEMO dom
+    class APPNOTE,UI,STATE app
+    class BE,IB,AO,CC,HC,LCG,CPPNOTE cpp
     class W1,W2,WN,WS,WPIN worker
-    class Manifest,WasmJS static
+    class Manifest,WasmJS,STATICNOTE static
     class T1,T2,T3,T4 timer
-    class Memo memo
+    class MEMOCTL,LS memo
     class CAM,FRAME,PROC,GPU,CPU,DAMAGE,CAND,ACCEPT,HISTORY,BRIDGE,ASSETS vision
     class EVAL eval
     class MOD,WASM runtime
