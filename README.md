@@ -1,5 +1,9 @@
 ## DQIX Solo Travel Battle Emulator
 
+![DQIX Battle Emulator](./image/dark-card.svg#gh-dark-mode-only)
+![DQIX Battle Emulator](./image/light-card.svg#gh-light-mode-only)
+
+
 - Highly optimized, algorithmic combinatorial optimization
 - Written in C++
 - 100% open source
