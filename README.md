@@ -242,6 +242,28 @@ or equivalently:<br>
 <br>
 This approximation makes the constant 0.125 a clean reciprocal representation of the upper timer frequency, while 7.920 represents the empirically observed effective rate in real conditions.<br>
 
+### Is it legal to use this in speedruns?
+Around 2024, the battle emulator was used privately and unofficially.  
+After community discussion, as of 2026, its use is permitted only under the [CTable regulation](https://www.speedrun.com/ja-JP/dq9?h=Any_Hero_Only-Japanese-Console-yes&x=q25p44gd-0nwgp5r8.1dk6kj4l-rn1gpw1n.qyz7zz41-ylq4dpvn.lx5wxzr1).  
+
+Since a battle emulator for four-character party runs has not yet been achieved, it is currently allowed only for solo-run CTable regulations.
+
+### Why has a four-party battle emulator not been developed?
+
+* For party battles, all characters after the first party member require reproducing the AI behavior system, which is implemented as one massive function.
+* The game logically decides whether to use a free camera or fixed camera during ally healing, certain abilities, chained attacks, and similar situations, and this behavior does not leak into the RNG.
+
+  * Because of this, a large amount of complex related code must be decompiled and understood, and nobody has ever fully solved it.
+  * The decision logic for free camera usage is not controlled by the battle damage calculator alone. It depends on a huge collection of interconnected systems, and understanding them would require an enormous amount of time.
+* In contrast, the solo battle emulator is highly deterministic, has no unstable RNG consumption, and behaves consistently, which made it feasible to develop a battle emulator for solo runs.
+
+For these reasons, a four-party battle emulator was never developed.
+
+### How do I input video into the vision recognition system?
+The vision recognition system uses the browser camera API and receives input through the OBS virtual camera.  
+The game footage must be captured using a Japanese fake Nitro Capture device and displayed in a fixed layout.  
+To start the vision recognition system, several clicks are required in the browser frontend.  
+
 ### Why is brute force used to identify the seed?
 
 As explained above, this repository uses brute force with early exits to identify the seed efficiently.  
