@@ -15,7 +15,7 @@
 
 <rect width="680" height="300" class="bg"/>
 <rect x="40" y="30" width="600" height="240" rx="8" class="card"/>
-<rect x="40" y="30" width="5" height="240" fill="#9a6700" rx="2"/>
+<rect x="40" y="30" width="5" height="240" fill="#57606a" rx="2"/>
 
 <text x="64" y="68" class="title-sub">DQIX SOLO TRAVEL</text>
 <text x="64" y="102" class="title-main">Battle Emulator</text>
@@ -45,5 +45,5 @@
 <text x="518" y="188" text-anchor="middle" class="bt" fill="#cf222e">brute-force</text>
 
 <text x="64" y="238" class="foot">solo-only · open source · JP region</text>
-<text x="616" y="238" text-anchor="end" class="foot">dqix.github.io/BattleEmulator</text>
+<text x="616" y="238" text-anchor="end" class="foot">Available at dqix.github.io/BattleEmulator</text>
 </svg>
