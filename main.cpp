@@ -1274,10 +1274,10 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 	auto t3 = std::chrono::high_resolution_clock::now();
 	BattleEmulator::ResetTurnProcessed();
 
-	uint64_t seed = 0x6b861bc8;
+	uint64_t seed = 0x6b9778a6;
 
 	int actions[350] = {
-		BattleEmulator::PSYCHE_UP_ALLY,
+		BattleEmulator::BUFF,
 		BattleEmulator::PSYCHE_UP_ALLY,
 		-1,
 	};
