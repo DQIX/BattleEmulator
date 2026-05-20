@@ -1224,13 +1224,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 	//AI Warning: This is code related to debug2
 	int32_t gene1[350] = {
-		BattleEmulator::BUFF,
-		BattleEmulator::PSYCHE_UP_ALLY,
-		BattleEmulator::PSYCHE_UP_ALLY,
-		BattleEmulator::PSYCHE_UP_ALLY,
-		BattleEmulator::PSYCHE_UP_ALLY,
-		BattleEmulator::DOUBLE_UP,
-		BattleEmulator::MULTITHRUST,
+		62, 62, 62, 62, 33, 50, 34,
 	};
 	//gene1[19-1] = BattleEmulator::DEFENCE;
 	int counter = 0;
@@ -1280,7 +1274,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 	auto t3 = std::chrono::high_resolution_clock::now();
 	BattleEmulator::ResetTurnProcessed();
 
-	uint64_t seed = 0x0ac040ac;
+	uint64_t seed = 0x6b861bc8;
 
 	int actions[350] = {
 		BattleEmulator::PSYCHE_UP_ALLY,

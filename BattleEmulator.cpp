@@ -40,11 +40,12 @@ constexpr int baseHP = 297;
 constexpr double ShieldGuardP = 6.5;
 constexpr double mitoreP = 0.3060;
 constexpr int Ally_Level = 47;
-constexpr double Enemy_level = 35.0;
+constexpr double Enemy_level = 25.0;
 constexpr int DragonSlashKaisinnP = kaisinnP / 2;
 constexpr int WooshSlashKaisinnP = 100;
 constexpr int multithrust3KaisinnP = DragonSlashKaisinnP / 3;
 constexpr int multithrust4KaisinnP = DragonSlashKaisinnP / 4;
+constexpr int TensionAddition = static_cast<int>(1+(Enemy_level/10));
 
 constexpr int determineTurn(const int level) {
 	return (level >= 10 && level <= 24)
@@ -1380,130 +1381,6 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 			baseDamage = 0;
 			resetCombo(NowState);
 			break;
-		case ZAMMLE:
-			(*position) += 2;
-			(*position)++; // 0x021ec6f8
-			(*position)++; // 会心
-			(*position)++; // 回避
-			baseDamage = FUN_021e8458_typeD(position, 15.0, 40.0);
-
-			//テンションのほうが先
-			if (players[attacker].TensionLevel != 0) {
-				//TODO ダメージが正しいか調べる 特殊県産式の引数も調べる https://dragonquest9.com/?%E3%83%80%E3%83%A1%E3%83%BC%E3%82%B8%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6#tension
-				tmp = baseDamage * Enemy_TensionTable[players[attacker].TensionLevel - 1];
-				tmp += (players[attacker].TensionLevel * TensionLevel);
-				players[attacker].TensionLevel = 0;
-			} else {
-				tmp = static_cast<double>(baseDamage);
-			}
-
-			tmp = Equipments::applyDamageReduction(tmp, Attribute::Darkness);
-
-			if (!players[0].paralysis && !players[0].sleeping && !players[0].isStunned) {
-				tmp *= players[defender].defence;
-			}
-
-			if (players[defender].TensionLevel == 4) {
-				tmp *= 0.5;
-			}
-
-			baseDamage = static_cast<int>(floor(tmp));
-
-			(*position)++; // 0x021e54fc
-			process7A8(position, baseDamage, players, defender);
-			break;
-		case BattleEmulator::DOUBLE_TROUBLE:
-			(*position) += 2;
-			for (int i = 0; i < 2; ++i) {
-				if (preHP[defender] > totalDamage) {
-					//hp0時特殊消費
-					defenseFlag = false;
-					kaihi = false;
-					tate = false;
-					(*position)++; // アクロバットスターとか
-
-					(*position)++; //会心
-					if (!players[0].paralysis && !players[0].sleeping && !players[0].isStunned) {
-						if (lcg::getPercent(position, 100) < 2) {
-							// = 10%
-							kaihi = true;
-						}
-						if (!kaihi && lcg::getPercent(position, 100) < ShieldGuardP) {
-							//TODO 盾の条件調べる 盾ガード
-							tate = true;
-						}
-					}
-					(*position)++; //回避
-
-					baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
-
-					if (kaihi || tate) {
-						if (!players[0].paralysis && !players[0].sleeping && !players[0].specialCharge && !players[0].
-						    isStunned) {
-							(*position)++; //0x021ed7a8
-						}
-						baseDamage = 0;
-					} else {
-						tmp = floor(baseDamage * 0.75);
-
-						if (baseDamage != 0) {
-							tmp = processCombo(Id & 0xffff, tmp, NowState, i == 1);
-							tmp = floor(tmp);
-						}
-
-						if (players[attacker].TensionLevel != 0) {
-							//TODO ダメージが正しいか調べる 特殊県産式の引数も調べる https://dragonquest9.com/?%E3%83%80%E3%83%A1%E3%83%BC%E3%82%B8%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6#tension
-							tmp *= Enemy_TensionTable[players[attacker].TensionLevel - 1];
-							tmp += (players[attacker].TensionLevel * TensionLevel);
-						}
-
-						baseDamage = static_cast<int>(floor(tmp));
-						if (baseDamage == 0) {
-							//&& players[0].defence != 0.1
-							baseDamage = lcg::getPercent(position, 2); //TODO: 0x021e81a0
-							if (baseDamage == 1) {
-								defenseFlag = true;
-							}
-						}
-						tmp = static_cast<double>(baseDamage);
-						if (!defenseFlag && !players[0].paralysis && !players[0].sleeping && !players[0].isStunned) {
-							tmp = tmp * players[defender].defence;
-						}
-						baseDamage = static_cast<int>(floor(tmp));
-
-						if (players[defender].TensionLevel == 4) {
-							tmp = baseDamage * 0.5;
-							baseDamage = static_cast<int>(floor(tmp));
-						}
-
-						if (baseDamage != 0) {
-							(*position)++; //目を覚ました
-							(*position)++; //不明
-						}
-
-
-						if (baseDamage != 0 && players[0].sleeping) {
-							players[0].sleeping = false;
-							players[0].sleepingTurn = -1;
-						}
-
-						//hp0時特殊消費
-						if (preHP[defender] > (totalDamage + baseDamage)) {
-							process7A8(position, baseDamage, players, defender);
-						}
-					}
-				} else {
-					//hp0時特殊消費
-					baseDamage = 0;
-					(*position)++; //0x021ec6f8
-				}
-				totalDamage += baseDamage;
-			}
-
-			if (players[attacker].TensionLevel != 0) {
-				players[attacker].TensionLevel = 0;
-			}
-			return totalDamage;
 		case PSYCHE_UP:
 			(*position) += 2;
 			(*position)++; //不明
@@ -1588,49 +1465,6 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 			RecalculateBuff(players);
 			resetCombo(NowState);
 			baseDamage = 0;
-			break;
-		case CRACKLE_ENEMY:
-			(*position) += 2;
-			(*position)++; //会心
-			(*position)++; //関係ない 0x021ec6f8
-			if (!players[0].paralysis && !players[0].sleeping && !players[0].isStunned) {
-				//TODO
-				if (lcg::getPercent(position, 100) < ShieldGuardP) {
-					//盾ガード 0x021586fc
-					tate = true;
-				}
-			}
-			(*position)++; //偽回避 0x02157f58
-			baseDamage = FUN_021e8458_typeD(position, 8, 33);
-
-			//テンションのほうが先
-			if (players[attacker].TensionLevel != 0) {
-				//TODO ダメージが正しいか調べる 特殊県産式の引数も調べる https://dragonquest9.com/?%E3%83%80%E3%83%A1%E3%83%BC%E3%82%B8%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6#tension
-				tmp = baseDamage * Enemy_TensionTable[players[attacker].TensionLevel - 1];
-				tmp += (players[attacker].TensionLevel * TensionLevel);
-				players[attacker].TensionLevel = 0;
-			} else {
-				tmp = static_cast<double>(baseDamage);
-			}
-
-			tmp = Equipments::applyDamageReduction(tmp, Attribute::Ice);
-			if (!tate) {
-				(*position)++; //武器固有の処理 0x021e54fc
-			} else {
-				tmp = 0.0;
-			}
-
-			if (!players[0].paralysis && !players[0].sleeping && !players[0].isStunned) {
-				tmp *= players[defender].defence;
-			}
-			if (players[defender].TensionLevel == 4) {
-				tmp *= 0.5;
-			}
-
-			baseDamage = static_cast<int>(floor(tmp));
-
-			process7A8(position, baseDamage, players, defender);
-			resetCombo(NowState);
 			break;
 		case SPECIAL_MEDICINE:
 		case SPECIAL_ANTIDOTE:
@@ -1759,7 +1593,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 					if (players[attacker].TensionLevel != 0) {
 						//TODO ダメージが正しいか調べる 特殊県産式の引数も調べる https://dragonquest9.com/?%E3%83%80%E3%83%A1%E3%83%BC%E3%82%B8%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6#tension
 						tmp *= Enemy_TensionTable[players[attacker].TensionLevel - 1];
-						tmp += (players[attacker].TensionLevel * 4); //4 = 1*(1+(30/10))
+						tmp += (players[attacker].TensionLevel * TensionAddition); //4 = 1*(1+(30/10))
 					}
 
 
