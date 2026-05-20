@@ -482,14 +482,18 @@ bool BattleEmulator::Main(int* position, int RunCount, const int32_t Gene[350], 
             }
 
             if(enemyAction[counter] == ATTACK_ENEMY){
-                (*position)++; //0x02156874
+                if (!players[1].rage) {
+                    (*position)++; //0x02156874
+                }
                 (*position) += 2; //0x0216139c && 0x021613b0
             }
             if(enemyAction[counter] == BOOM || enemyAction[counter] == WHIRLWIND){
                 (*position) += 2; //0x0216139c && 0x021613b0
             }
-            if(enemyAction[counter] == DOUBLE_TROUBLE || enemyAction[counter] == ZAMMLE){
-                (*position)++; //0x02156874
+            if(enemyAction[counter] == ZAMMLE){
+                if (!players[1].rage) {
+                    (*position)++; //0x02156874
+                }
             }
             if(counter == 0){
                 (*position)++; //0x02160d64
@@ -654,6 +658,13 @@ bool BattleEmulator::Main(int* position, int RunCount, const int32_t Gene[350], 
                     }
                     else{
                         break;
+                    }
+
+                    if (players[1].rage) {
+                        players[1].rageTurns--;
+                        if (players[1].rageTurns <= 0) {
+                            players[1].rage = false;
+                        }
                     }
 
                     players[1].BarrierTurns--;
@@ -1081,8 +1092,14 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
             (*position)++; //?
             if(kaisinn){
                 if(!players[1].rage){
-                    (*position)++; //会心時特殊処理　0x021e54fc
-                    (*position)++; //会心時特殊処理　0x021eb8c8
+                    auto p = lcg::getPercent(position, 100);
+                    auto turns2 = lcg::intRangeRand(position, 3, 4);
+                    if (p < 75) {
+                        players[attacker].rage = true;
+                        players[attacker].rageTurns = turns2;
+                    }
+                    // (*position)++; //会心時特殊処理　0x021e54fc
+                    // (*position)++; //会心時特殊処理　0x021eb8c8
                 }
                 else{
                     (*position)++; //会心時特殊処理　既に怒り狂ってる場合は1消費になる
@@ -1189,7 +1206,12 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
                 }
             }
             if(hasKaisinn){
-                (*position) += 2;
+                auto p = lcg::getPercent(position, 100);
+                auto turns2 = lcg::intRangeRand(position, 3, 4);
+                if (p < 75) {
+                    players[attacker].rage = true;
+                    players[attacker].rageTurns = turns2;
+                }
             }
             if(preHP[1] > 0){
                 if(!players[attacker].specialCharge && lcg::getPercent(position, 100) < 1){
@@ -1717,8 +1739,14 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
             (*position)++; //?
             if(kaisinn){
                 if(!players[1].rage){
-                    (*position)++; //会心時特殊処理　0x021e54fc
-                    (*position)++; //会心時特殊処理　0x021eb8c8
+                    auto p = lcg::getPercent(position, 100);
+                    auto turns2 = lcg::intRangeRand(position, 3, 4);
+                    if (p < 75) {
+                        players[attacker].rage = true;
+                        players[attacker].rageTurns = turns2;
+                    }
+                    // (*position)++; //会心時特殊処理　0x021e54fc
+                    // (*position)++; //会心時特殊処理　0x021eb8c8
                 }
                 else{
                     (*position)++; //会心時特殊処理　既に怒り狂ってる場合は1消費になる
@@ -1859,8 +1887,14 @@ int BattleEmulator::callAttackFun(int32_t Id, int* position, Player* players, in
             }
             if(kaisinn){
                 if(!players[1].rage){
-                    (*position)++; //会心時特殊処理　0x021e54fc
-                    (*position)++; //会心時特殊処理　0x021eb8c8
+                    auto p = lcg::getPercent(position, 100);
+                    auto turns2 = lcg::intRangeRand(position, 3, 4);
+                    if (p < 75) {
+                        players[attacker].rage = true;
+                        players[attacker].rageTurns = turns2;
+                    }
+                    // (*position)++; //会心時特殊処理　0x021e54fc
+                    // (*position)++; //会心時特殊処理　0x021eb8c8
                 }
                 else{
                     (*position)++; //会心時特殊処理　既に怒り狂ってる場合は1消費になる

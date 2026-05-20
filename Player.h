@@ -61,6 +61,7 @@ struct Player {
     int BarrierLevel = 0;
     int BarrierTurns = -1;//25%
     bool isStunned = false;
+    int rageTurns = 0;
 
     /**
      * @brief プレイヤーが生存しているかを判定する関数
