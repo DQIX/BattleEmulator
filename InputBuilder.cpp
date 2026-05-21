@@ -109,7 +109,7 @@ void InputBuilder::generateCombinations(size_t index, ResultStructure current, s
 	for (int candidate: entry.candidates) {
 		ResultStructure next = current; // 既にAII_damageが追加済み
 		if (candidate == BattleEmulator::ATTACK_ENEMY || candidate == BattleEmulator::PSYCHE_UP || candidate ==
-		    BattleEmulator::UNKNOWN_ACTION || candidate == BattleEmulator::CRITICAL_ATTACK) {
+		    BattleEmulator::UNKNOWN_ACTION || candidate == BattleEmulator::CRITICAL_ATTACK || candidate == BattleEmulator::CHAIN_SWING) {
 			next.Edamage[next.EdamageCounter++] = entry.damage;
 		} else {
 			next.Aactions[next.AactionsCounter++] = candidate;

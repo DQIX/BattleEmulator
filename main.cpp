@@ -461,15 +461,16 @@ namespace {
 				int damages[350] = {0};
 
 				// Aactions をスタックにコピー
-				for (int i = 0; i < 349; ++i) {
-					aActions[i] = aActions2[i];
+				for (int i = 0; i < result.AactionsCounter; ++i) {
+					aActions[i] = result.Aactions[i];
 				}
+				aActions[result.AactionsCounter] = -1;
 
 				// AII_damage をスタックにコピー
-				for (int i = 0; i < 349; ++i) {
-					damages[i] = value2[i];
+				for (int i = 0; i < result.AII_damageCounter; ++i) {
+					damages[i] = result.AII_damage[i];
 				}
-
+				damages[result.AII_damageCounter] = -1;
 
 				FoundSeed = 0;
 				foundSeeds = 0;
@@ -682,6 +683,10 @@ namespace {
 			(*position) = 1;
 			Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
 
+			if (seed == 720961) {
+				std::cout << "seed: " << seed << std::endl;
+			}
+
 			bool resultBool = BattleEmulator::Main(position, 20, gene, players,
 			                                       nullptr, seed, nullptr, damages,
 			                                       maxElement,
@@ -750,7 +755,7 @@ namespace {
 		                             合計 6Byte
 		*/
 
-		BruteForceMainLoop(copiedPlayers, time1, time2, aActions2, value2);
+		BruteForceMainLoop(copiedPlayers, time1, time2, aActions, damages);
 
 		std::cout << std::endl << "found: " << foundSeeds << std::endl;
 
@@ -1153,7 +1158,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 	//AI Warning: This is code related to debug2
 	//AI Warning: This is code related to debug2
-	uint64_t time1 = 0x6b861bc8;
+	uint64_t time1 = 720961;
 
 	int dummy[100];
 	lcg::init(time1, false);
@@ -1166,7 +1171,11 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 	//AI Warning: This is code related to debug2
 	int32_t gene1[350] = {
-		62, 62, 62, 62, 33, 50, 34,
+		BattleEmulator::BUFF,
+		BattleEmulator::PSYCHE_UP_ALLY,
+		BattleEmulator::PSYCHE_UP_ALLY,
+		BattleEmulator::PSYCHE_UP_ALLY,
+		BattleEmulator::PSYCHE_UP_ALLY,
 	};
 	//gene1[19-1] = BattleEmulator::DEFENCE;
 	int counter = 0;
