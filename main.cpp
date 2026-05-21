@@ -978,8 +978,7 @@ namespace {
 		return true;
 	}
 
-	std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed, const ResultStructure &result,
-	                            int numThreads, bool dropbug) {
+	std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed) {
 		lcg::init(seed, true);
 
 		BattleEmulator::ResetTurnProcessed();
@@ -1051,6 +1050,19 @@ void fillArraysFromResult(const ResultStructure &result, int aActions[350], int 
 		damages[i] = result.AII_damage[i];
 	}
 	damages[result.AII_damageCounter] = -1;
+}
+
+EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed, int numThreads, int dropbug) {
+	BattleEmulator::ResetTurnProcessed();
+	if (resultIndex < 0) {
+		wasmLastError = "invalid result index";
+		wasmLastDump.clear();
+		return wasmLastDump.c_str();
+	}
+
+	wasmLastDump = buildDumpOutput(BasePlayers, seed);
+	wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
+	return wasmLastDump.c_str();
 }
 
 
