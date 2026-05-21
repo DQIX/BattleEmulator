@@ -978,13 +978,28 @@ namespace {
 		return true;
 	}
 
-	std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed) {
+	std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed, ResultStructure &result) {
 		lcg::init(seed, true);
 
 		BattleEmulator::ResetTurnProcessed();
 
+		int32_t gene[350] = {0};
+		int turns = 0;
+		for (int i = 0; i < 349; ++i) {
+			if (i < result.AactionsCounter) {
+				gene[i] = result.Aactions[i];
+				turns++;
+				continue;
+			}
+			gene[i] = -1;
+			break;
+		}
+		if (result.AactionsCounter >= 349) {
+			gene[349] = -1;
+		}
+
 		std::stringstream ss;
-		if (!SearchRequest(copiedPlayers, seed, aActions2, ss)) {
+		if (!SearchRequest(copiedPlayers, seed, gene, ss)) {
 			ss << std::endl;
 			ss << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
 			ss << "      **YOU WILL NOW LOSE!**       " << std::endl;
@@ -992,7 +1007,7 @@ namespace {
 			ss << std::endl;
 
 			auto turns = 0;
-			for (int a_action: aActions2) {
+			for (int a_action: gene) {
 				if (a_action == -1) {
 					break;
 				}
@@ -1004,8 +1019,8 @@ namespace {
 			lcg::init(seed);
 			int position = 1;
 			uint64_t nowState = 0;
-			BattleEmulator::Main(&position, 100, aActions2, players, &res, seed, nullptr, nullptr, -1, &nowState);
-			ss << dumpTable(res, aActions2, foundTurn);
+			BattleEmulator::Main(&position, 100, gene, players, &res, seed, nullptr, nullptr, -1, &nowState);
+			ss << dumpTable(res, gene, foundTurn);
 			ss << "startturn=" << foundTurn << std::endl;
 			return ss.str();
 		}
@@ -1054,13 +1069,13 @@ void fillArraysFromResult(const ResultStructure &result, int aActions[350], int 
 
 EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed, int numThreads, int dropbug) {
 	BattleEmulator::ResetTurnProcessed();
-	if (resultIndex < 0) {
+	if (resultIndex < 0 || resultIndex >= static_cast<int>(wasmResults.size())) {
 		wasmLastError = "invalid result index";
 		wasmLastDump.clear();
 		return wasmLastDump.c_str();
 	}
 
-	wasmLastDump = buildDumpOutput(BasePlayers, seed);
+	wasmLastDump = buildDumpOutput(BasePlayers, seed, wasmResults[static_cast<size_t>(resultIndex)]);
 	wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
 	return wasmLastDump.c_str();
 }
