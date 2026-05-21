@@ -430,6 +430,12 @@ namespace {
                 builder.push(InputBuilder::TYPE_PRE_SPECIAL_MEDICINE, InputBuilder::PREFIX_SPECIAL_MEDICINE);
                 //攻撃フォローアップ
             }
+        	if (prefix == 'd') {
+        		builder.push(InputBuilder::TYPE_CRITICAL_ATTACK, InputBuilder::PREFIX_CRITICAL_ATTACK);
+        	}
+        	if (prefix == 't') {
+        		builder.push(InputBuilder::TYPE_CHAIN_SWING, InputBuilder::PREFIX_CHAIN_SWING);
+        	}
             builder.push(damage, prefix);
         }
         return true;

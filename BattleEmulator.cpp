@@ -554,11 +554,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 					                  ahp, tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag);
 				} else if (mode != -1 && mode != -2) {
 					if (
-						c == HEART_BREAKER ||
 						c == ATTACK_ENEMY ||
-						c == DESPERATE_ATTACK ||
-						c == BLOCKENSPIEL ||
-						c == BURNING_BREATH ||
+						c == CHAIN_SWING ||
+						c == PSYCHE_UP ||
 						c == CRITICAL_ATTACK
 					) {
 						if (damages[exCounter] == -1) {
@@ -566,21 +564,13 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 							return true;
 						}
 
-						if (damages[exCounter] == InputBuilder::TYPE_BURNING_BREATH) {
-							if (c != BURNING_BREATH) {
+						if (damages[exCounter] == InputBuilder::TYPE_PSYCHE_UP_ENEMY) {
+							if (c != PSYCHE_UP) {
 								return false;
 							}
 							exCounter++;
-						} else if (damages[exCounter] == InputBuilder::TYPE_HEART_BREAKER) {
-							if (c != HEART_BREAKER) {
-								return false;
-							}
-							exCounter++;
-							if (damages[exCounter++] != basedamage) {
-								return false;
-							}
-						} else if (damages[exCounter] == InputBuilder::TYPE_DESPERATE_ATTACK) {
-							if (c != DESPERATE_ATTACK) {
+						} else if (damages[exCounter] == InputBuilder::TYPE_CHAIN_SWING) {
+							if (c != CHAIN_SWING) {
 								return false;
 							}
 							exCounter++;
