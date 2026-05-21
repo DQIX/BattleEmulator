@@ -31,29 +31,17 @@ void InputBuilder::push(int damage, const char prefix) {
         }
     } else if (prefix == PREFIX_PSYCHE_UP_ALLY) {
         entry.candidates.push_back(BattleEmulator::PSYCHE_UP_ALLY);
-    } else if (prefix == PREFIX_MULTITHRUST) {
-        entry.candidates.push_back(BattleEmulator::MULTITHRUST);
+    } else if (prefix == PREFIX_TYPE_MORE_HEAL){
+        entry.candidates.push_back(BattleEmulator::MORE_HEAL);
+    } else if (prefix == PREFIX_TYPE_FULL_HEAL){
+        entry.candidates.push_back(BattleEmulator::FULLHEAL);
     } else if (damage == 0) {
         entry.candidates.push_back(BattleEmulator::ATTACK_ENEMY);
-    } else
-
-#if defined(BattleEmulatorLV19)
-    if (prefix == 'a') {
-        if (damage > 30 && damage <= 60) {
-            entry.candidates.push_back(BattleEmulator::MIRACLE_SLASH);
-        } else {
-            entry.candidates.push_back(BattleEmulator::ATTACK_ALLY);
-        }
+    } else if (prefix == 'a') {
+        entry.candidates.push_back(BattleEmulator::ATTACK_ALLY);
     } else {
-        entry.candidates.push_back(BattleEmulator::ATTACK_ENEMY);
+        entry.candidates.push_back(BattleEmulator::UNKNOWN_ACTION);
     }
-#elif defined(erusionn_lv21) || defined(BattleEmulatorLV13)
-        if (prefix == 'a') {
-            entry.candidates.push_back(BattleEmulator::ATTACK_ALLY);
-        } else {
-            entry.candidates.push_back(BattleEmulator::UNKNOWN_ACTION);
-        }
-#endif
 
     if (entry.candidates.empty()) {
         std::cerr << "WARNING: A damage value of 0 " << damage << " has no applicable range\n";

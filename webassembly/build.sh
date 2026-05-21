@@ -29,8 +29,8 @@ done
 # ------------------------------------------------------------
 declare -A BRANCH_VARIANTS
 
-BRANCH_VARIANTS[gadonnko_new_arugo]="
-gadonngo_v6:-Derusionn_lv21=1
+BRANCH_VARIANTS[goreonn_new_arugo]="
+goreonn_v6:-Derusionn_lv21=1
 "
 
 

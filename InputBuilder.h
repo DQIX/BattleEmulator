@@ -29,10 +29,12 @@ public:
     static constexpr int TYPE_CRITICAL_ATTACK = -15;
 
     static constexpr char PREFIX_SPECIAL_MEDICINE = 'h';
+    static constexpr char PREFIX_TYPE_MORE_HEAL = 'm';
+    static constexpr char PREFIX_TYPE_FULL_HEAL = 'f';
     static constexpr char PREFIX_PSYCHE_UP_ENEMY = 'p';
     static constexpr char PREFIX_BUFF_ALLY = 'b';
     static constexpr char PREFIX_PSYCHE_UP_ALLY = 'Q';
-    static constexpr char PREFIX_MULTITHRUST = 'm';
+    //static constexpr char PREFIX_MULTITHRUST = 'm';
 
 
     void push(int damage, char prefix);

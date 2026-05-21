@@ -382,183 +382,58 @@ namespace {
 		enemyConsecutive = 0;
 	}
 
-	NOINLINE bool ProcessInputBuilder(const int argc, char *argv[], int *aActions, int *values) {
-		// 最初の3件は時間情報のため、最低でも4件必要
-		if (argc < 4) {
-			return false;
-		}
-
-		int counter2 = 0;
-
-		// 行動引数は argv[4] 以降
-		int totalActions = argc - 4;
-		// 1ターンあたりの上限行動数（3件）
-		constexpr int actionsPerTurn = 2;
-
-		// ターン数は、totalActions を actionsPerTurn で割った商＋余りがあれば1ターンとして計上
-		int turns = totalActions / actionsPerTurn;
-		int remainder = totalActions % actionsPerTurn;
-		if (remainder > 0) {
-			turns++;
-		}
-
-		int enemyConsecutive = 0; // 複数ターンにわたる敵連続行動数
-		int tokenIndex = 4; // 最初の行動引数の位置
-		int enemyActions = 0; // このターン内の敵の行動数
-		int offset = 0;
-		int aActionsIndex = 0;
-
-		for (int turn = 0; turn < turns; turn++) {
-			if (argc <= tokenIndex) {
-				break;
-			}
-			bool allyPresent = false; // このターンに味方行動があるかのフラグ
-			bool EnemyPresent = false; // このターンに味方行動があるかのフラグ
-			int turnCouner = 0;
-
-
-			// 現ターンの行動数（最後のターンは3未満の場合があるので調整）
-			int actionsThisTurn = actionsPerTurn;
-			if ((turn == turns - 1) && (remainder > 0)) {
-				actionsThisTurn = remainder;
-			}
-
-			// 現ターン分のトークンを処理
-			for (int j = 0; j < actionsThisTurn; j++) {
-				if (argc <= tokenIndex) {
-					break;
-				}
-				const char *token = argv[tokenIndex++];
-				if (isMatchStrWithTrim(token, "h") || isMatchStrWithTrim(token, "ah")) {
-					// 回復は明示的な味方行動
-					enemyConsecutive += enemyActions;
-					pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
-					enemyActions = 0;
-					aActions[aActionsIndex++] = BattleEmulator::SPECIAL_MEDICINE;
-					values[counter2++] = InputBuilder::TYPE_PRE_SPECIAL_MEDICINE;
-					values[counter2++] = InputBuilder::TYPE_SPECIAL_MEDICINE;
-					allyPresent = true;
-					foundTurnOffset = 0;
-				} else if (isMatchStrWithTrim(token, "at")) {
-					// 回復は明示的な味方行動
-					enemyConsecutive += enemyActions;
-					pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
-					enemyActions = 0;
-					aActions[aActionsIndex++] = BattleEmulator::PSYCHE_UP_ALLY;
-					values[counter2++] = InputBuilder::TYPE_PSYCHE_UP_ALLY;
-					allyPresent = true;
-					foundTurnOffset = 0;
-				} else if (isMatchStrWithTrim(token, "as") || isMatchStrWithTrim(token, "s") ||
-				           isMatchStrWithTrim(token, "ab") || isMatchStrWithTrim(token, "b")) {
-					// 回復は明示的な味方行動
-					enemyConsecutive += enemyActions;
-					pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
-					enemyActions = 0;
-					aActions[aActionsIndex++] = BattleEmulator::BUFF;
-					values[counter2++] = InputBuilder::TYPE_BUFF_ALLY;
-					allyPresent = true;
-					foundTurnOffset = 0;
-				} else if (isMatchStrWithTrim(token, "f") || isMatchStrWithTrim(token, "af")) {
-					// 回復は明示的な味方行動
-					enemyConsecutive += enemyActions;
-					pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
-					enemyActions = 0;
-					aActions[aActionsIndex++] = BattleEmulator::FULLHEAL;
-					values[counter2++] = InputBuilder::TYPE_FULLHEAL;
-					allyPresent = true;
-					foundTurnOffset = 0;
-				} else if (isMatchStrWithTrim(token, "i")) {
-					// 回復は明示的な味方行動
-					values[counter2++] = InputBuilder::TYPE_BURNING_BREATH;
-					enemyActions++;
-					EnemyPresent = true;
-				} else if (isMatchStrWithTrim(token, "m") || isMatchStrWithTrim(token, "am")) {
-					enemyConsecutive += enemyActions;
-					pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
-					enemyActions = 0;
-					aActions[aActionsIndex++] = BattleEmulator::MORE_HEAL;
-					values[counter2++] = InputBuilder::TYPE_MORE_HEAL;
-					allyPresent = true;
-					foundTurnOffset = 0;
-				} else if (isMatchStrWithTrim(token, "y")) {
-					aActions[aActionsIndex++] = BattleEmulator::INACTIVE_ALLY;
-					allyPresent = true;
-					offset++;
-					if (remainder > 0) {
-						remainder--;
-					} else {
-						turns++;
-					}
-					foundTurnOffset++;
-					break;
-				} else if (isMatchStrWithTrim(token, "r")) {
-					enemyConsecutive += enemyActions;
-					pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
-					enemyActions = 0;
-				} else {
-					// 上記以外は toABCint による分解処理
-					auto [prefix, tmp] = toABCint(token);
-
-					assert(tmp != -1);
-
-					foundTurnOffset = 0;
-
-					// 味方行動の条件（今回は prefix == 'a' が味方とする）
-					if (prefix == 'a') {
-						enemyConsecutive += enemyActions;
-						pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
-						enemyActions = 0;
-						aActions[aActionsIndex++] = BattleEmulator::ATTACK_ALLY;
-						values[counter2++] = InputBuilder::TYPE_ATTACK_ALLY;
-						values[counter2++] = tmp;
-						allyPresent = true;
-					} else if (prefix == 'h') {
-						enemyConsecutive += enemyActions;
-						pla(enemyConsecutive, aActions, aActionsIndex, EnemyPresent);
-						enemyActions = 0;
-						aActions[aActionsIndex++] = BattleEmulator::SPECIAL_MEDICINE;
-						values[counter2++] = InputBuilder::TYPE_PRE_SPECIAL_MEDICINE;
-						values[counter2++] = tmp;
-						allyPresent = true;
-					} else if (prefix == 'd') {
-						values[counter2++] = InputBuilder::TYPE_CRITICAL_ATTACK;
-						values[counter2++] = tmp;
-						enemyActions++;
-						EnemyPresent = true;
-					} else if (prefix == 't') {
-						values[counter2++] = InputBuilder::TYPE_HEART_BREAKER;
-						values[counter2++] = tmp;
-						enemyActions++;
-						EnemyPresent = true;
-					} else if (prefix == 'n') {
-						values[counter2++] = InputBuilder::TYPE_DESPERATE_ATTACK;
-						values[counter2++] = tmp;
-						enemyActions++;
-						EnemyPresent = true;
-					} else {
-						values[counter2++] = tmp;
-						enemyActions++;
-						EnemyPresent = true;
-					}
-				}
-			} // 1ターン分の処理終了
-			//0 2 21 a19 9 11 16 13 13 r
-			//0 2 18 15 a16 y 14 11 9 11
-			//0 2 42 a17 11 10 a18 12 10 9 13 r
-			if ((enemyActions == 2 || enemyActions == 3) && ((tokenIndex - 3 - enemyActions) % 2 == offset % 2)) {
-				enemyActions--;
-			}
-		}
-
-		enemyConsecutive += enemyActions;
-		pla(enemyConsecutive, aActions, aActionsIndex, false);
-
-		aActions[aActionsIndex] = -1;
-		values[counter2] = -1;
-
-
-		return true;
-	}
+    /**
+     * 入力データを解析し、ビルダーに適切なコマンドを追加します。
+     * コマンドの形式やルールに基づき、条件処理を行います。
+     * 時に、眠りなどに対し適切に処理できるように設計されています。
+     *
+     * @param argc 入力引数の個数
+     * @param argv 入力引数を保持する文字列配列
+     * @return 入力が正常に処理され、ビルダーに追加された場合はtrueを返し、
+     *         引数の個数が不十分または他のエラーが発生した場合はfalseを返します。
+     */
+    NOINLINE bool ProcessInputBuilder(const int argc, char* argv[]){
+        // 4番目以降の引数を `push()` に入れる
+        for(int i = 4; i < argc; ++i){
+            if(isMatchStrWithTrim(argv[i], "t") || isMatchStrWithTrim(argv[i], "p")){
+                builder.push(InputBuilder::TYPE_PSYCHE_UP_ENEMY, InputBuilder::PREFIX_PSYCHE_UP_ENEMY);
+                continue;
+            }
+            if(isMatchStrWithTrim(argv[i], "b") || isMatchStrWithTrim(argv[i], "s") || isMatchStrWithTrim(argv[i], "ab")
+                || isMatchStrWithTrim(argv[i], "as")){
+                builder.push(InputBuilder::TYPE_BUFF_ALLY, InputBuilder::PREFIX_BUFF_ALLY);
+                continue;
+            }
+            if(isMatchStrWithTrim(argv[i], "h") || isMatchStrWithTrim(argv[i], "d") || isMatchStrWithTrim(argv[i], "ah")
+                || isMatchStrWithTrim(argv[i], "ad")){
+                builder.push(InputBuilder::TYPE_PRE_SPECIAL_MEDICINE, InputBuilder::PREFIX_SPECIAL_MEDICINE);
+                builder.push(InputBuilder::TYPE_SPECIAL_MEDICINE, InputBuilder::PREFIX_SPECIAL_MEDICINE);
+                continue;
+            }
+        	if(isMatchStrWithTrim(argv[i], "m") || isMatchStrWithTrim(argv[i], "am")){
+                builder.push(InputBuilder::TYPE_MORE_HEAL, InputBuilder::PREFIX_TYPE_MORE_HEAL);
+                continue;
+            }
+        	if(isMatchStrWithTrim(argv[i], "f") || isMatchStrWithTrim(argv[i], "af")){
+                builder.push(InputBuilder::TYPE_FULLHEAL, InputBuilder::PREFIX_TYPE_FULL_HEAL);
+                continue;
+            }
+            if(isMatchStrWithTrim(argv[i], "at") || isMatchStrWithTrim(argv[i], "AP")){
+                builder.push(InputBuilder::TYPE_PSYCHE_UP_ALLY, InputBuilder::PREFIX_PSYCHE_UP_ALLY);
+                continue;
+            }
+            auto [prefix, damage] = toABCint(argv[i]);
+            if(prefix == 'a'){
+                builder.push(-6, 't'); //攻撃フォローアップ
+            }
+            if(prefix == 'h'){
+                builder.push(InputBuilder::TYPE_PRE_SPECIAL_MEDICINE, InputBuilder::PREFIX_SPECIAL_MEDICINE);
+                //攻撃フォローアップ
+            }
+            builder.push(damage, prefix);
+        }
+        return true;
+    }
 
 	/**
 	 * このexeのメインロジック。
@@ -1055,6 +930,7 @@ namespace {
 		return tokens;
 	}
 
+
 	bool buildResultsFromInput(const char *input) {
 		wasmLastError.clear();
 		if (input == nullptr) {
@@ -1062,6 +938,7 @@ namespace {
 			return false;
 		}
 
+		builder.clear();
 		auto tokens = splitTokens(input);
 		std::vector<std::string> argvStorage;
 		argvStorage.reserve(tokens.size() + 4);
@@ -1069,7 +946,7 @@ namespace {
 		argvStorage.push_back("0");
 		argvStorage.push_back("0");
 		argvStorage.push_back("0");
-		for (const auto &token: tokens) {
+		for (const auto &token : tokens) {
 			if (!token.empty()) {
 				argvStorage.push_back(token);
 			}
@@ -1077,15 +954,27 @@ namespace {
 
 		std::vector<char *> argv;
 		argv.reserve(argvStorage.size());
-		for (auto &arg: argvStorage) {
+		for (auto &arg : argvStorage) {
 			argv.push_back(const_cast<char *>(arg.c_str()));
 		}
 
-		if (!ProcessInputBuilder(static_cast<int>(argv.size()), argv.data(), aActions2, value2)) {
+		if (!ProcessInputBuilder(static_cast<int>(argv.size()), argv.data())) {
 			wasmLastError = "input parse failed";
 			return false;
 		}
 
+		try {
+			wasmResults = builder.makeStructure();
+		} catch (const std::exception &e) {
+			wasmLastError = e.what();
+			return false;
+		}
+
+		builder.clear();
+		if (wasmResults.empty()) {
+			wasmLastError = "no input combinations";
+			return false;
+		}
 		return true;
 	}
 
@@ -1133,24 +1022,12 @@ EMSCRIPTEN_KEEPALIVE int wasm_prepare_input(const char *input) {
 	if (!buildResultsFromInput(input)) {
 		return 0;
 	}
-	return 1;
+	return static_cast<int>(wasmResults.size());
 }
+
 
 EMSCRIPTEN_KEEPALIVE const char *wasm_get_last_error() {
 	return wasmLastError.c_str();
-}
-
-EMSCRIPTEN_KEEPALIVE uint64_t wasm_bruteforce_range(int resultIndex, uint64_t startSeed, uint64_t endSeed) {
-	BattleEmulator::ResetTurnProcessed();
-	foundSeeds = 0;
-	FoundSeed = 0;
-	BruteForceMainLoop(BasePlayers, startSeed, endSeed, aActions2, value2);
-	wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
-
-	if (foundSeeds == 1) {
-		return FoundSeed;
-	}
-	return 0;
 }
 
 EMSCRIPTEN_KEEPALIVE uint64_t wasm_get_turn_processed() {
@@ -1161,13 +1038,45 @@ EMSCRIPTEN_KEEPALIVE int wasm_get_found_seeds() {
 	return foundSeeds;
 }
 
-EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed, int numThreads, int dropbug) {
-	BattleEmulator::ResetTurnProcessed();
-	wasmLastDump = buildDumpOutput(BasePlayers, seed, wasmResults[static_cast<size_t>(resultIndex)], numThreads,
-	                               dropbug != 0);
-	wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
-	return wasmLastDump.c_str();
+void fillArraysFromResult(const ResultStructure &result, int aActions[350], int damages[350]) {
+	for (int i = 0; i < 349; ++i) {
+		aActions[i] = 0;
+		damages[i] = 0;
+	}
+	for (int i = 0; i < result.AactionsCounter; ++i) {
+		aActions[i] = result.Aactions[i];
+	}
+	aActions[result.AactionsCounter] = -1;
+	for (int i = 0; i < result.AII_damageCounter; ++i) {
+		damages[i] = result.AII_damage[i];
+	}
+	damages[result.AII_damageCounter] = -1;
 }
+
+
+EMSCRIPTEN_KEEPALIVE uint64_t wasm_bruteforce_range(int resultIndex, uint64_t startSeed, uint64_t endSeed) {
+	if (resultIndex < 0 || resultIndex >= static_cast<int>(wasmResults.size())) {
+		wasmLastError = "invalid result index";
+		return 0;
+	}
+
+	int aActions[350] = {0};
+	int damages[350] = {0};
+	const auto &result = wasmResults[static_cast<size_t>(resultIndex)];
+	fillArraysFromResult(result, aActions, damages);
+
+	BattleEmulator::ResetTurnProcessed();
+	foundSeeds = 0;
+	FoundSeed = 0;
+	BruteForceMainLoop(BasePlayers, startSeed, endSeed, aActions, damages);
+	wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
+
+	if (foundSeeds == 1) {
+		return FoundSeed;
+	}
+	return 0;
+}
+
 }
 #endif
 
@@ -1312,7 +1221,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 	}
 
 
-	if (!ProcessInputBuilder(argc, argv, aActions2, value2)) {
+	if (!ProcessInputBuilder(argc, argv)) {
 		return 1;
 	}
 	auto exitCode = ProgramMain(hours, minutes, seconds);
