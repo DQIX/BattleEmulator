@@ -21,6 +21,8 @@ void InputBuilder::push(int damage, const char prefix) {
 
 	if (prefix == PREFIX_PSYCHE_UP_ENEMY) {
 		entry.candidates.push_back(BattleEmulator::PSYCHE_UP);
+	} else if (prefix == PREFIX_MULTITHRUST) {
+		entry.candidates.push_back(BattleEmulator::MULTITHRUST);
 	} else if (prefix == PREFIX_BUFF_ALLY) {
 		entry.candidates.push_back(BattleEmulator::BUFF);
 	} else if (prefix == PREFIX_SPECIAL_MEDICINE) {

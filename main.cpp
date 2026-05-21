@@ -430,12 +430,15 @@ namespace {
                 builder.push(InputBuilder::TYPE_PRE_SPECIAL_MEDICINE, InputBuilder::PREFIX_SPECIAL_MEDICINE);
                 //攻撃フォローアップ
             }
-        	if (prefix == 'd') {
-        		builder.push(InputBuilder::TYPE_CRITICAL_ATTACK, InputBuilder::PREFIX_CRITICAL_ATTACK);
-        	}
         	if (prefix == 't') {
         		builder.push(InputBuilder::TYPE_CHAIN_SWING, InputBuilder::PREFIX_CHAIN_SWING);
         	}
+        	if (prefix == 'm') {
+        		builder.push(InputBuilder::TYPE_MULTITHRUST, InputBuilder::PREFIX_MULTITHRUST);
+        		builder.push(damage, 'j');
+        		continue;
+        	}
+
             builder.push(damage, prefix);
         }
         return true;
@@ -683,7 +686,7 @@ namespace {
 			(*position) = 1;
 			Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
 
-			if (seed == 720961) {
+			if (seed == 720962) {
 				std::cout << "seed: " << seed << std::endl;
 			}
 

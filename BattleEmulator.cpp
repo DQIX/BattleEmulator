@@ -775,13 +775,29 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 									startTurn = counterJ;
 									return true;
 								}
-							} else if (action == ATTACK_ALLY || action == MIRACLE_SLASH || action == MULTITHRUST) {
+							} else if (action == ATTACK_ALLY || action == MIRACLE_SLASH) {
 								if (damages[exCounter] == -1) {
 									startTurn = counterJ;
 									return true;
 								}
 								//int need = ;
 								if (damages[exCounter++] != InputBuilder::TYPE_ATTACK_ALLY) {
+									return false;
+								}
+								if (damages[exCounter++] != basedamage) {
+									return false;
+								}
+								if (damages[exCounter] == -1) {
+									startTurn = counterJ;
+									return true;
+								}
+							} else if (action == MULTITHRUST) {
+								if (damages[exCounter] == -1) {
+									startTurn = counterJ;
+									return true;
+								}
+								//int need = ;
+								if (damages[exCounter++] != InputBuilder::TYPE_MULTITHRUST) {
 									return false;
 								}
 								if (damages[exCounter++] != basedamage) {

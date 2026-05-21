@@ -37,6 +37,7 @@ public:
     static constexpr char PREFIX_PSYCHE_UP_ALLY = 'Q';
     static constexpr char PREFIX_CRITICAL_ATTACK = 'd';
     static constexpr char PREFIX_CHAIN_SWING = 't';
+    static constexpr char PREFIX_MULTITHRUST = 'm';
     //static constexpr char PREFIX_MULTITHRUST = 'm';
 
 
