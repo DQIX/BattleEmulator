@@ -62,10 +62,10 @@ target_compile_definitions(gilyumei2_rubii PRIVATE RUBII=1)
 
 
 add_executable(gilyumei2_rubii_opt ${SOURCES})
-target_compile_definitions(gilyumei2_rubii_opt PRIVATE RUBII=1 OPTIMIZE_MODE=1)  # `#define MULTITHREADING` を適用
+target_compile_definitions(gilyumei2_rubii_opt PRIVATE gilyumei1=1 OPTIMIZE_MODE=1)  # `#define MULTITHREADING` を適用
 
-add_executable(gilyumei2_gouketu ${SOURCES})
-target_compile_definitions(gilyumei2_gouketu PRIVATE GOUKETU=1)
+add_executable(gilyumei1 ${SOURCES})
+target_compile_definitions(gilyumei1 PRIVATE gilyumei1=1)
 
 
 string(TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)

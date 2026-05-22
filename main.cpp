@@ -46,12 +46,12 @@ const Player copiedPlayers[2] = {
 	} // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 };
 
-#elif defined(GOUKETU)
+#elif defined(gilyumei1)
 
 const Player copiedPlayers[2] = {
 	// プレイヤー1
 	{
-		305, 305.0, 322, 322, 303, 303, 170, 222, 120, // 最初のメンバー
+		301, 301.0, 320, 320, 295, 295, 187, 226, 120, // 最初のメンバー
 		165, false, false, 0, false, 0, -1,
 		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
 		2, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
@@ -60,7 +60,7 @@ const Player copiedPlayers[2] = {
 
 	// プレイヤー2
 	{
-		1653, 1653.0, 234, 234, 256, 256, 172, 25, 25, // 最初のメンバー
+		2306, 2306.0, 220, 220, 256, 256, 162, 25, 25, // 最初のメンバー
 		255, false, false, 0, false, 0, -1,
 		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
 		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
@@ -344,27 +344,27 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 
     // --- TableA で探索 ---
     EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableA);
-	Genome genomeA = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
+	Genome genomeA = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 6000, gene, 0);
 
     // --- TableB で探索 ---
     EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableB);
-    Genome genomeB = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
+    Genome genomeB = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 6000, gene, 0);
 
     // --- TableC で探索 ---
     EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableC);
-    Genome genomeC = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
+    Genome genomeC = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 6000, gene, 0);
 
 	// --- TableC で探索 ---
 	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableD);
-	Genome genomeD = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
+	Genome genomeD = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 6000, gene, 0);
 
 	// --- TableC で探索 ---
 	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableF);
-	Genome genomeF = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
+	Genome genomeF = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 6000, gene, 0);
 
 	// --- TableC で探索 ---
 	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableG);
-	Genome genomeG = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
+	Genome genomeG = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 6000, gene, 0);
 
 
     BattleResult resultA, resultB, resultC, resultD, resultF, resultG;
@@ -862,7 +862,7 @@ int main(){
 	auto counter1 = 0;
 	actions1[counter1++] = BattleEmulator::BUFF;
 	actions1[counter1] = -1;
-	SimpleParameterOptimizer::optimize(copiedPlayers, 0x11052974ull, actions1, 100000, counter1);
+	SimpleParameterOptimizer::optimize(copiedPlayers, 0x11352974ull, actions1, 100000, counter1);
 	return 0;
 #endif
 
@@ -870,7 +870,7 @@ int main(){
 #ifdef DEBUG2
 	//THIS DEBUG CODE!
 	//THIS DEBUG CODE
-	uint64_t time1 = 0x4a1ff683;
+	uint64_t time1 = 0x4a1ff3c8;
 
 	int dummy[100];
 	lcg::init(time1);
@@ -893,7 +893,7 @@ int main(){
 	Player players1[2];
 	//int32_t gene1[350] = {0};
 	//THIS DEBUG CODE!
-	int32_t gene1[350] = { 30, 62, 25, 30, 62, 37, 33, 62, 62, 34, };
+	int32_t gene1[350] = { 30, 37, 62, 62, 62, 62, 33, 34,    };
 	//gene1[19-1] = BattleEmulator::DEFENCE;
 	int counter = 0;
 
@@ -946,7 +946,7 @@ int main(){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x04a1ff682;
+	uint64_t time1 = 0x04a1ff382;
 
 	auto counter = 0;
 	int actions[350] = {0};

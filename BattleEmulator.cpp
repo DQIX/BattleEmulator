@@ -20,15 +20,24 @@ thread_local int preHP[3] = {0, 0, 0};
 thread_local bool player0_has_initiative = false;
 thread_local bool TiggerSkyAttack = false;
 
+#if defined(rubii)
+
 constexpr int Ally_Level = 49;
 constexpr double Ally_TensionTable[4] = {1.5, 2.5, 4.0, 6.0};
-constexpr int Ally_TensionLevel = 1 + static_cast<int>(Ally_Level / 10.0);
 constexpr int shieldGuardP = 9; //盾ガード率 9%
 constexpr int kaisinnP = 500;
-constexpr int DragonSlashKaisinnP = kaisinnP / 2;
 constexpr int WooshSlashKaisinnP = 100;
-constexpr int multithrust3KaisinnP = DragonSlashKaisinnP / 3;
-constexpr int multithrust4KaisinnP = DragonSlashKaisinnP / 4;
+
+#elif defined(gilyumei1)
+
+constexpr int Ally_Level = 48;
+constexpr double Ally_TensionTable[4] = {1.5, 2.5, 4.0, 6.0};
+constexpr int shieldGuardP = 9; //盾ガード率 9%
+constexpr int kaisinnP = 500;
+constexpr int WooshSlashKaisinnP = 100;
+
+#endif
+
 
 constexpr int determineTurn(const int level) {
     return (level >= 10 && level <= 24)
@@ -42,6 +51,10 @@ constexpr int determineTurn(const int level) {
                                  : 0;
 }
 constexpr int SpecialChargeTurns = determineTurn(Ally_Level);
+constexpr int Ally_TensionLevel = 1 + static_cast<int>(Ally_Level / 10.0);
+constexpr int DragonSlashKaisinnP = kaisinnP / 2;
+constexpr int multithrust3KaisinnP = DragonSlashKaisinnP / 3;
+constexpr int multithrust4KaisinnP = DragonSlashKaisinnP / 4;
 
 thread_local int threadTurnProcessed = 0;
 int startTurn = 0;
@@ -262,7 +275,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 #ifdef DEBUG2
         DEBUG_COUT2((*position));
         //THIS DEBUG CODE!
-        if ((*position) == 557) { //THIS DEBUG CODE!
+        if ((*position) == 216) { //THIS DEBUG CODE!
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -378,6 +391,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                                 counter = HATCHET_MAN;
                             } else if (counter == FLAME_SLASH) {
                                 counter = MULTISLASH;
+                            } else if (counter == HATCHET_MAN) {
+                                counter = UPWARD_SLICE;
                             }
                         }
                         if (counter == HATCHET_MAN && players[1].mp <= 4) {
@@ -398,6 +413,18 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                            }
                         break;
                     } while (true);
+
+                    if (mode != -1 && mode != -2) {
+                        int need = eActions[exCounter1++];
+                        if (need == -1) {
+                            startTurn = counterJ - 1;
+                            return true;
+                        }
+                        if (need != enemyAction[counter]) {
+                            return false;
+                        }
+                    }
+
                     auto c = counter;
                     preAction = counter;
                     if (c == MULTISLASH) {
@@ -441,14 +468,11 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     } else if (mode != -1 && mode != -2) {
                         if (
                             c == ATTACK_ENEMY ||
-                            c == ULTRA_HIGH_SPEED_COMBO ||
-                            c == SKY_ATTACK ||
-                            c == CRITICAL_ATTACK ||
-                            c == DARK_BREATH ||
-                            c == FREEZING_BLIZZARD ||
-                            c == MERA_ZOMA ||
-                            c == LIGHTNING_STORM ||
-                            c == MAGIC_BURST
+                            c == FLAME_SLASH ||
+                            c == HATCHET_MAN ||
+                            c == UPWARD_SLICE ||
+                            c == KACRACKLE_SLASH ||
+                            c == MULTISLASH
                         ) {
                             if (damages[exCounter] == -1) {
                                 startTurn = counterJ - 1;
@@ -743,10 +767,12 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 
             if (kaisinn) {
                 tmp = players[attacker].defaultATK * lcg::floatRand(position, 0.9500, 1.0500);
+                tmp = tmp * players[defender].defence;
                 baseDamage = static_cast<int>(floor(tmp));
                 if (tate || kaihi) {
                     baseDamage = 0;
                 }
+
                 if (baseDamage != 0) {
                     (*position)++; //0x02158ac4 目を覚ました
                     (*position)++; //0x021e54fc 不明
