@@ -343,6 +343,30 @@ The update formula looks like this:
 \text{前の乱数} \times \text{0x5d588b656c078965} + \text{0x269ec3}\mod 2^{64}
 ```
 
+### Percent (getPercent)
+
+The game internally computes an integer in \[0, max-1\] using the following formula:
+
+```math
+\left\lfloor \frac{\text{seed} \gg 32}{2^{32} - 1} \times \text{max} \right\rfloor
+```
+
+This scales `seed >> 32` into an integer in \[0, max-1\] by dividing by $2^{32} - 1$ and multiplying by `max`.
+
+The Battle Emulator approximates this with integer arithmetic only, eliminating the division:
+
+```math
+\left\lfloor \frac{(\text{seed} \gg 32) \times \text{max}}{2^{32}} \right\rfloor
+```
+
+Dividing by $2^{32}$ is equivalent to a right shift by 32 bits:
+
+```math
+\left( (\text{seed} \gg 32) \times \text{max} \right) \gg 32
+```
+
+This completely eliminates the expensive division at the cost of a maximum deviation of $1 / 2^{32}$. (See also: Known Issues)
+
 ## flowchart
 
 ```mermaid
