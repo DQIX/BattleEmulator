@@ -367,6 +367,47 @@ Dividing by $2^{32}$ is equivalent to a right shift by 32 bits:
 
 This completely eliminates the expensive division at the cost of a maximum deviation of $1 / 2^{32}$. (See also: Known Issues)
 
+### Rotation Action
+
+A branching mechanic used by certain bosses that spans 3 turns, with 2 branches per turn determined by a 50% chance, yielding 6 total possible outcomes across the full rotation.  
+The optimized implementation is as follows:  
+
+```cpp
+int BattleEmulator::FUN_0208aecc(int* position, uint64_t* nowState)
+{
+    // Extract current pre-state from bits [4:7] of the global state
+    uint8_t pre = ((*nowState >> 4) & 0xF);
+    if (pre == 3) {
+        pre = 0;
+    }
+    // Take the lowest 1 bit from the LCG output
+    uint8_t lcgBit = lcg::getSeed(position);
+    // Compute branch output: pre * 2 + lcgBit ∈ {0, 1, 2, 3, 4, 5}
+    auto output = static_cast<uint8_t>(pre * 2 + lcgBit);
+    assert(output <= 6);
+    // Advance pre-state for the next turn
+    uint8_t next = pre + 1;
+    *nowState = (*nowState & ~0xF0) | (static_cast<uint64_t>(next) << 4);
+    return output;
+}
+```
+
+**How it works:**
+
+The original game code reads the lowest 1 bit of the LCG output to make a 50/50 branch decision, then combines it with a turn counter (`pre`) stored in bits [4:7] of `nowState` to produce the final action index.   
+The output is computed as `pre * 2 + lcgBit`, giving 6 distinct outcomes across the 3-turn cycle:    
+
+| Turn (pre) | lcgBit = 0 | lcgBit = 1 |
+|:---:|:---:|:---:|
+| 0 | 0 | 1 |
+| 1 | 2 | 3 |
+| 2 | 4 | 5 |
+
+nowState is a 64-bit integer representing the full battle emulator state. The pre-state is stored in bits [4:7] and is incremented each turn.  
+This function solely returns which index of the action table should be used for the current turn.     
+Whether that index corresponds to a jump to another table depends entirely on the action table's contents.   
+If a jump occurs, the boss's action table changes and the rotation ends naturally. If no jump occurs on turn 3, pre resets to 0 at the start of the next call, continuing the rotation from the beginning.  
+
 ## flowchart
 
 ```mermaid
