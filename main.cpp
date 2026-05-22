@@ -54,8 +54,8 @@ const Player copiedPlayers[2] = {
 		305, 305.0, 322, 322, 303, 303, 170, 222, 120, // 最初のメンバー
 		165, false, false, 0, false, 0, -1,
 		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-		false, -1, 0, -1, 0, false, 1, 1, 1 , false
+		2, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
+		false, -1, 0, -1, 0, false, 1, 1, 0, false
 	}, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 
 	// プレイヤー2
@@ -862,7 +862,7 @@ int main(){
 	auto counter1 = 0;
 	actions1[counter1++] = BattleEmulator::BUFF;
 	actions1[counter1] = -1;
-	SimpleParameterOptimizer::optimize(copiedPlayers, 0x110605356ull, actions1, 100000, counter1);
+	SimpleParameterOptimizer::optimize(copiedPlayers, 0x11052974ull, actions1, 100000, counter1);
 	return 0;
 #endif
 

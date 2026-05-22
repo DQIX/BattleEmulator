@@ -39,7 +39,7 @@ static constexpr std::array<int, ids> TUNE_IDS = {
     BattleEmulator::GOSPEL_SONG,
     BattleEmulator::FULLHEAL,
     BattleEmulator::MORE_HEAL,
-    BattleEmulator::ELFIN_ELIXIR,
+    BattleEmulator::SAGE_ELIXIR,
     BattleEmulator::MAGIC_MIRROR,
     BattleEmulator::DEFENDING_CHAMPION,
     BattleEmulator::INSULATE,

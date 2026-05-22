@@ -81,8 +81,8 @@ constexpr ActionEntry ACTION_TABLE[] = {
 		[](const Genome&, const Genome&){ return true; }
 	},
 	{
-		BattleEmulator::ELFIN_ELIXIR, [](const Genome& g){
-			return g.AllyPlayer.ElfinElixirCount > 0;
+		BattleEmulator::SAGE_ELIXIR, [](const Genome& g){
+			return g.AllyPlayer.SageElixirCount > 0;
 		},
 		[](const Genome&, const Genome&){ return true; }
 	},
