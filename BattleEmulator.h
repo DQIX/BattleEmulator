@@ -100,6 +100,13 @@ public:
     static constexpr int INSULATE = 63;//バーハ
 
 
+	static const int FLAME_SLASH = 64; //火炎斬り
+	static const int KACRACKLE_SLASH = 65;// マヒャド斬り
+	static const int HATCHET_MAN = 66;// 魔人切り
+	static const int UPWARD_SLICE = 67;// 切り上げ
+	static const int MULTISLASH = 68;// さみだれ斬り
+
+
     static bool
     Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
          BattleResult* result, uint64_t seed, const int eActions[350], const int damages[350], int mode, uint64_t *NowState);

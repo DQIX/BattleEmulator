@@ -44,6 +44,7 @@ struct Player {
     int MagicWaterCount = 1;
     int InsulateLevel = 0;
     int InsulateTurns = -1;
+    bool inactive = false;
 
     // 他のメンバー変数やメンバー関数を追加する可能性があります
 

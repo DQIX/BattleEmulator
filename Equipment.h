@@ -68,6 +68,12 @@ inline constexpr Equipment DarkShield("Dark shield", {
                                           {Attribute::Ice, 5}
                                       });
 
+//竜戦士のかぶと
+inline constexpr Equipment DragonWarriorGloves("Dragon warrior gloves", {
+                                          {Attribute::Fire, 5},
+                                          {Attribute::Darkness, 5}
+                                      });
+
 //げんまのよろい
 inline constexpr Equipment EtherealArmour("Ethereal armour", {
                                               {Attribute::Fire, 18},
@@ -102,8 +108,8 @@ inline constexpr Equipment DragonWarriorBoots("Dragon warrior boots", {
  * @note 配列内の順序は、装備品管理や計算処理で一貫性を保つために重要です。
  */
 // 同様に、配列も inline 化
-inline constexpr std::array<Equipment, 4> allEquipments = {
-    DarkShield, EtherealArmour, EnchantedGloves, DragonWarriorBoots
+inline constexpr std::array<Equipment, 5> allEquipments = {
+    DarkShield, DragonWarriorGloves, EtherealArmour, EnchantedGloves, DragonWarriorBoots
 };
 
 

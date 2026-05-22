@@ -285,7 +285,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 				continue;
 			}
 
-			if(currentGenome.AllyPlayer.paralysis || currentGenome.AllyPlayer.sleeping){
+			if(currentGenome.AllyPlayer.paralysis || currentGenome.AllyPlayer.sleeping || currentGenome.AllyPlayer.inactive){
 				Genome newGenome = currentGenome;
 				newGenome.actions[currentGenome.turn - 1] = BattleEmulator::ATTACK_ALLY;
 				newGenome.Initialized = true;

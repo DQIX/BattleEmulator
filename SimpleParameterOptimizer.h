@@ -36,8 +36,7 @@ constexpr uint64_t GA_INSTABILITY_WEIGHT = 10.0; // instability を fitness に�
 // ここを編集するだけで「追加しうる行動」を切り替え可能
 static constexpr std::array<int, 3> STABILITY_RANDOM_ACTION_POOL = {
     BattleEmulator::BUFF,
-    BattleEmulator::MAGIC_MIRROR,
-    BattleEmulator::BUFF, // ※ もし敵の PSYCHE_UP を混ぜたいなら BattleEmulator::PSYCHE_UP を入れる
+    BattleEmulator::FULLHEAL,
 };
 // 1回の stability check で最大いくつ挿入するか（0なら無効）
 static constexpr double STABILITY_EXTRA_ACTION_INSERT_PROB = 0.60;

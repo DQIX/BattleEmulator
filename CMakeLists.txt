@@ -57,15 +57,15 @@ set(SOURCES
         LinearIdPool.h
 )
 
-add_executable(newDirectory_gouketu ${SOURCES})
-target_compile_definitions(newDirectory_gouketu PRIVATE GOUKETU=1)
+add_executable(gilyumei2_rubii ${SOURCES})
+target_compile_definitions(gilyumei2_rubii PRIVATE RUBII=1)
 
 
-add_executable(newDirectory_gouketu_opt ${SOURCES})
-target_compile_definitions(newDirectory_gouketu_opt PRIVATE GOUKETU=1 OPTIMIZE_MODE=1)  # `#define MULTITHREADING` を適用
+add_executable(gilyumei2_rubii_opt ${SOURCES})
+target_compile_definitions(gilyumei2_rubii_opt PRIVATE GOUKETU=1 OPTIMIZE_MODE=1)  # `#define MULTITHREADING` を適用
 
-add_executable(newDirectory_super ${SOURCES})
-target_compile_definitions(newDirectory_super PRIVATE SUPER=1)
+add_executable(gilyumei2_gouketu ${SOURCES})
+target_compile_definitions(gilyumei2_gouketu PRIVATE GOUKETU=1)
 
 
 string(TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)
@@ -73,8 +73,8 @@ string(TIMESTAMP BUILD_TIME "%H:%M:%S" UTC)
 add_definitions(-DBUILD_DATE="${BUILD_DATE}" -DBUILD_TIME="${BUILD_TIME}")
 
 if(MINGW)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections -fno-inline-small-functions")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections -fno-inline-small-functions")
     set(CMAKE_EXE_LINKER_FLAGS "-static -Wl,--gc-sections")
 elseif(MSVC)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi /O2")

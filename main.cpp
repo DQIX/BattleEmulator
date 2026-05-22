@@ -24,49 +24,50 @@
 
 int startturn = -1;
 
-#if defined(GOUKETU)
+#if defined(RUBII)
 
 const Player copiedPlayers[2] = {
 	// プレイヤー1
 	{
-		309, 309.0, 324, 324, 294, 294, 193, 234, 165, // 最初のメンバー
+		305, 305.0, 310, 310, 313, 313, 170, 222, 120, // 最初のメンバー
 		165, false, false, 0, false, 0, -1,
 		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-		3, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-		false, -1, 0, -1, 0, false, 1, 1, 1
+		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
+		false, -1, 0, -1, 0, false, 1, 1, 1 , false
 	}, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 
 	// プレイヤー2
 	{
-		4800, 4800.0, 248, 248, 278, 278, 157, 0, 255, // 最初のメンバー
+		1653, 1653.0, 234, 234, 256, 256, 172, 25, 25, // 最初のメンバー
 		255, false, false, 0, false, 0, -1,
 		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
 		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-		false, -1, 0, -1, 0, false, 0, 0, 0
+		false, -1, 0, -1, 0, false, 0, 0, 0 ,false
 	} // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 };
 
-#elif defined(SUPER)
+#elif defined(GOUKETU)
 
 const Player copiedPlayers[2] = {
 	// プレイヤー1
 	{
-		309, 309.0, 312, 312, 299, 299, 193, 234, 165, // 最初のメンバー
+		305, 305.0, 322, 322, 303, 303, 170, 222, 120, // 最初のメンバー
 		165, false, false, 0, false, 0, -1,
 		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-		3, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-		false, -1, 0, -1, 0, false, 1, 1, 1
+		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
+		false, -1, 0, -1, 0, false, 1, 1, 1 , false
 	}, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 
 	// プレイヤー2
 	{
-		4800, 4800.0, 248, 248, 278, 278, 157, 0, 255, // 最初のメンバー
+		1653, 1653.0, 234, 234, 256, 256, 172, 25, 25, // 最初のメンバー
 		255, false, false, 0, false, 0, -1,
 		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
 		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-		false, -1, 0, -1, 0, false, 0, 0, 0
+		false, -1, 0, -1, 0, false, 0, 0, 0 ,false
 	} // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 };
+
 
 #endif
 
@@ -125,8 +126,8 @@ void printHeader(std::stringstream& ss){
 		<< std::setw(6) << "Sle"
 		<< std::setw(6) << "ATT"
 		<< std::setw(6) << "DET"
-		<< std::setw(6) << "MMT"
-		<< std::setw(6) << "Tab"
+		//<< std::setw(6) << "MMT"
+		//<< std::setw(6) << "Tab"
 		<< std::setw(6) << "Sct" << "\n";
 	ss << std::string(140, '-') << "\n"; // 区切り線を出力
 }
@@ -156,26 +157,10 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 		auto isEnemy = result.isEnemy[i];
 		auto state = result.state[i] & 0xf;
 		auto specialChargeTurn = result.scTurn[i];
+		auto defenseFlag = result.defenseFlag[i];
 		int amp = -1;
 		if(i >= 1){
 			amp = result.amp[i - 1];
-		}
-
-
-		if(state == BattleEmulator::TYPE_2A){
-			tmpState = "A";
-		}
-		else if(state == BattleEmulator::TYPE_2B){
-			tmpState = "B";
-		}
-		else if(state == BattleEmulator::TYPE_2C){
-			tmpState = "C";
-		}
-		else if(state == BattleEmulator::TYPE_2D){
-			tmpState = "D";
-		}
-		if(state == BattleEmulator::TYPE_2E){
-			tmpState = "E";
 		}
 
 		auto special = gene[turn];
@@ -207,8 +192,8 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 						<< std::setw(6) << ((aAction == "Sleeping" || aAction == "Cure Sleeping") ? "yes" : "")
 						<< std::setw(6) << ATKTurn1
 						<< std::setw(6) << DEFTurn1
-						<< std::setw(6) << magicMirrorTurn1
-						<< std::setw(6) << tmpState
+						//<< std::setw(6) << magicMirrorTurn1
+						//<< std::setw(6) << tmpState
 						<< std::setw(6) << specialChargeTurn1
 						<< std::setw(11) << "" << "\n";
 				}
@@ -268,6 +253,9 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 				if((action == BattleEmulator::CURE_SLEEPING || action == BattleEmulator::CURE_PARALYSIS)){
 					sp = "---------------";
 				}
+				if((action == BattleEmulator::INACTIVE_ALLY) && !defenseFlag){
+					sp = "---------------";
+				}
 			}
 		}
 	}
@@ -291,8 +279,8 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 			<< std::setw(6) << ((aAction == "Sleeping") ? "yes" : "")
 			<< std::setw(6) << ATKTurn1
 			<< std::setw(6) << DEFTurn1
-			<< std::setw(6) << magicMirrorTurn1
-			<< std::setw(6) << tmpState
+			//<< std::setw(6) << magicMirrorTurn1
+			//<< std::setw(6) << tmpState
 			<< std::setw(6) << specialChargeTurn1
 			<< std::setw(11) << "" << "\n";
 	}
@@ -873,10 +861,8 @@ int main(){
 	int actions1[350] = {};
 	auto counter1 = 0;
 	actions1[counter1++] = BattleEmulator::BUFF;
-	actions1[counter1++] = BattleEmulator::MAGIC_MIRROR;
-	actions1[counter1++] = BattleEmulator::PSYCHE_UP_ALLY;
 	actions1[counter1] = -1;
-	SimpleParameterOptimizer::optimize(copiedPlayers, 0x11060049ull, actions1, 100000, counter1);
+	SimpleParameterOptimizer::optimize(copiedPlayers, 0x110605356ull, actions1, 100000, counter1);
 	return 0;
 #endif
 
@@ -884,7 +870,7 @@ int main(){
 #ifdef DEBUG2
 	//THIS DEBUG CODE!
 	//THIS DEBUG CODE
-	uint64_t time1 = 0x932ca66;
+	uint64_t time1 = 0x4a1ff683;
 
 	int dummy[100];
 	lcg::init(time1);
@@ -905,13 +891,14 @@ int main(){
 	auto* NowState = new uint64_t(0); //エミュレーターの内部ステートを表すint
 
 	Player players1[2];
-	int32_t gene1[350] = {0};
+	//int32_t gene1[350] = {0};
 	//THIS DEBUG CODE!
-	//int32_t gene1[350] = {30, 31, 62, 62, 50, 53, 62, 30, 31, 34, 53, 33, 31, 34, 34, 34, 34, 53,};
+	int32_t gene1[350] = { 30, 62, 25, 30, 62, 37, 33, 62, 62, 34, };
 	//gene1[19-1] = BattleEmulator::DEFENCE;
 	int counter = 0;
 
-	gene1[counter++] = BattleEmulator::INSULATE;
+	//gene1[counter++] = BattleEmulator::BUFF;
+	//gene1[counter++] = BattleEmulator::FULLHEAL;
 	//gene1[counter++] = BattleEmulator::INSULATE;
 	// gene1[counter++] = BattleEmulator::BUFF;
 	// gene1[counter++] = BattleEmulator::BUFF;
@@ -959,12 +946,11 @@ int main(){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x04a1ff68;
+	uint64_t time1 = 0x04a1ff682;
 
 	auto counter = 0;
 	int actions[350] = {0};
-	actions[counter++] = BattleEmulator::DEFENCE;
-	actions[counter++] = BattleEmulator::MAGIC_MIRROR;
+	actions[counter++] = BattleEmulator::BUFF;
 	//actions[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
 	actions[counter] = -1;
 
@@ -972,7 +958,7 @@ int main(){
 	SearchRequest(copiedPlayers, time1, actions, false, ss);
 	ss << std::endl;
 
-	if(false){
+	if(true){
 		SearchRequest(copiedPlayers, time1+1, actions, false, ss);
 		ss << std::endl;
 

@@ -24,7 +24,8 @@ void camera::Main(int *position, const int32_t actions[5], uint64_t * NowState, 
         }
         if (after == BattleEmulator::ATTACK_ALLY||after == BattleEmulator::SKY_ATTACK||after == BattleEmulator::MERA_ZOMA) {
             onFreeCameraMove(position, after, preemptive ? 1 : 0, NowState);
-        }else if(after == BattleEmulator::MERCURIAL_THRUST){
+        }
+        if(after == BattleEmulator::MERCURIAL_THRUST||after == BattleEmulator::ATTACK_ENEMY||after == BattleEmulator::FLAME_SLASH||after == BattleEmulator::KACRACKLE_SLASH || after == BattleEmulator::HATCHET_MAN || after == BattleEmulator::UPWARD_SLICE) {
             (*position)++;//追尾カメラ
         }
         if (after != BattleEmulator::ATTACK_ALLY) {//味方の攻撃→上空だとフリーカメラが特異点の挙動する
@@ -58,9 +59,9 @@ void camera::onFreeCameraMove(int *position, const int action, const int param5,
             if (counter == 0) {
                 (*position)++;//引数5が1なら強制的に実行
                 counter = 0;
-                if (action == BattleEmulator::ATTACK_ALLY){
-                    (*position)+=2;
-                }
+                // if (action == BattleEmulator::ATTACK_ALLY){
+                //     (*position)+=2;
+                // }
                 break;
             }
             (*position)++;
