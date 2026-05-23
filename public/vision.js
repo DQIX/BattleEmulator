@@ -46,7 +46,7 @@
     const WHITE_SATURATION_MAX = 0.24;
     const ACTION_THRESHOLD = 0.45;
     const NUMBER_THRESHOLD = 0.80;
-    const DAMAGE_RECOGNITION_WINDOW_MS = 1500;
+    const DAMAGE_RECOGNITION_WINDOW_MS = 1000;
     const MATCH_PENALTY_WEIGHT = 0.0;
     const MATCH_WHITE_WEIGHT = 1.0;
     const TEMPLATE_ALPHA_THRESHOLD = 0.05;
@@ -703,7 +703,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 }
             }
 
-            const gpuNumberTemplates = getPrimaryNumberTemplates(numberTemplates);
+            const gpuNumberTemplates = numberTemplates;
             for (const [damageKey, config] of Object.entries(DAMAGE_ROIS)) {
                 config.actionAreas.forEach((area, areaIndex) => {
                     for (const template of gpuNumberTemplates) {
@@ -1224,17 +1224,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     function isPrimaryNumberTemplate(template) {
         return template.file.toLowerCase() === `${template.digit}.png`;
-    }
-
-    function getPrimaryNumberTemplates(numberTemplates) {
-        const templatesByDigit = new Map();
-        numberTemplates.forEach((template) => {
-            const current = templatesByDigit.get(template.digit);
-            if (!current || (!isPrimaryNumberTemplate(current) && isPrimaryNumberTemplate(template))) {
-                templatesByDigit.set(template.digit, template);
-            }
-        });
-        return Array.from(templatesByDigit.values()).sort((a, b) => a.digit - b.digit);
     }
 
     function convertMatchResults(digits) {
@@ -2573,7 +2562,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         if (typeof matcher?.createNumberTemplate !== "function") {
             return templates;
         }
-        const primaryTemplates = new Set(getPrimaryNumberTemplates(templates));
+        const primaryTemplates = new Set((templates));
         const loaded = [];
         for (const template of templates) {
             loaded.push(primaryTemplates.has(template) ? await matcher.createNumberTemplate(template) : template);
@@ -2665,6 +2654,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             state.matcher = null;
             state.matcherKind = "";
             state.templatesBySlot = new Map();
+            console.error("vision matcher error:", error);
             setStatus("visionStatusError");
         } finally {
             state.gpuRecoveryInProgress = false;
@@ -2712,6 +2702,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             await populateCameras();
             setStatus("visionStatusReady");
         } catch (error) {
+            console.error("vision matcher error:", error);
             setStatus("visionStatusError");
             console.error("camera permission error:", error);
         } finally {
@@ -2772,6 +2763,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             state.matcherKind = "";
             state.templatesBySlot = new Map();
             ui.engine.textContent = "";
+            console.error("vision matcher error:", error);
             setStatus("visionStatusError");
             setBridgeStatus("visionBridgeIdle", "");
         } finally {
@@ -2845,6 +2837,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                         await recoverWebGpuMatcher();
                         return;
                     } else {
+                        console.error("vision matcher error:", error);
                         setStatus("visionStatusError");
                         console.error("vision matcher error:", error);
                         return;
