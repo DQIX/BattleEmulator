@@ -20,7 +20,7 @@ thread_local int preHP[3] = {0, 0, 0};
 thread_local bool player0_has_initiative = false;
 thread_local bool TiggerSkyAttack = false;
 
-#if defined(rubii)
+#if defined(RUBII)
 
 constexpr int Ally_Level = 49;
 constexpr double Ally_TensionTable[4] = {1.5, 2.5, 4.0, 6.0};
