@@ -862,7 +862,7 @@ int main(){
 	auto counter1 = 0;
 	actions1[counter1++] = BattleEmulator::BUFF;
 	actions1[counter1] = -1;
-	SimpleParameterOptimizer::optimize(copiedPlayers, 0x11352974ull, actions1, 100000, counter1);
+	SimpleParameterOptimizer::optimize(copiedPlayers, 0x13456974ull, actions1, 100000, counter1);
 	return 0;
 #endif
 
