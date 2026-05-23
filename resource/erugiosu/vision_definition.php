@@ -10,7 +10,7 @@ return [
     ],
     'picker' => 'erugiosu',
     'battleEmulator' => [
-        'branch' => 'erugiosu_new_arugo',
+        'id' => 'erugiosu_gouketu',
     ],
     'templateGroups' => [
         [
