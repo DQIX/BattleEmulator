@@ -78,10 +78,14 @@
                         visionConnect: "Connect OBS Camera",
                         visionRequestPermission: "Request Camera Permission",
                         visionReset: "Reset Console",
-                        visionDebugExport: "Download Recognized Crops",
-                        visionCamera: "Camera",
-                        visionFps: "Inspect FPS",
-                        visionPreview: "Preview",
+                         visionDebugExport: "Download Recognized Crops",
+                         visionCamera: "Camera",
+                         visionMode: "Vision Mode",
+                         visionModeIdentify: "Identify Mode",
+                         visionModeErugiosu: "Erugiosu Mode",
+                         visionModeGilyumei1: "Gilyumei 1 Mode",
+                         visionFps: "Inspect FPS",
+                         visionPreview: "Preview",
                         visionBridge: "Bridge",
                         visionBridgeIdle: "Not sent yet",
                         visionBridgeReady: "Stub bridge ready",
@@ -230,10 +234,14 @@
                         visionConnect: "OBSカメラ接続",
                         visionRequestPermission: "カメラ権限を取得",
                         visionReset: "コンソール初期化",
-                        visionDebugExport: "認識枠モノクロ保存",
-                        visionCamera: "カメラ",
-                        visionFps: "認識FPS",
-                        visionPreview: "プレビュー",
+                         visionDebugExport: "認識枠モノクロ保存",
+                         visionCamera: "カメラ",
+                         visionMode: "認識モード",
+                         visionModeIdentify: "識別モード",
+                         visionModeErugiosu: "エルギオスモード",
+                         visionModeGilyumei1: "ギュメイ1モード",
+                         visionFps: "認識FPS",
+                         visionPreview: "プレビュー",
                         visionBridge: "連携",
                         visionBridgeIdle: "未送信",
                         visionBridgeReady: "建前ブリッジ準備完了",
@@ -507,6 +515,12 @@
                     <span data-i18n="visionCamera">Camera</span>
                     <select id="visionCameraSelect" class="emulator-select">
                         <option value="">camera not loaded</option>
+                    </select>
+                </label>
+                <label class="field">
+                    <span data-i18n="visionMode">Vision Mode</span>
+                    <select id="visionModeSelect" class="emulator-select">
+                        <option value="identify" data-i18n="visionModeIdentify">Identify Mode</option>
                     </select>
                 </label>
                 <label class="field">
@@ -1074,6 +1088,7 @@
 </div>
 
 <script src="app.js" defer></script>
+<script src="vision-assets.js" defer></script>
 <script src="vision.js" defer></script>
 </body>
 </html>

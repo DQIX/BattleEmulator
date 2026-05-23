@@ -2,6 +2,7 @@
     const ui = {
         status: document.getElementById("visionStatus"),
         cameraSelect: document.getElementById("visionCameraSelect"),
+        modeSelect: document.getElementById("visionModeSelect"),
         inspectRate: document.getElementById("visionInspectRate"),
         permissionButton: document.getElementById("visionPermissionButton"),
         connectButton: document.getElementById("visionConnectButton"),
@@ -38,6 +39,7 @@
     const SOURCE_1080P = {width: 1920, height: 1080};
     const SOURCE_720P = {width: 1280, height: 720};
     const VISION_ASSET_PACK_URL = "vision-assets.json";
+    const VISION_ASSET_EMBED_KEY = "__VISION_ASSET_PACK__";
     const TEMPLATE_THRESHOLD = 0.45;
     const RESET_LATCH_CLEAR_SCORE = 0.6;
     const WHITE_THRESHOLD = 0.72;
@@ -64,98 +66,6 @@
         target: {x: 78, y: 578, width: 140, height: 65, label: "target"}
     };
 
-    const NUMBER_TEMPLATE_FILES = [
-        "0.png",
-        "0_2.png",
-        "0_3.png",
-        "0_4.png",
-        "0_zep1.png",
-        "0_zpe2.png",
-        "1.png",
-        "1_1.png",
-        "1_10.png",
-        "1_11.png",
-        "1_12.png",
-        "1_2.png",
-        "1_3.png",
-        "1_4.png",
-        "1_5.png",
-        "1_6.png",
-        "1_7.png",
-        "1_8.png",
-        "1_9.png",
-        "1_zep1.png",
-        "1_zepp1.png",
-        "1_zepp13.png",
-        "1_zepp14.png",
-        "1_zepp16.png",
-        "1_zepp17.png",
-        "2.png",
-        "2_1.png",
-        "2_2.png",
-        "2_3.png",
-        "2_4.png",
-        "2_5.png",
-        "2_zep1.png",
-        "2_zep2.png",
-        "2_zep4.png",
-        "2_zepp2.png",
-        "3.png",
-        "3_1.png",
-        "3_2.png",
-        "3_3.png",
-        "3_4.png",
-        "3_5.png",
-        "3_6.png",
-        "3_7.png",
-        "3_zep1.png",
-        "3_zep3.png",
-        "4.png",
-        "4_1.png",
-        "4_2.png",
-        "4_3.png",
-        "4_4.png",
-        "4_5.png",
-        "4_6.png",
-        "4_zep1.png",
-        "4_zep2.png",
-        "4_zep4.png",
-        "4_zep5.png",
-        "4_zpp5.png",
-        "5.png",
-        "5_2.png",
-        "5_zep1.png",
-        "5_zep5.png",
-        "5_zepp1.png",
-        "6.png",
-        "6_1.png",
-        "6_12.png",
-        "6_zep2.png",
-        "6_zepp1.png",
-        "6_zepppp.png",
-        "7.png",
-        "7_2.png",
-        "7_3.png",
-        "7_4.png",
-        "7_zep1.png",
-        "7_zeppp.png",
-        "7_zpe2.png",
-        "8.png",
-        "8_1.png",
-        "8_3.png",
-        "8_4.png",
-        "8_5.png",
-        "8_6.png",
-        "8_zep1.png",
-        "8_zep7.png",
-        "8_zepp.png",
-        "9.png",
-        "9_2.png",
-        "9_zep1.png",
-        "9_zep2.png",
-        "9_zepp.png"
-    ];
-
     const DAMAGE_ROIS = {
         damage1: {
             x: 78,
@@ -180,80 +90,6 @@
             ]
         }
     };
-
-    const TEMPLATE_GROUPS = [
-        {
-            slot: "main",
-            directory: "message_v2",
-            files: [
-                "ano.png",
-                "ayasii.png",
-                "critical.png",
-                "defense_champion.png",
-                "elven.png",
-                "erugio.png",
-                "erugio2.png",
-                "erugio4.png",
-                "flee.png",
-                "fullheal.png",
-                "guard.png",
-                "hadou.png",
-                "ice.png",
-                "kagayaku.png",
-                "kuroi.png",
-                "madannte.png",
-                "meisou.png",
-                "merazoma.png",
-                "mikawasi.png",
-                "mira-.png",
-                "miss.png",
-                "miss2.png",
-                "more_heal.png",
-                "mp2.png",
-                "no_hadou.png",
-                "Paralysis.png",
-                "sage.png",
-                "samidare.png",
-                "samidare2.png",
-                "seisui.png",
-                "sippuu.png",
-                "sleeping2.png",
-                "song.png",
-                "sukara.png",
-                "sutemi.png",
-                "tameru.png",
-                "tokuyaku.png",
-                "WakeUp.png",
-                "WakeUp2.png",
-                "WakeUp3.png",
-                "yaketuku.png",
-                "zigosupa.png",
-                "zilyoukuu.png"
-            ]
-        },
-        {
-            slot: "sub",
-            directory: "submessage_v2",
-            files: [
-                "attack.png",
-                "defense_champion2.png",
-                "inori.png",
-                "Paralysis2.png",
-                "reset.png",
-                "uhsc.png"
-            ]
-        },
-        {
-            slot: "ally",
-            directory: "sub2message_v2",
-            files: ["a_attack.png", "CareParalysis.png", "dead.png", "dead2.png"]
-        },
-        {
-            slot: "target",
-            directory: "target",
-            files: ["aha.png", "erugio.png", "erugio2.png", "erugio4.png"]
-        }
-    ];
 
     const ACTIONS = {
         1: {names: {ja: "攻撃(敵)", en: "Attack (enemy)"}, ally: false, damage: true},
@@ -293,36 +129,13 @@
         51: {names: {ja: "しんでしまった！", en: "Dead"}, ally: true, damage: false},
         52: {names: {ja: "ゴスペルソング", en: "Gospel Song"}, ally: true, damage: false},
         53: {names: {ja: "逃げる", en: "Flee"}, ally: true, damage: false},
-        62: {names: {ja: "ためる(味方)", en: "Psyche Up (ally)"}, ally: true, damage: false}
+        62: {names: {ja: "ためる(味方)", en: "Psyche Up (ally)"}, ally: true, damage: false},
+        64: {names: {ja: "火炎斬り", en: "FLAME_SLASH"}, ally: false, damage: true},
+        65: {names: {ja: "マヒャド斬り", en: "KACRACKLE_SLASH"}, ally: false, damage: true},
+        66: {names: {ja: "魔人切り", en: "HATCHET_MAN"}, ally: false, damage: true},
+        67: {names: {ja: "切り上げ", en: "UPWARD_SLICE"}, ally: false, damage: true},
+        68: {names: {ja: "さみだれ斬り", en: "MULTISLASH"}, ally: false, damage: true}
     };
-    const DIRECT_MAIN_RULES = new Map([
-        ["sukara.png", 30],
-        ["hadou.png", 16],
-        ["yaketuku.png", 17],
-        ["zilyoukuu.png", 8],
-        ["merazoma.png", 9],
-        ["mira-.png", 31],
-        ["samidare.png", 34],
-        ["samidare2.png", 34],
-        ["no_hadou.png", 15],
-        ["zigosupa.png", 5],
-        ["kuroi.png", 18],
-        ["sutemi.png", 33],
-        ["seisui.png", 49],
-        ["meisou.png", 41],
-        ["madannte.png", 42],
-        ["ice.png", 10],
-        ["fullheal.png", 37],
-        ["more_heal.png", 32],
-        ["ayasii.png", 12],
-        ["mp2.png", 43],
-        ["song.png", 52],
-        ["sippuu.png", 44],
-        ["sage.png", 47],
-        ["elven.png", 48],
-        ["flee.png", 53],
-        ["tokuyaku.png", 50]
-    ]);
     const ACTION_IDS = Object.freeze({
         ATTACK_ENEMY: 1,
         ULTRA_HIGH_SPEED_COMBO: 2,
@@ -373,9 +186,89 @@
         DEAD: 51,
         SONG: 52,
         FLEE: 53,
-        PSYCHE_UP_ALLY: 62
+        PSYCHE_UP_ALLY: 62,
+        FLAME_SLASH: 64,
+        KACRACKLE_SLASH: 65,
+        HATCHET_MAN: 66,
+        UPWARD_SLICE: 67,
+        MULTISLASH: 68
     });
     const ACTIONS_BY_ID = ACTIONS;
+    const LEGACY_VISION_MODE_DEFINITIONS = Object.freeze({
+        erugiosu: {
+            id: "erugiosu",
+            names: {
+                ja: "エルギオスモード",
+                en: "Erugiosu Mode"
+            },
+            picker: "erugiosu",
+            timeoutMs: 4 * 60 * 1000,
+            battleEmulator: {
+                branch: "erugiosu_new_arugo"
+            },
+            identify: {
+                templates: [
+                    {slot: "main", directory: "message_v2", file: "erugio.png"},
+                    {slot: "main", directory: "message_v2", file: "erugio2.png"},
+                    {slot: "main", directory: "message_v2", file: "erugio4.png"}
+                ]
+            },
+            rules: {
+                erugioMain: ["erugio.png", "erugio2.png", "erugio4.png"],
+                resetSub: ["reset.png"],
+                enemyAttackSub: ["attack.png"],
+                uhscSub: ["uhsc.png"],
+                allyAttack: ["a_attack.png"],
+                dead: ["dead.png", "dead2.png"],
+                wakeUp: ["WakeUp.png", "WakeUp2.png", "WakeUp3.png"],
+                psycheUpTarget: ["aha.png"],
+                directMainActions: {
+                    "sukara.png": 30,
+                    "hadou.png": 16,
+                    "yaketuku.png": 17,
+                    "zilyoukuu.png": 8,
+                    "merazoma.png": 9,
+                    "mira-.png": 31,
+                    "samidare.png": 34,
+                    "samidare2.png": 34,
+                    "no_hadou.png": 15,
+                    "zigosupa.png": 5,
+                    "kuroi.png": 18,
+                    "sutemi.png": 33,
+                    "seisui.png": 49,
+                    "meisou.png": 41,
+                    "madannte.png": 42,
+                    "ice.png": 10,
+                    "fullheal.png": 37,
+                    "more_heal.png": 32,
+                    "ayasii.png": 12,
+                    "mp2.png": 43,
+                    "song.png": 52,
+                    "sippuu.png": 44,
+                    "sage.png": 47,
+                    "elven.png": 48,
+                    "flee.png": 53,
+                    "tokuyaku.png": 50
+                }
+            }
+        },
+        gilyumei1: {
+            id: "gilyumei1",
+            names: {
+                ja: "ギュメイ1モード",
+                en: "Gilyumei 1 Mode"
+            },
+            picker: "gilyumei1",
+            timeoutMs: 4 * 60 * 1000,
+            battleEmulator: {
+                branch: "gilyumei1"
+            },
+            identify: {
+                templates: []
+            },
+            rules: {}
+        }
+    });
 
     const state = {
         lang: document.documentElement.dataset.lang || "ja",
@@ -391,6 +284,10 @@
         history: [],
         numberTemplates: [],
         assetPack: null,
+        assetPackPromise: null,
+        modes: [],
+        modeId: "identify",
+        activeMode: null,
         lastMatches: Object.create(null),
         turnIndex: 1,
         actionIndex: 0,
@@ -414,6 +311,7 @@
         matcherKind: "",
         gpuRecoveryInProgress: false,
         gpuWarningResolver: null,
+        lastModeHitAt: 0,
         captureRect: {
             sourceWidth: BASE_WIDTH,
             sourceHeight: BASE_HEIGHT,
@@ -424,10 +322,145 @@
         }
     };
 
+    function getEmbeddedVisionAssetPack() {
+        const embedded = window[VISION_ASSET_EMBED_KEY];
+        return embedded && typeof embedded === "object" ? embedded : null;
+    }
+
+    function getLegacyModeDefinition(modeId) {
+        return LEGACY_VISION_MODE_DEFINITIONS[modeId] || null;
+    }
+
+    function buildLegacyVisionAssetPack(rawPack) {
+        const erugiosu = getLegacyModeDefinition("erugiosu");
+        const identifyDetections = [{
+            modeId: "erugiosu",
+            templates: erugiosu.identify.templates
+        }];
+        return {
+            version: rawPack.version || 1,
+            generatedAt: rawPack.generatedAt || null,
+            modes: [
+                {
+                    id: "identify",
+                    names: {ja: "識別モード", en: "Identify Mode"},
+                    picker: "identify",
+                    timeoutMs: 0,
+                    battleEmulator: null,
+                    rules: {detections: identifyDetections},
+                    identify: {templates: []},
+                    templates: (rawPack.templates || []).filter((entry) =>
+                        identifyDetections.some((detection) =>
+                            detection.templates.some((template) =>
+                                template.slot === entry.slot && template.file === entry.file
+                            )
+                        )
+                    )
+                },
+                {
+                    ...erugiosu,
+                    templates: rawPack.templates || []
+                },
+                {
+                    ...getLegacyModeDefinition("gilyumei1"),
+                    templates: []
+                }
+            ],
+            numberTemplates: rawPack.numberTemplates || []
+        };
+    }
+
+    function normalizeVisionAssetPack(rawPack) {
+        if (!rawPack || typeof rawPack !== "object") {
+            return buildLegacyVisionAssetPack({templates: [], numberTemplates: []});
+        }
+
+        if (!Array.isArray(rawPack.modes)) {
+            return buildLegacyVisionAssetPack(rawPack);
+        }
+
+        const normalizedModes = rawPack.modes.map((mode) => {
+            const legacy = getLegacyModeDefinition(mode.id);
+            return {
+                ...legacy,
+                ...mode,
+                names: {
+                    ...(legacy?.names || {}),
+                    ...(mode.names || {})
+                },
+                rules: {
+                    ...(legacy?.rules || {}),
+                    ...(mode.rules || {})
+                },
+                identify: {
+                    templates: [],
+                    ...(legacy?.identify || {}),
+                    ...(mode.identify || {})
+                },
+                templates: Array.isArray(mode.templates) ? mode.templates : []
+            };
+        });
+
+        const modeIds = new Set(normalizedModes.map((mode) => mode.id));
+        for (const legacyMode of Object.values(LEGACY_VISION_MODE_DEFINITIONS)) {
+            if (!modeIds.has(legacyMode.id)) {
+                normalizedModes.push({...legacyMode, templates: []});
+            }
+        }
+
+        if (!modeIds.has("identify")) {
+            normalizedModes.unshift({
+                id: "identify",
+                names: {ja: "識別モード", en: "Identify Mode"},
+                picker: "identify",
+                timeoutMs: 0,
+                battleEmulator: null,
+                rules: {detections: []},
+                identify: {templates: []},
+                templates: []
+            });
+        }
+
+        return {
+            version: rawPack.version || 2,
+            generatedAt: rawPack.generatedAt || null,
+            modes: normalizedModes,
+            numberTemplates: rawPack.numberTemplates || []
+        };
+    }
+
+    function getActiveMode() {
+        return state.activeMode;
+    }
+
+    function getModeRuleList(mode, key) {
+        const list = mode?.rules?.[key];
+        return Array.isArray(list) ? list : [];
+    }
+
+    function getModeRuleMap(mode, key) {
+        const value = mode?.rules?.[key];
+        return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    }
+
+    function modeRuleHasFile(mode, key, file) {
+        if (!file) {
+            return false;
+        }
+        return getModeRuleList(mode, key).includes(file);
+    }
+
+    function getModeDetectionEntries(mode) {
+        const detections = mode?.rules?.detections;
+        return Array.isArray(detections) ? detections : [];
+    }
+
     class BattleEmulatorBridge {
         send(snapshot) {
+            const activeMode = getActiveMode();
             const payload = {
-                emulator: "erugios-web-placeholder",
+                emulator: activeMode?.battleEmulator || null,
+                visionMode: activeMode?.id || "identify",
                 sentAt: new Date().toISOString(),
                 currentTurn: snapshot.currentTurn,
                 currentSlot: snapshot.currentSlot,
@@ -1270,24 +1303,82 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
     }
 
-    function createMonochromeCropCanvas(match) {
+    function clampRect(rect, boundsWidth, boundsHeight) {
+        const x = Math.max(0, Math.min(boundsWidth - 1, rect.x));
+        const y = Math.max(0, Math.min(boundsHeight - 1, rect.y));
+        const width = Math.max(1, Math.min(boundsWidth - x, rect.width));
+        const height = Math.max(1, Math.min(boundsHeight - y, rect.height));
+        return {x, y, width, height};
+    }
+
+    function resolveExportRect(slot, match) {
+        const roi = ROI_DEFS[slot];
+        if (!match || !match.file) {
+            return {...roi, exportName: `${slot}-roi`};
+        }
+        return {
+            x: Number.isFinite(match.x) ? match.x : roi.x,
+            y: Number.isFinite(match.y) ? match.y : roi.y,
+            width: Number.isFinite(match.width) ? match.width : roi.width,
+            height: Number.isFinite(match.height) ? match.height : roi.height,
+            exportName: `${slot}-${match.file.replace(/[^a-zA-Z0-9._-]/g, "_")}`
+        };
+    }
+
+    function mapProcessingRectToSource(rect) {
+        const capture = state.captureRect || {
+            sourceWidth: BASE_WIDTH,
+            sourceHeight: BASE_HEIGHT,
+            sourceX: 0,
+            sourceY: 0,
+            sourceCropWidth: BASE_WIDTH,
+            sourceCropHeight: BASE_HEIGHT
+        };
+        const scaleX = capture.sourceCropWidth / BASE_WIDTH;
+        const scaleY = capture.sourceCropHeight / BASE_HEIGHT;
+        return clampRect({
+            x: Math.round(capture.sourceX + rect.x * scaleX),
+            y: Math.round(capture.sourceY + rect.y * scaleY),
+            width: Math.max(1, Math.round(rect.width * scaleX)),
+            height: Math.max(1, Math.round(rect.height * scaleY))
+        }, capture.sourceWidth, capture.sourceHeight);
+    }
+
+    function createMonochromeCropCanvas(slot, match) {
+        const rect = resolveExportRect(slot, match);
+        const sourceRect = mapProcessingRectToSource(rect);
+        const hasVideoSource = !!(ui.video && ui.video.readyState >= 2 && ui.video.videoWidth && ui.video.videoHeight);
         const canvas = document.createElement("canvas");
-        canvas.width = match.width;
-        canvas.height = match.height;
+        canvas.width = hasVideoSource ? sourceRect.width : rect.width;
+        canvas.height = hasVideoSource ? sourceRect.height : rect.height;
         const context = canvas.getContext("2d", {willReadFrequently: true});
         context.imageSmoothingEnabled = false;
-        context.drawImage(
-            processingCanvas,
-            match.x,
-            match.y,
-            match.width,
-            match.height,
-            0,
-            0,
-            match.width,
-            match.height
-        );
-        const imageData = context.getImageData(0, 0, match.width, match.height);
+        if (hasVideoSource) {
+            context.drawImage(
+                ui.video,
+                sourceRect.x,
+                sourceRect.y,
+                sourceRect.width,
+                sourceRect.height,
+                0,
+                0,
+                sourceRect.width,
+                sourceRect.height
+            );
+        } else {
+            context.drawImage(
+                processingCanvas,
+                rect.x,
+                rect.y,
+                rect.width,
+                rect.height,
+                0,
+                0,
+                rect.width,
+                rect.height
+            );
+        }
+        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
         const data = imageData.data;
         for (let index = 0; index < data.length; index += 4) {
             const monochrome = Math.round(
@@ -1298,7 +1389,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             data[index + 2] = monochrome;
         }
         context.putImageData(imageData, 0, 0);
-        return canvas;
+        return {
+            canvas,
+            exportName: rect.exportName
+        };
     }
 
     function downloadCanvas(canvas, fileName) {
@@ -1316,12 +1410,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         let downloaded = 0;
         for (const slot of MATCH_SLOT_KEYS) {
             const match = matches[slot];
-            if (!match || !match.file || match.score < TEMPLATE_THRESHOLD) {
-                continue;
-            }
-            const canvas = createMonochromeCropCanvas(match);
-            const safeFile = match.file.replace(/[^a-zA-Z0-9._-]/g, "_");
-            downloadCanvas(canvas, `${slot}-${safeFile}-mono.png`);
+            const crop = createMonochromeCropCanvas(slot, match);
+            downloadCanvas(crop.canvas, `${crop.exportName}-mono.png`);
             downloaded += 1;
         }
         return downloaded;
@@ -1378,34 +1468,59 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
     }
 
-    function pickCandidate(matches) {
+    function pickIdentifyCandidate(matches) {
+        const mode = getActiveMode();
+        let best = null;
+
+        for (const detection of getModeDetectionEntries(mode)) {
+            for (const template of detection.templates || []) {
+                const match = matches[template.slot] || emptyMatch(template.slot);
+                if (match.file !== template.file || match.score < TEMPLATE_THRESHOLD) {
+                    continue;
+                }
+                if (!best || match.score > best.score) {
+                    best = {
+                        kind: "mode",
+                        modeId: detection.modeId,
+                        detail: `${template.slot}:${template.file}`,
+                        score: match.score
+                    };
+                }
+            }
+        }
+
+        return best;
+    }
+
+    function pickErugiosuCandidate(matches) {
         const main = matches.main || emptyMatch("main");
         const sub = matches.sub || emptyMatch("sub");
         const ally = matches.ally || emptyMatch("ally");
         const target = matches.target || emptyMatch("target");
-        const erugioMain = isErugio(main.file);
+        const mode = getActiveMode();
+        const erugioMain = modeRuleHasFile(mode, "erugioMain", main.file);
 
         // reset
-        if (erugioMain && sub.file === "reset.png" && main.score >= 0.6 && sub.score >= 0.6) {
-            return {kind: "reset", score: Math.min(main.score, sub.score), detail: `${main.file} + reset.png`};
+        if (erugioMain && modeRuleHasFile(mode, "resetSub", sub.file) && main.score >= 0.6 && sub.score >= 0.6) {
+            return {kind: "reset", score: Math.min(main.score, sub.score), detail: `${main.file} + ${sub.file}`};
         }
 
         // 攻撃(敵) = erugio + attack
-        if (erugioMain && sub.file === "attack.png" && main.score >= TEMPLATE_THRESHOLD && sub.score >= TEMPLATE_THRESHOLD) {
+        if (erugioMain && modeRuleHasFile(mode, "enemyAttackSub", sub.file) && main.score >= TEMPLATE_THRESHOLD && sub.score >= TEMPLATE_THRESHOLD) {
             return {
                 kind: "action",
                 actionId: ACTION_IDS.ATTACK_ENEMY,
-                detail: `${main.file} + attack.png`,
+                detail: `${main.file} + ${sub.file}`,
                 score: Math.min(main.score, sub.score)
             };
         }
 
         // 超高速連打 = erugio + uhsc
-        if (erugioMain && sub.file === "uhsc.png" && main.score >= TEMPLATE_THRESHOLD && sub.score >= TEMPLATE_THRESHOLD) {
+        if (erugioMain && modeRuleHasFile(mode, "uhscSub", sub.file) && main.score >= TEMPLATE_THRESHOLD && sub.score >= TEMPLATE_THRESHOLD) {
             return {
                 kind: "action",
                 actionId: ACTION_IDS.ULTRA_HIGH_SPEED_COMBO,
-                detail: `${main.file} + uhsc.png`,
+                detail: `${main.file} + ${sub.file}`,
                 score: Math.min(main.score, sub.score)
             };
         }
@@ -1413,12 +1528,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         // 攻撃(味方) = a_attack.png、ActionTaken未設定かつguardなし
         if (
             !state.actionTaken &&
-            ally.file === "a_attack.png" &&
+            modeRuleHasFile(mode, "allyAttack", ally.file) &&
             ally.score >= TEMPLATE_THRESHOLD &&
-            sub.file !== "uhsc.png" &&
+            !modeRuleHasFile(mode, "uhscSub", sub.file) &&
             main.file !== "guard.png"
         ) {
-            return {kind: "action", actionId: ACTION_IDS.ATTACK_ALLY, detail: `a_attack.png (${main.file || "-"})`, score: ally.score};
+            return {kind: "action", actionId: ACTION_IDS.ATTACK_ALLY, detail: `${ally.file} (${main.file || "-"})`, score: ally.score};
         }
 
         // 大防御 combo
@@ -1470,7 +1585,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         if (
             !state.actionTaken &&
             main.file === "sleeping2.png" &&
-            (ally.file === "dead.png" || ally.file === "dead2.png") &&
+            modeRuleHasFile(mode, "dead", ally.file) &&
             ally.score >= TEMPLATE_THRESHOLD
         ) {
             return {
@@ -1495,7 +1610,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         if (
             state.sleeping &&
             !state.slept &&
-            (main.file === "WakeUp.png" || main.file === "WakeUp2.png" || main.file === "WakeUp3.png") &&
+            modeRuleHasFile(mode, "wakeUp", main.file) &&
             sub.file !== "inori.png" &&
             main.score >= TEMPLATE_THRESHOLD &&
             state.actionIndex !== 0 &&
@@ -1507,7 +1622,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         // WakeUp系: Sleeping中かつ ActionIndex == 0 → 眠り回復（sleptは問わない）
         if (
             state.sleeping &&
-            (main.file === "WakeUp.png" || main.file === "WakeUp2.png" || main.file === "WakeUp3.png") &&
+            modeRuleHasFile(mode, "wakeUp", main.file) &&
             sub.file !== "inori.png" &&
             main.score >= TEMPLATE_THRESHOLD &&
             state.actionIndex === 0 &&
@@ -1518,11 +1633,11 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
         // ためる
         if (main.file === "tameru.png" && main.score >= TEMPLATE_THRESHOLD) {
-            if (target.file === "aha.png" && target.score >= TEMPLATE_THRESHOLD && !state.actionTaken) {
+            if (modeRuleHasFile(mode, "psycheUpTarget", target.file) && target.score >= TEMPLATE_THRESHOLD && !state.actionTaken) {
                 return {
                     kind: "action",
                     actionId: ACTION_IDS.PSYCHE_UP_ALLY,
-                    detail: "tameru + aha",
+                    detail: `tameru + ${target.file}`,
                     score: Math.min(main.score, target.score)
                 };
             }
@@ -1539,7 +1654,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
 
         // DIRECT_MAIN_RULES
-        const directAction = DIRECT_MAIN_RULES.get(main.file);
+        const directAction = getModeRuleMap(mode, "directMainActions")[main.file];
         if (directAction && main.score >= TEMPLATE_THRESHOLD) {
             return {kind: "action", actionId: directAction, detail: main.file, score: main.score};
         }
@@ -1547,8 +1662,23 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return null;
     }
 
-    function isErugio(file) {
-        return file === "erugio.png" || file === "erugio2.png" || file === "erugio4.png";
+    function pickGilyumei1Candidate() {
+        return null;
+    }
+
+    function pickCandidate(matches) {
+        const mode = getActiveMode();
+        const picker = mode?.picker || mode?.id || "identify";
+        if (picker === "identify") {
+            return pickIdentifyCandidate(matches);
+        }
+        if (picker === "erugiosu") {
+            return pickErugiosuCandidate(matches);
+        }
+        if (picker === "gilyumei1") {
+            return pickGilyumei1Candidate(matches);
+        }
+        return null;
     }
 
     function maybeResetFromCombo(candidate) {
@@ -1578,6 +1708,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         state.lastDamage1 = -1;
         state.lastDamage2 = -1;
         state.maybeCritical = -1;
+        state.lastModeHitAt = Date.now();
         // 追加
         state.actionTaken = false;
         state.sleeping = false;
@@ -1586,6 +1717,117 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         renderHistory();
         updateTurnChip();
         setBridgeStatus("visionBridgeReady", "");
+    }
+
+    function getModeById(modeId) {
+        return state.modes.find((mode) => mode.id === modeId) || null;
+    }
+
+    function getModeLabel(mode) {
+        if (!mode) {
+            return "identify";
+        }
+        return mode.names?.[state.lang] || mode.names?.ja || mode.names?.en || mode.id;
+    }
+
+    function syncModeSelect() {
+        if (!ui.modeSelect) {
+            return;
+        }
+        ui.modeSelect.value = state.modeId;
+    }
+
+    function populateModeOptions() {
+        if (!ui.modeSelect) {
+            return;
+        }
+        ui.modeSelect.innerHTML = "";
+        for (const mode of state.modes) {
+            const option = document.createElement("option");
+            option.value = mode.id;
+            option.textContent = getModeLabel(mode);
+            ui.modeSelect.appendChild(option);
+        }
+        syncModeSelect();
+    }
+
+    function syncModeBattleEmulator(mode) {
+        if (!mode?.battleEmulator) {
+            return false;
+        }
+        if (typeof window.selectVisionBattleEmulator !== "function") {
+            return false;
+        }
+        return window.selectVisionBattleEmulator(mode.battleEmulator);
+    }
+
+    async function refreshTemplatesForActiveMode() {
+        if (!state.matcher || !state.assetPack) {
+            return;
+        }
+        const mode = getActiveMode();
+        state.templatesBySlot = await loadTemplates(state.matcher, mode);
+    }
+
+    async function setVisionMode(modeId, options = {}) {
+        const {
+            reset = true,
+            syncEmulator = false
+        } = options;
+        const nextMode = getModeById(modeId) || getModeById("identify");
+        if (!nextMode) {
+            return;
+        }
+
+        state.modeId = nextMode.id;
+        state.activeMode = nextMode;
+        state.lastModeHitAt = Date.now();
+        state.lastMatches = Object.create(null);
+        syncModeSelect();
+        if (syncEmulator) {
+            syncModeBattleEmulator(nextMode);
+        }
+        if (reset) {
+            resetConsoleState();
+        }
+        await refreshTemplatesForActiveMode();
+        updateMatchCards(state.lastMatches);
+    }
+
+    function modeHasActivityMatch(mode, matches) {
+        if (!mode || mode.id === "identify") {
+            return false;
+        }
+
+        for (const template of mode.identify?.templates || []) {
+            const match = matches[template.slot] || emptyMatch(template.slot);
+            if (match.file === template.file && match.score >= TEMPLATE_THRESHOLD) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    function maybeReturnToIdentifyMode(matches) {
+        const mode = getActiveMode();
+        if (!mode || mode.id === "identify") {
+            return false;
+        }
+
+        if (modeHasActivityMatch(mode, matches)) {
+            state.lastModeHitAt = Date.now();
+            return false;
+        }
+
+        const timeoutMs = Number.isFinite(mode.timeoutMs) ? mode.timeoutMs : 4 * 60 * 1000;
+        if (Date.now() - state.lastModeHitAt < timeoutMs) {
+            return false;
+        }
+
+        setVisionMode("identify", {reset: true, syncEmulator: false}).catch(() => {
+        });
+        return true;
     }
 
     function historyToMarkdown() {
@@ -1858,6 +2100,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
         state.preAction = candidate.actionId;
         state.lastDetectionAt = Date.now();
+        state.lastModeHitAt = state.lastDetectionAt;
 
         const pendingSlotRef = (state.actionIndex << 12) | (state.turnIndex - 1);
         const damageChannel = getDamageChannel(candidate.actionId);
@@ -2046,11 +2289,15 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     async function loadPackedVisionAssets() {
+        const embeddedPack = getEmbeddedVisionAssetPack();
+        if (embeddedPack) {
+            return normalizeVisionAssetPack(embeddedPack);
+        }
         const response = await fetch(VISION_ASSET_PACK_URL, {cache: "no-store"});
         if (!response.ok) {
             throw new Error(`asset pack missing: ${VISION_ASSET_PACK_URL}`);
         }
-        return response.json();
+        return normalizeVisionAssetPack(await response.json());
     }
 
     function normalizePackedTemplate(entry) {
@@ -2063,9 +2310,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         };
     }
 
-    async function loadTemplates(matcher, assetPack) {
+    async function loadTemplates(matcher, mode) {
         const templatesBySlot = new Map();
-        for (const entry of assetPack.templates || []) {
+        for (const entry of mode?.templates || []) {
             const template = await matcher.createTemplate(normalizePackedTemplate(entry));
             if (!templatesBySlot.has(template.slot)) {
                 templatesBySlot.set(template.slot, []);
@@ -2157,7 +2404,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 onWebGpuLost: recoverWebGpuMatcher
             });
             state.matcher = matcher;
-            state.templatesBySlot = await loadTemplates(matcher, state.assetPack);
+            state.templatesBySlot = await loadTemplates(matcher, getActiveMode());
             state.lastFrameAt = 0;
             state.lastFpsAt = 0;
             state.processedFrames = 0;
@@ -2242,17 +2489,20 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             ui.video.srcObject = stream;
             await ui.video.play();
             await populateCameras();
+            if (!state.assetPackPromise) {
+                state.assetPackPromise = loadPackedVisionAssets();
+            }
             if (!state.assetPack) {
-                state.assetPack = await loadPackedVisionAssets();
+                state.assetPack = await state.assetPackPromise;
             }
             if (!state.matcher) {
                 state.matcher = await createMatcher({
                     warnOnCpuFallback: true,
                     onWebGpuLost: recoverWebGpuMatcher
                 });
-                state.templatesBySlot = await loadTemplates(state.matcher, state.assetPack);
-                state.numberTemplates = loadNumberTemplates(state.assetPack);
             }
+            state.templatesBySlot = await loadTemplates(state.matcher, getActiveMode());
+            state.numberTemplates = loadNumberTemplates(state.assetPack);
             state.lastFrameAt = 0;
             state.lastFpsAt = 0;
             state.processedFrames = 0;
@@ -2301,6 +2551,11 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                     };
                     updateMatchCards(matches);
                     drawOverlay(matches, damageReadings);
+                    if (maybeReturnToIdentifyMode(matches)) {
+                        updateFps(now);
+                        queueLoop(runFrame);
+                        return;
+                    }
                     if (handlePendingDamages(matches, damageReadings)) {
                         updateFps(now);
                         queueLoop(runFrame);
@@ -2308,6 +2563,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                     }
                     const candidate = pickCandidate(matches);
                     if (candidate && candidate.score < ACTION_THRESHOLD) {
+                        updateFps(now);
+                        queueLoop(runFrame);
+                        return;
+                    }
+                    if (candidate && candidate.kind === "mode") {
+                        await setVisionMode(candidate.modeId, {reset: true, syncEmulator: true});
                         updateFps(now);
                         queueLoop(runFrame);
                         return;
@@ -2342,6 +2603,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     function syncLanguage() {
         state.lang = document.documentElement.dataset.lang || "ja";
+        populateModeOptions();
         setStatus(state.statusKey);
         setBridgeStatus(state.bridgeStatusKey, ui.encodedPayload.value);
         renderHistory();
@@ -2367,6 +2629,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         });
         ui.resetButton.addEventListener("click", () => {
             openResetDialog();
+        });
+        ui.modeSelect?.addEventListener("change", (event) => {
+            setVisionMode(event.target.value, {reset: true, syncEmulator: true}).catch(() => {
+            });
         });
         ui.debugExportButton.addEventListener("click", () => {
             downloadRecognizedMatchCrops();
@@ -2411,7 +2677,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 return;
             }
             if (typeof window.applyVisionBattleFormat === "function") {
-                window.applyVisionBattleFormat(formatText);
+                window.applyVisionBattleFormat(formatText, {
+                    battleEmulator: getActiveMode()?.battleEmulator || null
+                });
             }
         });
         const observer = new MutationObserver(() => {
@@ -2424,6 +2692,18 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     async function init() {
+        try {
+            state.assetPackPromise = loadPackedVisionAssets();
+            state.assetPack = await state.assetPackPromise;
+            state.modes = Array.isArray(state.assetPack.modes) ? state.assetPack.modes : [];
+        } catch (error) {
+            console.warn("vision asset pack load failed, using legacy fallback:", error);
+            state.assetPack = normalizeVisionAssetPack(null);
+            state.modes = state.assetPack.modes;
+        }
+        state.activeMode = getModeById(state.modeId) || state.modes[0] || null;
+        state.lastModeHitAt = Date.now();
+        populateModeOptions();
         updateTurnChip();
         renderHistory();
         if (ui.applyFormatButton) {

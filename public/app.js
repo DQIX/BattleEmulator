@@ -562,6 +562,57 @@ function findEmulatorIndexByLabel(label) {
     return state.emulators.findIndex((emu) => emu.label === label);
 }
 
+function findEmulatorIndexBySelector(selector) {
+    if (!selector) {
+        return -1;
+    }
+
+    if (typeof selector === "string") {
+        return state.emulators.findIndex((emu) =>
+            emu.label === selector || emu.id === selector || emu.branch === selector || emu.module === selector
+        );
+    }
+
+    return state.emulators.findIndex((emu) => {
+        if (selector.id && emu.id === selector.id) {
+            return true;
+        }
+        if (selector.label && emu.label === selector.label) {
+            return true;
+        }
+        if (selector.branch && emu.branch === selector.branch) {
+            return true;
+        }
+        if (selector.module && emu.module === selector.module) {
+            return true;
+        }
+        return false;
+    });
+}
+
+function resetAutoTimerContextForEmulatorChange() {
+    state.autoTimerAppliedPrefix = "";
+    state.autoTimerLastUse = null;
+    clearAutoTimerFractionHideTimer();
+    setAutoTimerFractionDigits(null, "");
+}
+
+function selectBattleEmulator(selector) {
+    const index = findEmulatorIndexBySelector(selector);
+    if (index < 0) {
+        return false;
+    }
+
+    if (ui.emulatorSelect.selectedIndex !== index) {
+        ui.emulatorSelect.selectedIndex = index;
+    }
+    setActiveEmulator(index);
+    resetAutoTimerContextForEmulatorChange();
+    return true;
+}
+
+window.selectVisionBattleEmulator = selectBattleEmulator;
+
 function applyUrlOverrides(applyEmu) {
     const overrides = state.urlOverrides;
     if (!overrides) {
@@ -1788,9 +1839,12 @@ function applyAutoTimerToInput() {
     ui.actionInput.focus();
 }
 
-function applyVisionBattleFormatText(formatText) {
+function applyVisionBattleFormatText(formatText, options = {}) {
     if (!ui.actionInput) {
         return false;
+    }
+    if (options.battleEmulator) {
+        selectBattleEmulator(options.battleEmulator);
     }
     const formatted = String(formatText || "").trim();
     if (!formatted) {
@@ -1809,10 +1863,7 @@ window.applyVisionBattleFormat = applyVisionBattleFormatText;
 
 ui.emulatorSelect.addEventListener("change", (event) => {
     setActiveEmulator(Number(event.target.value));
-    state.autoTimerAppliedPrefix = "";
-    state.autoTimerLastUse = null;
-    clearAutoTimerFractionHideTimer();
-    setAutoTimerFractionDigits(null, "");
+    resetAutoTimerContextForEmulatorChange();
 });
 
 ui.runButton.addEventListener("click", () => {
