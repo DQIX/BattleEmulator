@@ -43,7 +43,7 @@
     const TEMPLATE_THRESHOLD = 0.45;
     const RESET_LATCH_CLEAR_SCORE = 0.6;
     const WHITE_THRESHOLD = 0.72;
-    const WHITE_SATURATION_MAX = 0.18;
+    const WHITE_SATURATION_MAX = 0.24;
     const ACTION_THRESHOLD = 0.45;
     const NUMBER_THRESHOLD = 0.80;
     const MATCH_PENALTY_WEIGHT = 0.0;
@@ -1719,10 +1719,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             return {kind: "action", actionId: ACTION_IDS.PSYCHE_UP, detail: "tameru", score: main.score};
         }
 
-        if (main.file === "sukara.png" && main.score >= TEMPLATE_THRESHOLD) {
-            return {kind: "action", actionId: ACTION_IDS.BUFF, detail: "tameru", score: main.score};
-        }
-
         // ano.png: action記録なし、状態リセットのみ
         if (main.file === "ano.png" && main.score >= TEMPLATE_THRESHOLD) {
             return {kind: "ano"};
@@ -1737,8 +1733,22 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return null;
     }
 
-    function pickGilyumei1Candidate() {
-        return null;
+    function pickGilyumei1Candidate(matches) {
+        const main = matches.main || emptyMatch("main");
+        const sub = matches.sub || emptyMatch("sub");
+        const ally = matches.ally || emptyMatch("ally");
+        const target = matches.target || emptyMatch("target");
+        const mode = getActiveMode();
+        const erugioMain = modeRuleHasFile(mode, "gilyumeiMain", main.file);
+        // reset
+        if (erugioMain && modeRuleHasFile(mode, "resetSub", sub.file) && main.score >= 0.6 && sub.score >= 0.6) {
+            return {kind: "reset", score: Math.min(main.score, sub.score), detail: `${main.file} + ${sub.file}`};
+        }
+
+        const directAction = getModeRuleMap(mode, "directMainActions")[main.file];
+        if (directAction && main.score >= TEMPLATE_THRESHOLD) {
+            return {kind: "action", actionId: directAction, detail: main.file, score: main.score};
+        }
     }
 
     function pickCandidate(matches) {
