@@ -46,6 +46,7 @@
     const WHITE_SATURATION_MAX = 0.24;
     const ACTION_THRESHOLD = 0.45;
     const NUMBER_THRESHOLD = 0.80;
+    const DAMAGE_RECOGNITION_WINDOW_MS = 1500;
     const MATCH_PENALTY_WEIGHT = 0.0;
     const MATCH_WHITE_WEIGHT = 1.0;
     const TEMPLATE_ALPHA_THRESHOLD = 0.05;
@@ -301,6 +302,8 @@
         pendingDamage2Enabled: false,
         lastDamage1: -1,
         lastDamage2: -1,
+        damageWatchDeadline1: 0,
+        damageWatchDeadline2: 0,
         maybeCritical: -1,
         // 以下追加
         actionTaken: false,   // C#のActionTaken相当
@@ -1900,6 +1903,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         state.pendingDamage2Enabled = false;
         state.lastDamage1 = -1;
         state.lastDamage2 = -1;
+        state.damageWatchDeadline1 = 0;
+        state.damageWatchDeadline2 = 0;
         state.maybeCritical = -1;
         state.lastModeHitAt = Date.now();
         // 追加
@@ -2138,6 +2143,25 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return 0;
     }
 
+    function hasActiveDamageWatch(now = Date.now()) {
+        return state.damageWatchDeadline1 > now || state.damageWatchDeadline2 > now;
+    }
+
+    function expireDamageWatch(now = Date.now()) {
+        if (state.damageWatchDeadline1 > 0 && state.damageWatchDeadline1 <= now) {
+            state.damageWatchDeadline1 = 0;
+            if (!state.pendingDamage1Enabled) {
+                state.pendingDamage1 = -1;
+            }
+        }
+        if (state.damageWatchDeadline2 > 0 && state.damageWatchDeadline2 <= now) {
+            state.damageWatchDeadline2 = 0;
+            if (!state.pendingDamage2Enabled) {
+                state.pendingDamage2 = -1;
+            }
+        }
+    }
+
     function updateHistoryDamage(turn, slotIndex, damage) {
         const entry = state.history.find((item) => item.turn === turn && item.slot === slotIndex + 1);
         if (!entry) {
@@ -2194,11 +2218,17 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function handlePendingDamages(matches, damageReadings) {
+        const now = Date.now();
+        expireDamageWatch(now);
         const main = matches.main || emptyMatch("main");
         const damage1 = damageReadings.damage1.value;
         const damage2 = damageReadings.damage2.value;
         const candidateDamage1 = Math.max(damage1, damage2);
         const candidateDamage2 = Math.max(damage2, damage1);
+        const watchDamage1 = state.pendingDamage1 !== -1 &&
+            (state.pendingDamage1Enabled || state.damageWatchDeadline1 > now);
+        const watchDamage2 = state.pendingDamage2 !== -1 &&
+            (state.pendingDamage2Enabled || state.damageWatchDeadline2 > now);
 
         // maybeCritical: critical.png検出時に攻撃(敵)→痛恨(6)に上書き
         if (state.maybeCritical !== -1) {
@@ -2216,33 +2246,40 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             }
         }
 
-        if ((state.pendingDamage1 !== -1 && state.pendingDamage1Enabled) || state.lastDamage1 < candidateDamage1) {
-            if (["guard.png", "miss.png", "miss2.png", "mikawasi.png"].includes(main.file)) {
+        if (watchDamage1) {
+            if (state.pendingDamage1Enabled && ["guard.png", "miss.png", "miss2.png", "mikawasi.png"].includes(main.file)) {
+                const pendingSlotRef = state.pendingDamage1;
                 state.pendingDamage1Enabled = false;
+                state.damageWatchDeadline1 = 0;
+                state.pendingDamage1 = -1;
                 state.maybeCritical = -1;
-                resolvePendingDamage(state.pendingDamage1, 0);
+                resolvePendingDamage(pendingSlotRef, 0);
                 state.preAction = -1;
                 return true;
             }
-            if (candidateDamage1 !== -1) {
+            if (candidateDamage1 !== -1 && state.lastDamage1 < candidateDamage1) {
                 state.lastDamage1 = candidateDamage1;
                 state.pendingDamage1Enabled = false;
+                state.damageWatchDeadline1 = now + DAMAGE_RECOGNITION_WINDOW_MS;
                 resolvePendingDamage(state.pendingDamage1, candidateDamage1);
                 state.preAction = -1;
                 return true;
             }
-        } else if ((state.pendingDamage2 !== -1 && state.pendingDamage2Enabled) || state.lastDamage2 < candidateDamage2) {
-            if (["guard.png", "miss.png", "miss2.png", "mikawasi.png"].includes(main.file)) {
+        } else if (watchDamage2) {
+            if (state.pendingDamage2Enabled && ["guard.png", "miss.png", "miss2.png", "mikawasi.png"].includes(main.file)) {
+                const pendingSlotRef = state.pendingDamage2;
                 state.pendingDamage2Enabled = false;
                 state.maybeCritical = -1;
-                state.lastDamage2 = -1;
-                resolvePendingDamage(state.pendingDamage2, 0);
+                state.damageWatchDeadline2 = 0;
+                state.pendingDamage2 = -1;
+                resolvePendingDamage(pendingSlotRef, 0);
                 state.preAction = -1;
                 return true;
             }
-            if (candidateDamage2 !== -1) {
-                state.pendingDamage2Enabled = false;
+            if (candidateDamage2 !== -1 && state.lastDamage2 < candidateDamage2) {
                 state.lastDamage2 = candidateDamage2;
+                state.pendingDamage2Enabled = false;
+                state.damageWatchDeadline2 = now + DAMAGE_RECOGNITION_WINDOW_MS;
                 resolvePendingDamage(state.pendingDamage2, candidateDamage2);
                 state.preAction = -1;
                 return true;
@@ -2303,6 +2340,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         state.pendingDamage2Enabled = damageChannel === 2;
         state.lastDamage1 = -1;
         state.lastDamage2 = -1;
+        state.damageWatchDeadline1 = 0;
+        state.damageWatchDeadline2 = 0;
 
         // maybeCritical: 攻撃(敵)のとき記録
         if (candidate.actionId === ACTION_IDS.ATTACK_ENEMY) {
@@ -2752,8 +2791,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 state.lastFrameAt = now;
                 try {
                     drawProcessingFrame(ui.video);
+                    expireDamageWatch();
                     const readDamage = getActiveMode()?.id !== "identify" &&
-                        (state.pendingDamage1Enabled || state.pendingDamage2Enabled);
+                        (state.pendingDamage1Enabled || state.pendingDamage2Enabled || hasActiveDamageWatch());
                     const matchResult = await state.matcher.match(
                         processingCanvas,
                         state.templatesBySlot,
