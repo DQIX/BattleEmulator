@@ -43,12 +43,11 @@
     const TEMPLATE_THRESHOLD = 0.45;
     const RESET_LATCH_CLEAR_SCORE = 0.6;
     const WHITE_THRESHOLD = 0.72;
+    const WHITE_SATURATION_MAX = 0.18;
     const ACTION_THRESHOLD = 0.45;
     const NUMBER_THRESHOLD = 0.80;
     const MATCH_PENALTY_WEIGHT = 0.0;
     const MATCH_WHITE_WEIGHT = 1.0;
-    const MATCH_CONTRAST = 1.28;
-    const MATCH_BIAS = 0.03;
     const TEMPLATE_ALPHA_THRESHOLD = 0.05;
     const MATCH_SLOT_KEYS = ["main", "sub", "ally", "target"];
     const overlayContext = ui.overlay.getContext("2d");
@@ -490,8 +489,10 @@
             this.device = null;
             this.queue = null;
             this.pipeline = null;
+            this.maskPipeline = null;
             this.sampler = null;
             this.frameTexture = null;
+            this.frameMaskBuffer = null;
             this.frameSize = {width: BASE_WIDTH, height: BASE_HEIGHT};
             this.onLost = options.onLost || null;
             this.deviceLostPromise = null;
@@ -527,6 +528,46 @@
                 format: "rgba8unorm",
                 usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT
             });
+            this.frameMaskBuffer = device.createBuffer({
+                size: BASE_WIDTH * BASE_HEIGHT * 4,
+                usage: GPUBufferUsage.STORAGE
+            });
+            const maskShader = device.createShaderModule({
+                code: `
+struct MaskParams {
+  valueThreshold: f32,
+  saturationMax: f32,
+  alphaThreshold: f32,
+  padding: f32,
+};
+
+@group(0) @binding(0) var frameTex: texture_2d<f32>;
+@group(0) @binding(1) var<storage, read_write> frameMask: array<u32>;
+@group(0) @binding(2) var<uniform> maskParams: MaskParams;
+
+fn hsvSaturation(rgb: vec3<f32>) -> f32 {
+  let maxChannel = max(max(rgb.r, rgb.g), rgb.b);
+  let minChannel = min(min(rgb.r, rgb.g), rgb.b);
+  return select(0.0, (maxChannel - minChannel) / maxChannel, maxChannel > 0.0);
+}
+
+@compute @workgroup_size(16, 16, 1)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (gid.x >= ${BASE_WIDTH}u || gid.y >= ${BASE_HEIGHT}u) {
+    return;
+  }
+
+  let sample = textureLoad(frameTex, vec2<i32>(i32(gid.x), i32(gid.y)), 0);
+  let value = max(max(sample.r, sample.g), sample.b);
+  let saturation = hsvSaturation(sample.rgb);
+  let isWhite = sample.a >= maskParams.alphaThreshold &&
+    value >= maskParams.valueThreshold &&
+    saturation <= maskParams.saturationMax;
+  let index = gid.y * ${BASE_WIDTH}u + gid.x;
+  frameMask[index] = select(0u, 1u, isWhite);
+}
+`
+            });
             const shader = device.createShaderModule({
                 code: `
 struct Params {
@@ -538,27 +579,14 @@ struct Params {
   templateHeight: u32,
   scoreWidth: u32,
   scoreHeight: u32,
-  threshold: f32,
   penaltyWeight: f32,
   whiteWeight: f32,
-  contrast: f32,
-  bias: f32,
-  alphaThreshold: f32,
 };
 
-@group(0) @binding(0) var frameTex: texture_2d<f32>;
+@group(0) @binding(0) var<storage, read> frameMask: array<u32>;
 @group(0) @binding(1) var templateMaskTex: texture_2d<f32>;
 @group(0) @binding(2) var<storage, read_write> scores: array<f32>;
 @group(0) @binding(3) var<uniform> params: Params;
-
-fn luminance(rgb: vec3<f32>) -> f32 {
-  return dot(rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
-}
-
-fn preprocess(sample: vec4<f32>) -> f32 {
-  let boosted = clamp((luminance(sample.rgb) - 0.5) * params.contrast + 0.5 + params.bias, 0.0, 1.0);
-  return select(0.0, boosted, sample.a >= params.alphaThreshold);
-}
 
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
@@ -572,10 +600,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
   for (var y: u32 = 0u; y < params.templateHeight; y = y + 1u) {
     for (var x: u32 = 0u; x < params.templateWidth; x = x + 1u) {
-      let framePos = vec2<i32>(i32(params.roiX + gid.x + x), i32(params.roiY + gid.y + y));
+      let frameIndex = (params.roiY + gid.y + y) * ${BASE_WIDTH}u + params.roiX + gid.x + x;
       let templatePos = vec2<i32>(i32(x), i32(y));
-      let frameL = preprocess(textureLoad(frameTex, framePos, 0));
-      let frameWhitePixel = select(0.0, 1.0, frameL >= params.threshold);
+      let frameWhitePixel = f32(frameMask[frameIndex]);
       let templateWhitePixel = select(0.0, 1.0, textureLoad(templateMaskTex, templatePos, 0).r > 0.0);
       overlap = overlap + min(frameWhitePixel, templateWhitePixel);
       templateWhiteCount = templateWhiteCount + templateWhitePixel;
@@ -589,6 +616,13 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   scores[index] = max(0.0, (overlap * params.whiteWeight - penalty * params.penaltyWeight) / unionWhite);
 }
 `
+            });
+            this.maskPipeline = device.createComputePipeline({
+                layout: "auto",
+                compute: {
+                    module: maskShader,
+                    entryPoint: "main"
+                }
             });
             this.pipeline = device.createComputePipeline({
                 layout: "auto",
@@ -683,16 +717,40 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             });
 
             const encoder = device.createCommandEncoder();
+            const maskParamsBuffer = device.createBuffer({
+                size: 16,
+                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+            });
+            this.queue.writeBuffer(
+                maskParamsBuffer,
+                0,
+                new Float32Array([WHITE_THRESHOLD, WHITE_SATURATION_MAX, 0, 0])
+            );
+
+            const maskBindGroup = device.createBindGroup({
+                layout: this.maskPipeline.getBindGroupLayout(0),
+                entries: [
+                    {binding: 0, resource: frameView},
+                    {binding: 1, resource: {buffer: this.frameMaskBuffer}},
+                    {binding: 2, resource: {buffer: maskParamsBuffer}}
+                ]
+            });
+            const maskPass = encoder.beginComputePass();
+            maskPass.setPipeline(this.maskPipeline);
+            maskPass.setBindGroup(0, maskBindGroup);
+            maskPass.dispatchWorkgroups(Math.ceil(BASE_WIDTH / 16), Math.ceil(BASE_HEIGHT / 16));
+            maskPass.end();
+
             const pass = encoder.beginComputePass();
             pass.setPipeline(this.pipeline);
 
             const scoreBuffers = [];
-            const uniformBuffers = [];
+            const uniformBuffers = [maskParamsBuffer];
 
             for (const job of jobs) {
                 const {roi, template, scoreWidth, scoreHeight, scoreCount} = job;
 
-                const paramsBuffer = new ArrayBuffer(56);
+                const paramsBuffer = new ArrayBuffer(40);
                 const paramsView = new DataView(paramsBuffer);
                 paramsView.setUint32(0, roi.x, true);
                 paramsView.setUint32(4, roi.y, true);
@@ -702,15 +760,11 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 paramsView.setUint32(20, template.height, true);
                 paramsView.setUint32(24, scoreWidth, true);
                 paramsView.setUint32(28, scoreHeight, true);
-                paramsView.setFloat32(32, WHITE_THRESHOLD, true);
-                paramsView.setFloat32(36, MATCH_PENALTY_WEIGHT, true);
-                paramsView.setFloat32(40, MATCH_WHITE_WEIGHT, true);
-                paramsView.setFloat32(44, MATCH_CONTRAST, true);
-                paramsView.setFloat32(48, MATCH_BIAS, true);
-                paramsView.setFloat32(52, TEMPLATE_ALPHA_THRESHOLD, true);
+                paramsView.setFloat32(32, MATCH_PENALTY_WEIGHT, true);
+                paramsView.setFloat32(36, MATCH_WHITE_WEIGHT, true);
 
                 const uniformBuffer = device.createBuffer({
-                    size: 64, // 56バイト→64バイトにアライン
+                    size: 64,
                     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
                 });
                 this.queue.writeBuffer(uniformBuffer, 0, paramsBuffer);
@@ -723,7 +777,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 const bindGroup = device.createBindGroup({
                     layout: this.pipeline.getBindGroupLayout(0),
                     entries: [
-                        {binding: 0, resource: frameView},
+                        {binding: 0, resource: {buffer: this.frameMaskBuffer}},
                         {binding: 1, resource: template.texture.createView()},
                         {binding: 2, resource: {buffer: scoreBuffer}},
                         {binding: 3, resource: {buffer: uniformBuffer}}
@@ -875,16 +929,67 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return mask;
     }
 
-    function preprocessLuminance(r, g, b) {
-        const luminance = (r * 0.2126 + g * 0.7152 + b * 0.0722) / 255;
-        return Math.max(0, Math.min(1, (luminance - 0.5) * MATCH_CONTRAST + 0.5 + MATCH_BIAS));
+    function getHsvValue(r, g, b) {
+        return Math.max(r, g, b) / 255;
+    }
+
+    function getHsvSaturation(r, g, b) {
+        const maxChannel = Math.max(r, g, b);
+        if (maxChannel <= 0) {
+            return 0;
+        }
+        const minChannel = Math.min(r, g, b);
+        return (maxChannel - minChannel) / maxChannel;
     }
 
     function isWhitePixel(r, g, b, a, threshold, alphaThreshold) {
         if (a / 255 < alphaThreshold) {
             return false;
         }
-        return preprocessLuminance(r, g, b) >= threshold;
+        return getHsvValue(r, g, b) >= threshold && getHsvSaturation(r, g, b) <= WHITE_SATURATION_MAX;
+    }
+
+    function shiftWhitePixelsToTopLeft(imageData) {
+        const {width, height, data} = imageData;
+        let minX = width;
+        let minY = height;
+        const mask = new Uint8Array(width * height);
+        for (let row = 0; row < height; row += 1) {
+            for (let col = 0; col < width; col += 1) {
+                const index = row * width + col;
+                if (data[index * 4] !== 255) {
+                    continue;
+                }
+                mask[index] = 1;
+                if (col < minX) {
+                    minX = col;
+                }
+                if (row < minY) {
+                    minY = row;
+                }
+            }
+        }
+        data.fill(0);
+        for (let index = 3; index < data.length; index += 4) {
+            data[index] = 255;
+        }
+        if (minX === width || minY === height) {
+            return;
+        }
+        for (let row = minY; row < height; row += 1) {
+            for (let col = minX; col < width; col += 1) {
+                const srcIndex = row * width + col;
+                if (!mask[srcIndex]) {
+                    continue;
+                }
+                const dstX = col - minX;
+                const dstY = row - minY;
+                const dstOffset = (dstY * width + dstX) * 4;
+                data[dstOffset] = 255;
+                data[dstOffset + 1] = 255;
+                data[dstOffset + 2] = 255;
+            }
+        }
     }
 
     function compareMask(frame, templateMask, x, y, width, height) {
@@ -974,9 +1079,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         const data = imageData.data;
         for (let index = 0; index < mask.length; index += 1) {
             const offset = index * 4;
-            const luminance =
-                (data[offset] * 0.2126 + data[offset + 1] * 0.7152 + data[offset + 2] * 0.0722) / 255;
-            mask[index] = luminance >= 140 / 255 ? 1 : 0;
+            mask[index] = isWhitePixel(
+                data[offset],
+                data[offset + 1],
+                data[offset + 2],
+                data[offset + 3],
+                WHITE_THRESHOLD,
+                0
+            ) ? 1 : 0;
         }
         return {
             width: imageData.width,
@@ -1303,14 +1413,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
     }
 
-    function clampRect(rect, boundsWidth, boundsHeight) {
-        const x = Math.max(0, Math.min(boundsWidth - 1, rect.x));
-        const y = Math.max(0, Math.min(boundsHeight - 1, rect.y));
-        const width = Math.max(1, Math.min(boundsWidth - x, rect.width));
-        const height = Math.max(1, Math.min(boundsHeight - y, rect.height));
-        return {x, y, width, height};
-    }
-
     function resolveExportRect(slot, match) {
         const roi = ROI_DEFS[slot];
         if (!match || !match.file) {
@@ -1325,69 +1427,42 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         };
     }
 
-    function mapProcessingRectToSource(rect) {
-        const capture = state.captureRect || {
-            sourceWidth: BASE_WIDTH,
-            sourceHeight: BASE_HEIGHT,
-            sourceX: 0,
-            sourceY: 0,
-            sourceCropWidth: BASE_WIDTH,
-            sourceCropHeight: BASE_HEIGHT
-        };
-        const scaleX = capture.sourceCropWidth / BASE_WIDTH;
-        const scaleY = capture.sourceCropHeight / BASE_HEIGHT;
-        return clampRect({
-            x: Math.round(capture.sourceX + rect.x * scaleX),
-            y: Math.round(capture.sourceY + rect.y * scaleY),
-            width: Math.max(1, Math.round(rect.width * scaleX)),
-            height: Math.max(1, Math.round(rect.height * scaleY))
-        }, capture.sourceWidth, capture.sourceHeight);
-    }
-
     function createMonochromeCropCanvas(slot, match) {
         const rect = resolveExportRect(slot, match);
-        const sourceRect = mapProcessingRectToSource(rect);
-        const hasVideoSource = !!(ui.video && ui.video.readyState >= 2 && ui.video.videoWidth && ui.video.videoHeight);
         const canvas = document.createElement("canvas");
-        canvas.width = hasVideoSource ? sourceRect.width : rect.width;
-        canvas.height = hasVideoSource ? sourceRect.height : rect.height;
+        canvas.width = rect.width;
+        canvas.height = rect.height;
         const context = canvas.getContext("2d", {willReadFrequently: true});
         context.imageSmoothingEnabled = false;
-        if (hasVideoSource) {
-            context.drawImage(
-                ui.video,
-                sourceRect.x,
-                sourceRect.y,
-                sourceRect.width,
-                sourceRect.height,
-                0,
-                0,
-                sourceRect.width,
-                sourceRect.height
-            );
-        } else {
-            context.drawImage(
-                processingCanvas,
-                rect.x,
-                rect.y,
-                rect.width,
-                rect.height,
-                0,
-                0,
-                rect.width,
-                rect.height
-            );
-        }
+        context.drawImage(
+            processingCanvas,
+            rect.x,
+            rect.y,
+            rect.width,
+            rect.height,
+            0,
+            0,
+            rect.width,
+            rect.height
+        );
         const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
         const data = imageData.data;
         for (let index = 0; index < data.length; index += 4) {
-            const monochrome = Math.round(
-                data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114
+            const white = isWhitePixel(
+                data[index],
+                data[index + 1],
+                data[index + 2],
+                data[index + 3],
+                WHITE_THRESHOLD,
+                0
             );
-            data[index] = monochrome;
-            data[index + 1] = monochrome;
-            data[index + 2] = monochrome;
+            const value = white ? 255 : 0;
+            data[index] = value;
+            data[index + 1] = value;
+            data[index + 2] = value;
+            data[index + 3] = 255;
         }
+        shiftWhitePixelsToTopLeft(imageData);
         context.putImageData(imageData, 0, 0);
         return {
             canvas,
