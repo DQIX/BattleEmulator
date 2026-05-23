@@ -664,6 +664,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             };
         }
 
+        async createNumberTemplate(template) {
+            return this.createTemplate(template);
+        }
+
         uploadFrame(source) {
             this.queue.copyExternalImageToTexture(
                 {source},
@@ -673,7 +677,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
 
         // 全スロット・全テンプレートを1回のsubmit + 1回のmapAsyncで処理する
-        async match(source, templatesBySlot) {
+        async match(source, templatesBySlot, numberTemplates = []) {
             this.uploadFrame(source);
             const device = this.device;
             const frameView = this.frameTexture.createView();
@@ -681,6 +685,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             // --- パス1: 全テンプレートのGPUジョブを1つのencoderに積む ---
             // 各テンプレートのメタ情報（オフセット・サイズ・バッファ参照）を収集
             const jobs = []; // {slot, template, scoreWidth, scoreHeight, scoreCount, scoreOffset, scoreBuffer, uniformBuffer}
+            const damageJobs = [];
             let totalScoreCount = 0;
 
             for (const slot of MATCH_SLOT_KEYS) {
@@ -695,8 +700,30 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 }
             }
 
-            if (totalScoreCount === 0) {
-                return Object.fromEntries(MATCH_SLOT_KEYS.map(slot => [slot, emptyMatch(slot)]));
+            const gpuNumberTemplates = getPrimaryNumberTemplates(numberTemplates);
+            for (const [damageKey, config] of Object.entries(DAMAGE_ROIS)) {
+                config.actionAreas.forEach((area, areaIndex) => {
+                    for (const template of gpuNumberTemplates) {
+                        const roi = {
+                            x: config.x + area.x,
+                            y: config.y + area.y,
+                            width: area.width,
+                            height: area.height
+                        };
+                        const scoreWidth = roi.width - template.width + 1;
+                        const scoreHeight = roi.height - template.height + 1;
+                        if (scoreWidth < 1 || scoreHeight < 1) continue;
+                        const scoreCount = scoreWidth * scoreHeight;
+                        damageJobs.push({damageKey, config, area, areaIndex, template, roi, scoreWidth, scoreHeight, scoreCount});
+                    }
+                });
+            }
+
+            if (totalScoreCount === 0 && damageJobs.length === 0) {
+                return {
+                    matches: Object.fromEntries(MATCH_SLOT_KEYS.map(slot => [slot, emptyMatch(slot)])),
+                    damageReadings: buildDamageReadingsFromGpuResults([], new Float32Array())
+                };
             }
 
             // 全スコアをまとめるreadBuffer（1回のmapAsyncのため）
@@ -707,6 +734,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             // 各ジョブのcopyOffsetを事前に256アライメントで計算し、readBufferサイズを確定
             let totalAlignedSize = 0;
             for (const job of jobs) {
+                job.alignedOffset = totalAlignedSize;
+                totalAlignedSize += align256(job.scoreCount * 4);
+            }
+            for (const job of damageJobs) {
                 job.alignedOffset = totalAlignedSize;
                 totalAlignedSize += align256(job.scoreCount * 4);
             }
@@ -747,7 +778,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             const scoreBuffers = [];
             const uniformBuffers = [maskParamsBuffer];
 
-            for (const job of jobs) {
+            for (const job of [...jobs, ...damageJobs]) {
                 const {roi, template, scoreWidth, scoreHeight, scoreCount} = job;
 
                 const paramsBuffer = new ArrayBuffer(40);
@@ -798,6 +829,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             for (const job of jobs) {
                 encoder.copyBufferToBuffer(job.scoreBufferRef, 0, readBuffer, job.alignedOffset, job.scoreCount * 4);
             }
+            for (const job of damageJobs) {
+                encoder.copyBufferToBuffer(job.scoreBufferRef, 0, readBuffer, job.alignedOffset, job.scoreCount * 4);
+            }
 
             // 1回のsubmit
             this.queue.submit([encoder.finish()]);
@@ -834,6 +868,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 }
             }
 
+            const damageReadings = buildDamageReadingsFromGpuResults(damageJobs, allScores);
+
             readBuffer.unmap();
 
             // バッファ解放
@@ -841,7 +877,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             for (const buf of scoreBuffers) buf.destroy();
             for (const buf of uniformBuffers) buf.destroy();
 
-            return bestBySlot;
+            return {
+                matches: bestBySlot,
+                damageReadings
+            };
         }
     }
 
@@ -949,10 +988,42 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return getHsvValue(r, g, b) >= threshold && getHsvSaturation(r, g, b) <= WHITE_SATURATION_MAX;
     }
 
+    function findFirstPixelTrimOrigin(binary) {
+        let foundX = -1;
+        let foundY = -1;
+
+        // フェーズ1: 行方向に走査
+        for (let row = 0; row < binary.height; row += 1) {
+            for (let col = 0; col < binary.width - 1; col += 1) {
+                const index = row * binary.width + col;
+                if (binary.mask[index] && binary.mask[index + 1]) {
+                    foundX = col;
+                    foundY = row;
+                    break;
+                }
+            }
+            if (foundX !== -1) break;
+        }
+
+        if (foundX === -1) return null;
+
+        // フェーズ2: foundXだけ絞り込む（foundYは変更しない）
+        for (let col = 0; col < foundX; col += 1) {
+            for (let row = 0; row < binary.height; row += 1) {
+                const index = row * binary.width + col;
+                if (binary.mask[index] && binary.mask[index + 1]) {
+                    foundX = Math.min(foundX, col);
+                    // ← foundY の更新を削除
+                    break;
+                }
+            }
+        }
+
+        return {x: foundX, y: foundY};
+    }
+
     function shiftWhitePixelsToTopLeft(imageData) {
         const {width, height, data} = imageData;
-        let minX = width;
-        let minY = height;
         const mask = new Uint8Array(width * height);
         for (let row = 0; row < height; row += 1) {
             for (let col = 0; col < width; col += 1) {
@@ -961,29 +1032,24 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                     continue;
                 }
                 mask[index] = 1;
-                if (col < minX) {
-                    minX = col;
-                }
-                if (row < minY) {
-                    minY = row;
-                }
             }
         }
         data.fill(0);
         for (let index = 3; index < data.length; index += 4) {
             data[index] = 255;
         }
-        if (minX === width || minY === height) {
+        const origin = findFirstPixelTrimOrigin({width, height, mask});
+        if (!origin) {
             return;
         }
-        for (let row = minY; row < height; row += 1) {
-            for (let col = minX; col < width; col += 1) {
+        for (let row = origin.y; row < height; row += 1) {
+            for (let col = origin.x; col < width; col += 1) {
                 const srcIndex = row * width + col;
                 if (!mask[srcIndex]) {
                     continue;
                 }
-                const dstX = col - minX;
-                const dstY = row - minY;
+                const dstX = col - origin.x;
+                const dstY = row - origin.y;
                 const dstOffset = (dstY * width + dstX) * 4;
                 data[dstOffset] = 255;
                 data[dstOffset + 1] = 255;
@@ -1108,45 +1174,18 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function trimFirstPixel(binary, targetWidth, targetHeight) {
-        let foundX = -1;
-        let foundY = -1;
+        const origin = findFirstPixelTrimOrigin(binary);
+        if (!origin) return {...binary, sourceX: 0, sourceY: 0};
 
-        // フェーズ1: 行方向に走査
-        for (let row = 0; row < binary.height; row += 1) {
-            for (let col = 0; col < binary.width - 1; col += 1) {
-                const index = row * binary.width + col;
-                if (binary.mask[index] && binary.mask[index + 1]) {
-                    foundX = col;
-                    foundY = row;
-                    break;
-                }
-            }
-            if (foundX !== -1) break;
-        }
-
-        if (foundX === -1) return {...binary, sourceX: 0, sourceY: 0};
-
-        // フェーズ2: foundXだけ絞り込む（foundYは変更しない）
-        for (let col = 0; col < foundX; col += 1) {
-            for (let row = 0; row < binary.height; row += 1) {
-                const index = row * binary.width + col;
-                if (binary.mask[index] && binary.mask[index + 1]) {
-                    foundX = Math.min(foundX, col);
-                    // ← foundY の更新を削除
-                    break;
-                }
-            }
-        }
-
-        const width = Math.min(targetWidth, binary.width - foundX);
-        const height = Math.min(targetHeight, binary.height - foundY);
+        const width = Math.min(targetWidth, binary.width - origin.x);
+        const height = Math.min(targetHeight, binary.height - origin.y);
         const mask = new Uint8Array(targetWidth * targetHeight);
         for (let row = 0; row < height; row += 1) {
-            const srcOffset = (foundY + row) * binary.width + foundX;
+            const srcOffset = (origin.y + row) * binary.width + origin.x;
             const dstOffset = row * targetWidth;
             mask.set(binary.mask.subarray(srcOffset, srcOffset + width), dstOffset);
         }
-        return {width: targetWidth, height: targetHeight, mask, sourceX: foundX, sourceY: foundY};
+        return {width: targetWidth, height: targetHeight, mask, sourceX: origin.x, sourceY: origin.y};
     }
 
     function compareBinaryImages(frameMask, templateMask) {
@@ -1178,6 +1217,21 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     function normalizeDigitFileName(file) {
         return Number.parseInt(file.split("_")[0], 10);
+    }
+
+    function isPrimaryNumberTemplate(template) {
+        return template.file.toLowerCase() === `${template.digit}.png`;
+    }
+
+    function getPrimaryNumberTemplates(numberTemplates) {
+        const templatesByDigit = new Map();
+        numberTemplates.forEach((template) => {
+            const current = templatesByDigit.get(template.digit);
+            if (!current || (!isPrimaryNumberTemplate(current) && isPrimaryNumberTemplate(template))) {
+                templatesByDigit.set(template.digit, template);
+            }
+        });
+        return Array.from(templatesByDigit.values()).sort((a, b) => a.digit - b.digit);
     }
 
     function convertMatchResults(digits) {
@@ -1232,6 +1286,60 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 };
             })
         };
+    }
+
+    function buildDamageReadingsFromGpuResults(damageJobs, allScores) {
+        const damageByKey = Object.fromEntries(
+            Object.entries(DAMAGE_ROIS).map(([key, config]) => [
+                key,
+                config.actionAreas.map(() => ({digit: -1, score: 0, localX: 0, localY: 0}))
+            ])
+        );
+
+        for (const job of damageJobs) {
+            const scoreOffset = job.alignedOffset / 4;
+            let score = 0;
+            let bestIndex = 0;
+            const end = scoreOffset + job.scoreCount;
+            for (let i = scoreOffset; i < end; i += 1) {
+                if (allScores[i] > score) {
+                    score = allScores[i];
+                    bestIndex = i - scoreOffset;
+                }
+            }
+            if (score < NUMBER_THRESHOLD || score < damageByKey[job.damageKey][job.areaIndex].score) {
+                continue;
+            }
+            damageByKey[job.damageKey][job.areaIndex] = {
+                digit: job.template.digit,
+                score,
+                localX: bestIndex % job.scoreWidth,
+                localY: Math.floor(bestIndex / job.scoreWidth)
+            };
+        }
+
+        return Object.fromEntries(
+            Object.entries(damageByKey).map(([key, digits]) => {
+                const config = DAMAGE_ROIS[key];
+                return [
+                    key,
+                    {
+                        digits: digits.map((item) => item.digit),
+                        scores: digits.map((item) => item.score),
+                        score: digits.reduce((max, item) => Math.max(max, item.score), 0),
+                        value: convertMatchResults(digits.map((item) => item.digit)),
+                        positions: digits.map((item, i) => {
+                            if (item.digit === -1) return null;
+                            const area = config.actionAreas[i];
+                            return {
+                                x: config.x + area.x + item.localX,
+                                y: config.y + area.y + item.localY
+                            };
+                        })
+                    }
+                ];
+            })
+        );
     }
 
     function emptyMatch(slot) {
@@ -2407,16 +2515,31 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return templatesBySlot;
     }
 
-    function loadNumberTemplates(assetPack) {
-        return (assetPack.numberTemplates || []).map((entry) => ({
-            file: entry.file,
-            digit: typeof entry.digit === "number" ? entry.digit : normalizeDigitFileName(entry.file),
-            mask: {
+    async function loadNumberTemplates(matcher, assetPack) {
+        const templates = (assetPack.numberTemplates || []).map((entry) => {
+            const maskBytes = decodeBase64Bytes(entry.mask);
+            return {
+                file: entry.file,
+                digit: typeof entry.digit === "number" ? entry.digit : normalizeDigitFileName(entry.file),
                 width: entry.width,
                 height: entry.height,
-                mask: decodeBase64Bytes(entry.mask)
-            }
-        }));
+                maskBytes,
+                mask: {
+                    width: entry.width,
+                    height: entry.height,
+                    mask: maskBytes
+                }
+            };
+        });
+        if (typeof matcher?.createNumberTemplate !== "function") {
+            return templates;
+        }
+        const primaryTemplates = new Set(getPrimaryNumberTemplates(templates));
+        const loaded = [];
+        for (const template of templates) {
+            loaded.push(primaryTemplates.has(template) ? await matcher.createNumberTemplate(template) : template);
+        }
+        return loaded;
     }
 
     function openGpuWarningDialog() {
@@ -2490,6 +2613,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             });
             state.matcher = matcher;
             state.templatesBySlot = await loadTemplates(matcher, getActiveMode());
+            state.numberTemplates = await loadNumberTemplates(matcher, state.assetPack);
             state.lastFrameAt = 0;
             state.lastFpsAt = 0;
             state.processedFrames = 0;
@@ -2587,7 +2711,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 });
             }
             state.templatesBySlot = await loadTemplates(state.matcher, getActiveMode());
-            state.numberTemplates = loadNumberTemplates(state.assetPack);
+            state.numberTemplates = await loadNumberTemplates(state.matcher, state.assetPack);
             state.lastFrameAt = 0;
             state.lastFpsAt = 0;
             state.processedFrames = 0;
@@ -2628,12 +2752,27 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 state.lastFrameAt = now;
                 try {
                     drawProcessingFrame(ui.video);
-                    const matches = await state.matcher.match(processingCanvas, state.templatesBySlot);
+                    const readDamage = getActiveMode()?.id !== "identify" &&
+                        (state.pendingDamage1Enabled || state.pendingDamage2Enabled);
+                    const matchResult = await state.matcher.match(
+                        processingCanvas,
+                        state.templatesBySlot,
+                        readDamage ? state.numberTemplates : []
+                    );
+                    const matches = matchResult.matches || matchResult;
                     state.lastMatches = matches;
-                    const damageReadings = {
-                        damage1: recognizeDamageValue("damage1"),
-                        damage2: recognizeDamageValue("damage2")
-                    };
+                    let damageReadings = matchResult.damageReadings || (readDamage
+                        ? {
+                            damage1: recognizeDamageValue("damage1"),
+                            damage2: recognizeDamageValue("damage2")
+                        }
+                        : buildDamageReadingsFromGpuResults([], new Float32Array()));
+                    if (readDamage && damageReadings.damage1.value === -1 && damageReadings.damage2.value === -1) {
+                        damageReadings = {
+                            damage1: recognizeDamageValue("damage1"),
+                            damage2: recognizeDamageValue("damage2")
+                        };
+                    }
                     updateMatchCards(matches);
                     drawOverlay(matches, damageReadings);
                     if (maybeReturnToIdentifyMode(matches)) {
