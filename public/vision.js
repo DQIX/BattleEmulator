@@ -1475,7 +1475,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         for (const detection of getModeDetectionEntries(mode)) {
             for (const template of detection.templates || []) {
                 const match = matches[template.slot] || emptyMatch(template.slot);
-                if (match.file !== template.file || match.score < TEMPLATE_THRESHOLD) {
+                if (match.file !== template.file || match.score < 0.65) {
                     continue;
                 }
                 if (!best || match.score > best.score) {
