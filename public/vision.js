@@ -79,6 +79,7 @@
             whiteThreshold: 0.60,
         })
     });
+    const DAMAGE_CONFIRMATION_MS = 1500;
     const MATCH_SLOT_KEYS = ["main", "sub", "ally", "target"];
     const overlayContext = ui.overlay.getContext("2d");
     overlayContext.imageSmoothingEnabled = false; // ★ 追加
@@ -359,6 +360,8 @@
         pendingDamage2Enabled: false,
         lastDamage1: -1,
         lastDamage2: -1,
+        pendingDamage1ConfirmUntil: 0,
+        pendingDamage2ConfirmUntil: 0,
         maybeCritical: -1,
         // 以下追加
         actionTaken: false,   // C#のActionTaken相当
@@ -1431,6 +1434,31 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         };
     }
 
+    function shouldRecognizeDamageValue(key) {
+        if (state.modeId === "identify") {
+            return false;
+        }
+        const now = Date.now();
+        if (key === "damage1") {
+            return state.pendingDamage1 !== -1 && (state.pendingDamage1Enabled || now < state.pendingDamage1ConfirmUntil);
+        }
+        if (key === "damage2") {
+            return state.pendingDamage2 !== -1 && (state.pendingDamage2Enabled || now < state.pendingDamage2ConfirmUntil);
+        }
+        return false;
+    }
+
+    function recognizePendingDamageValues() {
+        const damageReadings = {};
+        if (shouldRecognizeDamageValue("damage1")) {
+            damageReadings.damage1 = recognizeDamageValue("damage1");
+        }
+        if (shouldRecognizeDamageValue("damage2")) {
+            damageReadings.damage2 = recognizeDamageValue("damage2");
+        }
+        return damageReadings;
+    }
+
     function emptyMatch(slot) {
         const roi = ROI_DEFS[slot];
         return {
@@ -2060,6 +2088,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         state.pendingDamage2Enabled = false;
         state.lastDamage1 = -1;
         state.lastDamage2 = -1;
+        state.pendingDamage1ConfirmUntil = 0;
+        state.pendingDamage2ConfirmUntil = 0;
         state.maybeCritical = -1;
         state.lastModeHitAt = Date.now();
         // 追加
@@ -2359,13 +2389,28 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
     }
 
-    function handlePendingDamages(matches, damageReadings) {
+    function clearPendingDamageConfirmation(key) {
+        if (key === "damage1") {
+            state.pendingDamage1 = -1;
+            state.pendingDamage1Enabled = false;
+            state.pendingDamage1ConfirmUntil = 0;
+        } else if (key === "damage2") {
+            state.pendingDamage2 = -1;
+            state.pendingDamage2Enabled = false;
+            state.pendingDamage2ConfirmUntil = 0;
+        }
+    }
+
+    function handlePendingDamages(matches, damageReadings, nextActionDetected) {
         const {templateThreshold} = getActiveThresholds();
+        const now = Date.now();
         const main = matches.main || emptyMatch("main");
-        const damage1 = damageReadings.damage1.value;
-        const damage2 = damageReadings.damage2.value;
-        const candidateDamage1 = Math.max(damage1, damage2);
-        const candidateDamage2 = Math.max(damage2, damage1);
+        const needsDamage1 = state.pendingDamage1 !== -1 && state.pendingDamage1Enabled;
+        const needsDamage2 = state.pendingDamage2 !== -1 && state.pendingDamage2Enabled;
+        const confirmingDamage1 = state.pendingDamage1 !== -1 && !state.pendingDamage1Enabled && now < state.pendingDamage1ConfirmUntil;
+        const confirmingDamage2 = state.pendingDamage2 !== -1 && !state.pendingDamage2Enabled && now < state.pendingDamage2ConfirmUntil;
+        const candidateDamage1 = (needsDamage1 || confirmingDamage1) ? (damageReadings.damage1?.value ?? -1) : -1;
+        const candidateDamage2 = (needsDamage2 || confirmingDamage2) ? (damageReadings.damage2?.value ?? -1) : -1;
 
         // maybeCritical: critical.png検出時に攻撃(敵)→痛恨(6)に上書き
         if (state.maybeCritical !== -1) {
@@ -2383,7 +2428,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             }
         }
 
-        if ((state.pendingDamage1 !== -1 && state.pendingDamage1Enabled) || state.lastDamage1 < candidateDamage1) {
+        if (needsDamage1) {
             if (["guard.png", "miss.png", "miss2.png", "mikawasi.png"].includes(main.file) && main.score >= templateThreshold) {
                 state.pendingDamage1Enabled = false;
                 state.maybeCritical = -1;
@@ -2394,11 +2439,24 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             if (candidateDamage1 !== -1) {
                 state.lastDamage1 = candidateDamage1;
                 state.pendingDamage1Enabled = false;
+                state.pendingDamage1ConfirmUntil = now + DAMAGE_CONFIRMATION_MS;
                 resolvePendingDamage(state.pendingDamage1, candidateDamage1);
                 state.preAction = -1;
                 return true;
             }
-        } else if ((state.pendingDamage2 !== -1 && state.pendingDamage2Enabled) || state.lastDamage2 < candidateDamage2) {
+        } else if (confirmingDamage1) {
+            if (candidateDamage1 !== -1 && state.lastDamage1 < candidateDamage1) {
+                state.lastDamage1 = candidateDamage1;
+                resolvePendingDamage(state.pendingDamage1, candidateDamage1);
+            }
+            if (nextActionDetected || now >= state.pendingDamage1ConfirmUntil) {
+                clearPendingDamageConfirmation("damage1");
+                return false;
+            }
+            return true;
+        } else if (state.pendingDamage1 !== -1 && !state.pendingDamage1Enabled) {
+            clearPendingDamageConfirmation("damage1");
+        } else if (needsDamage2) {
             if (["guard.png", "miss.png", "miss2.png", "mikawasi.png"].includes(main.file) && main.score >= templateThreshold) {
                 state.pendingDamage2Enabled = false;
                 state.maybeCritical = -1;
@@ -2410,10 +2468,23 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             if (candidateDamage2 !== -1) {
                 state.pendingDamage2Enabled = false;
                 state.lastDamage2 = candidateDamage2;
+                state.pendingDamage2ConfirmUntil = now + DAMAGE_CONFIRMATION_MS;
                 resolvePendingDamage(state.pendingDamage2, candidateDamage2);
                 state.preAction = -1;
                 return true;
             }
+        } else if (confirmingDamage2) {
+            if (candidateDamage2 !== -1 && state.lastDamage2 < candidateDamage2) {
+                state.lastDamage2 = candidateDamage2;
+                resolvePendingDamage(state.pendingDamage2, candidateDamage2);
+            }
+            if (nextActionDetected || now >= state.pendingDamage2ConfirmUntil) {
+                clearPendingDamageConfirmation("damage2");
+                return false;
+            }
+            return true;
+        } else if (state.pendingDamage2 !== -1 && !state.pendingDamage2Enabled) {
+            clearPendingDamageConfirmation("damage2");
         }
         return false;
     }
@@ -2471,6 +2542,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         state.pendingDamage2Enabled = damageChannel === 2;
         state.lastDamage1 = -1;
         state.lastDamage2 = -1;
+        state.pendingDamage1ConfirmUntil = 0;
+        state.pendingDamage2ConfirmUntil = 0;
 
         // maybeCritical: 攻撃(敵)のとき記録
         if (candidate.actionId === ACTION_IDS.ATTACK_ENEMY) {
@@ -2915,10 +2988,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                     drawProcessingFrame(ui.video);
                     const matches = await state.matcher.match(processingCanvas, state.templatesBySlot);
                     state.lastMatches = matches;
-                    const damageReadings = {
-                        damage1: recognizeDamageValue("damage1"),
-                        damage2: recognizeDamageValue("damage2")
-                    };
+                    const damageReadings = recognizePendingDamageValues();
                     updateMatchCards(matches);
                     drawOverlay(matches, damageReadings);
                     if (maybeReturnToIdentifyMode(matches)) {
@@ -2926,12 +2996,13 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                         queueLoop(runFrame);
                         return;
                     }
-                    if (handlePendingDamages(matches, damageReadings)) {
+                    const candidate = pickCandidate(matches);
+                    const nextActionDetected = candidate && candidate.kind === "action" && candidate.score >= actionThreshold;
+                    if (handlePendingDamages(matches, damageReadings, nextActionDetected)) {
                         updateFps(now);
                         queueLoop(runFrame);
                         return;
                     }
-                    const candidate = pickCandidate(matches);
                     if (candidate && candidate.score < actionThreshold) {
                         updateFps(now);
                         queueLoop(runFrame);

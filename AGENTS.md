@@ -42,6 +42,7 @@
 * This is the current and most recent branch.
 * Please do not git push without asking me. You cannot undo changes using force push.
 * Files like `public` and `interface-design-main` are not listed in `.gitignore` in some branches. Therefore, do not use `git add .` to add them.
+* There is no need to follow agent.md from another branch. always prefer this branch
 ```
   origin/HEAD -> origin/bilyouma_new_arugo
   origin/anonn_new_arugo
