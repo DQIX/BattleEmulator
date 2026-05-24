@@ -47,6 +47,8 @@
     const WHITE_SATURATION_MAX_BRIGHT = 0.27;//こっちが大きい
     const WHITE_SATURATION_DARK_VALUE = 0.10;
     const WHITE_SATURATION_BRIGHT_VALUE = 0.9;
+    const NUMBER_WHITE_THRESHOLD = 0.58;
+    const NUMBER_WHITE_SATURATION_MAX = 0.45;
     const ACTION_THRESHOLD = 0.45;
     const NUMBER_THRESHOLD = 0.50;
     const MATCH_PENALTY_WEIGHT = 0.0;
@@ -977,6 +979,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return value >= threshold && getHsvSaturation(r, g, b) <= saturationMax;
     }
 
+    function isNumberWhitePixel(r, g, b, a) {
+        if (a <= 0) {
+            return false;
+        }
+        return getHsvValue(r, g, b) >= NUMBER_WHITE_THRESHOLD
+            && getHsvSaturation(r, g, b) <= NUMBER_WHITE_SATURATION_MAX;
+    }
+
     function shiftWhitePixelsToTopLeft(imageData) {
         const {width, height, data} = imageData;
         let minX = width;
@@ -1162,20 +1172,16 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         );
     }
 
-    function buildWhiteMask(imageData) {
+    function buildNumberWhiteMask(imageData) {
         const mask = new Uint8Array(imageData.width * imageData.height);
         const data = imageData.data;
-        const whiteParams = buildWhiteParamsForImageData(imageData);
         for (let index = 0; index < mask.length; index += 1) {
             const offset = index * 4;
-            mask[index] = isWhitePixel(
+            mask[index] = isNumberWhitePixel(
                 data[offset],
                 data[offset + 1],
                 data[offset + 2],
-                data[offset + 3],
-                WHITE_THRESHOLD,
-                0,
-                whiteParams
+                data[offset + 3]
             ) ? 1 : 0;
         }
         return {
@@ -1291,7 +1297,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     function recognizeDamageValue(key) {
         const config = DAMAGE_ROIS[key];
         const cropped = processingContext.getImageData(config.x, config.y, config.width, config.height);
-        const binary = buildWhiteMask(cropped);
+        const binary = buildNumberWhiteMask(cropped);
         const digits = config.actionAreas.map((area) => {
             const trimmed = trimFirstPixel(cropMask(binary, area), 26, 40);
             // サイズチェックを撤廃（trimFirstPixelが常にtargetWidth×targetHeightを返すため）
