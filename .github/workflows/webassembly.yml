@@ -146,6 +146,17 @@ jobs:
         run: |
           python webassembly/merge_manifests.py public/branches public/emulators.json
 
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: gd
+          coverage: none
+
+      - name: Build vision assets
+        run: |
+          php resource/build_all.php
+
       - name: Install JS minifier
         run: |
           npm install -g terser

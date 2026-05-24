@@ -8,6 +8,7 @@ const MATCH_BIAS = 0.03;
 const TEMPLATE_ALPHA_THRESHOLD = 0.05;
 const NUMBER_WHITE_THRESHOLD = 140 / 255;
 const DEFAULT_VISION_TIMEOUT_MS = 240000;
+const VISION_ASSET_HASH_ALGO = 'xxh128';
 
 function preprocessLuminance(int $r, int $g, int $b): float
 {
@@ -100,6 +101,32 @@ function normalizeDigitFileName(string $file): int
     return (int) explode('_', $file, 2)[0];
 }
 
+function buildVisionMaskAssetId(string $mask, int $width, int $height): string
+{
+    if (!in_array(VISION_ASSET_HASH_ALGO, hash_algos(), true)) {
+        throw new RuntimeException('Hash algorithm is unavailable: ' . VISION_ASSET_HASH_ALGO);
+    }
+
+    return 'm' . $width . 'x' . $height . '_' . hash(
+        VISION_ASSET_HASH_ALGO,
+        pack('N2', $width, $height) . $mask
+    );
+}
+
+function registerVisionMaskAsset(array &$assets, string $mask, int $width, int $height): string
+{
+    $id = buildVisionMaskAssetId($mask, $width, $height);
+    $encoded = base64_encode($mask);
+
+    if (isset($assets[$id]) && $assets[$id] !== $encoded) {
+        throw new RuntimeException("Vision asset hash collision: {$id}");
+    }
+
+    $assets[$id] = $encoded;
+
+    return $id;
+}
+
 function discoverPngFiles(string $directory): array
 {
     if (!is_dir($directory)) {
@@ -160,7 +187,7 @@ function loadVisionDefinitions(string $resourceRoot): array
     return $definitions;
 }
 
-function buildTemplateEntriesForMode(string $resourceRoot, array $definition): array
+function buildTemplateEntriesForMode(string $resourceRoot, array $definition, array &$maskAssets): array
 {
     $entries = [];
 
@@ -174,7 +201,12 @@ function buildTemplateEntriesForMode(string $resourceRoot, array $definition): a
                 'file' => $file,
                 'width' => $png['width'],
                 'height' => $png['height'],
-                'mask' => base64_encode(buildTemplateMask($png['rgba'], $png['width'], $png['height'])),
+                'maskId' => registerVisionMaskAsset(
+                    $maskAssets,
+                    buildTemplateMask($png['rgba'], $png['width'], $png['height']),
+                    $png['width'],
+                    $png['height']
+                ),
             ];
         }
     }
@@ -182,7 +214,7 @@ function buildTemplateEntriesForMode(string $resourceRoot, array $definition): a
     return $entries;
 }
 
-function buildIdentifyModeEntries(string $resourceRoot, array $definitions): array
+function buildIdentifyModeEntries(string $resourceRoot, array $definitions, array &$maskAssets): array
 {
     $entries = [];
 
@@ -200,7 +232,12 @@ function buildIdentifyModeEntries(string $resourceRoot, array $definitions): arr
                 'file' => $template['file'],
                 'width' => $png['width'],
                 'height' => $png['height'],
-                'mask' => base64_encode(buildTemplateMask($png['rgba'], $png['width'], $png['height'])),
+                'maskId' => registerVisionMaskAsset(
+                    $maskAssets,
+                    buildTemplateMask($png['rgba'], $png['width'], $png['height']),
+                    $png['width'],
+                    $png['height']
+                ),
             ];
         }
     }
@@ -208,7 +245,7 @@ function buildIdentifyModeEntries(string $resourceRoot, array $definitions): arr
     return $entries;
 }
 
-function buildNumberEntries(string $resourceRoot, array $definitions): array
+function buildNumberEntries(string $resourceRoot, array $definitions, array &$maskAssets): array
 {
     $entries = [];
     $seen = [];
@@ -225,13 +262,18 @@ function buildNumberEntries(string $resourceRoot, array $definitions): array
                 $png = loadPngRgba($path);
                 $entries[] = [
                     'file' => $file,
-                    'digit' => normalizeDigitFileName($file),
-                    'width' => $png['width'],
-                    'height' => $png['height'],
-                    'mask' => base64_encode(buildNumberMask($png['rgba'], $png['width'], $png['height'])),
-                ];
-            }
+                'digit' => normalizeDigitFileName($file),
+                'width' => $png['width'],
+                'height' => $png['height'],
+                'maskId' => registerVisionMaskAsset(
+                    $maskAssets,
+                    buildNumberMask($png['rgba'], $png['width'], $png['height']),
+                    $png['width'],
+                    $png['height']
+                ),
+            ];
         }
+    }
     }
 
     usort($entries, static function (array $left, array $right): int {
@@ -262,9 +304,10 @@ function buildVisionAssetPack(string $resourceRoot): array
         throw new RuntimeException("No vision definitions found in {$resourceRoot}");
     }
 
+    $maskAssets = [];
     $modes = [];
     foreach ($definitions as $definition) {
-        $templates = buildTemplateEntriesForMode($resourceRoot, $definition);
+        $templates = buildTemplateEntriesForMode($resourceRoot, $definition, $maskAssets);
         $modes[] = normalizeModeDefinitionForPack($definition, $templates);
     }
 
@@ -289,14 +332,18 @@ function buildVisionAssetPack(string $resourceRoot): array
             ))),
         ],
         'identify' => ['templates' => []],
-        'templates' => buildIdentifyModeEntries($resourceRoot, $definitions),
+        'templates' => buildIdentifyModeEntries($resourceRoot, $definitions, $maskAssets),
     ]);
 
+    $numberTemplates = buildNumberEntries($resourceRoot, $definitions, $maskAssets);
+    ksort($maskAssets, SORT_NATURAL | SORT_FLAG_CASE);
+
     return [
-        'version' => 2,
+        'version' => 3,
         'generatedAt' => gmdate(DATE_ATOM),
+        'assets' => $maskAssets,
         'modes' => $modes,
-        'numberTemplates' => buildNumberEntries($resourceRoot, $definitions),
+        'numberTemplates' => $numberTemplates,
     ];
 }
 
@@ -317,5 +364,6 @@ function writeVisionAssetOutputs(string $resourceRoot, string $publicRoot): arra
         'jsPath' => $jsPath,
         'jsonBytes' => strlen($json),
         'jsBytes' => strlen($js),
+        'maskAssetCount' => count($payload['assets']),
     ];
 }

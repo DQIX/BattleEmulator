@@ -373,8 +373,13 @@
                     templates: []
                 }
             ],
-            numberTemplates: rawPack.numberTemplates || []
+            numberTemplates: rawPack.numberTemplates || [],
+            assets: {}
         };
+    }
+
+    function normalizeVisionAssetMap(rawAssets) {
+        return rawAssets && typeof rawAssets === "object" && !Array.isArray(rawAssets) ? rawAssets : {};
     }
 
     function normalizeVisionAssetPack(rawPack) {
@@ -432,7 +437,8 @@
             version: rawPack.version || 2,
             generatedAt: rawPack.generatedAt || null,
             modes: normalizedModes,
-            numberTemplates: rawPack.numberTemplates || []
+            numberTemplates: rawPack.numberTemplates || [],
+            assets: normalizeVisionAssetMap(rawPack.assets)
         };
     }
 
@@ -1926,7 +1932,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             return;
         }
         const mode = getActiveMode();
-        state.templatesBySlot = await loadTemplates(state.matcher, mode);
+        state.templatesBySlot = await loadTemplates(state.matcher, mode, state.assetPack);
     }
 
     async function setVisionMode(modeId, options = {}) {
@@ -2464,20 +2470,28 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return normalizeVisionAssetPack(await response.json());
     }
 
-    function normalizePackedTemplate(entry) {
+    function decodePackedMask(entry, assetPack) {
+        const encoded = typeof entry.mask === "string" ? entry.mask : assetPack?.assets?.[entry.maskId];
+        if (typeof encoded !== "string") {
+            throw new Error(`asset mask missing: ${entry.file || entry.maskId || "unknown"}`);
+        }
+        return decodeBase64Bytes(encoded);
+    }
+
+    function normalizePackedTemplate(entry, assetPack) {
         return {
             slot: entry.slot,
             file: entry.file,
             width: entry.width,
             height: entry.height,
-            maskBytes: decodeBase64Bytes(entry.mask)
+            maskBytes: decodePackedMask(entry, assetPack)
         };
     }
 
-    async function loadTemplates(matcher, mode) {
+    async function loadTemplates(matcher, mode, assetPack) {
         const templatesBySlot = new Map();
         for (const entry of mode?.templates || []) {
-            const template = await matcher.createTemplate(normalizePackedTemplate(entry));
+            const template = await matcher.createTemplate(normalizePackedTemplate(entry, assetPack));
             if (!templatesBySlot.has(template.slot)) {
                 templatesBySlot.set(template.slot, []);
             }
@@ -2493,7 +2507,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             mask: {
                 width: entry.width,
                 height: entry.height,
-                mask: decodeBase64Bytes(entry.mask)
+                mask: decodePackedMask(entry, assetPack)
             }
         }));
     }
@@ -2568,7 +2582,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 onWebGpuLost: recoverWebGpuMatcher
             });
             state.matcher = matcher;
-            state.templatesBySlot = await loadTemplates(matcher, getActiveMode());
+            state.templatesBySlot = await loadTemplates(matcher, getActiveMode(), state.assetPack);
             state.lastFrameAt = 0;
             state.lastFpsAt = 0;
             state.processedFrames = 0;
@@ -2665,7 +2679,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                     onWebGpuLost: recoverWebGpuMatcher
                 });
             }
-            state.templatesBySlot = await loadTemplates(state.matcher, getActiveMode());
+            state.templatesBySlot = await loadTemplates(state.matcher, getActiveMode(), state.assetPack);
             state.numberTemplates = loadNumberTemplates(state.assetPack);
             state.lastFrameAt = 0;
             state.lastFpsAt = 0;
