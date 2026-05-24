@@ -33,6 +33,11 @@ BRANCH_VARIANTS[bilyouma_new_arugo]="
 bilyouma_v6:-DBattleEmulatorLV15=1 -DMULTITHREADING=1
 "
 
+BRANCH_VARIANTS[gilyumei_eizou]="
+bilyouma_v6:-DBattleEmulatorLV15=1 -DMULTITHREADING=1
+"
+
+
 
 
 #BRANCH_VARIANTS[webassembly]="
