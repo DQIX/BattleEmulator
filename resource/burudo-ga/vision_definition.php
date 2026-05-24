@@ -7,9 +7,10 @@ return [
 	'thresholds' => [
 		'whiteSaturationMaxDark' => 0.20,//こっちのほうを小さくないといけない
 		'whiteSaturationMaxBright' => 0.25,  //こっちが大きい
-		'whiteThreshold' => 0.60,            // ← 少し戻す
-		'numberWhiteThresholdDark' => 0.23,
-		'numberWhiteThresholdBright' => 0.27,
+		'whiteThreshold' => 0.80,            // ← 少し戻す
+        'numberWhiteSaturationMaxDark' => 0.21,
+        'numberWhiteSaturationMaxBright' => 0.22,
+		'numberThreshold' => 0.80,
 	],
 	'names' => [
 		'ja' => 'ブルドーガモード',
@@ -60,22 +61,8 @@ return [
 			'reset.png'
 		],
 		'directMainActions' => [
-			'sukara.png' => 30,
-			'mira-.png' => 31,
-			'sutemi.png' => 33,
-			'seisui.png' => 49,
-			'meisou.png' => 41,
-			'fullheal.png' => 37,
-			'more_heal.png' => 32,
-			'song.png' => 52,
-			'sippuu.png' => 44,
-			'sage.png' => 47,
-			'elven.png' => 48,
+			'ano2.png' => 25,
 			'flee.png' => 53,
-			'tokuyaku.png' => 50,
-			'mazinngiri.png' => 66,
-			'kaenn.png' => 64,
-			'mahilya.png' => 65,
 		],
 	],
 ];

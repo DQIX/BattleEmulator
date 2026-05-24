@@ -2047,7 +2047,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         if (erugioMain && modeRuleHasFile(mode, "resetSub", sub.file) && main.score >= 0.6 && sub.score >= 0.6) {
             return {kind: "reset", score: Math.min(main.score, sub.score), detail: `${main.file} + ${sub.file}`};
         }
-
+        const directAction = getModeRuleMap(mode, "directMainActions")[main.file];
+        if (directAction && main.score >= templateThreshold) {
+            return {kind: "action", actionId: directAction, detail: main.file, score: main.score};
+        }
     }
 
     function pickCandidate(matches) {
@@ -2335,6 +2338,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             ACTION_IDS.FLAME_SLASH,
             ACTION_IDS.KACRACKLE_SLASH,
             ACTION_IDS.HATCHET_MAN,
+            ACTION_IDS.ATTACK_ALLY,
+            ACTION_IDS.ATTACK_ENEMY,
         ].includes(actionId)) {
             return 1;
         }
