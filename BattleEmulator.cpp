@@ -420,7 +420,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             startTurn = counterJ - 1;
                             return true;
                         }
-                        if (need != enemyAction[counter]) {
+                        if (need != counter) {
                             return false;
                         }
                     }
