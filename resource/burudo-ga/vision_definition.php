@@ -3,23 +3,21 @@
 declare(strict_types=1);
 
 return [
-	'id' => 'gilyumei1',
+	'id' => 'hexagoon',
 	'thresholds' => [
-		'whiteSaturationMaxDark' => 0.20,
-		'whiteSaturationMaxBright' => 0.25,
-		'numberWhiteThresholdBright' => 0.65,
-		'numberWhiteThresholdDark' => 0.50,
 		'whiteSaturationMaxDark' => 0.20,//こっちのほうを小さくないといけない
-		'whiteSaturationMaxBright' => 0.24,//こっちが大きい
-		'whiteThreshold' => 0.60,
+		'whiteSaturationMaxBright' => 0.25,  //こっちが大きい
+		'whiteThreshold' => 0.60,            // ← 少し戻す
+		'numberWhiteThresholdDark' => 0.23,
+		'numberWhiteThresholdBright' => 0.27,
 	],
 	'names' => [
-		'ja' => 'ギュメイ1モード',
-		'en' => 'Gilyumei 1 Mode',
+		'ja' => 'ブルドーガモード',
+		'en' => 'hexagoon Mode',
 	],
-	'picker' => 'gilyumei1',
+	'picker' => 'hexagoon',
 	'battleEmulator' => [
-		 'id' => 'gilyumei1_v6',
+		 'id' => 'burudoga_v6',
 	],
 	'templateGroups' => [
 		[
@@ -50,17 +48,17 @@ return [
 			[
 				'slot' => 'main',
 				'directory' => 'message_v2',
-				'file' => 'gilyumei.png',
+				'file' => 'burudo1.png',
 			]
 		],
 	],
 	'rules' => [
-		'gilyumeiMain' => ['gilyumei.png'],
-		'psycheUpTarget' => ['aha.png'],
-		'resetSub' => ['reset.png'],
-		'kiriage' => ['kiriage.png'],
-		'samidare' => ['samidare.png', 'samidare2.png'],
-		'inactive' => ['mada.png'],
+	    'Main' => [
+			'burudo1.png'
+		],
+		'resetSub' => [
+			'reset.png'
+		],
 		'directMainActions' => [
 			'sukara.png' => 30,
 			'mira-.png' => 31,

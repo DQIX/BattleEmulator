@@ -293,10 +293,10 @@ function normalizeModeDefinitionForPack(array $definition, array $templates): ar
         'battleEmulator' => $definition['battleEmulator'] ?? null,
         'rules' => $definition['rules'] ?? new stdClass(),
         'identify' => $definition['identify'] ?? ['templates' => []],
+        'thresholds' => $definition['thresholds'] ?? null,  // ← 追加
         'templates' => $templates,
     ];
 }
-
 function buildVisionAssetPack(string $resourceRoot): array
 {
     $definitions = loadVisionDefinitions($resourceRoot);

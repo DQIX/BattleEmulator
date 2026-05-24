@@ -67,17 +67,6 @@
         erugiosu: normalizeVisionThresholds({
             // エルギオスモード
         }),
-        gilyumei1: normalizeVisionThresholds({
-            // ギュメイモード
-            numberWhiteSaturationMaxDark: 0.20,
-            numberWhiteSaturationMaxBright: 0.25,
-            numberWhiteThresholdBright: 0.65,
-            numberWhiteThresholdDark: 0.50,
-
-            whiteSaturationMaxDark: 0.20,//こっちのほうを小さくないといけない
-            whiteSaturationMaxBright: 0.24,//こっちが大きい
-            whiteThreshold: 0.60,
-        })
     });
     const DAMAGE_CONFIRMATION_MS = 1500;
     const MATCH_SLOT_KEYS = ["main", "sub", "ally", "target"];
@@ -2046,6 +2035,21 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
     }
 
+    function pickhexagoonCandidate(matches){
+        const {templateThreshold} = getActiveThresholds();
+        const main = matches.main || emptyMatch("main");
+        const sub = matches.sub || emptyMatch("sub");
+        const ally = matches.ally || emptyMatch("ally");
+        const target = matches.target || emptyMatch("target");
+        const mode = getActiveMode();
+        const erugioMain = modeRuleHasFile(mode, "Main", main.file);
+        // reset
+        if (erugioMain && modeRuleHasFile(mode, "resetSub", sub.file) && main.score >= 0.6 && sub.score >= 0.6) {
+            return {kind: "reset", score: Math.min(main.score, sub.score), detail: `${main.file} + ${sub.file}`};
+        }
+
+    }
+
     function pickCandidate(matches) {
         const mode = getActiveMode();
         const picker = mode?.picker || mode?.id || "identify";
@@ -2057,6 +2061,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
         if (picker === "gilyumei1") {
             return pickGilyumei1Candidate(matches);
+        }
+        if (picker === "hexagoon") {
+            return pickhexagoonCandidate(matches);
         }
         return null;
     }
