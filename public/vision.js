@@ -43,12 +43,12 @@
     const TEMPLATE_THRESHOLD = 0.45;
     const RESET_LATCH_CLEAR_SCORE = 0.6;
     const WHITE_THRESHOLD = 0.72;
-    const WHITE_SATURATION_MAX_DARK = 0.20;
-    const WHITE_SATURATION_MAX_BRIGHT = 0.05;
-    const WHITE_SATURATION_DARK_VALUE = 0.35;
-    const WHITE_SATURATION_BRIGHT_VALUE = 1.0;
+    const WHITE_SATURATION_MAX_DARK = 0.20;//こっちのほうが小さくないといけない
+    const WHITE_SATURATION_MAX_BRIGHT = 0.27;//こっちが大きい
+    const WHITE_SATURATION_DARK_VALUE = 0.10;
+    const WHITE_SATURATION_BRIGHT_VALUE = 0.9;
     const ACTION_THRESHOLD = 0.45;
-    const NUMBER_THRESHOLD = 0.65;
+    const NUMBER_THRESHOLD = 0.50;
     const MATCH_PENALTY_WEIGHT = 0.0;
     const MATCH_WHITE_WEIGHT = 1.0;
     const TEMPLATE_ALPHA_THRESHOLD = 0.05;
@@ -951,6 +951,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function buildWhiteParamsForImageData(imageData, area = null) {
+        // return {
+        //     saturationMax: 0.25
+        // };
+        // console.log( getWhiteSaturationMaxForBackground(estimateBackgroundValue(imageData, area)));
         return {
             saturationMax: getWhiteSaturationMaxForBackground(estimateBackgroundValue(imageData, area))
         };
