@@ -40,23 +40,45 @@
     const SOURCE_720P = {width: 1280, height: 720};
     const VISION_ASSET_PACK_URL = "vision-assets.json";
     const VISION_ASSET_EMBED_KEY = "__VISION_ASSET_PACK__";
-    const TEMPLATE_THRESHOLD = 0.45;
-    const RESET_LATCH_CLEAR_SCORE = 0.6;
-    const WHITE_THRESHOLD = 0.72;
-    const WHITE_SATURATION_MAX_DARK = 0.20;//こっちのほうを小さくないといけない
-    const WHITE_SATURATION_MAX_BRIGHT = 0.27;//こっちが大きい
-    const WHITE_SATURATION_DARK_VALUE = 0.10;
+    const DEFAULT_VISION_THRESHOLDS = Object.freeze({
+        templateThreshold: 0.45,
+        resetLatchClearScore: 0.6,
+        whiteThreshold: 0.72,
+        whiteSaturationMaxDark: 0.20,//こっちのほうを小さくないといけない
+        whiteSaturationMaxBright: 0.26,//こっちが大きい
+        whiteSaturationDarkValue: 0.10,
+        numberWhiteSaturationMaxDark: 0.20,
+        numberWhiteSaturationMaxBright: 0.28,
+        numberWhiteThresholdBright: 0.70,
+        whiteSaturationBrightValue: 0.9,
+        numberWhiteThresholdDark: 0.59,
+        actionThreshold: 0.45,
+        numberThreshold: 0.65,
+        matchPenaltyWeight: 0.0,
+        matchWhiteWeight: 1.0,
+        templateAlphaThreshold: 0.05
+    });
+    const VISION_MODE_THRESHOLDS = Object.freeze({
+        identify: normalizeVisionThresholds({
+            // 待機(認識) モード
+            whiteSaturationMaxDark: 0.20,//こっちのほうを小さくないといけない
+            whiteSaturationMaxBright: 0.20,//こっちが大きい
+        }),
+        erugiosu: normalizeVisionThresholds({
+            // エルギオスモード
+        }),
+        gilyumei1: normalizeVisionThresholds({
+            // ギュメイモード
+            numberWhiteSaturationMaxDark: 0.20,
+            numberWhiteSaturationMaxBright: 0.25,
+            numberWhiteThresholdBright: 0.65,
+            numberWhiteThresholdDark: 0.50,
 
-    const NUMBER_WHITE_SATURATION_MAX_DARK = 0.18;
-    const NUMBER_WHITE_SATURATION_MAX_BRIGHT = 0.28;
-    const NUMBER_WHITE_THRESHOLD_BRIGHT = 0.70;
-    const WHITE_SATURATION_BRIGHT_VALUE = 0.9;
-    const NUMBER_WHITE_THRESHOLD_DARK = 0.59;
-    const ACTION_THRESHOLD = 0.45;
-    const NUMBER_THRESHOLD = 0.68;
-    const MATCH_PENALTY_WEIGHT = 0.0;
-    const MATCH_WHITE_WEIGHT = 1.0;
-    const TEMPLATE_ALPHA_THRESHOLD = 0.05;
+            whiteSaturationMaxDark: 0.20,//こっちのほうを小さくないといけない
+            whiteSaturationMaxBright: 0.24,//こっちが大きい
+            whiteThreshold: 0.60,
+        })
+    });
     const MATCH_SLOT_KEYS = ["main", "sub", "ally", "target"];
     const overlayContext = ui.overlay.getContext("2d");
     overlayContext.imageSmoothingEnabled = false; // ★ 追加
@@ -210,6 +232,22 @@
         MULTISLASH: 68
     });
     const ACTIONS_BY_ID = ACTIONS;
+
+    function normalizeVisionThresholds(...sources) {
+        const thresholds = {...DEFAULT_VISION_THRESHOLDS};
+        for (const source of sources) {
+            if (!source || typeof source !== "object" || Array.isArray(source)) {
+                continue;
+            }
+            for (const [key, value] of Object.entries(source)) {
+                if (Object.prototype.hasOwnProperty.call(DEFAULT_VISION_THRESHOLDS, key) && Number.isFinite(value)) {
+                    thresholds[key] = value;
+                }
+            }
+        }
+        return thresholds;
+    }
+
     const LEGACY_VISION_MODE_DEFINITIONS = Object.freeze({
         erugiosu: {
             id: "erugiosu",
@@ -222,6 +260,7 @@
             battleEmulator: {
                 branch: "erugiosu_new_arugo"
             },
+            thresholds: VISION_MODE_THRESHOLDS.erugiosu,
             identify: {
                 templates: [
                     {slot: "main", directory: "message_v2", file: "erugio.png"},
@@ -279,6 +318,7 @@
             battleEmulator: {
                 branch: "gilyumei1"
             },
+            thresholds: VISION_MODE_THRESHOLDS.gilyumei1,
             identify: {
                 templates: []
             },
@@ -304,6 +344,7 @@
         modes: [],
         modeId: "identify",
         activeMode: null,
+        activeThresholds: DEFAULT_VISION_THRESHOLDS,
         lastMatches: Object.create(null),
         turnIndex: 1,
         actionIndex: 0,
@@ -347,6 +388,14 @@
         return LEGACY_VISION_MODE_DEFINITIONS[modeId] || null;
     }
 
+    function resolveModeThresholds(mode) {
+        return normalizeVisionThresholds(mode?.thresholds);
+    }
+
+    function getActiveThresholds() {
+        return state.activeThresholds || DEFAULT_VISION_THRESHOLDS;
+    }
+
     function buildLegacyVisionAssetPack(rawPack) {
         const erugiosu = getLegacyModeDefinition("erugiosu");
         const identifyDetections = [{
@@ -363,6 +412,7 @@
                     picker: "identify",
                     timeoutMs: 0,
                     battleEmulator: null,
+                    thresholds: VISION_MODE_THRESHOLDS.identify,
                     rules: {detections: identifyDetections},
                     identify: {templates: []},
                     templates: (rawPack.templates || []).filter((entry) =>
@@ -409,6 +459,7 @@
                     ...(legacy?.names || {}),
                     ...(mode.names || {})
                 },
+                thresholds: normalizeVisionThresholds(legacy?.thresholds, mode?.thresholds),
                 rules: {
                     ...(legacy?.rules || {}),
                     ...(mode.rules || {})
@@ -436,6 +487,7 @@
                 picker: "identify",
                 timeoutMs: 0,
                 battleEmulator: null,
+                thresholds: VISION_MODE_THRESHOLDS.identify,
                 rules: {detections: []},
                 identify: {templates: []},
                 templates: []
@@ -663,6 +715,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             const device = this.device;
             const frameView = this.frameTexture.createView();
             const frame = processingContext.getImageData(0, 0, BASE_WIDTH, BASE_HEIGHT);
+            const thresholds = getActiveThresholds();
             const whiteParamsBySlot = buildWhiteParamsBySlot(frame);
 
             // --- パス1: 全テンプレートのGPUジョブを1つのencoderに積む ---
@@ -732,9 +785,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 paramsView.setUint32(20, template.height, true);
                 paramsView.setUint32(24, scoreWidth, true);
                 paramsView.setUint32(28, scoreHeight, true);
-                paramsView.setFloat32(32, MATCH_PENALTY_WEIGHT, true);
-                paramsView.setFloat32(36, MATCH_WHITE_WEIGHT, true);
-                paramsView.setFloat32(40, WHITE_THRESHOLD, true);
+                paramsView.setFloat32(32, thresholds.matchPenaltyWeight, true);
+                paramsView.setFloat32(36, thresholds.matchWhiteWeight, true);
+                paramsView.setFloat32(40, thresholds.whiteThreshold, true);
                 paramsView.setFloat32(44, whiteParams.saturationMax, true);
 
                 const uniformBuffer = device.createBuffer({
@@ -888,6 +941,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function buildBinaryMask(imageData) {
+        const thresholds = getActiveThresholds();
         const mask = new Uint8Array(imageData.width * imageData.height);
         const data = imageData.data;
         const whiteParams = buildWhiteParamsForImageData(imageData);
@@ -898,8 +952,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 data[offset + 1],
                 data[offset + 2],
                 data[offset + 3],
-                WHITE_THRESHOLD,
-                TEMPLATE_ALPHA_THRESHOLD,
+                thresholds.whiteThreshold,
+                thresholds.templateAlphaThreshold,
                 whiteParams
             ) ? 1 : 0;
         }
@@ -920,38 +974,36 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function interpolateWhiteParamByBackground(value, darkParam, brightParam) {
-        const range = Math.max(0.001, WHITE_SATURATION_BRIGHT_VALUE - WHITE_SATURATION_DARK_VALUE);
-        const ratio = Math.max(0, Math.min(1, (value - WHITE_SATURATION_DARK_VALUE) / range));
+        const thresholds = getActiveThresholds();
+        const range = Math.max(0.001, thresholds.whiteSaturationBrightValue - thresholds.whiteSaturationDarkValue);
+        const ratio = Math.max(0, Math.min(1, (value - thresholds.whiteSaturationDarkValue) / range));
         return darkParam + (brightParam - darkParam) * ratio;
     }
 
     function getWhiteSaturationMaxForBackground(value) {
+        const thresholds = getActiveThresholds();
         return interpolateWhiteParamByBackground(
             value,
-            WHITE_SATURATION_MAX_DARK,
-            WHITE_SATURATION_MAX_BRIGHT
+            thresholds.whiteSaturationMaxDark,
+            thresholds.whiteSaturationMaxBright
         );
     }
 
     function getNumberWhiteThresholdForBackground(value) {
+        const thresholds = getActiveThresholds();
         return interpolateWhiteParamByBackground(
             value,
-            NUMBER_WHITE_THRESHOLD_DARK,
-            NUMBER_WHITE_THRESHOLD_BRIGHT
+            thresholds.numberWhiteThresholdDark,
+            thresholds.numberWhiteThresholdBright
         );
     }
 
     function getNumberWhiteSaturationMaxForBackground(value) {
-        console.log(interpolateWhiteParamByBackground(
-            value,
-            NUMBER_WHITE_SATURATION_MAX_DARK,
-            NUMBER_WHITE_SATURATION_MAX_BRIGHT
-        ));
-
+        const thresholds = getActiveThresholds();
         return interpolateWhiteParamByBackground(
             value,
-            NUMBER_WHITE_SATURATION_MAX_DARK,
-            NUMBER_WHITE_SATURATION_MAX_BRIGHT
+            thresholds.numberWhiteSaturationMaxDark,
+            thresholds.numberWhiteSaturationMaxBright
         );
     }
 
@@ -978,7 +1030,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
 
         if (!values.length) {
-            return WHITE_THRESHOLD;
+            return getActiveThresholds().whiteThreshold;
         }
 
         values.sort((left, right) => left - right);
@@ -1016,7 +1068,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             return false;
         }
         const value = getHsvValue(r, g, b);
-        const saturationMax = whiteParams?.saturationMax ?? WHITE_SATURATION_MAX_DARK;
+        const saturationMax = whiteParams?.saturationMax ?? getActiveThresholds().whiteSaturationMaxDark;
         return value >= threshold && getHsvSaturation(r, g, b) <= saturationMax;
     }
 
@@ -1024,8 +1076,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         if (a <= 0) {
             return false;
         }
-        const threshold = whiteParams?.threshold ?? NUMBER_WHITE_THRESHOLD_DARK;
-        const saturationMax = whiteParams?.saturationMax ?? NUMBER_WHITE_SATURATION_MAX_DARK;
+        const thresholds = getActiveThresholds();
+        const threshold = whiteParams?.threshold ?? thresholds.numberWhiteThresholdDark;
+        const saturationMax = whiteParams?.saturationMax ?? thresholds.numberWhiteSaturationMaxDark;
         return getHsvValue(r, g, b) >= threshold
             && getHsvSaturation(r, g, b) <= saturationMax;
     }
@@ -1074,6 +1127,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function buildNormalizedMonochromeImageData(sourceImageData, targetWidth, targetHeight) {
+        const thresholds = getActiveThresholds();
         const result = new ImageData(targetWidth, targetHeight);
         const resultData = result.data;
         for (let index = 3; index < resultData.length; index += 4) {
@@ -1093,7 +1147,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                     sourceData[offset + 1],
                     sourceData[offset + 2],
                     sourceData[offset + 3],
-                    WHITE_THRESHOLD,
+                    thresholds.whiteThreshold,
                     0,
                     whiteParams
                 );
@@ -1133,6 +1187,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function compareMask(frame, templateMask, x, y, width, height, whiteParams) {
+        const thresholds = getActiveThresholds();
         const data = frame.data;
         let overlap = 0;
         let templateWhiteCount = 0;
@@ -1145,7 +1200,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                     data[frameIndex + 1],
                     data[frameIndex + 2],
                     data[frameIndex + 3],
-                    WHITE_THRESHOLD,
+                    thresholds.whiteThreshold,
                     0,
                     whiteParams
                 ) ? 1 : 0;
@@ -1166,7 +1221,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             return 0;
         }
         const penalty = Math.max(0, frameWhiteCount - overlap);
-        return Math.max(0, (overlap * MATCH_WHITE_WEIGHT - penalty * MATCH_PENALTY_WEIGHT) / union);
+        return Math.max(0, (overlap * thresholds.matchWhiteWeight - penalty * thresholds.matchPenaltyWeight) / union);
     }
 
     function computeSourceRect(source) {
@@ -1340,6 +1395,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function recognizeDamageValue(key) {
+        const thresholds = getActiveThresholds();
         const config = DAMAGE_ROIS[key];
         const cropped = processingContext.getImageData(config.x, config.y, config.width, config.height);
         const binary = buildNumberWhiteMask(cropped);
@@ -1350,7 +1406,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             let bestScore = 0;
             state.numberTemplates.forEach((template) => {
                 const score = compareBinaryImages(trimmed, template.mask);
-                if (score >= NUMBER_THRESHOLD && score >= bestScore) {
+                if (score >= thresholds.numberThreshold && score >= bestScore) {
                     bestDigit = template.digit;
                     bestScore = score;
                 }
@@ -1471,6 +1527,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function drawOverlay(matches, damageReadings) {
+        const {templateThreshold} = getActiveThresholds();
         overlayContext.clearRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
         overlayContext.imageSmoothingEnabled = false;
         overlayContext.drawImage(processingCanvas, 0, 0, BASE_WIDTH, BASE_HEIGHT);
@@ -1539,7 +1596,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             overlayContext.strokeStyle = "rgba(230, 230, 230, 0.72)";
             overlayContext.lineWidth = 1;
             overlayContext.strokeRect(roi.x, roi.y, roi.width, roi.height);
-            if (match.file && match.score >= TEMPLATE_THRESHOLD) {
+            if (match.file && match.score >= templateThreshold) {
                 overlayContext.strokeStyle = "rgba(255, 187, 92, 0.92)";
                 overlayContext.lineWidth = 2;
                 overlayContext.strokeRect(match.x, match.y, match.width, match.height);
@@ -1617,15 +1674,72 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         link.remove();
     }
 
+    function createDamageActionAreaCanvas(damageKey, areaIndex) {
+        const config = DAMAGE_ROIS[damageKey];
+        if (!config) return null;
+        const area = config.actionAreas[areaIndex];
+        if (!area) return null;
+
+        const roiCanvas = document.createElement("canvas");
+        roiCanvas.width = config.width;
+        roiCanvas.height = config.height;
+        const roiCtx = roiCanvas.getContext("2d", {willReadFrequently: true});
+        roiCtx.imageSmoothingEnabled = false;
+        roiCtx.drawImage(
+            processingCanvas,
+            config.x, config.y, config.width, config.height,
+            0, 0, config.width, config.height
+        );
+
+        const roiImageData = roiCtx.getImageData(0, 0, config.width, config.height);
+        const binary = buildNumberWhiteMask(roiImageData);
+        const trimmed = trimFirstPixel(cropMask(binary, area), 26, 40);
+
+        // Uint8Array mask → RGBA ImageData に変換
+        const canvas = document.createElement("canvas");
+        canvas.width = trimmed.width;
+        canvas.height = trimmed.height;
+        const ctx = canvas.getContext("2d");
+        const imageData = ctx.createImageData(trimmed.width, trimmed.height);
+        for (let i = 0; i < trimmed.mask.length; i++) {
+            const v = trimmed.mask[i] ? 255 : 0;
+            imageData.data[i * 4 + 0] = v;
+            imageData.data[i * 4 + 1] = v;
+            imageData.data[i * 4 + 2] = v;
+            imageData.data[i * 4 + 3] = 255;
+        }
+        ctx.putImageData(imageData, 0, 0);
+
+        return {
+            canvas,
+            exportName: `${damageKey}-area${areaIndex}`
+        };
+    }
+
     function downloadRecognizedMatchCrops() {
         const matches = state.lastMatches || {};
         let downloaded = 0;
+
+        // 既存: スロットの切り抜き
         for (const slot of MATCH_SLOT_KEYS) {
             const match = matches[slot];
             const crop = createMonochromeCropCanvas(slot, match);
             downloadCanvas(crop.canvas, `${crop.exportName}-mono.png`);
             downloaded += 1;
         }
+
+        // 追加: DAMAGE_ROISのactionAreaごとの数字切り抜き
+        for (const damageKey of Object.keys(DAMAGE_ROIS)) {
+            const config = DAMAGE_ROIS[damageKey];
+            for (let i = 0; i < config.actionAreas.length; i++) {
+                const crop = createDamageActionAreaCanvas(damageKey, i);
+                if (crop) {
+                    downloadCanvas(crop.canvas, `${crop.exportName}-mono.png`);
+                    downloaded += 1;
+                }
+            }
+        }
+
         return downloaded;
     }
 
@@ -1687,7 +1801,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         for (const detection of getModeDetectionEntries(mode)) {
             for (const template of detection.templates || []) {
                 const match = matches[template.slot] || emptyMatch(template.slot);
-                if (match.file !== template.file || match.score < 0.65) {
+                if (match.file !== template.file || match.score < 0.50) {
                     continue;
                 }
                 if (!best || match.score > best.score) {
@@ -1705,6 +1819,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function pickErugiosuCandidate(matches) {
+        const {templateThreshold} = getActiveThresholds();
         const main = matches.main || emptyMatch("main");
         const sub = matches.sub || emptyMatch("sub");
         const ally = matches.ally || emptyMatch("ally");
@@ -1718,7 +1833,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
 
         // 攻撃(敵) = erugio + attack
-        if (erugioMain && modeRuleHasFile(mode, "enemyAttackSub", sub.file) && main.score >= TEMPLATE_THRESHOLD && sub.score >= TEMPLATE_THRESHOLD) {
+        if (erugioMain && modeRuleHasFile(mode, "enemyAttackSub", sub.file) && main.score >= templateThreshold && sub.score >= templateThreshold) {
             return {
                 kind: "action",
                 actionId: ACTION_IDS.ATTACK_ENEMY,
@@ -1728,7 +1843,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
 
         // 超高速連打 = erugio + uhsc
-        if (erugioMain && modeRuleHasFile(mode, "uhscSub", sub.file) && main.score >= TEMPLATE_THRESHOLD && sub.score >= TEMPLATE_THRESHOLD) {
+        if (erugioMain && modeRuleHasFile(mode, "uhscSub", sub.file) && main.score >= templateThreshold && sub.score >= templateThreshold) {
             return {
                 kind: "action",
                 actionId: ACTION_IDS.ULTRA_HIGH_SPEED_COMBO,
@@ -1741,7 +1856,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         if (
             !state.actionTaken &&
             modeRuleHasFile(mode, "allyAttack", ally.file) &&
-            ally.score >= TEMPLATE_THRESHOLD &&
+            ally.score >= templateThreshold &&
             !modeRuleHasFile(mode, "uhscSub", sub.file) &&
             main.file !== "guard.png"
         ) {
@@ -1752,8 +1867,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         if (
             main.file === "defense_champion.png" &&
             sub.file === "defense_champion2.png" &&
-            main.score >= TEMPLATE_THRESHOLD &&
-            sub.score >= TEMPLATE_THRESHOLD
+            main.score >= templateThreshold &&
+            sub.score >= templateThreshold
         ) {
             return {
                 kind: "action",
@@ -1764,7 +1879,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
 
         // daibougilyo: マダンテ後のsleeping2は大防御
-        if (state.daibougilyo && main.file === "sleeping2.png" && main.score >= TEMPLATE_THRESHOLD) {
+        if (state.daibougilyo && main.file === "sleeping2.png" && main.score >= templateThreshold) {
             return {kind: "action", actionId: ACTION_IDS.DEFENDING_CHAMPION, detail: "madannte -> sleeping2 (daibougilyo)", score: main.score};
         }
 
@@ -1773,7 +1888,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             !state.slept &&
             main.file === "Paralysis.png" &&
             ally.file === "CareParalysis.png" &&
-            ally.score >= TEMPLATE_THRESHOLD
+            ally.score >= templateThreshold
         ) {
             return {
                 kind: "action",
@@ -1787,8 +1902,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         if (
             !state.slept &&
             main.file === "Paralysis.png" &&
-            main.score >= TEMPLATE_THRESHOLD &&
-            (!sub.file || sub.file !== "Paralysis2.png" || sub.score < TEMPLATE_THRESHOLD)
+            main.score >= templateThreshold &&
+            (!sub.file || sub.file !== "Paralysis2.png" || sub.score < templateThreshold)
         ) {
             return {kind: "action", actionId: ACTION_IDS.PARALYSIS, detail: "Paralysis", score: main.score};
         }
@@ -1798,7 +1913,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             !state.actionTaken &&
             main.file === "sleeping2.png" &&
             modeRuleHasFile(mode, "dead", ally.file) &&
-            ally.score >= TEMPLATE_THRESHOLD
+            ally.score >= templateThreshold
         ) {
             return {
                 kind: "action",
@@ -1812,8 +1927,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         if (
             !state.slept &&
             main.file === "sleeping2.png" &&
-            main.score >= TEMPLATE_THRESHOLD &&
-            (!ally.file || (ally.file !== "dead.png" && ally.file !== "dead2.png") || ally.score < TEMPLATE_THRESHOLD)
+            main.score >= templateThreshold &&
+            (!ally.file || (ally.file !== "dead.png" && ally.file !== "dead2.png") || ally.score < templateThreshold)
         ) {
             return {kind: "action", actionId: ACTION_IDS.SLEEPING, detail: "sleeping2", score: main.score};
         }
@@ -1824,7 +1939,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             !state.slept &&
             modeRuleHasFile(mode, "wakeUp", main.file) &&
             sub.file !== "inori.png" &&
-            main.score >= TEMPLATE_THRESHOLD &&
+            main.score >= templateThreshold &&
             state.actionIndex !== 0 &&
             !state.actionTaken
         ) {
@@ -1836,7 +1951,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             state.sleeping &&
             modeRuleHasFile(mode, "wakeUp", main.file) &&
             sub.file !== "inori.png" &&
-            main.score >= TEMPLATE_THRESHOLD &&
+            main.score >= templateThreshold &&
             state.actionIndex === 0 &&
             !state.actionTaken
         ) {
@@ -1844,8 +1959,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
 
         // ためる
-        if (main.file === "tameru.png" && main.score >= TEMPLATE_THRESHOLD) {
-            if (modeRuleHasFile(mode, "psycheUpTarget", target.file) && target.score >= TEMPLATE_THRESHOLD && !state.actionTaken) {
+        if (main.file === "tameru.png" && main.score >= templateThreshold) {
+            if (modeRuleHasFile(mode, "psycheUpTarget", target.file) && target.score >= templateThreshold && !state.actionTaken) {
                 return {
                     kind: "action",
                     actionId: ACTION_IDS.PSYCHE_UP_ALLY,
@@ -1857,13 +1972,13 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
 
         // ano.png: action記録なし、状態リセットのみ
-        if (main.file === "ano.png" && main.score >= TEMPLATE_THRESHOLD) {
+        if (main.file === "ano.png" && main.score >= templateThreshold) {
             return {kind: "ano"};
         }
 
         // DIRECT_MAIN_RULES
         const directAction = getModeRuleMap(mode, "directMainActions")[main.file];
-        if (directAction && main.score >= TEMPLATE_THRESHOLD) {
+        if (directAction && main.score >= templateThreshold) {
             return {kind: "action", actionId: directAction, detail: main.file, score: main.score};
         }
 
@@ -1871,6 +1986,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function pickGilyumei1Candidate(matches) {
+        const {templateThreshold} = getActiveThresholds();
         const main = matches.main || emptyMatch("main");
         const sub = matches.sub || emptyMatch("sub");
         const ally = matches.ally || emptyMatch("ally");
@@ -1882,22 +1998,22 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             return {kind: "reset", score: Math.min(main.score, sub.score), detail: `${main.file} + ${sub.file}`};
         }
 
-        if(modeRuleHasFile(mode, "kiriage", ally.file) && ally.score >= TEMPLATE_THRESHOLD) {
+        if(modeRuleHasFile(mode, "kiriage", ally.file) && ally.score >= templateThreshold) {
             return {kind: "action", actionId: ACTION_IDS.UPWARD_SLICE, detail: ally.file, score: ally.score};
         }
-        if(modeRuleHasFile(mode, "inactive", main.file) && main.score >= TEMPLATE_THRESHOLD && !state.actionTaken) {
+        if(modeRuleHasFile(mode, "inactive", main.file) && main.score >= templateThreshold && !state.actionTaken) {
             return {kind: "action", actionId: ACTION_IDS.INACTIVE_ALLY, detail: main.file, score: main.score};
         }
-        if(modeRuleHasFile(mode, "samidare", main.file) && main.score >= TEMPLATE_THRESHOLD) {
-            if(target.file === "gilyumei_target.png" && target.score >= TEMPLATE_THRESHOLD) {
+        if(modeRuleHasFile(mode, "samidare", main.file) && main.score >= templateThreshold) {
+            if(target.file === "gilyumei_target.png" && target.score >= templateThreshold) {
                 return {kind: "action", actionId: ACTION_IDS.MULTISLASH, detail: main.file, score: main.score};
-            }else if(target.file === "aha.png" && target.score >= TEMPLATE_THRESHOLD) {
+            }else if(target.file === "aha.png" && target.score >= templateThreshold) {
                 return {kind: "action", actionId: ACTION_IDS.MULTITHRUST, detail: main.file, score: main.score};
             }
         }
 
         const directAction = getModeRuleMap(mode, "directMainActions")[main.file];
-        if (directAction && main.score >= TEMPLATE_THRESHOLD) {
+        if (directAction && main.score >= templateThreshold) {
             return {kind: "action", actionId: directAction, detail: main.file, score: main.score};
         }
     }
@@ -1918,6 +2034,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function maybeResetFromCombo(candidate) {
+        const {resetLatchClearScore} = getActiveThresholds();
         if (candidate && candidate.kind === "reset") {
             if (!state.resetLatched) {
                 state.resetLatched = true;
@@ -1925,7 +2042,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             }
             return true;
         }
-        if (!candidate || candidate.score < RESET_LATCH_CLEAR_SCORE) {
+        if (!candidate || candidate.score < resetLatchClearScore) {
             state.resetLatched = false;
         }
         return false;
@@ -2017,6 +2134,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
         state.modeId = nextMode.id;
         state.activeMode = nextMode;
+        state.activeThresholds = resolveModeThresholds(nextMode);
         state.lastModeHitAt = Date.now();
         state.lastMatches = Object.create(null);
         syncModeSelect();
@@ -2031,13 +2149,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function modeHasActivityMatch(mode, matches) {
+        const {templateThreshold} = getActiveThresholds();
         if (!mode || mode.id === "identify") {
             return false;
         }
 
         for (const template of mode.identify?.templates || []) {
             const match = matches[template.slot] || emptyMatch(template.slot);
-            if (match.file === template.file && match.score >= TEMPLATE_THRESHOLD) {
+            if (match.file === template.file && match.score >= templateThreshold) {
                 return true;
             }
         }
@@ -2241,6 +2360,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function handlePendingDamages(matches, damageReadings) {
+        const {templateThreshold} = getActiveThresholds();
         const main = matches.main || emptyMatch("main");
         const damage1 = damageReadings.damage1.value;
         const damage2 = damageReadings.damage2.value;
@@ -2249,7 +2369,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
         // maybeCritical: critical.png検出時に攻撃(敵)→痛恨(6)に上書き
         if (state.maybeCritical !== -1) {
-            if (main.file === "critical.png" && main.score >= TEMPLATE_THRESHOLD) {
+            if (main.file === "critical.png" && main.score >= templateThreshold) {
                 const turn = (state.maybeCritical & 0xfff) + 1;
                 const slotIndex = (state.maybeCritical >> 12) & 0xf;
                 updateHistoryDamage(turn, slotIndex, -1); // -2は「action上書き」シグナル用
@@ -2264,7 +2384,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
 
         if ((state.pendingDamage1 !== -1 && state.pendingDamage1Enabled) || state.lastDamage1 < candidateDamage1) {
-            if (["guard.png", "miss.png", "miss2.png", "mikawasi.png"].includes(main.file) && main.score >= TEMPLATE_THRESHOLD) {
+            if (["guard.png", "miss.png", "miss2.png", "mikawasi.png"].includes(main.file) && main.score >= templateThreshold) {
                 state.pendingDamage1Enabled = false;
                 state.maybeCritical = -1;
                 resolvePendingDamage(state.pendingDamage1, 0);
@@ -2279,7 +2399,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 return true;
             }
         } else if ((state.pendingDamage2 !== -1 && state.pendingDamage2Enabled) || state.lastDamage2 < candidateDamage2) {
-            if (["guard.png", "miss.png", "miss2.png", "mikawasi.png"].includes(main.file) && main.score >= TEMPLATE_THRESHOLD) {
+            if (["guard.png", "miss.png", "miss2.png", "mikawasi.png"].includes(main.file) && main.score >= templateThreshold) {
                 state.pendingDamage2Enabled = false;
                 state.maybeCritical = -1;
                 state.lastDamage2 = -1;
@@ -2299,6 +2419,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function acceptCandidate(candidate, matches) {
+        const {templateThreshold} = getActiveThresholds();
         // ano.png: preActionリセット、actionTaken=true、slept=false のみ
         if (candidate && candidate.kind === "ano") {
             state.preAction = -1;
@@ -2313,7 +2434,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             // C#移植: (currentTime - LastDetection) > 閾値 && lastHit1 == ""
             // lastHit1 == "" 相当 = mainスロットでテンプレートが閾値未満（未検出）
             const mainMatch = matches && matches.main ? matches.main : null;
-            const noTemplateDetected = !mainMatch || mainMatch.score < TEMPLATE_THRESHOLD;
+            const noTemplateDetected = !mainMatch || mainMatch.score < templateThreshold;
             if (elapsed > 3000 && noTemplateDetected) {
                 state.preAction = -1;
             }
@@ -2783,6 +2904,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         state.loopToken += 1;
         const token = state.loopToken;
         const runFrame = async (now) => {
+            const {actionThreshold} = getActiveThresholds();
             if (token !== state.loopToken || !state.stream || !state.matcher) {
                 return;
             }
@@ -2810,7 +2932,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                         return;
                     }
                     const candidate = pickCandidate(matches);
-                    if (candidate && candidate.score < ACTION_THRESHOLD) {
+                    if (candidate && candidate.score < actionThreshold) {
                         updateFps(now);
                         queueLoop(runFrame);
                         return;
@@ -2950,6 +3072,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             state.modes = state.assetPack.modes;
         }
         state.activeMode = getModeById(state.modeId) || state.modes[0] || null;
+        state.activeThresholds = resolveModeThresholds(state.activeMode);
         state.lastModeHitAt = Date.now();
         populateModeOptions();
         updateTurnChip();
