@@ -50,11 +50,11 @@ return [
 		'psycheUpTarget' => ['aha.png'],
 		'resetSub' => ['reset.png'],
 		'kiriage' => ['kiriage.png'],
+		'samidare' => ['samidare.png', 'samidare2.png'],
+		'inactive' => ['mada.png'],
 		'directMainActions' => [
 			'sukara.png' => 30,
 			'mira-.png' => 31,
-			'samidare.png' => 34,
-			'samidare2.png' => 34,
 			'sutemi.png' => 33,
 			'seisui.png' => 49,
 			'meisou.png' => 41,
@@ -67,6 +67,8 @@ return [
 			'flee.png' => 53,
 			'tokuyaku.png' => 50,
 			'mazinngiri.png' => 66,
+			'kaenn.png' => 64,
+			'mahilya.png' => 65,
 		],
 	],
 ];

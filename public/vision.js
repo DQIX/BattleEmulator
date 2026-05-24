@@ -43,7 +43,7 @@
     const TEMPLATE_THRESHOLD = 0.45;
     const RESET_LATCH_CLEAR_SCORE = 0.6;
     const WHITE_THRESHOLD = 0.72;
-    const WHITE_SATURATION_MAX = 0.20;
+    const WHITE_SATURATION_MAX = 0.26;
     const ACTION_THRESHOLD = 0.45;
     const NUMBER_THRESHOLD = 0.65;
     const MATCH_PENALTY_WEIGHT = 0.0;
@@ -63,6 +63,13 @@
         ally: {x: 179, y: 645, width: 160, height: 60, label: "ally"},
         sub: {x: 518, y: 619, width: 100, height: 90, label: "sub"},
         target: {x: 78, y: 578, width: 140, height: 65, label: "target"}
+    };
+    const RECOGNIZED_CROP_DEFS = {
+        main: {width: 130, height: 45},
+        number: {width: 26, height: 40},
+        ally: {width: 100, height: 45},
+        sub: {width: 40, height: 60},
+        target: {width: 130, height: 45}
     };
 
     const DAMAGE_ROIS = {
@@ -103,6 +110,7 @@
         16: {names: {ja: "凍てつく波動", en: "Disruptive Wave"}, ally: false, damage: false},
         17: {names: {ja: "やけつくいき", en: "Burning Breath"}, ally: false, damage: false},
         18: {names: {ja: "黒輝く息", en: "Dark Breath"}, ally: false, damage: true},
+        22: {names: {ja: "やすみ", en: "inactive"}, ally: true, damage: false},
         24: {names: {ja: "麻痺で動けない", en: "Paralysis"}, ally: true, damage: false},
         25: {names: {ja: "攻撃(味方)", en: "Attack (ally)"}, ally: true, damage: true},
         28: {names: {ja: "麻痺回復", en: "Cure Paralysis"}, ally: true, damage: false},
@@ -992,6 +1000,63 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
     }
 
+    function buildNormalizedMonochromeImageData(sourceImageData, targetWidth, targetHeight) {
+        const result = new ImageData(targetWidth, targetHeight);
+        const resultData = result.data;
+        for (let index = 3; index < resultData.length; index += 4) {
+            resultData[index] = 255;
+        }
+        const sourceData = sourceImageData.data;
+        let minX = sourceImageData.width;
+        let minY = sourceImageData.height;
+        const mask = new Uint8Array(sourceImageData.width * sourceImageData.height);
+        for (let row = 0; row < sourceImageData.height; row += 1) {
+            for (let col = 0; col < sourceImageData.width; col += 1) {
+                const pixelIndex = row * sourceImageData.width + col;
+                const offset = pixelIndex * 4;
+                const white = isWhitePixel(
+                    sourceData[offset],
+                    sourceData[offset + 1],
+                    sourceData[offset + 2],
+                    sourceData[offset + 3],
+                    WHITE_THRESHOLD,
+                    0
+                );
+                if (!white) {
+                    continue;
+                }
+                mask[pixelIndex] = 1;
+                if (col < minX) {
+                    minX = col;
+                }
+                if (row < minY) {
+                    minY = row;
+                }
+            }
+        }
+        if (minX === sourceImageData.width || minY === sourceImageData.height) {
+            return result;
+        }
+        for (let row = minY; row < sourceImageData.height; row += 1) {
+            for (let col = minX; col < sourceImageData.width; col += 1) {
+                const sourceIndex = row * sourceImageData.width + col;
+                if (!mask[sourceIndex]) {
+                    continue;
+                }
+                const dstX = col - minX;
+                const dstY = row - minY;
+                if (dstX >= targetWidth || dstY >= targetHeight) {
+                    continue;
+                }
+                const dstOffset = (dstY * targetWidth + dstX) * 4;
+                resultData[dstOffset] = 255;
+                resultData[dstOffset + 1] = 255;
+                resultData[dstOffset + 2] = 255;
+            }
+        }
+        return result;
+    }
+
     function compareMask(frame, templateMask, x, y, width, height) {
         const data = frame.data;
         let overlap = 0;
@@ -1419,54 +1484,50 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             return {...roi, exportName: `${slot}-roi`};
         }
         return {
-            x: Number.isFinite(match.x) ? match.x : roi.x,
-            y: Number.isFinite(match.y) ? match.y : roi.y,
-            width: Number.isFinite(match.width) ? match.width : roi.width,
-            height: Number.isFinite(match.height) ? match.height : roi.height,
+            x: roi.x,
+            y: roi.y,
+            width: roi.width,
+            height: roi.height,
             exportName: `${slot}-${match.file.replace(/[^a-zA-Z0-9._-]/g, "_")}`
         };
     }
 
     function createMonochromeCropCanvas(slot, match) {
-        const rect = resolveExportRect(slot, match);
+        const roi = ROI_DEFS[slot];
+        const cropDef = RECOGNIZED_CROP_DEFS[slot];
+        const exportName = match && match.file
+            ? `${slot}-${match.file.replace(/[^a-zA-Z0-9._-]/g, "_")}`
+            : `${slot}-roi`;
         const canvas = document.createElement("canvas");
-        canvas.width = rect.width;
-        canvas.height = rect.height;
+        canvas.width = cropDef.width;
+        canvas.height = cropDef.height;
         const context = canvas.getContext("2d", {willReadFrequently: true});
         context.imageSmoothingEnabled = false;
-        context.drawImage(
+        const roiCanvas = document.createElement("canvas");
+        roiCanvas.width = roi.width;
+        roiCanvas.height = roi.height;
+        const roiContext = roiCanvas.getContext("2d", {willReadFrequently: true});
+        roiContext.imageSmoothingEnabled = false;
+        roiContext.drawImage(
             processingCanvas,
-            rect.x,
-            rect.y,
-            rect.width,
-            rect.height,
+            roi.x,
+            roi.y,
+            roi.width,
+            roi.height,
             0,
             0,
-            rect.width,
-            rect.height
+            roi.width,
+            roi.height
         );
-        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-        const data = imageData.data;
-        for (let index = 0; index < data.length; index += 4) {
-            const white = isWhitePixel(
-                data[index],
-                data[index + 1],
-                data[index + 2],
-                data[index + 3],
-                WHITE_THRESHOLD,
-                0
-            );
-            const value = white ? 255 : 0;
-            data[index] = value;
-            data[index + 1] = value;
-            data[index + 2] = value;
-            data[index + 3] = 255;
-        }
-        shiftWhitePixelsToTopLeft(imageData);
-        context.putImageData(imageData, 0, 0);
+        const normalized = buildNormalizedMonochromeImageData(
+            roiContext.getImageData(0, 0, roi.width, roi.height),
+            cropDef.width,
+            cropDef.height
+        );
+        context.putImageData(normalized, 0, 0);
         return {
             canvas,
-            exportName: rect.exportName
+            exportName
         };
     }
 
@@ -1747,6 +1808,16 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
         if(modeRuleHasFile(mode, "kiriage", ally.file) && ally.score >= TEMPLATE_THRESHOLD) {
             return {kind: "action", actionId: ACTION_IDS.UPWARD_SLICE, detail: ally.file, score: ally.score};
+        }
+        if(modeRuleHasFile(mode, "inactive", main.file) && main.score >= TEMPLATE_THRESHOLD && !state.actionTaken) {
+            return {kind: "action", actionId: ACTION_IDS.INACTIVE_ALLY, detail: main.file, score: main.score};
+        }
+        if(modeRuleHasFile(mode, "samidare", main.file) && main.score >= TEMPLATE_THRESHOLD) {
+            if(target.file === "gilyumei_target.png" && target.score >= TEMPLATE_THRESHOLD) {
+                return {kind: "action", actionId: ACTION_IDS.MULTISLASH, detail: main.file, score: main.score};
+            }else if(target.file === "aha.png" && target.score >= TEMPLATE_THRESHOLD) {
+                return {kind: "action", actionId: ACTION_IDS.MULTITHRUST, detail: main.file, score: main.score};
+            }
         }
 
         const directAction = getModeRuleMap(mode, "directMainActions")[main.file];
