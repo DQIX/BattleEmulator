@@ -43,7 +43,9 @@
     const TEMPLATE_THRESHOLD = 0.45;
     const RESET_LATCH_CLEAR_SCORE = 0.6;
     const WHITE_THRESHOLD = 0.72;
-    const WHITE_SATURATION_MAX = 0.26;
+    const WHITE_SATURATION_MAX_DARK = 0.26;
+    const WHITE_SATURATION_MAX_BRIGHT = 0.05;
+    const WHITE_SATURATION_BRIGHT_VALUE = 1.0;
     const ACTION_THRESHOLD = 0.45;
     const NUMBER_THRESHOLD = 0.65;
     const MATCH_PENALTY_WEIGHT = 0.0;
@@ -550,9 +552,9 @@
                 code: `
 struct MaskParams {
   valueThreshold: f32,
-  saturationMax: f32,
-  alphaThreshold: f32,
-  padding: f32,
+  saturationMaxDark: f32,
+  saturationMaxBright: f32,
+  saturationBrightValue: f32,
 };
 
 @group(0) @binding(0) var frameTex: texture_2d<f32>;
@@ -574,9 +576,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let sample = textureLoad(frameTex, vec2<i32>(i32(gid.x), i32(gid.y)), 0);
   let value = max(max(sample.r, sample.g), sample.b);
   let saturation = hsvSaturation(sample.rgb);
-  let isWhite = sample.a >= maskParams.alphaThreshold &&
-    value >= maskParams.valueThreshold &&
-    saturation <= maskParams.saturationMax;
+  let saturationRange = max(0.001, maskParams.saturationBrightValue - maskParams.valueThreshold);
+  let saturationRatio = clamp((value - maskParams.valueThreshold) / saturationRange, 0.0, 1.0);
+  let saturationMax = maskParams.saturationMaxDark +
+    (maskParams.saturationMaxBright - maskParams.saturationMaxDark) * saturationRatio;
+  let isWhite = value >= maskParams.valueThreshold &&
+    saturation <= saturationMax;
   let index = gid.y * ${BASE_WIDTH}u + gid.x;
   frameMask[index] = select(0u, 1u, isWhite);
 }
@@ -738,7 +743,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             this.queue.writeBuffer(
                 maskParamsBuffer,
                 0,
-                new Float32Array([WHITE_THRESHOLD, WHITE_SATURATION_MAX, 0, 0])
+                new Float32Array([
+                    WHITE_THRESHOLD,
+                    WHITE_SATURATION_MAX_DARK,
+                    WHITE_SATURATION_MAX_BRIGHT,
+                    WHITE_SATURATION_BRIGHT_VALUE
+                ])
             );
 
             const maskBindGroup = device.createBindGroup({
@@ -956,11 +966,19 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return (maxChannel - minChannel) / maxChannel;
     }
 
+    function getWhiteSaturationMax(value, threshold) {
+        const range = Math.max(0.001, WHITE_SATURATION_BRIGHT_VALUE - threshold);
+        const ratio = Math.max(0, Math.min(1, (value - threshold) / range));
+        return WHITE_SATURATION_MAX_DARK
+            + (WHITE_SATURATION_MAX_BRIGHT - WHITE_SATURATION_MAX_DARK) * ratio;
+    }
+
     function isWhitePixel(r, g, b, a, threshold, alphaThreshold) {
         if (a / 255 < alphaThreshold) {
             return false;
         }
-        return getHsvValue(r, g, b) >= threshold && getHsvSaturation(r, g, b) <= WHITE_SATURATION_MAX;
+        const value = getHsvValue(r, g, b);
+        return value >= threshold && getHsvSaturation(r, g, b) <= getWhiteSaturationMax(value, threshold);
     }
 
     function shiftWhitePixelsToTopLeft(imageData) {
@@ -1490,10 +1508,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             return {...roi, exportName: `${slot}-roi`};
         }
         return {
-            x: roi.x,
-            y: roi.y,
-            width: roi.width,
-            height: roi.height,
+            x: match.x,
+            y: match.y,
+            width: match.width,
+            height: match.height,
             exportName: `${slot}-${match.file.replace(/[^a-zA-Z0-9._-]/g, "_")}`
         };
     }
