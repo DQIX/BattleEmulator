@@ -46,11 +46,14 @@
     const WHITE_SATURATION_MAX_DARK = 0.20;//こっちのほうを小さくないといけない
     const WHITE_SATURATION_MAX_BRIGHT = 0.27;//こっちが大きい
     const WHITE_SATURATION_DARK_VALUE = 0.10;
+
+    const NUMBER_WHITE_SATURATION_MAX_DARK = 0.18;
+    const NUMBER_WHITE_SATURATION_MAX_BRIGHT = 0.28;
+    const NUMBER_WHITE_THRESHOLD_BRIGHT = 0.70;
     const WHITE_SATURATION_BRIGHT_VALUE = 0.9;
-    const NUMBER_WHITE_THRESHOLD = 0.58;
-    const NUMBER_WHITE_SATURATION_MAX = 0.45;
+    const NUMBER_WHITE_THRESHOLD_DARK = 0.59;
     const ACTION_THRESHOLD = 0.45;
-    const NUMBER_THRESHOLD = 0.80;
+    const NUMBER_THRESHOLD = 0.68;
     const MATCH_PENALTY_WEIGHT = 0.0;
     const MATCH_WHITE_WEIGHT = 1.0;
     const TEMPLATE_ALPHA_THRESHOLD = 0.05;
@@ -92,12 +95,13 @@
         damage2: {
             x: 179,
             y: 645,
-            width: 160,
+            width: 180,
             height: 60,
             actionAreas: [
                 {x: 0, y: 0, width: 60, height: 60},
                 {x: 43, y: 0, width: 60, height: 60},
-                {x: 87, y: 0, width: 60, height: 60}
+                {x: 87, y: 0, width: 60, height: 60},
+                {x: 87+44, y: 0, width: 60, height: 60}
             ]
         }
     };
@@ -915,11 +919,40 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return (maxChannel - minChannel) / maxChannel;
     }
 
-    function getWhiteSaturationMaxForBackground(value) {
+    function interpolateWhiteParamByBackground(value, darkParam, brightParam) {
         const range = Math.max(0.001, WHITE_SATURATION_BRIGHT_VALUE - WHITE_SATURATION_DARK_VALUE);
         const ratio = Math.max(0, Math.min(1, (value - WHITE_SATURATION_DARK_VALUE) / range));
-        return WHITE_SATURATION_MAX_DARK
-            + (WHITE_SATURATION_MAX_BRIGHT - WHITE_SATURATION_MAX_DARK) * ratio;
+        return darkParam + (brightParam - darkParam) * ratio;
+    }
+
+    function getWhiteSaturationMaxForBackground(value) {
+        return interpolateWhiteParamByBackground(
+            value,
+            WHITE_SATURATION_MAX_DARK,
+            WHITE_SATURATION_MAX_BRIGHT
+        );
+    }
+
+    function getNumberWhiteThresholdForBackground(value) {
+        return interpolateWhiteParamByBackground(
+            value,
+            NUMBER_WHITE_THRESHOLD_DARK,
+            NUMBER_WHITE_THRESHOLD_BRIGHT
+        );
+    }
+
+    function getNumberWhiteSaturationMaxForBackground(value) {
+        console.log(interpolateWhiteParamByBackground(
+            value,
+            NUMBER_WHITE_SATURATION_MAX_DARK,
+            NUMBER_WHITE_SATURATION_MAX_BRIGHT
+        ));
+
+        return interpolateWhiteParamByBackground(
+            value,
+            NUMBER_WHITE_SATURATION_MAX_DARK,
+            NUMBER_WHITE_SATURATION_MAX_BRIGHT
+        );
     }
 
     function estimateBackgroundValue(imageData, area = null) {
@@ -962,6 +995,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         };
     }
 
+    function buildNumberWhiteParamsForImageData(imageData, area = null) {
+        const backgroundValue = estimateBackgroundValue(imageData, area);
+        return {
+            threshold: getNumberWhiteThresholdForBackground(backgroundValue),
+            saturationMax: getNumberWhiteSaturationMaxForBackground(backgroundValue)
+        };
+    }
+
     function buildWhiteParamsBySlot(frame) {
         const params = {};
         for (const slot of MATCH_SLOT_KEYS) {
@@ -979,12 +1020,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return value >= threshold && getHsvSaturation(r, g, b) <= saturationMax;
     }
 
-    function isNumberWhitePixel(r, g, b, a) {
+    function isNumberWhitePixel(r, g, b, a, whiteParams) {
         if (a <= 0) {
             return false;
         }
-        return getHsvValue(r, g, b) >= NUMBER_WHITE_THRESHOLD
-            && getHsvSaturation(r, g, b) <= NUMBER_WHITE_SATURATION_MAX;
+        const threshold = whiteParams?.threshold ?? NUMBER_WHITE_THRESHOLD_DARK;
+        const saturationMax = whiteParams?.saturationMax ?? NUMBER_WHITE_SATURATION_MAX_DARK;
+        return getHsvValue(r, g, b) >= threshold
+            && getHsvSaturation(r, g, b) <= saturationMax;
     }
 
     function shiftWhitePixelsToTopLeft(imageData) {
@@ -1175,13 +1218,15 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     function buildNumberWhiteMask(imageData) {
         const mask = new Uint8Array(imageData.width * imageData.height);
         const data = imageData.data;
+        const whiteParams = buildNumberWhiteParamsForImageData(imageData);
         for (let index = 0; index < mask.length; index += 1) {
             const offset = index * 4;
             mask[index] = isNumberWhitePixel(
                 data[offset],
                 data[offset + 1],
                 data[offset + 2],
-                data[offset + 3]
+                data[offset + 3],
+                whiteParams
             ) ? 1 : 0;
         }
         return {
