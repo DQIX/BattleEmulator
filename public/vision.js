@@ -2207,7 +2207,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             if (main.file === "critical.png" && main.score >= TEMPLATE_THRESHOLD) {
                 const turn = (state.maybeCritical & 0xfff) + 1;
                 const slotIndex = (state.maybeCritical >> 12) & 0xf;
-                updateHistoryDamage(turn, slotIndex, -2); // -2は「action上書き」シグナル用
+                updateHistoryDamage(turn, slotIndex, -1); // -2は「action上書き」シグナル用
                 // 実際はダメージではなくactionIdを上書きする必要があるため別途処理
                 const entry = state.history.find((item) => item.turn === turn && item.slot === slotIndex + 1);
                 if (entry) {
