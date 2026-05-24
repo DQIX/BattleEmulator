@@ -49,6 +49,7 @@ return [
 		'gilyumeiMain' => ['gilyumei.png'],
 		'psycheUpTarget' => ['aha.png'],
 		'resetSub' => ['reset.png'],
+		'kiriage' => ['kiriage.png'],
 		'directMainActions' => [
 			'sukara.png' => 30,
 			'mira-.png' => 31,
@@ -65,6 +66,7 @@ return [
 			'elven.png' => 48,
 			'flee.png' => 53,
 			'tokuyaku.png' => 50,
+			'mazinngiri.png' => 66,
 		],
 	],
 ];

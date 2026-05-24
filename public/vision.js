@@ -43,9 +43,9 @@
     const TEMPLATE_THRESHOLD = 0.45;
     const RESET_LATCH_CLEAR_SCORE = 0.6;
     const WHITE_THRESHOLD = 0.72;
-    const WHITE_SATURATION_MAX = 0.24;
+    const WHITE_SATURATION_MAX = 0.20;
     const ACTION_THRESHOLD = 0.45;
-    const NUMBER_THRESHOLD = 0.80;
+    const NUMBER_THRESHOLD = 0.65;
     const MATCH_PENALTY_WEIGHT = 0.0;
     const MATCH_WHITE_WEIGHT = 1.0;
     const TEMPLATE_ALPHA_THRESHOLD = 0.05;
@@ -132,7 +132,7 @@
         64: {names: {ja: "火炎斬り", en: "FLAME_SLASH"}, ally: false, damage: true},
         65: {names: {ja: "マヒャド斬り", en: "KACRACKLE_SLASH"}, ally: false, damage: true},
         66: {names: {ja: "魔人切り", en: "HATCHET_MAN"}, ally: false, damage: true},
-        67: {names: {ja: "切り上げ", en: "UPWARD_SLICE"}, ally: false, damage: true},
+        67: {names: {ja: "斬り上げた", en: "UPWARD_SLICE"}, ally: false, damage: true},
         68: {names: {ja: "さみだれ斬り", en: "MULTISLASH"}, ally: false, damage: true}
     };
     const ACTION_IDS = Object.freeze({
@@ -1745,6 +1745,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             return {kind: "reset", score: Math.min(main.score, sub.score), detail: `${main.file} + ${sub.file}`};
         }
 
+        if(modeRuleHasFile(mode, "kiriage", ally.file) && ally.score >= TEMPLATE_THRESHOLD) {
+            return {kind: "action", actionId: ACTION_IDS.UPWARD_SLICE, detail: ally.file, score: ally.score};
+        }
+
         const directAction = getModeRuleMap(mode, "directMainActions")[main.file];
         if (directAction && main.score >= TEMPLATE_THRESHOLD) {
             return {kind: "action", actionId: directAction, detail: main.file, score: main.score};
@@ -2011,7 +2015,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function getDamageChannel(actionId) {
-        if (actionId === ACTION_IDS.ULTRA_HIGH_SPEED_COMBO || actionId === ACTION_IDS.MULTITHRUST) {
+        if (actionId === ACTION_IDS.MULTISLASH || actionId === ACTION_IDS.ULTRA_HIGH_SPEED_COMBO || actionId === ACTION_IDS.MULTITHRUST) {
             return 2;
         }
         if ([
@@ -2023,7 +2027,11 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             ACTION_IDS.DARK_BREATH,
             ACTION_IDS.ATTACK_ALLY,
             ACTION_IDS.MAGIC_BURST,
-            ACTION_IDS.MERCURIAL_THRUST
+            ACTION_IDS.MERCURIAL_THRUST,
+            ACTION_IDS.UPWARD_SLICE,
+            ACTION_IDS.FLAME_SLASH,
+            ACTION_IDS.KACRACKLE_SLASH,
+            ACTION_IDS.HATCHET_MAN,
         ].includes(actionId)) {
             return 1;
         }
@@ -2109,7 +2117,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
 
         if ((state.pendingDamage1 !== -1 && state.pendingDamage1Enabled) || state.lastDamage1 < candidateDamage1) {
-            if (["guard.png", "miss.png", "miss2.png", "mikawasi.png"].includes(main.file)) {
+            if (["guard.png", "miss.png", "miss2.png", "mikawasi.png"].includes(main.file) && main.score >= TEMPLATE_THRESHOLD) {
                 state.pendingDamage1Enabled = false;
                 state.maybeCritical = -1;
                 resolvePendingDamage(state.pendingDamage1, 0);
@@ -2124,7 +2132,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 return true;
             }
         } else if ((state.pendingDamage2 !== -1 && state.pendingDamage2Enabled) || state.lastDamage2 < candidateDamage2) {
-            if (["guard.png", "miss.png", "miss2.png", "mikawasi.png"].includes(main.file)) {
+            if (["guard.png", "miss.png", "miss2.png", "mikawasi.png"].includes(main.file) && main.score >= TEMPLATE_THRESHOLD) {
                 state.pendingDamage2Enabled = false;
                 state.maybeCritical = -1;
                 state.lastDamage2 = -1;
