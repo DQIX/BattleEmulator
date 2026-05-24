@@ -36,7 +36,7 @@
   * Furthermore, this does not mean that dynamic elements should not be initialized at startup.
 * The BattleEmulator.cpp file in this branch is not related to video recognition. If necessary, be sure to run `git stash` before going to the target branch. After returning to the branch, be sure to run `git stash apply`.
 * Also, when switching branches, please remember the name of the branch you are currently on.
-* Do not use git stash pop.
+* Do not use git stash pop. Also, please do not delete the stash after you have finished working on it.
 * Please do not delete branches without asking me.
 * Remote branches are protected by GitHub, but please do not delete them without asking me.
 * This is the current and most recent branch.
@@ -49,7 +49,7 @@
   origin/erugiosu_new_arugo
   origin/erusionn_new_arugo
   origin/gadonnko_new_arugo
-  origin/gilyumei2_new_arugo　(including gilyumei1 & gilyumei2)
+  origin/gilyumei2_new_arugo　(including gilyumei1 & gilyumei2) This includes the first and second forms
   origin/goreonn_new_arugo
   origin/nusisama1_v2_new_arugo
   origin/reokonn_lv8_new_arugo
