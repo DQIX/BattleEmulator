@@ -9,8 +9,6 @@ return [
 		'whiteSaturationMaxBright' => 0.25,
 		'numberWhiteThresholdBright' => 0.65,
 		'numberWhiteThresholdDark' => 0.50,
-		'whiteSaturationMaxDark' => 0.20,//こっちのほうを小さくないといけない
-		'whiteSaturationMaxBright' => 0.24,//こっちが大きい
 		'whiteThreshold' => 0.60,
 	],
 	'names' => [

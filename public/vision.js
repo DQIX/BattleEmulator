@@ -43,7 +43,7 @@
     const DEFAULT_VISION_THRESHOLDS = Object.freeze({
         templateThreshold: 0.45,
         resetLatchClearScore: 0.6,
-        whiteThreshold: 0.72,
+        whiteThreshold: 0.72,//これ結果スコアの一致率
         whiteSaturationMaxDark: 0.20,//こっちのほうを小さくないといけない
         whiteSaturationMaxBright: 0.26,//こっちが大きい
         whiteSaturationDarkValue: 0.10,
@@ -53,7 +53,7 @@
         whiteSaturationBrightValue: 0.9,
         numberWhiteThresholdDark: 0.59,
         actionThreshold: 0.45,
-        numberThreshold: 0.65,
+        numberThreshold: 0.65,//これ結果スコアの一致率 score >= thresholds.numberThreshold
         matchPenaltyWeight: 0.0,
         matchWhiteWeight: 1.0,
         templateAlphaThreshold: 0.05
@@ -2046,6 +2046,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         // reset
         if (erugioMain && modeRuleHasFile(mode, "resetSub", sub.file) && main.score >= 0.6 && sub.score >= 0.6) {
             return {kind: "reset", score: Math.min(main.score, sub.score), detail: `${main.file} + ${sub.file}`};
+        }else if(erugioMain){
+            return {kind: "action", actionId: ACTION_IDS.ATTACK_ENEMY, detail: main.file, score: main.score};
         }
         const directAction = getModeRuleMap(mode, "directMainActions")[main.file];
         if (directAction && main.score >= templateThreshold) {
