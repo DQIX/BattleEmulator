@@ -100,13 +100,14 @@ public:
     static constexpr int INSULATE = 63;//バーハ
 
 
+	static constexpr int RUBBLE = 150;//がれき落とし
+	static constexpr int HOLY_WATER = 151;//せいすい
+
     static bool
     Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
          BattleResult* result, uint64_t seed, const int eActions[350], const int damages[350], int mode, uint64_t *NowState);
 
     static std::string getActionName(int actionId);
-
-    static int roundCustom(double value);
 
 	static void ResetTurnProcessed();
 
@@ -119,23 +120,15 @@ public:
 
 
 private:
-    static int ProcessMagicBurst(int *position);
-
-    static void ProcessRage(int *position, int baseDamage, const Player players[2]);
-
-    static void RecalculateBuff(Player players[2]);
-
-    static int CalculateMoreHealBase(const Player players[2]);
-
-    static int CalculateMidHealBase(const Player players[2]);
-
-    static int FUN_0208aecc(int *position, uint64_t *NowState);
-
     static void resetCombo(uint64_t *NowState);
 
     static double processCombo(int32_t Id, double damage, uint64_t *NowState);
 
+	static void ProcessRage(int *position, int baseDamage, const Player players[2]);
+
     static int FUN_0207564c(int *position, int atk, int def);
+
+    static int ProcessEnemyRandomAction2b(int *position);
 
     static int FUN_021e8458_typeC(int *position, double min, double max, double base);
 
@@ -144,12 +137,6 @@ private:
     static int callAttackFun(int32_t Id, int *position, Player *players, int attacker, int defender, uint64_t *NowState);
 
     static double FUN_021dbc04(int baseHp, double maxHp);
-
-    static int ProcessEnemyRandomAction2A(int *position);
-
-    static int ProcessEnemyRandomAction44(int *position);
-
-    static void process7A8(int *position, int baseDamage, Player players[2], int defender);
 };
 
 

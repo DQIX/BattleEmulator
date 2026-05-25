@@ -13,37 +13,11 @@ struct Player {
     int hp;
     double maxHp;
     int atk;
-    int defaultATK;
     int def;
-    int defaultDEF;
     int speed;
     int HealPower;
     int mp = 0;
     int maxMp = 0;
-    bool specialCharge = false;
-    bool dirtySpecialCharge = false;
-    int specialChargeTurn = 0;
-    bool paralysis = false;
-    int paralysisLevel = 0;
-    int paralysisTurns = -1;
-
-    int SpecialMedicineCount = 3;
-    double defence = 1.0;
-    bool sleeping = false;
-    int sleepingTurn = -1;
-    int BuffLevel = 0;
-    int BuffTurns = -1;
-    bool hasMagicMirror = false;
-    int MagicMirrorTurn = -1;
-    int AtkBuffLevel = 0;
-    int AtkBuffTurn = -1;
-    int TensionLevel = 0;
-    bool rage = false;
-    int SageElixirCount = 1;
-    int ElfinElixirCount = 1;
-    int MagicWaterCount = 1;
-    int InsulateLevel = 0;
-    int InsulateTurns = -1;
 
     // 他のメンバー変数やメンバー関数を追加する可能性があります
 
