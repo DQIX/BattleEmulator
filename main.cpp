@@ -9,9 +9,6 @@
 #include "lcg.h"
 #include "BattleEmulator.h"
 #include "debug.h"
-#include "ActionOptimizer.h"
-#include "EnhancedCostCalculator.h"
-
 #ifdef DEBUG
 
 #include <chrono>
@@ -784,11 +781,66 @@ EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed
 }
 #endif
 
+#ifdef DEBUG4
+static void runDebug4Benchmark(const Player copiedPlayers[2]) {
+	constexpr int targetTurns = 10000000;
+	constexpr int maxTurnsPerRun = 300;
+	constexpr uint64_t baseSeed = 0x03642037ull;
+
+	int32_t gene[350] = {0};
+	for (int i = 0; i < maxTurnsPerRun; ++i) {
+		gene[i] = BattleEmulator::HEAL;
+	}
+	gene[maxTurnsPerRun] = -1;
+
+	Player benchPlayers[2] = {copiedPlayers[0], copiedPlayers[1]};
+	benchPlayers[0].hp = 100000000;
+	benchPlayers[0].maxHp = 100000000.0;
+	benchPlayers[0].mp = 100000000;
+	benchPlayers[0].maxMp = 100000000;
+	benchPlayers[1].hp = 100000000;
+	benchPlayers[1].maxHp = 100000000.0;
+
+	BattleEmulator::ResetTurnProcessed();
+	const auto started = std::chrono::steady_clock::now();
+
+	int seedOffset = 0;
+	while (BattleEmulator::getTurnProcessed() < targetTurns) {
+		const int remaining = targetTurns - BattleEmulator::getTurnProcessed();
+		const int runTurns = std::min(maxTurnsPerRun, remaining);
+		const uint64_t seed = baseSeed + static_cast<uint64_t>(seedOffset);
+		int position = 1;
+		uint64_t nowState = 0;
+		Player players[2] = {benchPlayers[0], benchPlayers[1]};
+
+		lcg::init(seed);
+		BattleEmulator::Main(&position, runTurns, gene, players, nullptr, seed, nullptr, nullptr, -2, &nowState);
+		++seedOffset;
+	}
+
+	const auto finished = std::chrono::steady_clock::now();
+	const double seconds = std::chrono::duration<double>(finished - started).count();
+	const int turns = BattleEmulator::getTurnProcessed();
+	std::cout << "DEBUG4 benchmark" << std::endl;
+	std::cout << "baseSeed: 0x" << std::hex << baseSeed << std::dec << std::endl;
+	std::cout << "seeds: " << seedOffset << std::endl;
+	std::cout << "turns: " << turns << std::endl;
+	std::cout << std::fixed << std::setprecision(3);
+	std::cout << "seconds: " << seconds << std::endl;
+	std::cout << "turns/sec: " << static_cast<double>(turns) / seconds << std::endl;
+}
+#endif
+
 int main() {
 	showHeader();
 
 	//https://zenn.dev/reputeless/books/standard-cpp-for-competitive-programming/viewer/library-ios-iomanip#3.1-c-%E8%A8%80%E8%AA%9E%E3%81%AE%E5%85%A5%E5%87%BA%E5%8A%9B%E3%82%B9%E3%83%88%E3%83%AA%E3%83%BC%E3%83%A0%E3%81%A8%E3%81%AE%E5%90%8C%E6%9C%9F%E3%82%92%E7%84%A1%E5%8A%B9%E3%81%AB%E3%81%99%E3%82%8B
 	//std::cin.tie(0)->sync_with_stdio(0);
+
+#ifdef DEBUG4
+	runDebug4Benchmark(copiedPlayers);
+	return 0;
+#endif
 
 #if defined(OPTIMIZE_MODE)
 	int actions1[350] = {};

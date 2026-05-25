@@ -124,7 +124,7 @@ private:
 
     static double processCombo(int32_t Id, double damage, uint64_t *NowState);
 
-	static void ProcessRage(int *position, int baseDamage, const Player players[2]);
+	static void ProcessRage(int *position, int baseDamage, const Player players[2], int preEnemyHp);
 
     static int FUN_0207564c(int *position, int atk, int def);
 
@@ -134,7 +134,8 @@ private:
 
     static int FUN_021e8458_typeD(int *position, double difference, double base);
 
-    static int callAttackFun(int32_t Id, int *position, Player *players, int attacker, int defender, uint64_t *NowState);
+    static int callAttackFun(int32_t Id, int *position, Player *players, int attacker, int defender, uint64_t *NowState,
+                             bool isDefending);
 
     static double FUN_021dbc04(int baseHp, double maxHp);
 };

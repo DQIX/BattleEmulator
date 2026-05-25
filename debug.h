@@ -17,6 +17,8 @@
 
 //#define DEBUG1 1
 
+//#define DEBUG4 1
+
 // DEBUGモードが有効な場合にのみデバッグ出力を有効にする
 #ifdef DEBUG1
 #define DEBUG_COUT1(x) std::cout << x << std::endl
@@ -24,7 +26,9 @@
 #define DEBUG_COUT1(x)
 #endif
 
+#ifndef DEBUG4
 #define DEBUG2 1
+#endif
 
 #ifdef DEBUG2
 #define DEBUG_COUT2(x) std::cout << x << std::endl
@@ -39,6 +43,12 @@
 #define DEBUG_COUT3(x) std::cout << x << std::endl
 #else
 #define DEBUG_COUT3(x)
+#endif
+
+#ifdef DEBUG4
+#define DEBUG_COUT4(x) std::cout << x << std::endl
+#else
+#define DEBUG_COUT4(x)
 #endif
 
 

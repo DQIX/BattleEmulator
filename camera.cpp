@@ -22,6 +22,7 @@ void camera::Main(int *position, const int32_t actions[5], uint64_t * NowState, 
 }
 
 //constexprルッキングテーブルにすれば速い
+//ここのパスは、乱数消費は同じでも、別のコルーチンなので、状態に圧縮するのはNG
 void camera::onFreeCameraMove(int *position, const int param5, uint64_t * NowState) {
     auto counter = ((*NowState) >> 8) & 0xf;
     do {

@@ -11,14 +11,9 @@
 #include "camera.h"
 #include "debug.h"
 #include "BattleResult.h"
-#include "Equipment.h"
 
 
-thread_local int32_t actions[3];
-thread_local int actionsPosition = 0;
-thread_local int preHP[3] = {0, 0, 0};
 thread_local int threadTurnProcessed = 0;
-thread_local double defence = 1.0;
 int startTurn = 0;
 
 void BattleEmulator::resetStartTurn() {
@@ -66,15 +61,18 @@ std::string BattleEmulator::getActionName(int actionId) {
 }
 
 bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
-                         BattleResult* result,
-                          uint64_t seed, const int eActions[350], const int damages[350], int mode,
-                          uint64_t *NowState) {
-    bool player0_has_initiative = false;
-    actionsPosition = 0;
+                          BattleResult* result,
+                           uint64_t seed, const int eActions[350], const int damages[350], int mode,
+                           uint64_t *NowState) {
+    (void) seed;
+    (void) eActions;
     int genePosition = 0;
     int exCounter = 0;
+    uint64_t nowState = *NowState;
+    const bool recordResult = mode == -1;
+    const bool validateDamage = mode != -1 && mode != -2;
 
-    auto startPos = static_cast<int>(((*NowState) >> 12) & 0xfffff);
+    auto startPos = static_cast<int>((nowState >> 12) & 0xfffff);
     if (startPos != 0) {
         startPos++;
         RunCount += startPos;
@@ -83,13 +81,12 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         RunCount++;
     }
     for (int counterJ = startPos; counterJ < RunCount; ++counterJ) {
-        processTurn();
+        ++threadTurnProcessed;
         if (genePosition != -1) {
             genePosition = counterJ - 1;
         }
         //現在ターンを保存
-        (*NowState) &= ~0xFFFFF000;
-        (*NowState) |= (static_cast<uint64_t>(counterJ) << 12ULL);
+        nowState = (nowState & ~0xFFFFF000ULL) | (static_cast<uint64_t>(counterJ) << 12ULL);
 
 #ifdef DEBUG2
         DEBUG_COUT2((*position));
@@ -101,18 +98,13 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         int ehp = players[1].hp;
         int ahp = players[0].hp;
 
-        defence = 1.0;
-
-        actionsPosition = 0;
+        int32_t turnActions[3] = {0, 0, 0};
+        int turnActionPosition = 0;
         double speed0 = players[0].speed * lcg::floatRand051_1(position);
         double speed1 = players[1].speed * lcg::floatRand051_1(position);
 
         // 素早さを比較
-        if (speed0 > speed1) {
-            player0_has_initiative = true;
-        } else {
-            player0_has_initiative = false;
-        }
+        const bool player0_has_initiative = speed0 > speed1;
 
         int c = ProcessEnemyRandomAction2b(position);
         int32_t action = -1;
@@ -122,26 +114,25 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             (*position)++;
         }
 
-        if (Gene[genePosition] == 0 || Gene[genePosition] == -1) {
-            genePosition = -1;
-            //throw std::invalid_argument("GenePosition is invalid");
+        if (genePosition != -1) {
+            const int32_t gene = Gene[genePosition];
+            if (gene == 0 || gene == -1) {
+                genePosition = -1;
+                //throw std::invalid_argument("GenePosition is invalid");
+            } else {
+                action = gene;
+            }
         }
-        if (genePosition != -1 && Gene[genePosition] != 0 && Gene[genePosition] != -1) {
-            action = Gene[genePosition];
-        } else {
+        if (action == -1) {
             action = ATTACK_ALLY;
         }
-
-
-        if (action == DEFENCE) {
-           defence = 0.5;
-        }
+        const bool isDefending = action == DEFENCE;
         // ソートされた結果を出力
         for (int t = 0; t < 2; ++t) {
-            if (!Player::isPlayerAlive(players[1])) {
+            if (players[1].hp == 0) {
                 break;
             }
-            if (!Player::isPlayerAlive(players[0])) {
+            if (players[0].hp == 0) {
                 break;
             }
 
@@ -151,22 +142,25 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 (*position)++;//0x021588ec
                 (*position)++;//0x02159b10
                 //--------end_FUN_02158dfc-------
-                basedamage = callAttackFun(c, position, players, 1, 0, NowState);
+                turnActions[turnActionPosition++] = c;
+                basedamage = callAttackFun(c, position, players, 1, 0, &nowState, isDefending);
 
-                if (mode == -1) {
+                if (recordResult) {
                     BattleResult::add(result, c, basedamage, true, counterJ - 1,
                                       player0_has_initiative, ehp,
                                       ahp, players[0].mp);
-                } else if (mode != -1 && mode != -2) {
+                } else if (validateDamage) {
                     if (
                         c == ATTACK_ENEMY ||
                         c == RUBBLE
                     ) {
                         if (damages[exCounter] == -1) {
                             startTurn = counterJ - 1;
+                            *NowState = nowState;
                             return true;
                         }
                         if (damages[exCounter++] != basedamage) {
+                            *NowState = nowState;
                             return false;
                         }
                     }
@@ -177,7 +171,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     Player::reduceHp(players[0], basedamage);
                 }
                 //--------start_FUN_021594bc-------
-                if (Player::isPlayerAlive(players[0]) && Player::isPlayerAlive(players[1])) {
+                if (players[0].hp != 0 && players[1].hp != 0) {
                     (*position) += 1;
                 } else {
                     break;
@@ -187,8 +181,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 //--------start_FUN_02158dfc-------
                 (*position) += 1;
                 //--------end_FUN_02158dfc-------
-                basedamage = callAttackFun(action, position, players, 0, 1, NowState);
-                if (mode == -1) {
+                turnActions[turnActionPosition++] = action;
+                basedamage = callAttackFun(action, position, players, 0, 1, &nowState, isDefending);
+                if (recordResult) {
                     BattleResult::add(result, action, basedamage, false, counterJ - 1,
                                       player0_has_initiative, ehp, ahp,players[0].mp);
                 }
@@ -197,36 +192,40 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 } else {
                     Player::reduceHp(players[1], basedamage);
 
-                    if (mode != -1 && mode != -2) {
+                    if (validateDamage) {
                         if (action == ATTACK_ALLY) {
                             if (damages[exCounter] == -1) {
                                 startTurn = counterJ - 1;
+                                *NowState = nowState;
                                 return true;
                             }
                             //int need = ;
                             if (damages[exCounter++] != basedamage) {
+                                *NowState = nowState;
                                 return false;
                             }
                         }
                     }
                 }
                 //--------start_FUN_021594bc-------
-                if (Player::isPlayerAlive(players[0]) && Player::isPlayerAlive(players[1])) {
+                if (players[0].hp != 0 && players[1].hp != 0) {
                     (*position) += 1;
                     //TODO: 順序調べる
                 }
             }
             //--------end_FUN_021594bc-------
         }
-        if (Player::isPlayerAlive(players[0]) && Player::isPlayerAlive(players[1])) {
+        if (players[0].hp != 0 && players[1].hp != 0) {
             (*position) += 1;
         }
-        camera::Main(position, actions, NowState, player0_has_initiative);
+        camera::Main(position, turnActions, &nowState, player0_has_initiative);
 
-        if (!Player::isPlayerAlive(players[1])) {
+        if (players[1].hp == 0) {
+            *NowState = nowState;
             return false;
         }
-        if (!Player::isPlayerAlive(players[0])) {
+        if (players[0].hp == 0) {
+            *NowState = nowState;
             return false;
         }
 
@@ -234,8 +233,10 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
     }
     if (mode != -1 && mode != -2) {
         startTurn = RunCount - 2;
+        *NowState = nowState;
         return true;
     } else {
+        *NowState = nowState;
         return false;
     }
 }
@@ -249,11 +250,8 @@ double BattleEmulator::FUN_021dbc04(int baseHp, double maxHp) {
 }
 
 int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, int attacker, int defender,
-                                  uint64_t *NowState) {
-    for (int j = 0; j < 2; ++j) {
-        preHP[j] = players[j].hp;
-    }
-    actions[actionsPosition++] = Id;
+                                  uint64_t *NowState, bool isDefending) {
+    const int preDefenderHp = players[defender].hp;
     int baseDamage = 0;
     switch (Id & 0xffff) {
         // case BattleEmulator::MEDICINAL_HERBS:
@@ -274,7 +272,6 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             break;
         case BattleEmulator::ATTACK_ENEMY:
             {
-                double tmp = 0;
                 bool kaihi = false;
                 (*position) += 2;
                 (*position)++; // アクロバットスターとか
@@ -291,9 +288,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 if (kaihi) {
                     baseDamage = 0;
                 } else {
-                    tmp = static_cast<double>(baseDamage);
-                    tmp *= defence;
-                    baseDamage = static_cast<int>(floor(tmp));
+                    if (isDefending) {
+                        baseDamage >>= 1;
+                    }
 
                     if (baseDamage != 0) {
                         (*position)++; //目を覚ました
@@ -353,7 +350,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
 
                 if (!kaihi) {
-                    ProcessRage(position, baseDamage, players);
+                    ProcessRage(position, baseDamage, players, preDefenderHp);
                     (*position)++; //目を覚ました
                     (*position)++; //不明
                 } else {
@@ -386,7 +383,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     (*position)++;//目を覚ました
                     (*position)++;//不明
                 }
-                baseDamage = static_cast<int>((baseDamage * defence));
+                if (isDefending) {
+                    baseDamage >>= 1;
+                }
                 break;
             }
         default:
@@ -491,16 +490,16 @@ int BattleEmulator::FUN_0207564c(int *position, int atk, int def) {
 
 #endif
 
-void BattleEmulator::ProcessRage(int *position, int baseDamage, const Player *players) {
-    auto percent1 = FUN_021dbc04(preHP[1] - baseDamage, players[1].maxHp);
-    if (percent1 < 0.5) {
-        double percent = FUN_021dbc04(preHP[1], players[1].maxHp);
-        if (percent >= 0.5) {
+void BattleEmulator::ProcessRage(int *position, int baseDamage, const Player *players, int preEnemyHp) {
+    const double maxHp = players[1].maxHp;
+    const int afterHp = preEnemyHp - baseDamage;
+    if (static_cast<double>(afterHp) < maxHp * 0.5) {
+        if (static_cast<double>(preEnemyHp) >= maxHp * 0.5) {
             (*position)++;
             (*position)++;
         } else {
-            if (percent1 < 0.25) {
-                if (percent >= 0.25) {
+            if (static_cast<double>(afterHp) < maxHp * 0.25) {
+                if (static_cast<double>(preEnemyHp) >= maxHp * 0.25) {
                     (*position)++;
                     (*position)++;
                 }
@@ -566,6 +565,6 @@ constexpr auto actionTable = makeProbabilityTable(ratios, ids);
 
 int BattleEmulator::ProcessEnemyRandomAction2b(int *position) {
     //0x0208aca8
-    int rnd = lcg::getPercent(position, 0x100);
+    int rnd = static_cast<int>(static_cast<uint32_t>(lcg::getTop32(position)) >> 24);
     return actionTable[rnd];
 }

@@ -7,6 +7,16 @@
 #include <cassert>
 #include <cstdint>
 
+namespace {
+constexpr uint64_t LCG_MULTIPLIER = 0x5d588b656c078965;
+constexpr uint64_t LCG_INCREMENT = 0x269ec3;
+constexpr int LINEAR_ADVANCE_LIMIT = 32;
+
+inline uint64_t lcg_step(uint64_t seed) {
+    return seed * LCG_MULTIPLIER + LCG_INCREMENT;
+}
+}
+
 #if defined(OPTIMIZE_MODE)
 // Define the size of the array
 const int ARRAY_SIZE = 7000;
@@ -24,27 +34,13 @@ bool init_mode;         // true = 初期一括生成モード
 #endif
 
 inline uint64_t lcg::lcg_rand(uint64_t seed) {
-    // Constants for the LCG formula
-    const uint64_t multiplier = 0x5d588b656c078965;
-    const uint64_t increment = 0x269ec3;
-    const uint64_t modulo = 0xFFFFFFFFFFFFFFFF;
-
-    // Update the seed using the LCG formula
-    seed = seed * multiplier + increment;
-
-    // Apply modulo to keep the result within the specified range
-    seed = seed & modulo;
-
-    return seed;
+    return lcg_step(seed);
 }
 
 static inline uint64_t lcg_advance(uint64_t seed, uint64_t delta) {
-    const uint64_t multiplier = 0x5d588b656c078965;
-    const uint64_t increment = 0x269ec3;
-
     // Exponentiation by squaring for LCG: f(x)=a*x+c (mod 2^64).
-    uint64_t a = multiplier;
-    uint64_t c = increment;
+    uint64_t a = LCG_MULTIPLIER;
+    uint64_t c = LCG_INCREMENT;
     uint64_t acc_mult = 1;
     uint64_t acc_plus = 0;
 
@@ -88,8 +84,14 @@ inline uint64_t lcg::nextTop32NoCache(int position) {
 
     // nowCounter を position まで進める（ジャンプ対応）
     if (nowCounter < position) {
-        const uint64_t delta = static_cast<uint64_t>(position - nowCounter);
-        now_seed = lcg_advance(now_seed, delta);
+        int delta = position - nowCounter;
+        if (delta <= LINEAR_ADVANCE_LIMIT) {
+            do {
+                now_seed = lcg_step(now_seed);
+            } while (--delta != 0);
+        } else {
+            now_seed = lcg_advance(now_seed, static_cast<uint64_t>(delta));
+        }
         nowCounter = position;
     }
     // now_seed は「position に対応する seed」になっている
