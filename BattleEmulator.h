@@ -121,6 +121,7 @@ public:
     static constexpr int MANAZASHI = 83;
     static constexpr int HP_HOOVER = 84;
     static constexpr int WOOSH_ALLY = 85;
+    static constexpr int RUBBLE = 150;
 
     static void ResetTurnProcessed();
 

@@ -162,7 +162,8 @@
         65: {names: {ja: "マヒャド斬り", en: "KACRACKLE_SLASH"}, ally: false, damage: true},
         66: {names: {ja: "魔人切り", en: "HATCHET_MAN"}, ally: false, damage: true},
         67: {names: {ja: "斬り上げた", en: "UPWARD_SLICE"}, ally: false, damage: true},
-        68: {names: {ja: "さみだれ斬り", en: "MULTISLASH"}, ally: false, damage: true}
+        68: {names: {ja: "さみだれ斬り", en: "MULTISLASH"}, ally: false, damage: true},
+        150: {names: {ja: "ガレキ", en: "RUBBLE"}, ally: false, damage: true}
     };
     const ACTION_IDS = Object.freeze({
         ATTACK_ENEMY: 1,
@@ -219,7 +220,8 @@
         KACRACKLE_SLASH: 65,
         HATCHET_MAN: 66,
         UPWARD_SLICE: 67,
-        MULTISLASH: 68
+        MULTISLASH: 68,
+        RUBBLE: 150
     });
     const ACTIONS_BY_ID = ACTIONS;
 
@@ -2342,6 +2344,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             ACTION_IDS.HATCHET_MAN,
             ACTION_IDS.ATTACK_ALLY,
             ACTION_IDS.ATTACK_ENEMY,
+            ACTION_IDS.RUBBLE,
         ].includes(actionId)) {
             return 1;
         }

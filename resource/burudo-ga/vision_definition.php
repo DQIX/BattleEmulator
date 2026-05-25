@@ -43,6 +43,9 @@ return [
 			'directory' => 'numbers',
 			'sourceBoss' => 'erugiosu',
 		],
+		[
+            'directory' => 'numbers',
+        ],
 	],
 	'identify' => [
 		'templates' => [
@@ -63,6 +66,7 @@ return [
 		'directMainActions' => [
 			'ano2.png' => 25,
 			'flee.png' => 53,
+			'gareki.png' => 150,
 		],
 	],
 ];
