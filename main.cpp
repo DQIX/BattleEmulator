@@ -568,11 +568,11 @@ void mainLoop(const Player copiedPlayers[2]) {
 			if (foundSeeds == 1) {
 				std::stringstream ss2;
 				if (!SearchRequest(copiedPlayers, seed, aActions, true, ss2)) {
-					std::cout << std::endl;
-					std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
-					std::cout << "      **YOU WILL NOW LOSE!**       " << std::endl;
-					std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
-					std::cout << std::endl;
+					// std::cout << std::endl;
+					// std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
+					// std::cout << "      **YOU WILL NOW LOSE!**       " << std::endl;
+					// std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
+					// std::cout << std::endl;
 				}
 				std::cout << ss2.str();
 			}
