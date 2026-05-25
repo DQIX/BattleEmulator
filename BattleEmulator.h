@@ -103,10 +103,17 @@ public:
 	static constexpr int RUBBLE = 150;//がれき落とし
     static constexpr int HOLY_WATER = 151;//せいすい
 
+    struct StepSummary {
+        int enemyAction = 0;
+        int allyAction = 0;
+        int allyDamage = 0;
+    };
+
     struct StepContext {
         int genePosition = 0;
         int exCounter = 0;
         uint64_t nowState = 0;
+        StepSummary *summary = nullptr;
     };
 
     struct StepResult {

@@ -77,6 +77,12 @@ RBE_FORCE_INLINE BattleEmulator::StepResult BattleEmulator::Step(int *position, 
     uint64_t &nowState = context->nowState;
     int &genePosition = context->genePosition;
     int &exCounter = context->exCounter;
+    StepSummary *summary = context->summary;
+    if (summary != nullptr) {
+        summary->enemyAction = 0;
+        summary->allyAction = 0;
+        summary->allyDamage = 0;
+    }
 
     ++threadTurnProcessed;
     if (genePosition != -1) {
@@ -85,7 +91,7 @@ RBE_FORCE_INLINE BattleEmulator::StepResult BattleEmulator::Step(int *position, 
 #ifdef DEBUG2
     DEBUG_COUT2((*position));
     //THIS DEBUG CODE!
-    if ((*position) == 187) { //THIS DEBUG CODE!
+    if ((*position) == 107) { //THIS DEBUG CODE!
         std::cout << "!!" << std::endl;
     }
 #endif
@@ -138,6 +144,9 @@ RBE_FORCE_INLINE BattleEmulator::StepResult BattleEmulator::Step(int *position, 
             //--------end_FUN_02158dfc-------
             turnActions[turnActionPosition++] = c;
             basedamage = callAttackFun(c, position, players, 1, 0, &nowState, isDefending);
+            if (summary != nullptr) {
+                summary->enemyAction = c;
+            }
 
             if (recordResult) {
                 BattleResult::add(result, c, basedamage, true, counterJ - 1,
@@ -176,6 +185,10 @@ RBE_FORCE_INLINE BattleEmulator::StepResult BattleEmulator::Step(int *position, 
                 //--------end_FUN_02158dfc-------
                 turnActions[turnActionPosition++] = action;
                 basedamage = callAttackFun(action, position, players, 0, 1, &nowState, isDefending);
+                if (summary != nullptr) {
+                    summary->allyAction = action;
+                    summary->allyDamage = basedamage;
+                }
                 if (recordResult) {
                     BattleResult::add(result, action, basedamage, false, counterJ - 1,
                                       player0_has_initiative, ehp, ahp,players[0].mp);
@@ -205,6 +218,10 @@ RBE_FORCE_INLINE BattleEmulator::StepResult BattleEmulator::Step(int *position, 
                 }
                 //--------end_FUN_021594bc-------
             } else {
+                if (summary != nullptr) {
+                    summary->allyAction = action;
+                    summary->allyDamage = basedamage;
+                }
                 if (recordResult) {
                     BattleResult::add(result, action, basedamage, false, counterJ - 1,
                                       player0_has_initiative, ehp, ahp,players[0].mp);
@@ -370,12 +387,11 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 (*position)++; //盾ガード(幼女は盾を持っていないので0%)
                 (*position)++; //回避
 
+                baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
                 if (kaisinn) {
                     //0x020759ec
                     double tmp =  players[attacker].atk * lcg::floatRand(position, 0.95, 1.05);
                     baseDamage = static_cast<int>((tmp));//切り捨て
-                } else {
-                    baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
                 }
 
                 ProcessRage(position, baseDamage, players, preDefenderHp);

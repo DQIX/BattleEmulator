@@ -842,7 +842,7 @@ int main() {
 #ifdef DEBUG2
 	//THIS DEBUG CODE!
 	//THIS DEBUG CODE
-	uint64_t time1 = 0x03642037;
+	uint64_t time1 = 0x357776fb;
 
 	int dummy[100];
 	lcg::init(time1);
@@ -863,53 +863,23 @@ int main() {
 	auto *NowState = new uint64_t(0); //エミュレーターの内部ステートを表すint
 
 	Player players1[2];
-	int32_t gene1[350] = {0};
+	//int32_t gene1[350] = {0};
 	//THIS DEBUG CODE!
-	//int32_t gene1[350] = {30, 31, 62, 62, 50, 53, 62, 30, 31, 34, 53, 33, 31, 34, 34, 34, 34, 53,};
+	int32_t gene1[350] = {25, 53, 53, 26, 25, 25, 25, 53, 26, 25, };
 	//gene1[19-1] = BattleEmulator::DEFENCE;
 	int counter = 0;
 
-	gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-	gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-	gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-	gene1[counter++] = BattleEmulator::HEAL;
-	gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-	gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-	gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-	gene1[counter++] = BattleEmulator::HEAL;
-	gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-	gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-	gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-	gene1[counter++] = BattleEmulator::HEAL;
-	//gene1[counter++] = BattleEmulator::INSULATE;
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::MAGIC_MIRROR;
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::DOUBLE_UP;
-	// gene1[counter++] = BattleEmulator::DOUBLE_UP;
-	// gene1[counter++] = BattleEmulator::DOUBLE_UP;
-	// gene1[counter++] = BattleEmulator::DEFENDING_CHAMPION;
-	// gene1[counter++] = BattleEmulator::DEFENDING_CHAMPION;
-	// gene1[counter++] = BattleEmulator::MAGIC_MIRROR;
-	// gene1[counter++] = BattleEmulator::MULTITHRUST;
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::MULTITHRUST;
-	// gene1[counter++] = BattleEmulator::MULTITHRUST;
-	// gene1[counter++] = BattleEmulator::MULTITHRUST;
-	// gene1[counter++] = BattleEmulator::MORE_HEAL;
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::MAGIC_MIRROR;
-	// gene1[counter++] = BattleEmulator::BUFF;
-	// gene1[counter++] = BattleEmulator::DOUBLE_UP;
-	// gene1[counter++] = BattleEmulator::MULTITHRUST;
-	// gene1[counter++] = BattleEmulator::MULTITHRUST;
-	// gene1[counter++] = BattleEmulator::MULTITHRUST;
-
+	// gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+	// gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+	// gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+	// gene1[counter++] = BattleEmulator::HEAL;
+	// gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+	// gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+	// gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+	// gene1[counter++] = BattleEmulator::HEAL;
+	// gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+	// gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+	// gene1[counter++] = BattleEmulator::ATTACK_ALLY;
 	//for (int i = 0; i < 10; ++i) {
 	(*NowState) = BattleEmulator::TYPE_2A;
 	(*position1) = 1;

@@ -9,6 +9,15 @@ namespace {
 	constexpr uint64_t kTurnBitsMask = 0xFFFFF000ULL;
 	constexpr std::size_t kBoxBytes = 500ULL * 1024ULL * 1024ULL;
 	constexpr int kMaxEncodedTurns = 32;
+	constexpr int kHighDamageThreshold = 27;
+	constexpr int kMaxStoredSolutions = 2000;
+	constexpr int kAllyAttackAnimationCost = 10;
+	constexpr int kAllyHealAnimationCost = 10;
+	constexpr int kAllyFleeAnimationCost = 20;
+	constexpr int kEnemyAttackAnimationCost = 12;
+	constexpr int kEnemyRubbleAnimationCost = 16;
+	constexpr int kFinalEnemyActionCost = 40;
+	constexpr int kScoreCostLimit = 1024;
 	constexpr int kBranchActions[] = {
 		BattleEmulator::HEAL,
 		BattleEmulator::ATTACK_ALLY,
@@ -23,6 +32,24 @@ namespace {
 		int allyHp;
 		int enemyHp;
 		int allyMp;
+		uint16_t highDamageMask;
+		uint16_t enemyAttackMask;
+		uint16_t enemyRubbleMask;
+	};
+
+	struct SolutionCandidate {
+		uint64_t pathBits;
+		uint16_t highDamageMask;
+		uint16_t enemyAttackMask;
+		uint16_t enemyRubbleMask;
+		int16_t score;
+	};
+
+	struct SolutionStore {
+		SolutionCandidate candidates[kMaxStoredSolutions];
+		int count = 0;
+		int worstIndex = -1;
+		int16_t worstScore = 32767;
 	};
 
 	struct NodeBoxes {
@@ -32,6 +59,7 @@ namespace {
 	};
 
 	NodeBoxes g_boxes;
+	SolutionStore g_solutions;
 
 	uint64_t storeTurn(uint64_t nowState, int turn) {
 		return (nowState & ~kTurnBitsMask) | (static_cast<uint64_t>(turn) << 12ULL);
@@ -71,6 +99,117 @@ namespace {
 		return true;
 	}
 
+	int countBits(uint16_t value) {
+		int count = 0;
+		while (value != 0) {
+			value = static_cast<uint16_t>(value & static_cast<uint16_t>(value - 1));
+			++count;
+		}
+		return count;
+	}
+
+	int actionAnimationCost(int action) {
+		switch (action) {
+			case BattleEmulator::HEAL:
+				return kAllyHealAnimationCost;
+			case BattleEmulator::FLEE_ALLY:
+				return kAllyFleeAnimationCost;
+			case BattleEmulator::ATTACK_ALLY:
+			default:
+				return kAllyAttackAnimationCost;
+		}
+	}
+
+	int estimateAnimationCost(uint64_t pathBits, int depth, uint16_t enemyAttackMask, uint16_t enemyRubbleMask) {
+		int cost = 0;
+		for (int i = 0; i < depth; ++i) {
+			const auto actionIndex = static_cast<int>((pathBits >> (i * 2)) & 0x3ULL);
+			cost += actionAnimationCost(kBranchActions[actionIndex]);
+		}
+		cost += countBits(enemyAttackMask) * kEnemyAttackAnimationCost;
+		cost += countBits(enemyRubbleMask) * kEnemyRubbleAnimationCost;
+		if (depth > 0) {
+			const auto finalTurnBit = static_cast<uint16_t>(1U << (depth - 1));
+			if (((enemyAttackMask | enemyRubbleMask) & finalTurnBit) != 0) {
+				cost += kFinalEnemyActionCost;
+			}
+		}
+		return cost;
+	}
+
+	int16_t makeCandidateScore(uint64_t pathBits, int depth, uint16_t highDamageMask,
+	                           uint16_t enemyAttackMask, uint16_t enemyRubbleMask) {
+		int cost = estimateAnimationCost(pathBits, depth, enemyAttackMask, enemyRubbleMask);
+		if (cost > kScoreCostLimit) {
+			cost = kScoreCostLimit;
+		}
+		return static_cast<int16_t>((kScoreCostLimit - cost) * 16 + countBits(highDamageMask));
+	}
+
+	void resetSolutions() {
+		g_solutions.count = 0;
+		g_solutions.worstIndex = -1;
+		g_solutions.worstScore = 32767;
+	}
+
+	void refreshWorstSolution() {
+		if (g_solutions.count <= 0) {
+			g_solutions.worstIndex = -1;
+			g_solutions.worstScore = 32767;
+			return;
+		}
+		int worstIndex = 0;
+		int16_t worstScore = g_solutions.candidates[0].score;
+		for (int i = 1; i < g_solutions.count; ++i) {
+			if (g_solutions.candidates[i].score < worstScore) {
+				worstScore = g_solutions.candidates[i].score;
+				worstIndex = i;
+			}
+		}
+		g_solutions.worstIndex = worstIndex;
+		g_solutions.worstScore = worstScore;
+	}
+
+	void storeSolution(uint64_t pathBits, int depth, uint16_t highDamageMask,
+	                   uint16_t enemyAttackMask, uint16_t enemyRubbleMask) {
+		const int16_t score = makeCandidateScore(pathBits, depth, highDamageMask, enemyAttackMask, enemyRubbleMask);
+		const SolutionCandidate candidate = {
+			pathBits,
+			highDamageMask,
+			enemyAttackMask,
+			enemyRubbleMask,
+			score,
+		};
+
+		if (g_solutions.count < kMaxStoredSolutions) {
+			g_solutions.candidates[g_solutions.count++] = candidate;
+			if (g_solutions.worstIndex == -1 || score < g_solutions.worstScore) {
+				g_solutions.worstIndex = g_solutions.count - 1;
+				g_solutions.worstScore = score;
+			}
+			return;
+		}
+
+		if (score <= g_solutions.worstScore) {
+			return;
+		}
+
+		g_solutions.candidates[g_solutions.worstIndex] = candidate;
+		refreshWorstSolution();
+	}
+
+	uint64_t bestSolutionPath() {
+		int bestIndex = 0;
+		int16_t bestScore = g_solutions.candidates[0].score;
+		for (int i = 1; i < g_solutions.count; ++i) {
+			if (g_solutions.candidates[i].score > bestScore) {
+				bestScore = g_solutions.candidates[i].score;
+				bestIndex = i;
+			}
+		}
+		return g_solutions.candidates[bestIndex].pathBits;
+	}
+
 	void decodeActions(uint64_t pathBits, int depth, int32_t actions[350]) {
 		for (int i = 0; i < 350; ++i) {
 			actions[i] = 0;
@@ -102,6 +241,7 @@ ActionOptimizer::Result ActionOptimizer::FindShortestWin(const Player startPlaye
 	}
 
 	lcg::init(seed, true);
+	resetSolutions();
 
 	std::size_t currentCount = 1;
 	g_boxes.current[0] = {
@@ -111,13 +251,15 @@ ActionOptimizer::Result ActionOptimizer::FindShortestWin(const Player startPlaye
 		startPlayers[0].hp,
 		startPlayers[1].hp,
 		startPlayers[0].mp,
+		0,
+		0,
+		0,
 	};
 
 	for (int depth = 0; depth < maxDepth; ++depth) {
 		std::size_t nextCount = 0;
 		bool foundAtThisDepth = false;
 		const bool needsNextLayer = depth + 1 < maxDepth;
-		uint64_t bestPath = 0;
 
 		for (std::size_t nodeIndex = 0; nodeIndex < currentCount; ++nodeIndex) {
 			const SearchNode &node = g_boxes.current[nodeIndex];
@@ -134,8 +276,10 @@ ActionOptimizer::Result ActionOptimizer::FindShortestWin(const Player startPlaye
 				players[1].hp = node.enemyHp;
 
 				int position = node.position;
+				BattleEmulator::StepSummary summary;
 				BattleEmulator::StepContext context;
 				context.nowState = node.nowState;
+				context.summary = &summary;
 
 				const BattleEmulator::StepResult step = BattleEmulator::StepAction(
 					&position, startTurn + depth + 1, action, players, nullptr, nullptr, -2, &context);
@@ -143,12 +287,23 @@ ActionOptimizer::Result ActionOptimizer::FindShortestWin(const Player startPlaye
 				++result.nodesVisited;
 
 				const uint64_t pathBits = node.pathBits | (static_cast<uint64_t>(actionIndex) << (depth * 2));
+				const auto turnBit = static_cast<uint16_t>(1U << depth);
+				uint16_t highDamageMask = node.highDamageMask;
+				uint16_t enemyAttackMask = node.enemyAttackMask;
+				uint16_t enemyRubbleMask = node.enemyRubbleMask;
+				if (summary.allyAction != 0 && summary.allyAction != BattleEmulator::HEAL
+				    && summary.allyDamage >= kHighDamageThreshold) {
+					highDamageMask = static_cast<uint16_t>(highDamageMask | turnBit);
+				}
+				if (summary.enemyAction == BattleEmulator::ATTACK_ENEMY) {
+					enemyAttackMask = static_cast<uint16_t>(enemyAttackMask | turnBit);
+				} else if (summary.enemyAction == BattleEmulator::RUBBLE) {
+					enemyRubbleMask = static_cast<uint16_t>(enemyRubbleMask | turnBit);
+				}
 				if (players[1].hp == 0) {
-					if (!foundAtThisDepth) {
-						bestPath = pathBits;
-					}
 					foundAtThisDepth = true;
 					++result.winningNodes;
+					storeSolution(pathBits, depth + 1, highDamageMask, enemyAttackMask, enemyRubbleMask);
 					continue;
 				}
 				if (players[0].hp == 0 || foundAtThisDepth || !needsNextLayer) {
@@ -167,6 +322,9 @@ ActionOptimizer::Result ActionOptimizer::FindShortestWin(const Player startPlaye
 					players[0].hp,
 					players[1].hp,
 					players[0].mp,
+					highDamageMask,
+					enemyAttackMask,
+					enemyRubbleMask,
 				};
 			}
 		}
@@ -174,7 +332,7 @@ ActionOptimizer::Result ActionOptimizer::FindShortestWin(const Player startPlaye
 		if (foundAtThisDepth) {
 			result.solved = true;
 			result.turn = depth + 1;
-			decodeActions(bestPath, result.turn, result.actions);
+			decodeActions(bestSolutionPath(), result.turn, result.actions);
 			return result;
 		}
 		if (nextCount == 0) {
