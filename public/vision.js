@@ -44,6 +44,8 @@
         templateThreshold: 0.45,
         resetLatchClearScore: 0.6,
         whiteThreshold: 0.72,//これ結果スコアの一致率
+        matchWhiteThresholdDark: 0.59,
+        matchWhiteThresholdBright: 0.70,
         whiteSaturationMaxDark: 0.20,//こっちのほうを小さくないといけない
         whiteSaturationMaxBright: 0.26,//こっちが大きい
         whiteSaturationDarkValue: 0.10,
@@ -164,7 +166,8 @@
         66: {names: {ja: "魔人切り", en: "HATCHET_MAN"}, ally: false, damage: true},
         67: {names: {ja: "斬り上げた", en: "UPWARD_SLICE"}, ally: false, damage: true},
         68: {names: {ja: "さみだれ斬り", en: "MULTISLASH"}, ally: false, damage: true},
-        150: {names: {ja: "ガレキ", en: "RUBBLE"}, ally: false, damage: true}
+        150: {names: {ja: "ガレキ", en: "RUBBLE"}, ally: false, damage: true},
+        151: {names: {ja: "せいすい", en: "HOLY_WATER"}, ally: true, damage: true}
     };
     const ACTION_IDS = Object.freeze({
         ATTACK_ENEMY: 1,
@@ -222,7 +225,8 @@
         HATCHET_MAN: 66,
         UPWARD_SLICE: 67,
         MULTISLASH: 68,
-        RUBBLE: 150
+        RUBBLE: 150,
+        HOLY_WATER: 151
     });
     const ACTIONS_BY_ID = ACTIONS;
 
@@ -709,9 +713,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             this.uploadFrame(source);
             const device = this.device;
             const frameView = this.frameTexture.createView();
-            const frame = processingContext.getImageData(0, 0, BASE_WIDTH, BASE_HEIGHT);
             const thresholds = getActiveThresholds();
-            const whiteParamsBySlot = buildWhiteParamsBySlot(frame);
+            const whiteParamsBySlot = buildWhiteParamsBySlotFromCanvas(processingContext);
 
             // --- パス1: 全テンプレートのGPUジョブを1つのencoderに積む ---
             // 各テンプレートのメタ情報（オフセット・サイズ・バッファ参照）を収集
@@ -782,7 +785,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 paramsView.setUint32(28, scoreHeight, true);
                 paramsView.setFloat32(32, thresholds.matchPenaltyWeight, true);
                 paramsView.setFloat32(36, thresholds.matchWhiteWeight, true);
-                paramsView.setFloat32(40, thresholds.whiteThreshold, true);
+                paramsView.setFloat32(40, whiteParams.threshold, true);
                 paramsView.setFloat32(44, whiteParams.saturationMax, true);
 
                 const uniformBuffer = device.createBuffer({
@@ -984,6 +987,20 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         );
     }
 
+    function getMatchWhiteThresholdForBackground(value) {
+        const thresholds = getActiveThresholds();
+        console.log(interpolateWhiteParamByBackground(
+            value,
+            thresholds.matchWhiteThresholdDark,
+            thresholds.matchWhiteThresholdBright
+        ))
+        return interpolateWhiteParamByBackground(
+            value,
+            thresholds.matchWhiteThresholdDark,
+            thresholds.matchWhiteThresholdBright
+        );
+    }
+
     function getNumberWhiteThresholdForBackground(value) {
         const thresholds = getActiveThresholds();
         return interpolateWhiteParamByBackground(
@@ -1033,12 +1050,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function buildWhiteParamsForImageData(imageData, area = null) {
-        // return {
-        //     saturationMax: 0.25
-        // };
-        // console.log( getWhiteSaturationMaxForBackground(estimateBackgroundValue(imageData, area)));
+        const backgroundValue = estimateBackgroundValue(imageData, area);
         return {
-            saturationMax: getWhiteSaturationMaxForBackground(estimateBackgroundValue(imageData, area))
+            threshold: getMatchWhiteThresholdForBackground(backgroundValue),
+            saturationMax: getWhiteSaturationMaxForBackground(backgroundValue)
         };
     }
 
@@ -1050,12 +1065,48 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         };
     }
 
-    function buildWhiteParamsBySlot(frame) {
+    function getBoundsForAreas(areas) {
+        let minX = BASE_WIDTH;
+        let minY = BASE_HEIGHT;
+        let maxX = 0;
+        let maxY = 0;
+        for (const area of areas) {
+            minX = Math.min(minX, area.x);
+            minY = Math.min(minY, area.y);
+            maxX = Math.max(maxX, area.x + area.width);
+            maxY = Math.max(maxY, area.y + area.height);
+        }
+        return {
+            x: minX,
+            y: minY,
+            width: Math.max(0, maxX - minX),
+            height: Math.max(0, maxY - minY)
+        };
+    }
+
+    function buildWhiteParamsBySlot(frame, origin = {x: 0, y: 0}) {
         const params = {};
         for (const slot of MATCH_SLOT_KEYS) {
-            params[slot] = buildWhiteParamsForImageData(frame, ROI_DEFS[slot]);
+            const roi = ROI_DEFS[slot];
+            params[slot] = buildWhiteParamsForImageData(frame, {
+                x: roi.x - origin.x,
+                y: roi.y - origin.y,
+                width: roi.width,
+                height: roi.height
+            });
         }
         return params;
+    }
+
+    function buildWhiteParamsBySlotFromCanvas(context) {
+        const bounds = getBoundsForAreas(MATCH_SLOT_KEYS.map((slot) => ROI_DEFS[slot]));
+        if (!bounds.width || !bounds.height) {
+            return Object.fromEntries(MATCH_SLOT_KEYS.map((slot) => [slot, buildWhiteParamsForImageData(new ImageData(1, 1))]));
+        }
+        return buildWhiteParamsBySlot(
+            context.getImageData(bounds.x, bounds.y, bounds.width, bounds.height),
+            bounds
+        );
     }
 
     function isWhitePixel(r, g, b, a, threshold, alphaThreshold, whiteParams) {
@@ -1063,8 +1114,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             return false;
         }
         const value = getHsvValue(r, g, b);
+        const valueThreshold = whiteParams?.threshold ?? threshold;
         const saturationMax = whiteParams?.saturationMax ?? getActiveThresholds().whiteSaturationMaxDark;
-        return value >= threshold && getHsvSaturation(r, g, b) <= saturationMax;
+        return value >= valueThreshold && getHsvSaturation(r, g, b) <= saturationMax;
     }
 
     function isNumberWhitePixel(r, g, b, a, whiteParams) {
@@ -2046,12 +2098,19 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         const target = matches.target || emptyMatch("target");
         const mode = getActiveMode();
         const erugioMain = modeRuleHasFile(mode, "Main", main.file);
+
+        if(erugioMain && sub.file === "end.png"){
+            return undefined;
+        }
+
         // reset
-        if (erugioMain && modeRuleHasFile(mode, "resetSub", sub.file) && main.score >= 0.6 && sub.score >= 0.6) {
+        if (erugioMain && modeRuleHasFile(mode, "resetSub", sub.file) && main.score >= 0.4 && sub.score >= 0.4) {
             return {kind: "reset", score: Math.min(main.score, sub.score), detail: `${main.file} + ${sub.file}`};
         }else if(erugioMain){
             return {kind: "action", actionId: ACTION_IDS.ATTACK_ENEMY, detail: main.file, score: main.score};
         }
+
+
         const directAction = getModeRuleMap(mode, "directMainActions")[main.file];
         if (directAction && main.score >= templateThreshold) {
             return {kind: "action", actionId: directAction, detail: main.file, score: main.score};
@@ -2346,6 +2405,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             ACTION_IDS.ATTACK_ALLY,
             ACTION_IDS.ATTACK_ENEMY,
             ACTION_IDS.RUBBLE,
+            ACTION_IDS.HOLY_WATER,
         ].includes(actionId)) {
             return 1;
         }

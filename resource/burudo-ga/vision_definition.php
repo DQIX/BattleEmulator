@@ -5,8 +5,10 @@ declare(strict_types=1);
 return [
 	'id' => 'hexagoon',
 	'thresholds' => [
-		'whiteSaturationMaxDark' => 0.20,//こっちのほうを小さくないといけない
-		'whiteSaturationMaxBright' => 0.25,  //こっちが大きい
+		'whiteSaturationMaxDark' => 0.14,//こっちのほうを小さくないといけない
+		'whiteSaturationMaxBright' => 0.17,  //こっちが大きい
+        "matchWhiteThresholdBright" => 0.75,
+		"matchWhiteThresholdDark" => 0.75,
 		'numberWhiteSaturationMaxDark' => 0.18,
 		'numberWhiteSaturationMaxBright' => 0.22,
 		'numberWhiteThresholdBright' => 0.80,  // 0.91から下げる
@@ -73,6 +75,8 @@ return [
 			'flee.png' => 53,
 			'gareki.png' => 150,
 			'heal.png' => 26,
+			'seisui.png' => 151,
+			'seisui2.png' => 151,
 		],
 	],
 ];
