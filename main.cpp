@@ -903,8 +903,8 @@ int main() {
 	auto counter = 0;
 	int actions[350] = {0};
 	actions[counter++] = BattleEmulator::ATTACK_ALLY;
-	actions[counter++] = BattleEmulator::ATTACK_ALLY;
-	actions[counter++] = BattleEmulator::HEAL;
+	// actions[counter++] = BattleEmulator::ATTACK_ALLY;
+	// actions[counter++] = BattleEmulator::HEAL;
 	actions[counter] = -1;
 
 	std::stringstream ss;

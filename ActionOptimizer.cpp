@@ -63,6 +63,20 @@ namespace {
 	NodeBoxes g_boxes;
 	SolutionStore g_solutions;
 
+	void releaseBoxes() {
+		std::free(g_boxes.current);
+		std::free(g_boxes.next);
+		g_boxes.current = nullptr;
+		g_boxes.next = nullptr;
+		g_boxes.capacity = 0;
+	}
+
+	struct ReleaseBoxesOnExit {
+		~ReleaseBoxesOnExit() {
+			releaseBoxes();
+		}
+	};
+
 	uint64_t storeTurn(uint64_t nowState, int turn) {
 		return (nowState & ~kTurnBitsMask) | (static_cast<uint64_t>(turn) << 12ULL);
 	}
@@ -93,8 +107,7 @@ namespace {
 			return false;
 		}
 
-		std::free(g_boxes.current);
-		std::free(g_boxes.next);
+		releaseBoxes();
 		g_boxes.current = current;
 		g_boxes.next = next;
 		g_boxes.capacity = capacity;
@@ -156,11 +169,20 @@ namespace {
 		g_solutions.worstScore = 32767;
 	}
 
+	bool hasValidWorstSolution() {
+		return g_solutions.worstIndex >= 0
+		       && g_solutions.worstIndex < g_solutions.count
+		       && g_solutions.worstIndex < kMaxStoredSolutions;
+	}
+
 	void refreshWorstSolution() {
 		if (g_solutions.count <= 0) {
 			g_solutions.worstIndex = -1;
 			g_solutions.worstScore = 32767;
 			return;
+		}
+		if (g_solutions.count > kMaxStoredSolutions) {
+			g_solutions.count = kMaxStoredSolutions;
 		}
 		int worstIndex = 0;
 		int16_t worstScore = g_solutions.candidates[0].score;
@@ -194,6 +216,12 @@ namespace {
 			return;
 		}
 
+		if (!hasValidWorstSolution()) {
+			refreshWorstSolution();
+		}
+		if (!hasValidWorstSolution()) {
+			return;
+		}
 		if (score <= g_solutions.worstScore) {
 			return;
 		}
@@ -203,6 +231,9 @@ namespace {
 	}
 
 	uint64_t bestSolutionPath() {
+		if (g_solutions.count <= 0) {
+			return 0;
+		}
 		int bestIndex = 0;
 		int16_t bestScore = g_solutions.candidates[0].score;
 		for (int i = 1; i < g_solutions.count; ++i) {
@@ -230,6 +261,7 @@ namespace {
 
 ActionOptimizer::Result ActionOptimizer::FindShortestWin(const Player startPlayers[2], uint64_t seed, int startPosition,
                                                          uint64_t startNowState, int startTurn, int maxDepth) {
+	const ReleaseBoxesOnExit releaseBoxesOnExit;
 	Result result;
 	result.maxDepth = maxDepth;
 
