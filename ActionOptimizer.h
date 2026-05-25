@@ -24,7 +24,7 @@ namespace ActionOptimizerDetail {
 
 class ActionOptimizer {
 public:
-	static constexpr int BranchActionCount = 3;
+	static constexpr int BranchActionCount = 4;
 	static constexpr uint64_t EstimatedTurnsPerSecond = 20000000ULL;
 	static constexpr uint64_t SearchSecondsNumerator = 3ULL;
 	static constexpr uint64_t SearchSecondsDenominator = 2ULL;

@@ -14,6 +14,7 @@ namespace {
 	constexpr int kAllyAttackAnimationCost = 10;
 	constexpr int kAllyHealAnimationCost = 10;
 	constexpr int kAllyFleeAnimationCost = 20;
+	constexpr int kDefenceAnimationCost = 15;
 	constexpr int kEnemyAttackAnimationCost = 12;
 	constexpr int kEnemyRubbleAnimationCost = 16;
 	constexpr int kFinalEnemyActionCost = 40;
@@ -22,6 +23,7 @@ namespace {
 		BattleEmulator::HEAL,
 		BattleEmulator::ATTACK_ALLY,
 		BattleEmulator::FLEE_ALLY,
+		BattleEmulator::DEFENCE,
 	};
 	static_assert(sizeof(kBranchActions) / sizeof(kBranchActions[0]) == ActionOptimizer::BranchActionCount);
 
@@ -114,6 +116,8 @@ namespace {
 				return kAllyHealAnimationCost;
 			case BattleEmulator::FLEE_ALLY:
 				return kAllyFleeAnimationCost;
+			case BattleEmulator::DEFENCE:
+				return kDefenceAnimationCost;
 			case BattleEmulator::ATTACK_ALLY:
 			default:
 				return kAllyAttackAnimationCost;
