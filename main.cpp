@@ -262,20 +262,72 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
                    std::stringstream &ss) {
 	(void) dropbug;
 
-	auto turns = 0;
+	auto currentTurn = 0;
+	int32_t pastActions[350] = {0};
 	for (int i = 0; i < 349; ++i) {
 		if (aActions[i] == -1) {
 			break;
 		}
-		turns++;
+		pastActions[i] = aActions[i];
+		currentTurn++;
 	}
-	if (turns == 0) {
-		turns = 11;
+	pastActions[currentTurn] = -1;
+
+	Player startPlayers[2] = {copiedPlayers2[0], copiedPlayers2[1]};
+	int startPosition = 1;
+	uint64_t startNowState = BattleEmulator::TYPE_2A;
+	if (currentTurn > 0) {
+		lcg::init(seed);
+		BattleEmulator::Main(&startPosition, currentTurn, pastActions, startPlayers, nullptr, seed, nullptr,
+		                     nullptr, -2, &startNowState);
 	}
 
-	const ActionOptimizer::Result searchResult = ActionOptimizer::FindShortestWin(copiedPlayers2, seed, turns);
+	if (startPlayers[0].hp == 0) {
+		ss << "BFS search failed: player is already dead at turn=" << currentTurn << std::endl;
+		return false;
+	}
+	if (startPlayers[1].hp == 0) {
+		BattleResult battleResult;
+		Player players[2] = {copiedPlayers2[0], copiedPlayers2[1]};
+		int position = 1;
+		uint64_t nowState = 0;
+		lcg::init(seed);
+		BattleEmulator::Main(&position, currentTurn, pastActions, players, &battleResult, seed, nullptr,
+		                     nullptr, -1, &nowState);
+
+		ss << dumpTable(battleResult, pastActions, startturn) << std::endl;
+		ss << "0x" << std::hex << seed << std::dec << ": ";
+		for (auto i = 0; i < 100; ++i) {
+			if (pastActions[i] == 0 || pastActions[i] == -1) {
+				break;
+			}
+			ss << pastActions[i] << ", ";
+		}
+		ss << std::endl;
+		ss << "BFS currentTurn=" << currentTurn
+				<< " futureTurn=0"
+				<< " winTurn=" << currentTurn
+				<< " maxDepth=0"
+				<< " nodes=0"
+				<< " sameTurnWins=1" << std::endl;
+		return true;
+	}
+
+	int maxDepth = ActionOptimizer::MaxSearchDepth;
+	const int maxFutureTurns = 349 - currentTurn;
+	if (maxDepth > maxFutureTurns) {
+		maxDepth = maxFutureTurns;
+	}
+	if (maxDepth <= 0) {
+		ss << "BFS search failed: no future turn capacity currentTurn=" << currentTurn << std::endl;
+		return false;
+	}
+
+	const ActionOptimizer::Result searchResult = ActionOptimizer::FindShortestWin(
+		startPlayers, seed, startPosition, startNowState, currentTurn, maxDepth);
 	if (!searchResult.solved) {
 		ss << "BFS search failed: maxTurn=" << searchResult.maxDepth
+				<< " currentTurn=" << currentTurn
 				<< " nodes=" << searchResult.nodesVisited;
 		if (searchResult.exhausted) {
 			ss << " exhausted";
@@ -284,24 +336,36 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 		return false;
 	}
 
+	int32_t fullActions[350] = {0};
+	for (int i = 0; i < currentTurn; ++i) {
+		fullActions[i] = pastActions[i];
+	}
+	for (int i = 0; i < searchResult.turn; ++i) {
+		fullActions[currentTurn + i] = searchResult.actions[i];
+	}
+	fullActions[currentTurn + searchResult.turn] = -1;
+
 	BattleResult battleResult;
 	Player players[2] = {copiedPlayers2[0], copiedPlayers2[1]};
 	int position = 1;
 	uint64_t nowState = 0;
 	lcg::init(seed);
-	BattleEmulator::Main(&position, searchResult.turn, searchResult.actions, players, &battleResult, seed, nullptr,
+	BattleEmulator::Main(&position, currentTurn + searchResult.turn, fullActions, players, &battleResult, seed, nullptr,
 	                     nullptr, -1, &nowState);
 
-	ss << dumpTable(battleResult, searchResult.actions, startturn) << std::endl;
+	ss << dumpTable(battleResult, fullActions, startturn) << std::endl;
 	ss << "0x" << std::hex << seed << std::dec << ": ";
 	for (auto i = 0; i < 100; ++i) {
-		if (searchResult.actions[i] == 0 || searchResult.actions[i] == -1) {
+		if (fullActions[i] == 0 || fullActions[i] == -1) {
 			break;
 		}
-		ss << searchResult.actions[i] << ", ";
+		ss << fullActions[i] << ", ";
 	}
 	ss << std::endl;
-	ss << "BFS turn=" << searchResult.turn
+	ss << "BFS currentTurn=" << currentTurn
+			<< " futureTurn=" << searchResult.turn
+			<< " winTurn=" << (currentTurn + searchResult.turn)
+			<< " maxDepth=" << maxDepth
 			<< " nodes=" << searchResult.nodesVisited
 			<< " sameTurnWins=" << searchResult.winningNodes << std::endl;
 

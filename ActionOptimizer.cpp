@@ -14,6 +14,7 @@ namespace {
 		BattleEmulator::ATTACK_ALLY,
 		BattleEmulator::FLEE_ALLY,
 	};
+	static_assert(sizeof(kBranchActions) / sizeof(kBranchActions[0]) == ActionOptimizer::BranchActionCount);
 
 	struct SearchNode {
 		uint64_t nowState;
@@ -84,7 +85,8 @@ namespace {
 	}
 }
 
-ActionOptimizer::Result ActionOptimizer::FindShortestWin(const Player copiedPlayers[2], uint64_t seed, int maxDepth) {
+ActionOptimizer::Result ActionOptimizer::FindShortestWin(const Player startPlayers[2], uint64_t seed, int startPosition,
+                                                         uint64_t startNowState, int startTurn, int maxDepth) {
 	Result result;
 	result.maxDepth = maxDepth;
 
@@ -103,12 +105,12 @@ ActionOptimizer::Result ActionOptimizer::FindShortestWin(const Player copiedPlay
 
 	std::size_t currentCount = 1;
 	g_boxes.current[0] = {
-		BattleEmulator::TYPE_2A,
+		startNowState,
 		0,
-		1,
-		copiedPlayers[0].hp,
-		copiedPlayers[1].hp,
-		copiedPlayers[0].mp,
+		startPosition,
+		startPlayers[0].hp,
+		startPlayers[1].hp,
+		startPlayers[0].mp,
 	};
 
 	for (int depth = 0; depth < maxDepth; ++depth) {
@@ -121,7 +123,12 @@ ActionOptimizer::Result ActionOptimizer::FindShortestWin(const Player copiedPlay
 			const SearchNode &node = g_boxes.current[nodeIndex];
 
 			for (int actionIndex = 0; actionIndex < static_cast<int>(sizeof(kBranchActions) / sizeof(kBranchActions[0])); ++actionIndex) {
-				Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
+				const int action = kBranchActions[actionIndex];
+				if (action == BattleEmulator::HEAL && node.allyMp <= 0) {
+					continue;
+				}
+
+				Player players[2] = {startPlayers[0], startPlayers[1]};
 				players[0].hp = node.allyHp;
 				players[0].mp = node.allyMp;
 				players[1].hp = node.enemyHp;
@@ -130,9 +137,8 @@ ActionOptimizer::Result ActionOptimizer::FindShortestWin(const Player copiedPlay
 				BattleEmulator::StepContext context;
 				context.nowState = node.nowState;
 
-				const int action = kBranchActions[actionIndex];
 				const BattleEmulator::StepResult step = BattleEmulator::StepAction(
-					&position, depth + 1, action, players, nullptr, nullptr, -2, &context);
+					&position, startTurn + depth + 1, action, players, nullptr, nullptr, -2, &context);
 				(void) step;
 				++result.nodesVisited;
 
@@ -155,7 +161,7 @@ ActionOptimizer::Result ActionOptimizer::FindShortestWin(const Player copiedPlay
 				}
 
 				g_boxes.next[nextCount++] = {
-					storeTurn(context.nowState, depth + 1),
+					storeTurn(context.nowState, startTurn + depth + 1),
 					pathBits,
 					position,
 					players[0].hp,
