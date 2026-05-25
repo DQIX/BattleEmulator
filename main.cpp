@@ -928,39 +928,16 @@ int main() {
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x04a1ff68;
+	uint64_t time1 = 0x357776fb;
 
 	auto counter = 0;
 	int actions[350] = {0};
-	actions[counter++] = BattleEmulator::DEFENCE;
-	actions[counter++] = BattleEmulator::MAGIC_MIRROR;
-	//actions[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	actions[counter++] = BattleEmulator::ATTACK_ALLY;
 	actions[counter] = -1;
 
 	std::stringstream ss;
 	SearchRequest(copiedPlayers, time1, actions, false, ss);
 	ss << std::endl;
-
-	if (false) {
-		SearchRequest(copiedPlayers, time1 + 1, actions, false, ss);
-		ss << std::endl;
-
-		SearchRequest(copiedPlayers, time1 + 2, actions, false, ss);
-		ss << std::endl;
-
-		SearchRequest(copiedPlayers, time1 + 6, actions, false, ss);
-		ss << std::endl;
-
-		SearchRequest(copiedPlayers, time1 + 10, actions, false, ss);
-		ss << std::endl;
-
-
-		SearchRequest(copiedPlayers, time1 + 40, actions, false, ss);
-		ss << std::endl;
-
-		SearchRequest(copiedPlayers, time1 + 70, actions, false, ss);
-		ss << std::endl;
-	}
 
 	std::cout << ss.str();
 	return 0;
