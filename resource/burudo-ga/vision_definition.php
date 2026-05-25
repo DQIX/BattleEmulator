@@ -24,6 +24,11 @@ return [
 		[
 			'slot' => 'main',
 			'directory' => 'message_v2',
+			'sourceBoss' => 'system',
+		],
+		[
+			'slot' => 'main',
+			'directory' => 'message_v2',
 		],
 		[
 			'slot' => 'sub',
@@ -67,6 +72,7 @@ return [
 			'ano2.png' => 25,
 			'flee.png' => 53,
 			'gareki.png' => 150,
+			'heal.png' => 26,
 		],
 	],
 ];

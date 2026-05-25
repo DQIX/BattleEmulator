@@ -16,6 +16,16 @@ return [
         [
             'slot' => 'main',
             'directory' => 'message_v2',
+            'sourceBoss' => 'system',
+        ],
+        [
+            'slot' => 'main',
+            'directory' => 'message_v2',
+            'sourceBoss' => 'ally',
+        ],
+        [
+            'slot' => 'main',
+            'directory' => 'message_v2',
         ],
         [
             'slot' => 'sub',

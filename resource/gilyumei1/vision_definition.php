@@ -20,6 +20,16 @@ return [
 		 'id' => 'gilyumei1_v6',
 	],
 	'templateGroups' => [
+        [
+            'slot' => 'main',
+            'directory' => 'message_v2',
+            'sourceBoss' => 'system',
+        ],
+        [
+            'slot' => 'main',
+            'directory' => 'message_v2',
+            'sourceBoss' => 'ally',
+        ],
 		[
 			'slot' => 'main',
 			'directory' => 'message_v2',

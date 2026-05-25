@@ -134,6 +134,7 @@
         22: {names: {ja: "やすみ", en: "inactive"}, ally: true, damage: false},
         24: {names: {ja: "麻痺で動けない", en: "Paralysis"}, ally: true, damage: false},
         25: {names: {ja: "攻撃(味方)", en: "Attack (ally)"}, ally: true, damage: true},
+        26: {names: {ja: "ホイミ", en: "heal"}, ally: true, damage: false},
         28: {names: {ja: "麻痺回復", en: "Cure Paralysis"}, ally: true, damage: false},
         30: {names: {ja: "スカラ", en: "Buff"}, ally: true, damage: false},
         31: {names: {ja: "ミラーシールド", en: "Magic Mirror"}, ally: true, damage: false},
