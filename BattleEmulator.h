@@ -101,7 +101,21 @@ public:
 
 
 	static constexpr int RUBBLE = 150;//がれき落とし
-	static constexpr int HOLY_WATER = 151;//せいすい
+    static constexpr int HOLY_WATER = 151;//せいすい
+
+    struct StepContext {
+        int genePosition = 0;
+        int exCounter = 0;
+        uint64_t nowState = 0;
+    };
+
+    struct StepResult {
+        bool finished = false;
+        bool value = false;
+    };
+
+    static StepResult Step(int *position, int counterJ, const int32_t Gene[350], Player *players,
+                           BattleResult* result, const int damages[350], int mode, StepContext *context);
 
     static bool
     Main(int *position, int RunCount, const int32_t Gene[350], Player *players,

@@ -17,7 +17,7 @@
 
 //#define DEBUG1 1
 
-#define DEBUG4 1
+//#define DEBUG4 1
 
 // DEBUGモードが有効な場合にのみデバッグ出力を有効にする
 #ifdef DEBUG1
@@ -27,7 +27,7 @@
 #endif
 
 #ifndef DEBUG4
-#define DEBUG2 1
+//#define DEBUG2 1
 #endif
 
 #ifdef DEBUG2
