@@ -26,12 +26,12 @@ int startturn = -1;
 const Player copiedPlayers[2] = {
 	// プレイヤー1
 	{
-		37, 37.0, 29,  21, 19, 0, 6, 6
+		37, 37, 29,  21, 19, 0, 6, 6
 	},
 
 	// プレイヤー2
 	{
-		93, 93.0, 30, 22, 11, 0, 18, 18
+		93, 93, 30, 22, 11, 0, 18, 18
 	}
 };
 
@@ -40,12 +40,12 @@ const Player copiedPlayers[2] = {
 const Player copiedPlayers[2] = {
 	// プレイヤー1
 	{
-		37, 37.0, 29,  24, 19, 0, 6, 6
+		37, 37, 29,  24, 19, 0, 6, 6
 	},
 
 	// プレイヤー2
 	{
-		93, 93.0, 30, 22, 11, 0, 18, 18
+		93, 93, 30, 22, 11, 0, 18, 18
 	}
 };
 
@@ -784,7 +784,7 @@ EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed
 #ifdef DEBUG4
 static void runDebug4Benchmark(const Player copiedPlayers[2]) {
 	constexpr int targetTurns = 10000000;
-	constexpr int maxTurnsPerRun = 300;
+	constexpr int maxTurnsPerRun = 50;
 	constexpr uint64_t baseSeed = 0x03642037ull;
 
 	int32_t gene[350] = {0};
@@ -795,11 +795,11 @@ static void runDebug4Benchmark(const Player copiedPlayers[2]) {
 
 	Player benchPlayers[2] = {copiedPlayers[0], copiedPlayers[1]};
 	benchPlayers[0].hp = 100000000;
-	benchPlayers[0].maxHp = 100000000.0;
+	benchPlayers[0].maxHp = 100000000;
 	benchPlayers[0].mp = 100000000;
 	benchPlayers[0].maxMp = 100000000;
 	benchPlayers[1].hp = 100000000;
-	benchPlayers[1].maxHp = 100000000.0;
+	benchPlayers[1].maxHp = 100000000;
 
 	BattleEmulator::ResetTurnProcessed();
 	const auto started = std::chrono::steady_clock::now();

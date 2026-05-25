@@ -137,7 +137,7 @@ private:
     static int callAttackFun(int32_t Id, int *position, Player *players, int attacker, int defender, uint64_t *NowState,
                              bool isDefending);
 
-    static double FUN_021dbc04(int baseHp, double maxHp);
+    static double FUN_021dbc04(int baseHp, int maxHp);
 };
 
 

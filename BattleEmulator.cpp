@@ -71,6 +71,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
     uint64_t nowState = *NowState;
     const bool recordResult = mode == -1;
     const bool validateDamage = mode != -1 && mode != -2;
+    const auto storeNowState = [&](int turn) {
+        *NowState = (nowState & ~0xFFFFF000ULL) | (static_cast<uint64_t>(turn) << 12ULL);
+    };
 
     auto startPos = static_cast<int>((nowState >> 12) & 0xfffff);
     if (startPos != 0) {
@@ -85,9 +88,6 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         if (genePosition != -1) {
             genePosition = counterJ - 1;
         }
-        //現在ターンを保存
-        nowState = (nowState & ~0xFFFFF000ULL) | (static_cast<uint64_t>(counterJ) << 12ULL);
-
 #ifdef DEBUG2
         DEBUG_COUT2((*position));
         //THIS DEBUG CODE!
@@ -156,11 +156,11 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     ) {
                         if (damages[exCounter] == -1) {
                             startTurn = counterJ - 1;
-                            *NowState = nowState;
+                            storeNowState(counterJ);
                             return true;
                         }
                         if (damages[exCounter++] != basedamage) {
-                            *NowState = nowState;
+                            storeNowState(counterJ);
                             return false;
                         }
                     }
@@ -196,12 +196,12 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         if (action == ATTACK_ALLY) {
                             if (damages[exCounter] == -1) {
                                 startTurn = counterJ - 1;
-                                *NowState = nowState;
+                                storeNowState(counterJ);
                                 return true;
                             }
                             //int need = ;
                             if (damages[exCounter++] != basedamage) {
-                                *NowState = nowState;
+                                storeNowState(counterJ);
                                 return false;
                             }
                         }
@@ -221,11 +221,11 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         camera::Main(position, turnActions, &nowState, player0_has_initiative);
 
         if (players[1].hp == 0) {
-            *NowState = nowState;
+            storeNowState(counterJ);
             return false;
         }
         if (players[0].hp == 0) {
-            *NowState = nowState;
+            storeNowState(counterJ);
             return false;
         }
 
@@ -233,20 +233,12 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
     }
     if (mode != -1 && mode != -2) {
         startTurn = RunCount - 2;
-        *NowState = nowState;
+        storeNowState(RunCount - 1);
         return true;
     } else {
-        *NowState = nowState;
+        storeNowState(RunCount - 1);
         return false;
     }
-}
-
-double BattleEmulator::FUN_021dbc04(int baseHp, double maxHp) {
-    auto hp = static_cast<double>(baseHp);
-    if (hp == 0) {
-        return 0;
-    }
-    return hp / maxHp;
 }
 
 int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, int attacker, int defender,
@@ -491,15 +483,15 @@ int BattleEmulator::FUN_0207564c(int *position, int atk, int def) {
 #endif
 
 void BattleEmulator::ProcessRage(int *position, int baseDamage, const Player *players, int preEnemyHp) {
-    const double maxHp = players[1].maxHp;
+    const int maxHp = players[1].maxHp;
     const int afterHp = preEnemyHp - baseDamage;
-    if (static_cast<double>(afterHp) < maxHp * 0.5) {
-        if (static_cast<double>(preEnemyHp) >= maxHp * 0.5) {
+    if (static_cast<int64_t>(afterHp) * 2 < maxHp) {
+        if (static_cast<int64_t>(preEnemyHp) * 2 >= maxHp) {
             (*position)++;
             (*position)++;
         } else {
-            if (static_cast<double>(afterHp) < maxHp * 0.25) {
-                if (static_cast<double>(preEnemyHp) >= maxHp * 0.25) {
+            if (static_cast<int64_t>(afterHp) * 4 < maxHp) {
+                if (static_cast<int64_t>(preEnemyHp) * 4 >= maxHp) {
                     (*position)++;
                     (*position)++;
                 }
