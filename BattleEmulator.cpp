@@ -69,9 +69,9 @@ std::string BattleEmulator::getActionName(int actionId) {
 }
 
 RBE_FORCE_INLINE BattleEmulator::StepResult BattleEmulator::Step(int *position, int counterJ, const int32_t Gene[350],
-                                                                 Player *players, BattleResult* result,
-                                                                 const int damages[350], int mode,
-                                                                 StepContext *context) {
+                                                                  Player *players, BattleResult* result,
+                                                                  const int damages[350], int mode,
+                                                                  StepContext *context) {
     const bool recordResult = mode == -1;
     const bool validateDamage = mode != -1 && mode != -2;
     uint64_t &nowState = context->nowState;
@@ -170,40 +170,48 @@ RBE_FORCE_INLINE BattleEmulator::StepResult BattleEmulator::Step(int *position, 
             }
             //--------end_FUN_021594bc-------
         } else {
-            //--------start_FUN_02158dfc-------
-            (*position) += 1;
-            //--------end_FUN_02158dfc-------
-            turnActions[turnActionPosition++] = action;
-            basedamage = callAttackFun(action, position, players, 0, 1, &nowState, isDefending);
-            if (recordResult) {
-                BattleResult::add(result, action, basedamage, false, counterJ - 1,
-                                  player0_has_initiative, ehp, ahp,players[0].mp);
-            }
-            if (action == HEAL || action == MEDICINAL_HERBS) {
-                Player::heal(players[0], basedamage);
-            } else {
-                Player::reduceHp(players[1], basedamage);
+            if (action != FLEE_ALLY) {
+                //--------start_FUN_02158dfc-------
+                (*position) += 1;
+                //--------end_FUN_02158dfc-------
+                turnActions[turnActionPosition++] = action;
+                basedamage = callAttackFun(action, position, players, 0, 1, &nowState, isDefending);
+                if (recordResult) {
+                    BattleResult::add(result, action, basedamage, false, counterJ - 1,
+                                      player0_has_initiative, ehp, ahp,players[0].mp);
+                }
+                if (action == HEAL || action == MEDICINAL_HERBS) {
+                    Player::heal(players[0], basedamage);
+                } else {
+                    Player::reduceHp(players[1], basedamage);
 
-                if (validateDamage) {
-                    if (action == ATTACK_ALLY) {
-                        if (damages[exCounter] == -1) {
-                            startTurn = counterJ - 1;
-                            return {true, true};
-                        }
-                        //int need = ;
-                        if (damages[exCounter++] != basedamage) {
-                            return {true, false};
+                    if (validateDamage) {
+                        if (action == ATTACK_ALLY) {
+                            if (damages[exCounter] == -1) {
+                                startTurn = counterJ - 1;
+                                return {true, true};
+                            }
+                            //int need = ;
+                            if (damages[exCounter++] != basedamage) {
+                                return {true, false};
+                            }
                         }
                     }
                 }
-            }
-            //--------start_FUN_021594bc-------
-            if (players[0].hp != 0 && players[1].hp != 0) {
-                (*position) += 1;
-                //TODO: 順序調べる
+                //--------start_FUN_021594bc-------
+                if (players[0].hp != 0 && players[1].hp != 0) {
+                    (*position) += 1;
+                    //TODO: 順序調べる
+                }
+                //--------end_FUN_021594bc-------
+            } else {
+                if (recordResult) {
+                    BattleResult::add(result, action, basedamage, false, counterJ - 1,
+                                      player0_has_initiative, ehp, ahp,players[0].mp);
+                }
             }
         }
-        //--------end_FUN_021594bc-------
+
     }
     if (players[0].hp != 0 && players[1].hp != 0) {
         (*position) += 1;
@@ -219,6 +227,18 @@ RBE_FORCE_INLINE BattleEmulator::StepResult BattleEmulator::Step(int *position, 
 
     //Player::heal(players[0], 25);
     return {false, false};
+}
+
+BattleEmulator::StepResult BattleEmulator::StepAction(int *position, int counterJ, int32_t action, Player *players,
+                                                       BattleResult* result, const int damages[350], int mode,
+                                                       StepContext *context) {
+    static thread_local int32_t singleActionGene[350] = {};
+    if (counterJ <= 0 || counterJ > 350) {
+        return {true, false};
+    }
+
+    singleActionGene[counterJ - 1] = action;
+    return Step(position, counterJ, singleActionGene, players, result, damages, mode, context);
 }
 
 bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], Player *players,

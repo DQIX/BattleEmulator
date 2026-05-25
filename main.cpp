@@ -8,6 +8,7 @@
 
 #include "lcg.h"
 #include "BattleEmulator.h"
+#include "ActionOptimizer.h"
 #include "debug.h"
 #ifdef DEBUG
 
@@ -259,131 +260,51 @@ void showHeader() {
 
 bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aActions[350], bool dropbug,
                    std::stringstream &ss) {
-	int32_t gene[350] = {0};
+	(void) dropbug;
+
 	auto turns = 0;
 	for (int i = 0; i < 349; ++i) {
-		gene[i] = aActions[i];
 		if (aActions[i] == -1) {
-			gene[i] = -1;
 			break;
 		}
 		turns++;
 	}
+	if (turns == 0) {
+		turns = 11;
+	}
 
+	const ActionOptimizer::Result searchResult = ActionOptimizer::FindShortestWin(copiedPlayers2, seed, turns);
+	if (!searchResult.solved) {
+		ss << "BFS search failed: maxTurn=" << searchResult.maxDepth
+				<< " nodes=" << searchResult.nodesVisited;
+		if (searchResult.exhausted) {
+			ss << " exhausted";
+		}
+		ss << std::endl;
+		return false;
+	}
+
+	BattleResult battleResult;
+	Player players[2] = {copiedPlayers2[0], copiedPlayers2[1]};
+	int position = 1;
+	uint64_t nowState = 0;
 	lcg::init(seed);
-//
-// #if !defined(OPTIMIZE_MODE)
-//
-// 	// --- TableA で探索 ---
-// 	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableA);
-// 	Genome genomeA = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
-//
-// 	// --- TableB で探索 ---
-// 	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableB);
-// 	Genome genomeB = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
-//
-// 	// --- TableC で探索 ---
-// 	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableC);
-// 	Genome genomeC = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
-//
-// 	// --- TableC で探索 ---
-// 	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableD);
-// 	Genome genomeD = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
-//
-// 	// --- TableC で探索 ---
-// 	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableF);
-// 	Genome genomeF = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
-//
-// 	// --- TableC で探索 ---
-// 	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableG);
-// 	Genome genomeG = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
-//
-//
-// 	BattleResult resultA, resultB, resultC, resultD, resultF, resultG;
-//
-// 	auto runMain = [&](const Genome &g, BattleResult &res) -> RunResult {
-// 		Player players[2] = {copiedPlayers2[0], copiedPlayers2[1]};
-// 		int position = 1;
-// 		uint64_t nowState = 0;
-// 		BattleEmulator::Main(&position, 100, g.actions, players, &res, seed, nullptr, nullptr, -1, &nowState);
-// 		bool win = players[1].hp <= 0;
-// 		return {win, players[1].hp, res.turn, res.position};
-// 	};
-//
-// 	auto rrA = runMain(genomeA, resultA);
-// 	auto rrB = runMain(genomeB, resultB);
-// 	auto rrC = runMain(genomeC, resultC);
-// 	auto rrD = runMain(genomeD, resultD);
-// 	auto rrF = runMain(genomeF, resultF);
-// 	auto rrG = runMain(genomeG, resultG);
-//
-// 	if (!rrA.win && !rrB.win && !rrC.win && !rrD.win) {
-// 		return false;
-// 	}
-//
-// 	// 勝利したもの同士でターン数→敵残HP（メモ化済み）で比較
-// 	// 負けたものは無条件で除外
-// 	auto isBetter = [](const RunResult &a, const RunResult &b) -> bool {
-// 		if (a.turn != b.turn) return a.turn < b.turn;
-// 		return a.position < b.position; // 同ターンなら行動数が少ない方
-// 	};
-//
-// 	const Genome *chosenGenome = nullptr;
-// 	const BattleResult *chosenResult = nullptr;
-// 	const RunResult *chosenRR = nullptr;
-//
-// 	auto tryUpdate = [&](const RunResult &rr, const Genome &g, const BattleResult &r) {
-// 		if (!rr.win) return; // 負けは無価値
-// 		if (chosenRR == nullptr || isBetter(rr, *chosenRR)) {
-// 			chosenGenome = &g;
-// 			chosenResult = &r;
-// 			chosenRR = &rr;
-// 		}
-// 	};
-//
-// 	//A（ケース1）: ためる・すてみ → Multithrust のテンション蓄積戦法
-// 	//B（ケース3）: メラゾーマ反射しながら長期消耗戦
-// 	//C（ケース2）: 最短ルートでメラゾーマ反射 → 最速決着
-// 	tryUpdate(rrA, genomeA, resultA);
-// 	tryUpdate(rrB, genomeB, resultB);
-// 	tryUpdate(rrC, genomeC, resultC);
-// 	tryUpdate(rrD, genomeD, resultD);
-// 	tryUpdate(rrF, genomeF, resultF);
-// 	tryUpdate(rrG, genomeG, resultG);
-//
-// 	ss << dumpTable(*chosenResult, chosenGenome->actions, startturn) << std::endl;
-//
-// 	ss << "0x" << std::hex << seed << std::dec << ": ";
-//
-// 	for (auto i = 0; i < 100; ++i) {
-// 		if (chosenGenome->actions[i] == 0 || chosenGenome->actions[i] == -1) {
-// 			break;
-// 		}
-// 		ss << chosenGenome->actions[i] << ", ";
-// 	}
-// 	ss << std::endl;
-//
-// 	// --- 各テーブルの結果をログ出力 ---
-// 	auto printRunResult = [&](const char *label, const RunResult &rr) {
-// 		ss << "[" << label << "] ";
-// 		if (rr.win) {
-// 			ss << "Win  turn=" << (rr.turn + 1) << " position=" << rr.position;
-// 		} else {
-// 			ss << "Lose";
-// 		}
-// 		ss << std::endl;
-// 	};
-// 	printRunResult("TableA", rrA);
-// 	printRunResult("TableB", rrB);
-// 	printRunResult("TableC", rrC);
-// 	printRunResult("TableD", rrD);
-// 	printRunResult("TableF", rrF);
-// 	printRunResult("TableG", rrG);
-//
-//
-// #endif
+	BattleEmulator::Main(&position, searchResult.turn, searchResult.actions, players, &battleResult, seed, nullptr,
+	                     nullptr, -1, &nowState);
 
-	//探索成功
+	ss << dumpTable(battleResult, searchResult.actions, startturn) << std::endl;
+	ss << "0x" << std::hex << seed << std::dec << ": ";
+	for (auto i = 0; i < 100; ++i) {
+		if (searchResult.actions[i] == 0 || searchResult.actions[i] == -1) {
+			break;
+		}
+		ss << searchResult.actions[i] << ", ";
+	}
+	ss << std::endl;
+	ss << "BFS turn=" << searchResult.turn
+			<< " nodes=" << searchResult.nodesVisited
+			<< " sameTurnWins=" << searchResult.winningNodes << std::endl;
+
 	return true;
 }
 

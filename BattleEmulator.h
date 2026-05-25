@@ -117,6 +117,9 @@ public:
     static StepResult Step(int *position, int counterJ, const int32_t Gene[350], Player *players,
                            BattleResult* result, const int damages[350], int mode, StepContext *context);
 
+    static StepResult StepAction(int *position, int counterJ, int32_t action, Player *players,
+                                 BattleResult* result, const int damages[350], int mode, StepContext *context);
+
     static bool
     Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
          BattleResult* result, uint64_t seed, const int eActions[350], const int damages[350], int mode, uint64_t *NowState);

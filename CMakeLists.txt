@@ -36,6 +36,8 @@ set(SOURCES
         lcg.h
         BattleEmulator.cpp
         BattleEmulator.h
+        ActionOptimizer.cpp
+        ActionOptimizer.h
         Player.h
         camera.cpp
         camera.h
