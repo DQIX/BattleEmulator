@@ -29,9 +29,9 @@ done
 # ------------------------------------------------------------
 declare -A BRANCH_VARIANTS
 
-BRANCH_VARIANTS[erugiosu_new_arugo]="
-erugiosu_super: -DSUPER=1
-erugiosu_gouketu: -DGOUKETU=1
+BRANCH_VARIANTS[brurudoga_v9_new_arugo]="
+brurudoga_v9_tate: -Dtate=1
+brurudoga_v9_no_tate: -Dno_tate=1
 "
 
 

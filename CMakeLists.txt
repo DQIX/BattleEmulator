@@ -62,10 +62,6 @@ set(SOURCES
 add_executable(burudoga_no ${SOURCES})
 target_compile_definitions(burudoga_no PRIVATE no_tate=1)
 
-
-add_executable(burudoga_no_opt ${SOURCES})
-target_compile_definitions(burudoga_no_opt PRIVATE GOUKETU=1 OPTIMIZE_MODE=1)  # `#define MULTITHREADING` を適用
-
 add_executable(burudoga_tate ${SOURCES})
 target_compile_definitions(burudoga_tate PRIVATE tate=1)
 
