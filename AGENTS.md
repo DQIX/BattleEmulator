@@ -34,6 +34,33 @@
 * When implementing the UI, you should not insert anything from JavaScript at startup to prevent CLS issues. All elements are implemented in HTML, and optional elements are hidden by default (though their width is reserved).
   * This doesn't mean you can't use dynamic elements in JavaScript. Dynamic additions using templates are still permitted.
   * Furthermore, this does not mean that dynamic elements should not be initialized at startup.
+* The BattleEmulator.cpp file in this branch is not related to video recognition. If necessary, be sure to run `git stash` before going to the target branch. After returning to the branch, be sure to run `git stash apply`.
+* Also, when switching branches, please remember the name of the branch you are currently on.
+* Do not use git stash pop. Also, please do not delete the stash after you have finished working on it.
+* Please do not delete branches without asking me.
+* Remote branches are protected by GitHub, but please do not delete them without asking me.
+* This is the current and most recent branch.
+* Please do not git push without asking me. You cannot undo changes using force push.
+* Files like `public` and `interface-design-main` are not listed in `.gitignore` in some branches. Therefore, do not use `git add .` to add them.
+* There is no need to follow agent.md from another branch. always prefer this branch
+```
+  origin/HEAD -> origin/bilyouma_new_arugo
+  origin/anonn_new_arugo
+  origin/bilyouma_new_arugo
+  origin/erugiosu_new_arugo
+  origin/erusionn_new_arugo
+  origin/gadonnko_new_arugo
+  origin/gilyumei2_new_arugo　(including gilyumei1 & gilyumei2) This includes the first and second forms
+  origin/goreonn_new_arugo
+  origin/nusisama1_v2_new_arugo
+  origin/reokonn_lv8_new_arugo
+  origin/silyarumana_new_arugo
+  origin/yo2_lv5_algorithm_v4 (isilyudaru)
+  origin/zilyadama_new_arugo
+  origin/zuo_v2_new_arugo
+```
+
+
 
 When modifying the UI, read interface-design-main/.claude/skills/interface-design/SKILL.md.
 A UI description is not a specification report. When adding a description, you should write about what the user should expect and what they should input, rather than just saying "it's based on xx" or "it uses performance.now()".

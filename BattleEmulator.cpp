@@ -227,6 +227,16 @@ const char *BattleEmulator::getActionName(int actionId) {
             return "Acrobatic Star";
         case BattleEmulator::CRACKLE:
             return "Crackle";
+        case BattleEmulator::FLAME_SLASH:
+            return "FLAME_SLASH";
+        case BattleEmulator::KACRACKLE_SLASH:
+            return "KACRACKLE_SLASH";
+        case BattleEmulator::HATCHET_MAN:
+            return "HATCHET_MAN";
+        case BattleEmulator::UPWARD_SLICE:
+            return "UPWARD_SLICE";
+        case BattleEmulator::MULTISLASH:
+            return "MULTISLASH";
         case WOOSH_ALLY:
             return "Woosh";
         case DRAGON_SLASH:

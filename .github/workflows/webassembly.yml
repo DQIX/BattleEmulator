@@ -6,7 +6,7 @@ on:
       branches:
         description: "Comma-separated branches to build"
         required: false
-        default: "reokonn_lv8_new_arugo,yo2_lv5_algorithm_v4,bilyouma_new_arugo,zilyadama_new_arugo,nusisama1_v2_new_arugo,zuo_v2_new_arugo,anonn_new_arugo,silyarumana_new_arugo,erusionn_new_arugo,erugiosu_new_arugo,gadonnko_new_arugo,goreonn_new_arugo,gilyumei2_new_arugo"
+        default: "reokonn_lv8_new_arugo,yo2_lv5_algorithm_v4,bilyouma_new_arugo,zilyadama_new_arugo,nusisama1_v2_new_arugo,zuo_v2_new_arugo,anonn_new_arugo,silyarumana_new_arugo,erusionn_new_arugo,erugiosu_new_arugo,gadonnko_new_arugo,goreonn_new_arugo,gilyumei2_new_arugo,brurudoga_v9_new_arugo"
       ui_branch:
         description: "Branch to take public UI from (default current)"
         required: false
@@ -145,6 +145,17 @@ jobs:
       - name: Merge manifests
         run: |
           python webassembly/merge_manifests.py public/branches public/emulators.json
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: gd
+          coverage: none
+
+      - name: Build vision assets
+        run: |
+          php resource/build_all.php
 
       - name: Install JS minifier
         run: |
