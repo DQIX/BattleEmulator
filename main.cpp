@@ -899,11 +899,11 @@ int main() {
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x357776fb;
+	uint64_t time1 = 0x02759694;
 
 	auto counter = 0;
 	int actions[350] = {0};
-	actions[counter++] = BattleEmulator::ATTACK_ALLY;
+	actions[counter++] = BattleEmulator::HOLY_WATER;
 	// actions[counter++] = BattleEmulator::ATTACK_ALLY;
 	// actions[counter++] = BattleEmulator::HEAL;
 	actions[counter] = -1;

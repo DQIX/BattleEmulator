@@ -63,6 +63,8 @@ std::string BattleEmulator::getActionName(int actionId) {
             return "Flee";
         case BattleEmulator::RUBBLE:
             return "Rubble";
+        case HOLY_WATER:
+            return "Holy Water";
         default:
             return "Unknown Action";
     }
