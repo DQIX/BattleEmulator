@@ -77,6 +77,7 @@ return [
 			'heal.png' => 26,
 			'seisui.png' => 151,
 			'seisui2.png' => 151,
+			'yakusou.png' => 23,
 		],
 	],
 ];

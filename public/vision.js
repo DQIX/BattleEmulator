@@ -134,6 +134,7 @@
         17: {names: {ja: "やけつくいき", en: "Burning Breath"}, ally: false, damage: false},
         18: {names: {ja: "黒輝く息", en: "Dark Breath"}, ally: false, damage: true},
         22: {names: {ja: "やすみ", en: "inactive"}, ally: true, damage: false},
+        23: {names: {ja: "やくそう", en: "medicinal herbs"}, ally: true, damage: false},
         24: {names: {ja: "麻痺で動けない", en: "Paralysis"}, ally: true, damage: false},
         25: {names: {ja: "攻撃(味方)", en: "Attack (ally)"}, ally: true, damage: true},
         26: {names: {ja: "ホイミ", en: "heal"}, ally: true, damage: false},
