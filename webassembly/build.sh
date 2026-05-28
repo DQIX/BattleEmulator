@@ -29,7 +29,7 @@ done
 # ------------------------------------------------------------
 declare -A BRANCH_VARIANTS
 
-BRANCH_VARIANTS[brurudoga_v9_new_arugo]="
+BRANCH_VARIANTS[burudoga_v9_new_arugo]="
 brurudoga_v9_tate: -Dtate=1
 brurudoga_v9_no_tate: -Dno_tate=1
 "
