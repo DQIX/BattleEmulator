@@ -29,6 +29,8 @@
 * When implementing the UI, you should not insert anything from JavaScript at startup to prevent CLS issues. All elements are implemented in HTML, and optional elements are hidden by default (though their width is reserved).
   * This doesn't mean you can't use dynamic elements in JavaScript. Dynamic additions using templates are still permitted.
   * Furthermore, this does not mean that dynamic elements should not be initialized at startup.
+* DO NOT USE CLION's GCC or CLION or NINJA CMAKE, USE Global INSTALLED cmake and GCC and NINJA
+
 
 When modifying the UI, read interface-design-main/.claude/skills/interface-design/SKILL.md.
 A UI description is not a specification report. When adding a description, you should write about what the user should expect and what they should input, rather than just saying "it's based on xx" or "it uses performance.now()".

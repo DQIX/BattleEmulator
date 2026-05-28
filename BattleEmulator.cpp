@@ -316,6 +316,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position)++; //会心
             (*position)++; //回避
             FUN_0207564c(position, players[attacker].atk, players[attacker].def);
+            (*position)++; // 0x021e54fc
             baseDamage = 0;
             break;
 
