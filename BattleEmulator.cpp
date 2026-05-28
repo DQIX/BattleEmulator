@@ -199,7 +199,7 @@ RBE_FORCE_INLINE BattleEmulator::StepResult BattleEmulator::Step(int *position, 
                     Player::reduceHp(players[1], basedamage);
 
                     if (validateDamage) {
-                        if (action == ATTACK_ALLY) {
+                        if (action == ATTACK_ALLY || action == HOLY_WATER) {
                             if (damages[exCounter] == -1) {
                                 startTurn = counterJ - 1;
                                 return {true, true};
@@ -300,14 +300,14 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
     const int preDefenderHp = players[defender].hp;
     int baseDamage = 0;
     switch (Id & 0xffff) {
-        // case BattleEmulator::MEDICINAL_HERBS:
-        //     (*position) += 2;
-        //     (*position)++; // 関係ない
-        //     (*position)++; // 会心判定
-        //     (*position)++; // 回避
-        //     baseDamage = FUN_021e8458_typeC(position, 35.0, 35.0, 5.0);
-        //     (*position)++; // 不明
-        //     break;
+        case BattleEmulator::MEDICINAL_HERBS:
+            (*position) += 2;
+            (*position)++; // 関係ない
+            (*position)++; // 会心判定
+            (*position)++; // 回避
+            baseDamage = FUN_021e8458_typeC(position, 35.0, 35.0, 5.0);
+            (*position)++; // 不明
+            break;
         case BattleEmulator::DEFENCE:
             (*position) += 2;
             (*position)++; //関係ない
@@ -315,6 +315,18 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position)++; //回避
             FUN_0207564c(position, players[attacker].atk, players[attacker].def);
             baseDamage = 0;
+            break;
+
+        case HOLY_WATER:
+            {
+                (*position) += 2;
+                (*position)++; //関係ない
+                (*position)++; //会心
+                (*position)++;//盾
+                (*position)++; //回避
+                baseDamage = FUN_021e8458_typeC(position, 14.0, 14.0, 2.0);
+                (*position)++;//0x021e54fc
+            }
             break;
         case BattleEmulator::ATTACK_ENEMY:
             {

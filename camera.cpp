@@ -19,11 +19,11 @@ struct CameraStep {
     uint8_t counterIfNonZero;
 };
 
-constexpr std::array<CameraStep, 106> makeCameraStepTable() {
-    std::array<CameraStep, 106> table{};
+constexpr std::array<CameraStep, 15> makeCameraStepTable() {
+    std::array<CameraStep, 15> table{};
     for (int param5 = 0; param5 <= 1; ++param5) {
         for (int counter = 0; counter <= 5; ++counter) {
-            const int index = param5 * 10 + counter;
+            const int index = param5 * 6 + counter;
             if (param5 == 0) {
                 if (counter == 0) {
                     table[index] = {1, 0, 0, 0, 0, 1, 1};
@@ -55,14 +55,26 @@ constexpr std::array<CameraStep, 106> makeCameraStepTable() {
 }
 
 constexpr auto cameraStepTable = makeCameraStepTable();
+constexpr uint64_t allyOrHolyWaterDoneMask = 1ULL << 48;
 }
 
 void camera::Main(int *position, const int32_t actions[5], uint64_t * NowState, bool bakuti) {
     bool preemptive = true;
+    bool allyOrHolyWaterDone = ((*NowState) & allyOrHolyWaterDoneMask) != 0;
     for (int i = 0; i < 3; ++i) {
         int32_t after = actions[i];
         if (after == BattleEmulator::ATTACK_ALLY) {
             onFreeCameraMove(position, preemptive ? 1 : 0, NowState);
+            if (!allyOrHolyWaterDone) {
+                allyOrHolyWaterDone = true;
+                (*NowState) |= allyOrHolyWaterDoneMask;
+            }
+        }else if(after == BattleEmulator::HOLY_WATER){
+            if (!allyOrHolyWaterDone) {
+                onFreeCameraMove(position, preemptive ? 1 : 0, NowState);
+                allyOrHolyWaterDone = true;
+                (*NowState) |= allyOrHolyWaterDoneMask;
+            }
         }else if(after == BattleEmulator::ATTACK_ENEMY){
             (*position)++;//追尾カメラ
         }
@@ -76,7 +88,7 @@ void camera::Main(int *position, const int32_t actions[5], uint64_t * NowState, 
 //ここのパスは、乱数消費は同じでも、別のコルーチンなので、状態に圧縮するのはNG
 void camera::onFreeCameraMove(int *position, const int param5, uint64_t * NowState) {
     auto counter = static_cast<int>((*NowState >> 8) & 0xf);
-    const auto &step = cameraStepTable[param5 * 10 + counter];
+    const auto &step = cameraStepTable[param5 * 6 + counter];
     (*position) += step.offsetBeforeRandom;
 
     if (step.usesRandom) {

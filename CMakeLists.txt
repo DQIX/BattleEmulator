@@ -44,19 +44,6 @@ set(SOURCES
         debug.cpp
         debug.h
         BattleResult.h
-#        Equipment.h
-#        ActionOptimizer.cpp
-#        ActionOptimizer.h
-#        Genome.h
-#        EnhancedCostCalculator.h
-#        EnhancedCostCalculator.cpp
-#        EnhancedHashCalculator.h
-#        EnhancedHeapQueue.h
-#        EnhancedHeapQueue.cpp
-#        EnhancedHashCalculator.cpp
-#        SimpleParameterOptimizer.cpp
-#        SimpleParameterOptimizer.h
-        LinearIdPool.h
 )
 
 add_executable(burudoga_no ${SOURCES})
