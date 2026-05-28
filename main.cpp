@@ -899,7 +899,7 @@ int main() {
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x02980bef;
+	uint64_t time1 = 0x029d6394;
 
 	auto counter = 0;
 	int actions[350] = {0};
