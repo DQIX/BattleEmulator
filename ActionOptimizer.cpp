@@ -8,7 +8,6 @@
 namespace {
 	constexpr uint64_t kTurnBitsMask = 0xFFFFF000ULL;
 	constexpr std::size_t kBoxBytes = 500ULL * 1024ULL * 1024ULL;
-	constexpr int kMaxEncodedTurns = 32;
 	constexpr int kHighDamageThreshold = 27;
 	constexpr int kMaxStoredSolutions = 2000;
 	constexpr int kAllyAttackAnimationCost = 10;
@@ -24,8 +23,24 @@ namespace {
 		BattleEmulator::ATTACK_ALLY,
 		BattleEmulator::FLEE_ALLY,
 		BattleEmulator::DEFENCE,
+		BattleEmulator::MEDICINAL_HERBS,
 	};
 	static_assert(sizeof(kBranchActions) / sizeof(kBranchActions[0]) == ActionOptimizer::BranchActionCount);
+
+	constexpr int requiredActionBits(int branchCount) {
+		int bits = 0;
+		int encodableCount = 1;
+		while (encodableCount < branchCount) {
+			encodableCount <<= 1;
+			++bits;
+		}
+		return bits;
+	}
+
+	constexpr int kActionBits = requiredActionBits(ActionOptimizer::BranchActionCount);
+	constexpr uint64_t kActionMask = (1ULL << kActionBits) - 1ULL;
+	constexpr int kMaxEncodedTurns = 64 / kActionBits;
+	static_assert(kActionBits > 0);
 
 	struct SearchNode {
 		uint64_t nowState;
@@ -34,6 +49,7 @@ namespace {
 		int allyHp;
 		int enemyHp;
 		int allyMp;
+		int medicinalHerbsLeft;
 		uint16_t highDamageMask;
 		uint16_t enemyAttackMask;
 		uint16_t enemyRubbleMask;
@@ -126,6 +142,7 @@ namespace {
 	int actionAnimationCost(int action) {
 		switch (action) {
 			case BattleEmulator::HEAL:
+			case BattleEmulator::MEDICINAL_HERBS:
 				return kAllyHealAnimationCost;
 			case BattleEmulator::FLEE_ALLY:
 				return kAllyFleeAnimationCost;
@@ -140,7 +157,7 @@ namespace {
 	int estimateAnimationCost(uint64_t pathBits, int depth, uint16_t enemyAttackMask, uint16_t enemyRubbleMask) {
 		int cost = 0;
 		for (int i = 0; i < depth; ++i) {
-			const auto actionIndex = static_cast<int>((pathBits >> (i * 2)) & 0x3ULL);
+			const auto actionIndex = static_cast<int>((pathBits >> (i * kActionBits)) & kActionMask);
 			cost += actionAnimationCost(kBranchActions[actionIndex]);
 		}
 		cost += countBits(enemyAttackMask) * kEnemyAttackAnimationCost;
@@ -250,7 +267,7 @@ namespace {
 			actions[i] = 0;
 		}
 		for (int i = 0; i < depth; ++i) {
-			const auto actionIndex = static_cast<int>((pathBits >> (i * 2)) & 0x3ULL);
+			const auto actionIndex = static_cast<int>((pathBits >> (i * kActionBits)) & kActionMask);
 			actions[i] = kBranchActions[actionIndex];
 		}
 		if (depth < 350) {
@@ -260,7 +277,8 @@ namespace {
 }
 
 ActionOptimizer::Result ActionOptimizer::FindShortestWin(const Player startPlayers[2], uint64_t seed, int startPosition,
-                                                         uint64_t startNowState, int startTurn, int maxDepth) {
+                                                         uint64_t startNowState, int startTurn, int maxDepth,
+                                                         int medicinalHerbCount) {
 	const ReleaseBoxesOnExit releaseBoxesOnExit;
 	Result result;
 	result.maxDepth = maxDepth;
@@ -287,6 +305,7 @@ ActionOptimizer::Result ActionOptimizer::FindShortestWin(const Player startPlaye
 		startPlayers[0].hp,
 		startPlayers[1].hp,
 		startPlayers[0].mp,
+		medicinalHerbCount > 0 ? medicinalHerbCount : 0,
 		0,
 		0,
 		0,
@@ -303,6 +322,9 @@ ActionOptimizer::Result ActionOptimizer::FindShortestWin(const Player startPlaye
 			for (int actionIndex = 0; actionIndex < static_cast<int>(sizeof(kBranchActions) / sizeof(kBranchActions[0])); ++actionIndex) {
 				const int action = kBranchActions[actionIndex];
 				if (action == BattleEmulator::HEAL && node.allyMp <= 0) {
+					continue;
+				}
+				if (action == BattleEmulator::MEDICINAL_HERBS && node.medicinalHerbsLeft <= 0) {
 					continue;
 				}
 
@@ -322,12 +344,13 @@ ActionOptimizer::Result ActionOptimizer::FindShortestWin(const Player startPlaye
 				(void) step;
 				++result.nodesVisited;
 
-				const uint64_t pathBits = node.pathBits | (static_cast<uint64_t>(actionIndex) << (depth * 2));
+				const uint64_t pathBits = node.pathBits | (static_cast<uint64_t>(actionIndex) << (depth * kActionBits));
 				const auto turnBit = static_cast<uint16_t>(1U << depth);
 				uint16_t highDamageMask = node.highDamageMask;
 				uint16_t enemyAttackMask = node.enemyAttackMask;
 				uint16_t enemyRubbleMask = node.enemyRubbleMask;
 				if (summary.allyAction != 0 && summary.allyAction != BattleEmulator::HEAL
+				    && summary.allyAction != BattleEmulator::MEDICINAL_HERBS
 				    && summary.allyDamage >= kHighDamageThreshold) {
 					highDamageMask = static_cast<uint16_t>(highDamageMask | turnBit);
 				}
@@ -346,6 +369,8 @@ ActionOptimizer::Result ActionOptimizer::FindShortestWin(const Player startPlaye
 					continue;
 				}
 
+				const int medicinalHerbsLeft = node.medicinalHerbsLeft
+				                               - (action == BattleEmulator::MEDICINAL_HERBS ? 1 : 0);
 				if (nextCount >= g_boxes.capacity) {
 					result.exhausted = true;
 					return result;
@@ -358,6 +383,7 @@ ActionOptimizer::Result ActionOptimizer::FindShortestWin(const Player startPlaye
 					players[0].hp,
 					players[1].hp,
 					players[0].mp,
+					medicinalHerbsLeft,
 					highDamageMask,
 					enemyAttackMask,
 					enemyRubbleMask,

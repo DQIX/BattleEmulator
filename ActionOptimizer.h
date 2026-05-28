@@ -24,9 +24,9 @@ namespace ActionOptimizerDetail {
 
 class ActionOptimizer {
 public:
-	static constexpr int BranchActionCount = 4;
+	static constexpr int BranchActionCount = 5;
 	static constexpr uint64_t EstimatedTurnsPerSecond = 10000000ULL;
-	static constexpr uint64_t SearchSecondsNumerator = 3ULL;
+	static constexpr uint64_t SearchSecondsNumerator = 13ULL;
 	static constexpr uint64_t SearchSecondsDenominator = 2ULL;
 	static constexpr uint64_t SearchNodeBudget =
 			EstimatedTurnsPerSecond * SearchSecondsNumerator / SearchSecondsDenominator;
@@ -44,7 +44,7 @@ public:
 	};
 
 	static Result FindShortestWin(const Player startPlayers[2], uint64_t seed, int startPosition,
-	                              uint64_t startNowState, int startTurn, int maxDepth);
+	                              uint64_t startNowState, int startTurn, int maxDepth, int medicinalHerbCount);
 };
 
 #endif //NEWDIRECTORY_ACTIONOPTIMIZER_H

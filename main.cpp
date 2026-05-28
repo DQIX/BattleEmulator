@@ -72,6 +72,7 @@ std::string rtrim(const std::string &s);
 std::string trim(const std::string &s);
 
 bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aActions[350], bool dropbug,
+                   int medicinalHerbCount,
                    std::stringstream &ss);
 
 uint64_t BruteForceRequest(const Player copiedPlayers2[2], int hours, int minutes, int seconds, int turns,
@@ -86,6 +87,7 @@ using namespace std;
 int foundSeeds = 0;
 
 uint64_t FoundSeed = 0;
+constexpr int kDefaultMedicinalHerbCount = 1;
 
 void printHeader(std::stringstream &ss);
 
@@ -259,14 +261,24 @@ void showHeader() {
 //int main(int argc, char *argv[]) {
 
 bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aActions[350], bool dropbug,
+                   int medicinalHerbCount,
                    std::stringstream &ss) {
 	(void) dropbug;
 
 	auto currentTurn = 0;
+	int remainingMedicinalHerbCount = medicinalHerbCount > 0 ? medicinalHerbCount : 0;
 	int32_t pastActions[350] = {0};
 	for (int i = 0; i < 349; ++i) {
 		if (aActions[i] == -1) {
 			break;
+		}
+		if (aActions[i] == BattleEmulator::MEDICINAL_HERBS) {
+			--remainingMedicinalHerbCount;
+			if (remainingMedicinalHerbCount < 0) {
+				ss << "BFS search failed: medicinal herbs exhausted by past actions currentTurn="
+						<< currentTurn << std::endl;
+				return false;
+			}
 		}
 		pastActions[i] = aActions[i];
 		currentTurn++;
@@ -324,7 +336,7 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 	}
 
 	const ActionOptimizer::Result searchResult = ActionOptimizer::FindShortestWin(
-		startPlayers, seed, startPosition, startNowState, currentTurn, maxDepth);
+		startPlayers, seed, startPosition, startNowState, currentTurn, maxDepth, remainingMedicinalHerbCount);
 	if (!searchResult.solved) {
 		ss << "BFS search failed: maxTurn=" << searchResult.maxDepth
 				<< " currentTurn=" << currentTurn
@@ -567,7 +579,7 @@ void mainLoop(const Player copiedPlayers[2]) {
 			auto seed = BruteForceRequest(copiedPlayers, hours, minutes, seconds, turns, eActions, aActions, damages);
 			if (foundSeeds == 1) {
 				std::stringstream ss2;
-				if (!SearchRequest(copiedPlayers, seed, aActions, true, ss2)) {
+				if (!SearchRequest(copiedPlayers, seed, aActions, true, kDefaultMedicinalHerbCount, ss2)) {
 					// std::cout << std::endl;
 					// std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
 					// std::cout << "      **YOU WILL NOW LOSE!**       " << std::endl;
@@ -681,7 +693,7 @@ namespace {
 		BattleEmulator::ResetTurnProcessed();
 
 		std::stringstream ss;
-		if (!SearchRequest(copiedPlayers, seed, aActions5, true, ss)) {
+		if (!SearchRequest(copiedPlayers, seed, aActions5, true, kDefaultMedicinalHerbCount, ss)) {
 			ss << std::endl;
 			ss << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
 			ss << "      **YOU WILL NOW LOSE!**       " << std::endl;
@@ -842,7 +854,7 @@ int main() {
 #ifdef DEBUG2
 	//THIS DEBUG CODE!
 	//THIS DEBUG CODE
-	uint64_t time1 = 0x02759694;
+	uint64_t time1 = 0x279dcb3;
 
 	int dummy[100];
 	lcg::init(time1);
@@ -863,14 +875,14 @@ int main() {
 	auto *NowState = new uint64_t(0); //エミュレーターの内部ステートを表すint
 
 	Player players1[2];
-	int32_t gene1[350] = {0};
+	//int32_t gene1[350] = {0};
 	//THIS DEBUG CODE!
-	//int32_t gene1[350] = {25, 53, 53, 26, 25, 25, 25, 53, 26, 25, };
+	int32_t gene1[350] = {25, 25, 25, 27, 25, 26, 25, 25, 25,  };
 	//gene1[19-1] = BattleEmulator::DEFENCE;
 	int counter = 0;
-
-	gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-	gene1[counter++] = BattleEmulator::MEDICINAL_HERBS;
+	//
+	// gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+	// gene1[counter++] = BattleEmulator::MEDICINAL_HERBS;
 	// gene1[counter++] = BattleEmulator::ATTACK_ALLY;
 	// gene1[counter++] = BattleEmulator::ATTACK_ALLY;
 	// gene1[counter++] = BattleEmulator::HEAL;
@@ -899,17 +911,17 @@ int main() {
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x02759694;
+	uint64_t time1 = 0x0279dcb3;
 
 	auto counter = 0;
 	int actions[350] = {0};
-	actions[counter++] = BattleEmulator::HOLY_WATER;
+	actions[counter++] = BattleEmulator::ATTACK_ALLY;
 	// actions[counter++] = BattleEmulator::ATTACK_ALLY;
 	// actions[counter++] = BattleEmulator::HEAL;
 	actions[counter] = -1;
 
 	std::stringstream ss;
-	SearchRequest(copiedPlayers, time1, actions, false, ss);
+	SearchRequest(copiedPlayers, time1, actions, false, kDefaultMedicinalHerbCount, ss);
 	ss << std::endl;
 
 	std::cout << ss.str();
