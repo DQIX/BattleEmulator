@@ -93,7 +93,7 @@ RBE_FORCE_INLINE BattleEmulator::StepResult BattleEmulator::Step(int *position, 
 #ifdef DEBUG2
     DEBUG_COUT2((*position));
     //THIS DEBUG CODE!
-    if ((*position) == 107) { //THIS DEBUG CODE!
+    if ((*position) == 239) { //THIS DEBUG CODE!
         std::cout << "!!" << std::endl;
     }
 #endif
@@ -340,8 +340,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 (*position)++; //会心
                 if (lcg::getPercent(position, 100) < 2) {
                     kaihi = true;
+                }else {
+                    (*position)++;//盾
                 }
-                (*position)++;//盾
                 (*position)++; //回避
 
                 baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);

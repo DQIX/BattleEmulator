@@ -842,7 +842,7 @@ int main() {
 #ifdef DEBUG2
 	//THIS DEBUG CODE!
 	//THIS DEBUG CODE
-	uint64_t time1 = 0x02759694;
+	uint64_t time1 = 0x2980bef;
 
 	int dummy[100];
 	lcg::init(time1);
@@ -863,14 +863,14 @@ int main() {
 	auto *NowState = new uint64_t(0); //エミュレーターの内部ステートを表すint
 
 	Player players1[2];
-	int32_t gene1[350] = {0};
+	//int32_t gene1[350] = {0};
 	//THIS DEBUG CODE!
-	//int32_t gene1[350] = {25, 53, 53, 26, 25, 25, 25, 53, 26, 25, };
+	int32_t gene1[350] = {25, 26, 25, 27, 25, 26, 53, 25, 25, 25,  };
 	//gene1[19-1] = BattleEmulator::DEFENCE;
 	int counter = 0;
 
-	gene1[counter++] = BattleEmulator::ATTACK_ALLY;
-	gene1[counter++] = BattleEmulator::MEDICINAL_HERBS;
+	//gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+	//gene1[counter++] = BattleEmulator::MEDICINAL_HERBS;
 	// gene1[counter++] = BattleEmulator::ATTACK_ALLY;
 	// gene1[counter++] = BattleEmulator::ATTACK_ALLY;
 	// gene1[counter++] = BattleEmulator::HEAL;
@@ -899,11 +899,11 @@ int main() {
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x02759694;
+	uint64_t time1 = 0x02980bef;
 
 	auto counter = 0;
 	int actions[350] = {0};
-	actions[counter++] = BattleEmulator::HOLY_WATER;
+	actions[counter++] = BattleEmulator::ATTACK_ALLY;
 	// actions[counter++] = BattleEmulator::ATTACK_ALLY;
 	// actions[counter++] = BattleEmulator::HEAL;
 	actions[counter] = -1;
