@@ -29,21 +29,17 @@ int startturn = -1;
 const Player copiedPlayers[2] = {
 	// プレイヤー1
 	{
-		309, 309.0, 324, 324, 294, 294, 193, 234, 165, // 最初のメンバー
+		309, 309, 324, 324, 299, 299, 193, 193, 234, 165, // 最初のメンバー
 		165, false, false, 0, false, 0, -1,
 		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
 		3, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
 		false, -1, 0, -1, 0, false, 1, 1, 1
-	}, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
+	},
 
 	// プレイヤー2
 	{
-		4800, 4800.0, 248, 248, 278, 278, 157, 0, 255, // 最初のメンバー
-		255, false, false, 0, false, 0, -1,
-		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-		false, -1, 0, -1, 0, false, 0, 0, 0
-	} // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
+		3098, 3098, 238, 238, 228, 228, 160, 160, 0, 255, 255
+	}
 };
 
 #elif defined(SUPER)
@@ -884,7 +880,7 @@ int main(){
 #ifdef DEBUG2
 	//THIS DEBUG CODE!
 	//THIS DEBUG CODE
-	uint64_t time1 = 0x932ca66;
+	uint64_t time1 = 0x26576c8b;
 
 	int dummy[100];
 	lcg::init(time1);
@@ -911,7 +907,12 @@ int main(){
 	//gene1[19-1] = BattleEmulator::DEFENCE;
 	int counter = 0;
 
-	gene1[counter++] = BattleEmulator::INSULATE;
+	gene1[counter++] = BattleEmulator::BUFF;
+	gene1[counter++] = BattleEmulator::BUFF;
+	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
 	//gene1[counter++] = BattleEmulator::INSULATE;
 	// gene1[counter++] = BattleEmulator::BUFF;
 	// gene1[counter++] = BattleEmulator::BUFF;

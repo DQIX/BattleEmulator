@@ -11,12 +11,13 @@
 
 struct Player {
     int hp;
-    double maxHp;
+    int maxHp;
     int atk;
     int defaultATK;
     int def;
     int defaultDEF;
     int speed;
+    int defaultSpeed;
     int HealPower;
     int mp = 0;
     int maxMp = 0;
@@ -44,6 +45,10 @@ struct Player {
     int MagicWaterCount = 1;
     int InsulateLevel = 0;
     int InsulateTurns = -1;
+    int SpeedLevel = 0;
+    int SpeedTurns = -1;
+    bool inactive = false;
+
 
     // 他のメンバー変数やメンバー関数を追加する可能性があります
 
