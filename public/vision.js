@@ -1148,6 +1148,21 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         };
     }
 
+    function buildMatchWhiteDebugMetrics(imageData, area = null) {
+        const thresholds = getActiveThresholds();
+        const backgroundValue = estimateBackgroundValue(imageData, area);
+        const threshold = getMatchWhiteThresholdForBackground(backgroundValue);
+        const saturationMax = getWhiteSaturationMaxForBackground(backgroundValue);
+        return {
+            backgroundValue,
+            backgroundRatio: getWhiteBackgroundRatio(backgroundValue),
+            threshold,
+            thresholdMove: threshold - thresholds.matchWhiteThresholdDark,
+            saturationMax,
+            saturationMove: saturationMax - thresholds.whiteSaturationMaxDark
+        };
+    }
+
     function getNumberBackgroundArea(config) {
         return {
             x: config.x,
@@ -1457,8 +1472,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return `${area.x},${area.y} ${area.width}x${area.height}`;
     }
 
-    function buildNumberWhiteParamDebugEntry(label, imageData, area = null, sourceArea = area) {
-        const metrics = buildNumberWhiteDebugMetrics(imageData, area);
+    function buildWhiteParamDebugEntryFromMetrics(label, sourceArea, metrics) {
         const line = [
             label.padEnd(28, " "),
             `area=${formatDebugArea(sourceArea)}`,
@@ -1470,6 +1484,26 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             `saturationMove=${formatDebugSignedNumber(metrics.saturationMove)}`
         ].join("  ");
         return {line, metrics};
+    }
+
+    function buildMatchWhiteParamDebugEntry(label, imageData, area = null, sourceArea = area) {
+        return buildWhiteParamDebugEntryFromMetrics(
+            label,
+            sourceArea,
+            buildMatchWhiteDebugMetrics(imageData, area)
+        );
+    }
+
+    function buildMatchWhiteParamDebugLine(label, imageData, area = null, sourceArea = area) {
+        return buildMatchWhiteParamDebugEntry(label, imageData, area, sourceArea).line;
+    }
+
+    function buildNumberWhiteParamDebugEntry(label, imageData, area = null, sourceArea = area) {
+        return buildWhiteParamDebugEntryFromMetrics(
+            label,
+            sourceArea,
+            buildNumberWhiteDebugMetrics(imageData, area)
+        );
     }
 
     function buildNumberWhiteParamDebugLine(label, imageData, area = null, sourceArea = area) {
@@ -1510,22 +1544,22 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         const frame = processingContext.getImageData(0, 0, BASE_WIDTH, BASE_HEIGHT);
         let summary = null;
         const rows = [
-            "# buildNumberWhiteParamsForImageData",
+            "# white parameter debug",
             `capturedAt=${new Date().toISOString()}`,
             `frameClock=${formatDebugNumber(now)}ms`,
             `mode=${state.modeId}`,
             `source=${BASE_WIDTH}x${BASE_HEIGHT}`,
             "",
-            "# match slots",
-            buildNumberWhiteParamDebugLine("frame.full", frame)
+            "# match slots (buildWhiteParamsForImageData)",
+            buildMatchWhiteParamDebugLine("frame.full", frame)
         ];
 
         for (const slot of MATCH_SLOT_KEYS) {
-            rows.push(buildNumberWhiteParamDebugLine(`slot.${slot}`, frame, ROI_DEFS[slot]));
+            rows.push(buildMatchWhiteParamDebugLine(`slot.${slot}`, frame, ROI_DEFS[slot]));
         }
 
         rows.push("");
-        rows.push("# damage number boxes");
+        rows.push("# damage number boxes (buildNumberWhiteParamsForImageData)");
         for (const [key, config] of Object.entries(DAMAGE_ROIS)) {
             const backgroundArea = getNumberBackgroundArea(config);
             const backgroundImageData = getNumberBackgroundImageData(config);
