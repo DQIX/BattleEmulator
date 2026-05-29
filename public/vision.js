@@ -25,6 +25,12 @@
         gpuWarningDialog: document.getElementById("visionGpuWarningDialog"),
         gpuWarningCancel: document.getElementById("visionGpuWarningCancel"),
         gpuWarningStart: document.getElementById("visionGpuWarningStart"),
+        numberWhiteDebugToggle: document.getElementById("visionNumberWhiteDebugToggle"),
+        numberWhiteThresholdMove: document.getElementById("visionNumberWhiteThresholdMove"),
+        numberWhiteBackgroundRatio: document.getElementById("visionNumberWhiteBackgroundRatio"),
+        numberWhiteSaturationMove: document.getElementById("visionNumberWhiteSaturationMove"),
+        numberWhiteDebugOutput: document.getElementById("visionNumberWhiteDebugOutput"),
+        numberWhiteDebugCopy: document.getElementById("visionNumberWhiteDebugCopy"),
         matches: Array.from(document.querySelectorAll("#visionMatches .vision-match-card")),
         copyMarkdown: document.getElementById("visionCopyMarkdown"),
         copyCsv: document.getElementById("visionCopyCsv")
@@ -40,6 +46,57 @@
     const SOURCE_720P = {width: 1280, height: 720};
     const VISION_ASSET_PACK_URL = "vision-assets.json";
     const VISION_ASSET_EMBED_KEY = "__VISION_ASSET_PACK__";
+    /**
+     * 画像認識しきい値の基準値。
+     *
+     * Dark/Bright は「文字の色」ではなく、背景推定で得た明るさ(Value)を指す。
+     * 背景が whiteSaturationDarkValue 以下なら Dark 側、whiteSaturationBrightValue 以上なら
+     * Bright 側に寄り、その間は線形補間される。モード別定義に書いた値はこの基準値を上書きする。
+     *
+     * templateThreshold:
+     * 通常テンプレート一致スコアの採用ライン。上げると誤検出は減るが、文字欠けやブレで拾いにくくなる。
+     *
+     * resetLatchClearScore:
+     * リセット検出後、候補スコアがこの値を下回るまで次のリセットを受け付けない。
+     * 低いとリセットが連続発火しにくく、高いと解除が早くなる。
+     *
+     * whiteThreshold:
+     * 背景推定に失敗した時などに使う通常文字の明度下限。これは一致率ではなくHSV Valueの下限。
+     * 値を上げるほど暗い白文字を捨て、値を下げるほど薄い文字や背景ノイズも白扱いしやすい。
+     *
+     * matchWhiteThresholdDark / matchWhiteThresholdBright:
+     * 通常テンプレート照合で白文字とみなす明度下限。値を上げるほど厳しい。
+     * 暗い背景ではDark側、明るい背景ではBright側が使われる。
+     *
+     * whiteSaturationMaxDark / whiteSaturationMaxBright:
+     * 通常テンプレート照合で白文字とみなす彩度上限。値を上げるほど色付きピクセルも白扱いする。
+     * 「明るい時に厳しくしたい」ならBrightを小さくする。大きくすると明るい背景で白判定は緩くなる。
+     *
+     * whiteSaturationDarkValue / whiteSaturationBrightValue:
+     * 背景の明るさをDark/Brightへ割り当てる基準。認識対象の文字そのものではなく、背景推定値に対する境界。
+     *
+     * numberWhiteThresholdDark / numberWhiteThresholdBright:
+     * 数字認識で白数字とみなす明度下限。通常テンプレートとは分離されている。
+     * 値を上げるほど数字は厳しくなり、暗い数字や薄い数字は落ちやすくなる。
+     *
+     * numberWhiteSaturationMaxDark / numberWhiteSaturationMaxBright:
+     * 数字認識で白数字とみなす彩度上限。通常テンプレートとは分離されている。
+     * 値を上げるほど緩い。背景が明るい時に背景ノイズを避けたいならBrightをDark以下にする。
+     *
+     * actionThreshold:
+     * pickCandidate後、実際に行動として処理する候補スコアの採用ライン。
+     * templateThresholdを満たして候補化されても、ここ未満なら行動履歴には進めない。
+     *
+     * numberThreshold:
+     * 数字テンプレート一致スコアの採用ライン。上げると誤読は減るが、桁欠け時に数字が-1になりやすい。
+     *
+     * matchPenaltyWeight / matchWhiteWeight:
+     * 通常テンプレート一致スコアの重み。matchWhiteWeightは一致した白画素の評価、
+     * matchPenaltyWeightはテンプレートにない白画素への減点。通常は0のまま必要な時だけ上げる。
+     *
+     * templateAlphaThreshold:
+     * テンプレート画像の透明度下限。上げると薄い半透明ピクセルを無視しやすくなる。
+     */
     const DEFAULT_VISION_THRESHOLDS = Object.freeze({
         templateThreshold: 0.45,
         resetLatchClearScore: 0.6,
@@ -71,6 +128,7 @@
         }),
     });
     const DAMAGE_CONFIRMATION_MS = 1500;
+    const NUMBER_WHITE_DEBUG_INTERVAL_MS = 500;
     const MATCH_SLOT_KEYS = ["main", "sub", "ally", "target"];
     const overlayContext = ui.overlay.getContext("2d");
     overlayContext.imageSmoothingEnabled = false; // ★ 追加
@@ -368,6 +426,7 @@
         matcherKind: "",
         gpuRecoveryInProgress: false,
         gpuWarningResolver: null,
+        lastNumberWhiteDebugAt: 0,
         lastModeHitAt: 0,
         captureRect: {
             sourceWidth: BASE_WIDTH,
@@ -585,12 +644,14 @@
             this.deviceLostPromise = device.lost
                 .then((info) => {
                     if (this.onLost) {
-                        Promise.resolve(this.onLost(info)).catch(() => {
+                        Promise.resolve(this.onLost(info)).catch((error) => {
+                            console.error("WebGPU lost handler failed:", error);
                         });
                     }
                     return info;
                 })
-                .catch(() => {
+                .catch((error) => {
+                    console.error("WebGPU device lost promise failed:", error);
                 });
             this.sampler = device.createSampler({
                 magFilter: "nearest",
@@ -979,6 +1040,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return darkParam + (brightParam - darkParam) * ratio;
     }
 
+    function getWhiteBackgroundRatio(value) {
+        const thresholds = getActiveThresholds();
+        const range = Math.max(0.001, thresholds.whiteSaturationBrightValue - thresholds.whiteSaturationDarkValue);
+        return Math.max(0, Math.min(1, (value - thresholds.whiteSaturationDarkValue) / range));
+    }
+
     function getWhiteSaturationMaxForBackground(value) {
         const thresholds = getActiveThresholds();
         return interpolateWhiteParamByBackground(
@@ -1064,6 +1131,35 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             threshold: getNumberWhiteThresholdForBackground(backgroundValue),
             saturationMax: getNumberWhiteSaturationMaxForBackground(backgroundValue)
         };
+    }
+
+    function buildNumberWhiteDebugMetrics(imageData, area = null) {
+        const thresholds = getActiveThresholds();
+        const backgroundValue = estimateBackgroundValue(imageData, area);
+        const threshold = getNumberWhiteThresholdForBackground(backgroundValue);
+        const saturationMax = getNumberWhiteSaturationMaxForBackground(backgroundValue);
+        return {
+            backgroundValue,
+            backgroundRatio: getWhiteBackgroundRatio(backgroundValue),
+            threshold,
+            thresholdMove: threshold - thresholds.numberWhiteThresholdDark,
+            saturationMax,
+            saturationMove: saturationMax - thresholds.numberWhiteSaturationMaxDark
+        };
+    }
+
+    function getNumberBackgroundArea(config) {
+        return {
+            x: config.x,
+            y: config.y,
+            width: config.width,
+            height: config.height
+        };
+    }
+
+    function getNumberBackgroundImageData(config) {
+        const area = getNumberBackgroundArea(config);
+        return processingContext.getImageData(area.x, area.y, area.width, area.height);
     }
 
     function getBoundsForAreas(areas) {
@@ -1339,6 +1435,135 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         };
     }
 
+    function formatDebugNumber(value) {
+        return Number.isFinite(value) ? value.toFixed(4) : String(value);
+    }
+
+    function formatDebugSignedNumber(value) {
+        if (!Number.isFinite(value)) {
+            return String(value);
+        }
+        return `${value >= 0 ? "+" : "-"}${Math.abs(value).toFixed(4)}`;
+    }
+
+    function formatDebugPercent(value) {
+        return Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : String(value);
+    }
+
+    function formatDebugArea(area) {
+        if (!area) {
+            return `0,0 ${BASE_WIDTH}x${BASE_HEIGHT}`;
+        }
+        return `${area.x},${area.y} ${area.width}x${area.height}`;
+    }
+
+    function buildNumberWhiteParamDebugEntry(label, imageData, area = null, sourceArea = area) {
+        const metrics = buildNumberWhiteDebugMetrics(imageData, area);
+        const line = [
+            label.padEnd(28, " "),
+            `area=${formatDebugArea(sourceArea)}`,
+            `background=${formatDebugNumber(metrics.backgroundValue)}`,
+            `ratio=${formatDebugPercent(metrics.backgroundRatio)}`,
+            `threshold=${formatDebugNumber(metrics.threshold)}`,
+            `thresholdMove=${formatDebugSignedNumber(metrics.thresholdMove)}`,
+            `saturationMax=${formatDebugNumber(metrics.saturationMax)}`,
+            `saturationMove=${formatDebugSignedNumber(metrics.saturationMove)}`
+        ].join("  ");
+        return {line, metrics};
+    }
+
+    function buildNumberWhiteParamDebugLine(label, imageData, area = null, sourceArea = area) {
+        return buildNumberWhiteParamDebugEntry(label, imageData, area, sourceArea).line;
+    }
+
+    function toAbsoluteDamageArea(config, area) {
+        return {
+            x: config.x + area.x,
+            y: config.y + area.y,
+            width: area.width,
+            height: area.height
+        };
+    }
+
+    function pickNumberWhiteDebugSummary(current, label, metrics) {
+        if (!current || Math.abs(metrics.thresholdMove) > Math.abs(current.thresholdMove)) {
+            return {label, ...metrics};
+        }
+        return current;
+    }
+
+    function updateNumberWhiteDebugSummary(summary) {
+        if (ui.numberWhiteThresholdMove) {
+            ui.numberWhiteThresholdMove.textContent = summary
+                ? `${formatDebugSignedNumber(summary.thresholdMove)} ${summary.label}`
+                : "--";
+        }
+        if (ui.numberWhiteBackgroundRatio) {
+            ui.numberWhiteBackgroundRatio.textContent = summary ? formatDebugPercent(summary.backgroundRatio) : "--";
+        }
+        if (ui.numberWhiteSaturationMove) {
+            ui.numberWhiteSaturationMove.textContent = summary ? formatDebugSignedNumber(summary.saturationMove) : "--";
+        }
+    }
+
+    function buildNumberWhiteDebugSnapshot(now) {
+        const frame = processingContext.getImageData(0, 0, BASE_WIDTH, BASE_HEIGHT);
+        let summary = null;
+        const rows = [
+            "# buildNumberWhiteParamsForImageData",
+            `capturedAt=${new Date().toISOString()}`,
+            `frameClock=${formatDebugNumber(now)}ms`,
+            `mode=${state.modeId}`,
+            `source=${BASE_WIDTH}x${BASE_HEIGHT}`,
+            "",
+            "# match slots",
+            buildNumberWhiteParamDebugLine("frame.full", frame)
+        ];
+
+        for (const slot of MATCH_SLOT_KEYS) {
+            rows.push(buildNumberWhiteParamDebugLine(`slot.${slot}`, frame, ROI_DEFS[slot]));
+        }
+
+        rows.push("");
+        rows.push("# damage number boxes");
+        for (const [key, config] of Object.entries(DAMAGE_ROIS)) {
+            const backgroundArea = getNumberBackgroundArea(config);
+            const backgroundImageData = getNumberBackgroundImageData(config);
+            // This mirrors the imageData-only call path used by buildNumberWhiteMask during number recognition.
+            const backgroundEntry = buildNumberWhiteParamDebugEntry(`${key}.actualBackground`, backgroundImageData, null, backgroundArea);
+            rows.push(backgroundEntry.line);
+            summary = pickNumberWhiteDebugSummary(summary, key, backgroundEntry.metrics);
+            rows.push(buildNumberWhiteParamDebugLine(`${key}.crop`, frame, config));
+            config.actionAreas.forEach((area, index) => {
+                rows.push(buildNumberWhiteParamDebugLine(`${key}.digit${index + 1}`, frame, toAbsoluteDamageArea(config, area)));
+            });
+        }
+
+        rows.push("");
+        rows.push("# movement summary");
+        rows.push(summary
+            ? `maxThresholdMove=${formatDebugSignedNumber(summary.thresholdMove)}  source=${summary.label}  backgroundRatio=${formatDebugPercent(summary.backgroundRatio)}  saturationMove=${formatDebugSignedNumber(summary.saturationMove)}`
+            : "maxThresholdMove=--");
+
+        return {
+            text: rows.join("\n"),
+            summary
+        };
+    }
+
+    function updateNumberWhiteDebug(now, options = {}) {
+        if (!ui.numberWhiteDebugOutput || !ui.numberWhiteDebugToggle?.checked) {
+            return;
+        }
+        if (!options.force && now - state.lastNumberWhiteDebugAt < NUMBER_WHITE_DEBUG_INTERVAL_MS) {
+            return;
+        }
+        state.lastNumberWhiteDebugAt = now;
+        const snapshot = buildNumberWhiteDebugSnapshot(now);
+        ui.numberWhiteDebugOutput.value = snapshot.text;
+        updateNumberWhiteDebugSummary(snapshot.summary);
+    }
+
     function cropMask(binary, area) {
         const width = Math.min(area.width, binary.width - area.x);
         const height = Math.min(area.height, binary.height - area.y);
@@ -1525,6 +1750,16 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     function t(key, fallback) {
         const dictionary = getDictionary();
         return dictionary[key] || fallback;
+    }
+
+    function setNumberWhiteDebugPlaceholder() {
+        if (!ui.numberWhiteDebugOutput) {
+            return;
+        }
+        ui.numberWhiteDebugOutput.placeholder = t(
+            "visionNumberWhiteDebugPlaceholder",
+            "Enable the switch to show throttled buildNumberWhiteParamsForImageData output for every recognition box."
+        );
     }
 
     function getActionLabel(actionId) {
@@ -2285,7 +2520,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             return false;
         }
 
-        setVisionMode("identify", {reset: true, syncEmulator: false}).catch(() => {
+        setVisionMode("identify", {reset: true, syncEmulator: false}).catch((error) => {
+            console.error("failed to return to identify mode:", error);
         });
         return true;
     }
@@ -2891,6 +3127,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 setStatus("visionStatusReady");
                 return matcher;
             } catch (error) {
+                console.error("WebGPU matcher init failed:", error);
                 console.warn("WebGPU matcher unavailable, falling back to CPU:", error);
                 if (warnOnCpuFallback) {
                     const proceed = await openGpuWarningDialog();
@@ -2934,6 +3171,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 startLoop();
             }
         } catch (error) {
+            console.error("WebGPU matcher recovery failed:", error);
             console.warn("WebGPU matcher recovery failed:", error);
             state.matcher = null;
             state.matcherKind = "";
@@ -3031,6 +3269,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             setStatus("visionStatusWatching");
             startLoop();
         } catch (error) {
+            console.error("camera connection failed:", error);
             if (state.stream) {
                 state.stream.getTracks().forEach((track) => track.stop());
                 state.stream = null;
@@ -3065,6 +3304,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 state.lastFrameAt = now;
                 try {
                     drawProcessingFrame(ui.video);
+                    updateNumberWhiteDebug(now);
                     const matches = await state.matcher.match(processingCanvas, state.templatesBySlot);
                     state.lastMatches = matches;
                     const damageReadings = recognizePendingDamageValues();
@@ -3097,12 +3337,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                         acceptCandidate(candidate, matches);
                     }
                 } catch (error) {
+                    console.error("vision matcher error:", error);
                     if (state.matcherKind === "webgpu") {
                         await recoverWebGpuMatcher();
                         return;
                     } else {
                         setStatus("visionStatusError");
-                        console.error("vision matcher error:", error);
                         return;
                     }
                 }
@@ -3126,6 +3366,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         populateModeOptions();
         setStatus(state.statusKey);
         setBridgeStatus(state.bridgeStatusKey, ui.encodedPayload.value);
+        setNumberWhiteDebugPlaceholder();
         renderHistory();
     }
 
@@ -3151,7 +3392,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             openResetDialog();
         });
         ui.modeSelect?.addEventListener("change", (event) => {
-            setVisionMode(event.target.value, {reset: true, syncEmulator: true}).catch(() => {
+            setVisionMode(event.target.value, {reset: true, syncEmulator: true}).catch((error) => {
+                console.error("vision mode change failed:", error);
             });
         });
         ui.debugExportButton.addEventListener("click", () => {
@@ -3176,7 +3418,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             }
         });
         navigator.mediaDevices?.addEventListener?.("devicechange", () => {
-            populateCameras().catch(() => {
+            populateCameras().catch((error) => {
+                console.error("camera list refresh failed:", error);
             });
         });
         ui.copyMarkdown?.addEventListener("click", (event) => {
@@ -3202,6 +3445,19 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 });
             }
         });
+        ui.numberWhiteDebugToggle?.addEventListener("change", () => {
+            state.lastNumberWhiteDebugAt = 0;
+            if (!ui.numberWhiteDebugToggle.checked && ui.numberWhiteDebugOutput) {
+                ui.numberWhiteDebugOutput.value = "";
+                updateNumberWhiteDebugSummary(null);
+            }
+        });
+        ui.numberWhiteDebugCopy?.addEventListener("click", () => {
+            const text = ui.numberWhiteDebugOutput?.value || "";
+            if (text && typeof copyText === "function") {
+                copyText(text);
+            }
+        });
         const observer = new MutationObserver(() => {
             syncLanguage();
         });
@@ -3217,6 +3473,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             state.assetPack = await state.assetPackPromise;
             state.modes = Array.isArray(state.assetPack.modes) ? state.assetPack.modes : [];
         } catch (error) {
+            console.error("vision asset pack load failed:", error);
             console.warn("vision asset pack load failed, using legacy fallback:", error);
             state.assetPack = normalizeVisionAssetPack(null);
             state.modes = state.assetPack.modes;
@@ -3227,6 +3484,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         populateModeOptions();
         updateTurnChip();
         renderHistory();
+        setNumberWhiteDebugPlaceholder();
         if (ui.applyFormatButton) {
             ui.applyFormatButton.disabled = true;
         }
@@ -3238,6 +3496,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             }
             await populateCameras();
         } catch (error) {
+            console.error("initial camera list load failed:", error);
             setStatus("visionStatusIdle");
         }
     }

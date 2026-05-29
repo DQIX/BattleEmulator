@@ -309,6 +309,7 @@ function loadSeedMemos() {
         const parsed = JSON.parse(stored);
         return Array.isArray(parsed) ? parsed : [];
     } catch (err) {
+        console.error("seed memo load failed:", err);
         return [];
     }
 }
@@ -348,7 +349,8 @@ function copyText(text) {
         return;
     }
     if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).catch(() => {
+        navigator.clipboard.writeText(text).catch((err) => {
+            console.error("clipboard write failed:", err);
         });
         return;
     }
@@ -362,6 +364,7 @@ function copyText(text) {
     try {
         document.execCommand("copy");
     } catch (err) {
+        console.error("fallback copy failed:", err);
     }
     document.body.removeChild(temp);
 }
@@ -844,6 +847,7 @@ function loadShortcutBindings() {
     try {
         stored = JSON.parse(localStorage.getItem(SHORTCUT_STORAGE_KEY) || "{}");
     } catch (err) {
+        console.error("shortcut binding load failed:", err);
         stored = {};
     }
     const bindings = {};
@@ -1310,7 +1314,8 @@ function splitRange(start, end, threads) {
 }
 
 function enqueuePreload(task) {
-    state.preloadQueue = state.preloadQueue.then(task).catch(() => {
+    state.preloadQueue = state.preloadQueue.then(task).catch((err) => {
+        console.error("preload queue task failed:", err);
     });
     return state.preloadQueue;
 }
@@ -1325,6 +1330,7 @@ async function ensureWorkerScript() {
         const blob = new Blob([state.workerScriptText], {type: "application/javascript"});
         state.workerBlobUrl = URL.createObjectURL(blob);
     } catch (err) {
+        console.error("worker.js preload failed:", err);
         appendLog("worker.js preload failed");
     }
 }
@@ -1352,6 +1358,7 @@ function preloadModule(moduleUrl) {
             await ensureModulePayload(moduleUrl);
             appendLog(`preloaded ${moduleUrl}`);
         } catch (err) {
+            console.error("module preload failed:", err);
             appendLog("preload failed");
         }
     });
@@ -1409,6 +1416,7 @@ async function loadManifest() {
         state.emulatorStatusKey = "ready";
         ui.emulatorStatus.textContent = t("ready", "ready");
     } catch (err) {
+        console.error("manifest load failed:", err);
         state.emulatorStatusKey = "missing";
         ui.emulatorStatus.textContent = t("missing", "missing");
         ui.emulatorSelect.innerHTML = "";
@@ -1751,6 +1759,7 @@ async function runSearch() {
         appendLog("dump table ready");
         searchClient.terminate();
     } catch (err) {
+        console.error("run failed:", err);
         appendLog(err ? String(err) : "run failed");
         setSeedState("error");
     } finally {

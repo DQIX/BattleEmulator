@@ -418,6 +418,7 @@ body::before {
 
 
 .panel-vision,
+.panel-vision-debug,
 .panel-vision-history {
   grid-column: span 2;
 }
@@ -781,6 +782,79 @@ h2 {
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.5;
+}
+
+.vision-debug-panel {
+  width: 100%;
+}
+
+.vision-debug-body {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(220px, 0.65fr) minmax(0, 1.35fr);
+  margin-top: 14px;
+}
+
+.vision-debug-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  min-height: 132px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 84%, var(--fg) 6%);
+  background: color-mix(in srgb, var(--card) 84%, var(--panel));
+}
+
+.vision-debug-toggle {
+  width: 100%;
+}
+
+.vision-debug-metrics {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+
+.vision-debug-metric {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 34px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--input-bg) 88%, var(--panel));
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.vision-debug-metric strong {
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.vision-debug-output {
+  width: 100%;
+  min-height: 220px;
+  resize: vertical;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--input-bg) 94%, var(--panel));
+  color: color-mix(in srgb, var(--fg) 78%, var(--muted));
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
 }
 
 .action-input {
@@ -1169,6 +1243,10 @@ h2 {
     grid-template-rows: none;
   }
 
+  .vision-debug-body {
+    grid-template-columns: 1fr;
+  }
+
   .auto-timer-actions,
   .auto-timer-confirm,
   .shortcut-actions {
@@ -1180,6 +1258,7 @@ h2 {
   }
 
   .panel-vision,
+  .panel-vision-debug,
   .panel-vision-history {
     grid-column: span 1;
   }

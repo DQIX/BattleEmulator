@@ -29,6 +29,7 @@ function loadModuleFromSource(jsText, key) {
       // worker 内限定用途なので問題なし
       (0, eval)(jsText);
     } catch (err) {
+      console.error("worker module eval failed:", err);
       reject(err);
     }
   });
@@ -141,6 +142,7 @@ self.onmessage = async (event) => {
     }
 
   } catch (err) {
+    console.error("worker task failed:", err);
     self.postMessage({
       id,
       type: "error",
