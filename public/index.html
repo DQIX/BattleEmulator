@@ -315,14 +315,14 @@
                         visionCopyMd: "markdownコピー",
                         visionCopyCsv: "CSVコピー",
                         visionRecognitionDebug: "映像認識デバッグ",
-                        visionRecognitionDebugHint: "認識が見ている値を確認したい時だけスイッチを有効にします。",
+                        visionRecognitionDebugHint: "トグルを有効にすると、映像認識のデバッグに役立つ値を表示します。",
                         visionNumberWhiteDebugEnable: "数字白判定を表示",
                         visionNumberWhiteThresholdMove: "閾値移動量",
                         visionNumberWhiteBackgroundRatio: "背景補間率",
                         visionNumberWhiteSaturationMove: "彩度上限移動量",
                         visionNumberWhiteDebugOutput: "数字白判定パラメータ",
                         visionNumberWhiteDebugCopy: "コピー",
-                        visionNumberWhiteDebugPlaceholder: "スイッチを有効にすると、背景の明るさで数字白判定の閾値がどれだけ動いたかを低頻度で表示します。",
+                        visionNumberWhiteDebugPlaceholder: "ここにデバッグ情報が表示されます",
                         memoCopyInput: "Inputコピー",
                         visionApplyFormatButtonDescription: "現在のアクション入力を映像認識のデータで置き換えます。",
                         visionApplyFormat: "フォーマットを使用する",
@@ -613,52 +613,6 @@
                         </label>
                         <div class="meta-line" data-i18n="visionEncoderLabel">Custom encode</div>
                     </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="panel panel-vision-debug" style="--delay: 180ms">
-            <div class="vision-debug-panel">
-                <div class="panel-header">
-                    <div>
-                        <h2 data-i18n="visionRecognitionDebug">Vision Recognition Debug</h2>
-                        <div class="hint" data-i18n="visionRecognitionDebugHint">Enable the switch when you want to inspect what the recognizer is reading.</div>
-                    </div>
-                </div>
-                <div class="vision-debug-body">
-                    <div class="vision-debug-controls">
-                        <label class="field field-inline vision-debug-toggle">
-                            <span data-i18n="visionNumberWhiteDebugEnable">Show number white params</span>
-                            <div class="toggle">
-                                <input id="visionNumberWhiteDebugToggle" type="checkbox"/>
-                                <div class="toggle-ui"></div>
-                            </div>
-                        </label>
-                        <div class="vision-debug-metrics" aria-label="Number white threshold movement">
-                            <div class="vision-debug-metric">
-                                <span data-i18n="visionNumberWhiteThresholdMove">Threshold move</span>
-                                <strong id="visionNumberWhiteThresholdMove">--</strong>
-                            </div>
-                            <div class="vision-debug-metric">
-                                <span data-i18n="visionNumberWhiteBackgroundRatio">Background ratio</span>
-                                <strong id="visionNumberWhiteBackgroundRatio">--</strong>
-                            </div>
-                            <div class="vision-debug-metric">
-                                <span data-i18n="visionNumberWhiteSaturationMove">Saturation move</span>
-                                <strong id="visionNumberWhiteSaturationMove">--</strong>
-                            </div>
-                        </div>
-                        <button id="visionNumberWhiteDebugCopy" class="run-button run-button-secondary"
-                                data-i18n="visionNumberWhiteDebugCopy">Copy
-                        </button>
-                    </div>
-                    <label class="field">
-                        <span data-i18n="visionNumberWhiteDebugOutput">Number white params</span>
-                        <!-- Add future vision debug text outputs here so startup HTML keeps the layout stable. -->
-                        <textarea id="visionNumberWhiteDebugOutput" class="vision-debug-output" readonly
-                                  data-i18n-placeholder="visionNumberWhiteDebugPlaceholder"
-                                  placeholder="Enable the switch to show how far the number-white threshold moved from the background brightness."></textarea>
-                    </label>
                 </div>
             </div>
         </section>
@@ -1104,6 +1058,51 @@
 
 
             </div><!-- /shortcut-list -->
+        </section>
+        <section class="panel panel-vision-debug" style="--delay: 180ms">
+            <div class="vision-debug-panel">
+                <div class="panel-header">
+                    <div>
+                        <h2 data-i18n="visionRecognitionDebug">Vision Recognition Debug</h2>
+                        <div class="hint" data-i18n="visionRecognitionDebugHint">Enable the switch when you want to inspect what the recognizer is reading.</div>
+                    </div>
+                </div>
+                <div class="vision-debug-body">
+                    <div class="vision-debug-controls">
+                        <label class="field field-inline vision-debug-toggle">
+                            <span data-i18n="visionNumberWhiteDebugEnable">Show number white params</span>
+                            <div class="toggle">
+                                <input id="visionNumberWhiteDebugToggle" type="checkbox"/>
+                                <div class="toggle-ui"></div>
+                            </div>
+                        </label>
+                        <div class="vision-debug-metrics" aria-label="Number white threshold movement">
+                            <div class="vision-debug-metric">
+                                <span data-i18n="visionNumberWhiteThresholdMove">Threshold move</span>
+                                <strong id="visionNumberWhiteThresholdMove">--</strong>
+                            </div>
+                            <div class="vision-debug-metric">
+                                <span data-i18n="visionNumberWhiteBackgroundRatio">Background ratio</span>
+                                <strong id="visionNumberWhiteBackgroundRatio">--</strong>
+                            </div>
+                            <div class="vision-debug-metric">
+                                <span data-i18n="visionNumberWhiteSaturationMove">Saturation move</span>
+                                <strong id="visionNumberWhiteSaturationMove">--</strong>
+                            </div>
+                        </div>
+                        <button id="visionNumberWhiteDebugCopy" class="run-button run-button-secondary"
+                                data-i18n="visionNumberWhiteDebugCopy">Copy
+                        </button>
+                    </div>
+                    <label class="field">
+                        <span data-i18n="visionNumberWhiteDebugOutput">Number white params</span>
+                        <!-- Add future vision debug text outputs here so startup HTML keeps the layout stable. -->
+                        <textarea id="visionNumberWhiteDebugOutput" class="vision-debug-output" readonly
+                                  data-i18n-placeholder="visionNumberWhiteDebugPlaceholder"
+                                  placeholder="Enable the switch to show how far the number-white threshold moved from the background brightness."></textarea>
+                    </label>
+                </div>
+            </div>
         </section>
         <section class="panel panel-copyright" style="--delay: 320ms">
             <div class="panel-header">

@@ -7,12 +7,12 @@ return [
 	'thresholds' => [
 		'whiteSaturationMaxDark' => 0.14,//こっちのほうを小さくないといけない
 		'whiteSaturationMaxBright' => 0.17,  //こっちが大きい
-        "matchWhiteThresholdBright" => 0.75,
+        "matchWhiteThresholdBright" => 0.70,
 		"matchWhiteThresholdDark" => 0.60,
 		'numberWhiteSaturationMaxDark' => 0.22,
-		'numberWhiteSaturationMaxBright' => 0.18,
+		'numberWhiteSaturationMaxBright' => 0.17,
 		'numberWhiteThresholdBright' => 0.80,  // 0.91から下げる
-		'numberWhiteThresholdDark' => 0.70,    // 0.82から下げる
+		'numberWhiteThresholdDark' => 0.60,    // 0.82から下げる
 	],
 	'names' => [
 		'ja' => 'ブルドーガモード',
