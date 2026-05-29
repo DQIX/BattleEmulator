@@ -183,6 +183,7 @@ std::string BattleEmulator::getActionName(int actionId) {
         case KAZAM:
             return "Kazam";
         case CLAW_SLASH:
+        case CLAW_SLASH_B1:
             return "Claw Slash";
         case WAR_CRY:
             return "War Cry";
