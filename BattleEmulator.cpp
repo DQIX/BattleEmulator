@@ -1127,7 +1127,6 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     players[attacker].specialChargeTurn = SpecialChargeTurns;
                 }
             }
-            players[attacker].mp -= 28;
             resetCombo(NowState);
             return 999;
             break;
