@@ -908,11 +908,19 @@ int main(){
 	int counter = 0;
 
 	gene1[counter++] = BattleEmulator::BUFF;
+	gene1[counter++] = BattleEmulator::MAGIC_MIRROR;
+	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	gene1[counter++] = BattleEmulator::DOUBLE_UP;
+	gene1[counter++] = BattleEmulator::FULLHEAL;
+	gene1[counter++] = BattleEmulator::MULTITHRUST;
+	gene1[counter++] = BattleEmulator::MULTITHRUST;
+	gene1[counter++] = BattleEmulator::FULLHEAL;
 	gene1[counter++] = BattleEmulator::BUFF;
-	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	gene1[counter++] = BattleEmulator::MULTITHRUST;
+	gene1[counter++] = BattleEmulator::BUFF;
 	gene1[counter++] = BattleEmulator::DOUBLE_UP;
 	gene1[counter++] = BattleEmulator::FULLHEAL;
 	gene1[counter++] = BattleEmulator::MULTITHRUST;
