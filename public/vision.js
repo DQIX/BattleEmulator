@@ -397,6 +397,7 @@
         numberTemplates: [],
         assetPack: null,
         assetPackPromise: null,
+        assetPackLoaded: false,
         modes: [],
         modeId: "identify",
         activeMode: null,
@@ -1057,11 +1058,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     function getMatchWhiteThresholdForBackground(value) {
         const thresholds = getActiveThresholds();
-        console.log(interpolateWhiteParamByBackground(
-            value,
-            thresholds.matchWhiteThresholdDark,
-            thresholds.matchWhiteThresholdBright
-        ))
         return interpolateWhiteParamByBackground(
             value,
             thresholds.matchWhiteThresholdDark,
@@ -3076,11 +3072,39 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         if (embeddedPack) {
             return normalizeVisionAssetPack(embeddedPack);
         }
-        const response = await fetch(VISION_ASSET_PACK_URL, {cache: "no-store"});
+        const response = await fetch(VISION_ASSET_PACK_URL);
         if (!response.ok) {
             throw new Error(`asset pack missing: ${VISION_ASSET_PACK_URL}`);
         }
         return normalizeVisionAssetPack(await response.json());
+    }
+
+    function applyVisionAssetPack(assetPack) {
+        state.assetPack = assetPack;
+        state.modes = Array.isArray(assetPack.modes) ? assetPack.modes : [];
+        state.activeMode = getModeById(state.modeId) || getModeById("identify") || state.modes[0] || null;
+        if (state.activeMode) {
+            state.modeId = state.activeMode.id;
+        }
+        state.activeThresholds = resolveModeThresholds(state.activeMode);
+        populateModeOptions();
+    }
+
+    async function ensureVisionAssetPackLoaded() {
+        if (state.assetPackLoaded && state.assetPack) {
+            return state.assetPack;
+        }
+        if (!state.assetPackPromise) {
+            state.assetPackPromise = loadPackedVisionAssets().catch((error) => {
+                console.error("vision asset pack load failed:", error);
+                console.warn("vision asset pack load failed, using legacy fallback:", error);
+                return normalizeVisionAssetPack(null);
+            });
+        }
+        const assetPack = await state.assetPackPromise;
+        applyVisionAssetPack(assetPack);
+        state.assetPackLoaded = true;
+        return assetPack;
     }
 
     function decodePackedMask(entry, assetPack) {
@@ -3188,9 +3212,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         state.gpuRecoveryInProgress = true;
         state.loopToken += 1;
         try {
-            if (!state.assetPack) {
-                state.assetPack = await loadPackedVisionAssets();
-            }
+            await ensureVisionAssetPackLoaded();
             const matcher = await createMatcher({
                 warnOnCpuFallback: false,
                 onWebGpuLost: recoverWebGpuMatcher
@@ -3282,12 +3304,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             ui.video.srcObject = stream;
             await ui.video.play();
             await populateCameras();
-            if (!state.assetPackPromise) {
-                state.assetPackPromise = loadPackedVisionAssets();
-            }
-            if (!state.assetPack) {
-                state.assetPack = await state.assetPackPromise;
-            }
+            await ensureVisionAssetPackLoaded();
             if (!state.matcher) {
                 state.matcher = await createMatcher({
                     warnOnCpuFallback: true,
@@ -3502,16 +3519,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     async function init() {
-        try {
-            state.assetPackPromise = loadPackedVisionAssets();
-            state.assetPack = await state.assetPackPromise;
-            state.modes = Array.isArray(state.assetPack.modes) ? state.assetPack.modes : [];
-        } catch (error) {
-            console.error("vision asset pack load failed:", error);
-            console.warn("vision asset pack load failed, using legacy fallback:", error);
-            state.assetPack = normalizeVisionAssetPack(null);
-            state.modes = state.assetPack.modes;
-        }
+        state.assetPack = normalizeVisionAssetPack(null);
+        state.modes = state.assetPack.modes;
         state.activeMode = getModeById(state.modeId) || state.modes[0] || null;
         state.activeThresholds = resolveModeThresholds(state.activeMode);
         state.lastModeHitAt = Date.now();
