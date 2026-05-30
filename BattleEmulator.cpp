@@ -183,12 +183,18 @@ std::string BattleEmulator::getActionName(int actionId) {
         case KAZAM:
             return "Kazam";
         case CLAW_SLASH:
+            return "Claw Slash B6";
         case CLAW_SLASH_B1:
-            return "Claw Slash";
+            return "Claw Slash B1";
+        case CLAW_SLASH_A2:
+            return "Claw Slash A1";
         case WAR_CRY:
             return "War Cry";
         case WAVE_OF_PANIC:
             return "Wave of Panic";
+        case INACTIVE_ENEMY:
+        case INACTIVE_ALLY:
+            return "Inactive";
         default:
             return "Unknown Action";
     }
@@ -243,7 +249,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 #ifdef DEBUG2
         DEBUG_COUT2((*position));
         //THIS DEBUG CODE!
-        if ((*position) == 100) { //THIS DEBUG CODE!
+        if ((*position) == 525) { //THIS DEBUG CODE!
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -276,12 +282,10 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 enemyAction[counter] = ProcessEnemyRandomAction2A(position);
                 if (counter == 1 && enemyAction[0] == enemyAction[1]) {
                     if (preAction != SWITCH_2A) {
-                        if (enemyAction[counter] == ULTRA_HIGH_SPEED_COMBO) {
+                        if (enemyAction[counter] == CLAW_SLASH_A2) {
                             enemyAction[counter] = ATTACK_ENEMY;
-                        } else if (enemyAction[counter] == LIGHTNING_STORM) {
-                            enemyAction[counter] = SWITCH_2C;
-                        } else if (enemyAction[counter] == CRITICAL_ATTACK) {
-                            enemyAction[counter] = LIGHTNING_STORM;
+                        }else if (enemyAction[counter] == KAZAM){
+                            enemyAction[counter] = CLAW_SLASH_A2;
                         }
                     }
                 }
@@ -294,9 +298,16 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     continue;
                 }
                 if (enemyAction[counter] == ATTACK_ENEMY) {
-                    (*position)+=3;
-                }else if(enemyAction[counter] == KAZAM) {
-                    (*position)++;
+                    (*position)+=2;
+                    if (!players[1].rage) {
+                        (*position) += 1;
+                    }
+                }else if (enemyAction[counter] == CLAW_SLASH_A2 || enemyAction[counter] == KAZAM) {
+                    if (!players[1].rage) {
+                        (*position) += 1;
+                    }
+                }else if (enemyAction[counter] == WAR_CRY) {
+                    (*position)+=2;
                 }
             } else if (state == TYPE_2B) {
                 enemyAction[counter] = ProcessEnemyRandomAction2B(position);
@@ -311,6 +322,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             enemyAction[counter] = WAVE_OF_PANIC;
                         } else if (enemyAction[counter] == CLAW_SLASH) {
                             enemyAction[counter] = SWITCH_2A;
+                        }else if (enemyAction[counter] == DARK_BREATH) {
+                            enemyAction[counter] = ATTACK_ENEMY;
                         }
                     }
                 }
@@ -320,12 +333,15 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     (*position) += 2;
                     continue;
                 }
-                if (enemyAction[counter] == DARK_BREATH) {
+                if (enemyAction[counter] == ATTACK_ENEMY) {
                     (*position) += 2;
-                } else if (enemyAction[counter] == ATTACK_ENEMY) {
-                    (*position) += 3;
+                    if (!players[1].rage) {
+                        (*position) += 1;
+                    }
                 }else if (enemyAction[counter] == CLAW_SLASH || enemyAction[counter] == CLAW_SLASH_B1) {
-                    (*position)++;
+                    if (!players[1].rage) {
+                        (*position)++;
+                    }
                 }
             }
             if (counter == 0) {
@@ -485,6 +501,13 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     } else {
                         break;
                     }
+
+                    if (players[1].rage) {
+                        players[1].rageTurns--;
+                        if (players[1].rageTurns <= 0) {
+                            players[1].rage = false;
+                        }
+                    }
                     //--------end_FUN_021594bc-------
                 }
             } else {
@@ -623,6 +646,19 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                                 RecalculateBuff(players);
                             }
                         }
+
+                        players[0].SpeedTurns--;
+                        if (players[0].SpeedLevel != 0 && players[0].SpeedTurns <= 0) {
+                            //0x0215a94c speed
+                            const int probability[4] = {62, 75, 87, 100};
+                            auto probability1 = probability[std::abs(players[0].SpeedTurns)];
+                            auto probability2 = lcg::getPercent(position, 100);
+                            if (probability1 >= (probability2 + (probability1 == 75 ? 1 : 0))) {
+                                players[0].SpeedLevel = 0;
+                                RecalculateBuff(players);
+                            }
+                        }
+
                         players[0].InsulateTurns--;
                         if (players[0].InsulateLevel != 0 && players[0].InsulateTurns <= 0) {
                             //0x0215ac74 ins
@@ -742,12 +778,13 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     players[0].BuffLevel--;
                     players[0].BuffTurns = 7;
                     players[0].SpeedLevel--;
-                    players[0].BuffTurns = 7;
+                    players[0].SpeedTurns = 7;
 
                     RecalculateBuff(players);
                 }
                 process7A8(position, 0, players, defender);
                 baseDamage = 0;
+                resetCombo(NowState);
                 break;
         }
         case KAZAM:
@@ -773,6 +810,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 
             (*position)++; // 0x021e54fc
             process7A8(position, baseDamage, players, defender);
+            resetCombo(NowState);
             break;
 
         case WAR_CRY:
@@ -794,6 +832,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             }
             baseDamage = 0;
             process7A8(position, 0, players, defender);
+            resetCombo(NowState);
             break;
         case BattleEmulator::INSULATE:
             players[0].mp -= 4;
@@ -1307,7 +1346,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                         hasKaisinn = true;
                     }
                 }
-                if (lcg::getPercent(position, 100) < 2) {
+                if (lcg::getPercent(position, 100) < 4) {
                     kaihi = true;
                 } else {
                     (*position)++; //盾ガード 0x021586fc 0%
@@ -1335,7 +1374,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
 
                 //ここの小数点以下は引き継がれる
-                tmp = tmp * 1.25; //1.25倍は雷属性になってるから
+                tmp = tmp; //1.25倍は雷属性になってるから
                 baseDamage = static_cast<int>(floor(tmp));
 
                 if (!kaihi) {
@@ -1346,16 +1385,16 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     baseDamage = 0;
                 }
 
-                preHP[1] = std::max(0, preHP[1] - baseDamage);
+                preEnemyHp = std::max(0, preEnemyHp - baseDamage);
                 totalDamage += baseDamage;
-                if (preHP[1] <= 0) {
+                if (preEnemyHp <= 0) {
                     return totalDamage;
                 }
             }
             if (hasKaisinn) {
                 (*position) += 2;
             }
-            if (preHP[1] > 0) {
+            if (preEnemyHp > 0) {
                 if (!players[attacker].specialCharge && lcg::getPercent(position, 100) < 1) {
                     players[attacker].specialCharge = true;
                     players[attacker].specialChargeTurn = 8;
@@ -1877,10 +1916,14 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
         case BattleEmulator::SKY_ATTACK:
         case CLAW_SLASH:
         case CLAW_SLASH_B1:
+        case CLAW_SLASH_A2:
             (*position) += 2;
             (*position)++; // アクロバットスターとか
 
             (*position)++; //会心
+            if (Id == CLAW_SLASH_B1 || Id == CLAW_SLASH_A2) {
+                Id = CLAW_SLASH;
+            }
             if (!players[0].paralysis && !players[0].sleeping) {
                 if (lcg::getPercent(position, 100) < 2) {
                     kaihi = true;
@@ -2060,7 +2103,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 
             //みかわし(相手)
             if (!players[0].paralysis) {
-                if (lcg::getPercent(position, 100) < 2) {
+                if (lcg::getPercent(position, 100) < 4) {
                     kaihi = true;
                 }
                 if (!kaihi) {
@@ -2307,7 +2350,7 @@ void BattleEmulator::RecalculateBuff(Player *players) {
     }
 }
 
-void BattleEmulator::ProcessRage(int *position, int baseDamage, const Player *players, int preEnemyHp) {
+void BattleEmulator::ProcessRage(int *position, int baseDamage, Player *players, int preEnemyHp) {
     const int maxHp = players[1].maxHp;
     const int afterHp = preEnemyHp - baseDamage;
     if (static_cast<int64_t>(afterHp) * 2 < maxHp) {
@@ -2323,7 +2366,8 @@ void BattleEmulator::ProcessRage(int *position, int baseDamage, const Player *pl
                 if (static_cast<int64_t>(preEnemyHp) * 4 >= maxHp) {
                     if (!players[1].rage) {
                         (*position)++;
-                        (*position)++;
+                        players[1].rage = true;
+                        players[1].rageTurns = lcg::intRangeRand(position, 2, 4);
                     } else {
                         (*position)++;
                     }
@@ -2388,7 +2432,7 @@ constexpr std::array<int, 6> ratios = {
 
 constexpr std::array<int, 6> ids = {
     BattleEmulator::ATTACK_ENEMY,
-    BattleEmulator::CLAW_SLASH,
+    BattleEmulator::CLAW_SLASH_A2,
     BattleEmulator::KAZAM,
     BattleEmulator::SWITCH_2B,
     BattleEmulator::WAR_CRY,
@@ -2418,9 +2462,9 @@ constexpr std::array<int, 6> ratios2 = {
 
 constexpr std::array<int, 6> ids2 = {
     BattleEmulator::CLAW_SLASH_B1,
-    BattleEmulator::WAVE_OF_PANIC, //つめ
+    BattleEmulator::WAVE_OF_PANIC,
     BattleEmulator::ATTACK_ENEMY,
-    BattleEmulator::DARK_BREATH, //攻撃
+    BattleEmulator::DARK_BREATH,
     BattleEmulator::SWITCH_2A,
     BattleEmulator::CLAW_SLASH
 };

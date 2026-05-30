@@ -101,9 +101,10 @@ public:
 	static constexpr int WAR_CRY = 84; //雄叫び、id変更するな、バトルエミュレーター共通idのためid変更するな
 	static constexpr int CLAW_SLASH = 85; //爪できりさく、id変更するな、バトルエミュレーター共通idのためid変更するな
 	static constexpr int CLAW_SLASH_B1 = 155; //爪できりさく、id変更するな、バトルエミュレーター共通idのためid変更するな
+	static constexpr int CLAW_SLASH_A2 = 156; //爪できりさく、id変更するな、バトルエミュレーター共通idのためid変更するな
 
 	static constexpr int KAZAM = 153; //ドルモーア
-	static constexpr int WAVE_OF_PANIC = 154; //どぐるま
+	static constexpr int WAVE_OF_PANIC = 154; //ステータス効果
 
     static bool
     Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
@@ -128,7 +129,7 @@ private:
 
     static int ProcessEnemyRandomAction2b(int *position);
 
-    static void ProcessRage(int *position, int baseDamage, const Player *players, int preEnemyHp);
+    static void ProcessRage(int *position, int baseDamage, Player *players, int preEnemyHp);
 
     static void RecalculateBuff(Player players[2]);
 

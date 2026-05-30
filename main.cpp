@@ -38,7 +38,7 @@ const Player copiedPlayers[2] = {
 
 	// プレイヤー2
 	{
-		3098, 3098, 238, 238, 228, 228, 160, 160, 0, 255, 255
+		3098, 3098, 238, 238, 288, 288, 160, 160, 0, 255, 255
 	}
 };
 
@@ -880,7 +880,7 @@ int main(){
 #ifdef DEBUG2
 	//THIS DEBUG CODE!
 	//THIS DEBUG CODE
-	uint64_t time1 = 0x26576c8b;
+	uint64_t time1 = 0x265d9157;
 
 	int dummy[100];
 	lcg::init(time1);
@@ -913,6 +913,12 @@ int main(){
 	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
 	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
 	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	gene1[counter++] = BattleEmulator::DOUBLE_UP;
+	gene1[counter++] = BattleEmulator::FULLHEAL;
+	gene1[counter++] = BattleEmulator::MULTITHRUST;
+	gene1[counter++] = BattleEmulator::MULTITHRUST;
+	gene1[counter++] = BattleEmulator::MULTITHRUST;
+	gene1[counter++] = BattleEmulator::MULTITHRUST;
 	//gene1[counter++] = BattleEmulator::INSULATE;
 	// gene1[counter++] = BattleEmulator::BUFF;
 	// gene1[counter++] = BattleEmulator::BUFF;
