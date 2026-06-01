@@ -914,6 +914,12 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 players[0].BuffTurns = -1;
                 RecalculateBuff(players);
             }
+
+            if(players[0].SpeedLevel < 0){
+                players[0].SpeedLevel = 0;
+                players[0].SpeedLevel = -1;
+                RecalculateBuff(players);
+            }
             break;
         case SPECIAL_MEDICINE:
             players[attacker].SpecialMedicineCount--;
