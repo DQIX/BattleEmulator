@@ -226,7 +226,10 @@
         67: {names: {ja: "斬り上げた", en: "UPWARD_SLICE"}, ally: false, damage: true},
         68: {names: {ja: "さみだれ斬り", en: "MULTISLASH"}, ally: false, damage: true},
         150: {names: {ja: "ガレキ", en: "RUBBLE"}, ally: false, damage: true},
-        151: {names: {ja: "せいすい", en: "HOLY_WATER"}, ally: true, damage: true}
+        151: {names: {ja: "せいすい", en: "HOLY_WATER"}, ally: true, damage: true},
+        153: {names: {ja: "ドルモーア", en: "kazam"}, ally: false, damage: true},
+        85: {names: {ja: "するどい爪", en: "claw slash"}, ally: false, damage: true},
+        154: {names: {ja: "やみのはどう", en: "Wave Of Panic"}, ally: false, damage: false}
     };
     const ACTION_IDS = Object.freeze({
         ATTACK_ENEMY: 1,
@@ -285,7 +288,10 @@
         UPWARD_SLICE: 67,
         MULTISLASH: 68,
         RUBBLE: 150,
-        HOLY_WATER: 151
+        HOLY_WATER: 151,
+        KAZAM: 153,
+        CLAW_SLASH: 85,
+        WAVE_OF_PANIC: 154,
     });
     const ACTIONS_BY_ID = ACTIONS;
 
@@ -305,81 +311,6 @@
     }
 
     const LEGACY_VISION_MODE_DEFINITIONS = Object.freeze({
-        erugiosu: {
-            id: "erugiosu",
-            names: {
-                ja: "エルギオスモード",
-                en: "Erugiosu Mode"
-            },
-            picker: "erugiosu",
-            timeoutMs: 4 * 60 * 1000,
-            battleEmulator: {
-                branch: "erugiosu_new_arugo"
-            },
-            thresholds: VISION_MODE_THRESHOLDS.erugiosu,
-            identify: {
-                templates: [
-                    {slot: "main", directory: "message_v2", file: "erugio.png"},
-                    {slot: "main", directory: "message_v2", file: "erugio2.png"},
-                    {slot: "main", directory: "message_v2", file: "erugio4.png"}
-                ]
-            },
-            rules: {
-                erugioMain: ["erugio.png", "erugio2.png", "erugio4.png"],
-                resetSub: ["reset.png"],
-                enemyAttackSub: ["attack.png"],
-                uhscSub: ["uhsc.png"],
-                allyAttack: ["a_attack.png"],
-                dead: ["dead.png", "dead2.png"],
-                wakeUp: ["WakeUp.png", "WakeUp2.png", "WakeUp3.png"],
-                psycheUpTarget: ["aha.png"],
-                directMainActions: {
-                    "sukara.png": 30,
-                    "hadou.png": 16,
-                    "yaketuku.png": 17,
-                    "zilyoukuu.png": 8,
-                    "merazoma.png": 9,
-                    "mira-.png": 31,
-                    "samidare.png": 34,
-                    "samidare2.png": 34,
-                    "no_hadou.png": 15,
-                    "zigosupa.png": 5,
-                    "kuroi.png": 18,
-                    "sutemi.png": 33,
-                    "seisui.png": 49,
-                    "meisou.png": 41,
-                    "madannte.png": 42,
-                    "ice.png": 10,
-                    "fullheal.png": 37,
-                    "more_heal.png": 32,
-                    "ayasii.png": 12,
-                    "mp2.png": 43,
-                    "song.png": 52,
-                    "sippuu.png": 44,
-                    "sage.png": 47,
-                    "elven.png": 48,
-                    "flee.png": 53,
-                    "tokuyaku.png": 50
-                }
-            }
-        },
-        gilyumei1: {
-            id: "gilyumei1",
-            names: {
-                ja: "ギュメイ1モード",
-                en: "Gilyumei 1 Mode"
-            },
-            picker: "gilyumei1",
-            timeoutMs: 4 * 60 * 1000,
-            battleEmulator: {
-                branch: "gilyumei1"
-            },
-            thresholds: VISION_MODE_THRESHOLDS.gilyumei1,
-            identify: {
-                templates: []
-            },
-            rules: {}
-        }
     });
 
     const state = {
@@ -456,60 +387,11 @@
         return state.activeThresholds || DEFAULT_VISION_THRESHOLDS;
     }
 
-    function buildLegacyVisionAssetPack(rawPack) {
-        const erugiosu = getLegacyModeDefinition("erugiosu");
-        const identifyDetections = [{
-            modeId: "erugiosu",
-            templates: erugiosu.identify.templates
-        }];
-        return {
-            version: rawPack.version || 1,
-            generatedAt: rawPack.generatedAt || null,
-            modes: [
-                {
-                    id: "identify",
-                    names: {ja: "識別モード", en: "Identify Mode"},
-                    picker: "identify",
-                    timeoutMs: 0,
-                    battleEmulator: null,
-                    thresholds: VISION_MODE_THRESHOLDS.identify,
-                    rules: {detections: identifyDetections},
-                    identify: {templates: []},
-                    templates: (rawPack.templates || []).filter((entry) =>
-                        identifyDetections.some((detection) =>
-                            detection.templates.some((template) =>
-                                template.slot === entry.slot && template.file === entry.file
-                            )
-                        )
-                    )
-                },
-                {
-                    ...erugiosu,
-                    templates: rawPack.templates || []
-                },
-                {
-                    ...getLegacyModeDefinition("gilyumei1"),
-                    templates: []
-                }
-            ],
-            numberTemplates: rawPack.numberTemplates || [],
-            assets: {}
-        };
-    }
-
     function normalizeVisionAssetMap(rawAssets) {
         return rawAssets && typeof rawAssets === "object" && !Array.isArray(rawAssets) ? rawAssets : {};
     }
 
     function normalizeVisionAssetPack(rawPack) {
-        if (!rawPack || typeof rawPack !== "object") {
-            return buildLegacyVisionAssetPack({templates: [], numberTemplates: []});
-        }
-
-        if (!Array.isArray(rawPack.modes)) {
-            return buildLegacyVisionAssetPack(rawPack);
-        }
-
         const normalizedModes = rawPack.modes.map((mode) => {
             const legacy = getLegacyModeDefinition(mode.id);
             return {
@@ -2356,6 +2238,34 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
     }
 
+    function pickBaruborosuCandidate(matches){
+        const {templateThreshold} = getActiveThresholds();
+        const main = matches.main || emptyMatch("main");
+        const sub = matches.sub || emptyMatch("sub");
+        const ally = matches.ally || emptyMatch("ally");
+        const target = matches.target || emptyMatch("target");
+        const mode = getActiveMode();
+        const erugioMain = modeRuleHasFile(mode, "Main", main.file);
+
+        if (erugioMain && modeRuleHasFile(mode, "resetSub", sub.file) && main.score >= 0.4 && sub.score >= 0.4) {
+            return {kind: "reset", score: Math.min(main.score, sub.score), detail: `${main.file} + ${sub.file}`};
+        }else if(erugioMain){
+            return {kind: "action", actionId: ACTION_IDS.ATTACK_ENEMY, detail: main.file, score: main.score};
+        }
+
+        if(modeRuleHasFile(mode, "samidare", main.file) && main.score >= templateThreshold) {
+            if(target.file === "aha.png" && target.score >= templateThreshold) {
+                return {kind: "action", actionId: ACTION_IDS.MULTITHRUST, detail: main.file, score: main.score};
+            }
+        }
+
+
+        const directAction = getModeRuleMap(mode, "directMainActions")[main.file];
+        if (directAction && main.score >= templateThreshold) {
+            return {kind: "action", actionId: directAction, detail: main.file, score: main.score};
+        }
+    }
+
     function pickhexagoonCandidate(matches){
         const {templateThreshold} = getActiveThresholds();
         const main = matches.main || emptyMatch("main");
@@ -2397,6 +2307,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
         if (picker === "hexagoon") {
             return pickhexagoonCandidate(matches);
+        }
+        if(picker === "baruborosu"){
+            return pickBaruborosuCandidate(matches);
         }
         return null;
     }
@@ -2673,6 +2586,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             ACTION_IDS.ATTACK_ENEMY,
             ACTION_IDS.RUBBLE,
             ACTION_IDS.HOLY_WATER,
+            ACTION_IDS.KAZAM,
+            ACTION_IDS.CLAW_SLASH,
         ].includes(actionId)) {
             return 1;
         }
@@ -3518,11 +3433,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         });
     }
 
-    async function init() {
-        state.assetPack = normalizeVisionAssetPack(null);
-        state.modes = state.assetPack.modes;
-        state.activeMode = getModeById(state.modeId) || state.modes[0] || null;
-        state.activeThresholds = resolveModeThresholds(state.activeMode);
+    async function init() {;
+        state.activeMode = null;
         state.lastModeHitAt = Date.now();
         populateModeOptions();
         updateTurnChip();
