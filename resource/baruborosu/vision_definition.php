@@ -96,6 +96,7 @@ return [
 			'yamino.png' => 154,
 			'otake.png' => 84,
 			'yasumi2.png' => 22,
+			'mitore_teki.png' => 21,
 		],
 	],
 ];

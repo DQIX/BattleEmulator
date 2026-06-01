@@ -230,7 +230,8 @@
         153: {names: {ja: "ドルモーア", en: "kazam"}, ally: false, damage: true},
         85: {names: {ja: "するどい爪", en: "claw slash"}, ally: false, damage: true},
         154: {names: {ja: "やみのはどう", en: "Wave Of Panic"}, ally: false, damage: false},
-        84: {names: {ja: "おたけび", en: "War Cry"}, ally: false, damage: false}
+        84: {names: {ja: "おたけび", en: "War Cry"}, ally: false, damage: false},
+        21: {names: {ja: "敵やすみ", en: "Inactive Enemy"}, ally: false, damage: false}
     };
     const ACTION_IDS = Object.freeze({
         ATTACK_ENEMY: 1,
