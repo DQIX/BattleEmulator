@@ -30,7 +30,7 @@ done
 declare -A BRANCH_VARIANTS
 
 BRANCH_VARIANTS[baruborosu_new_arugo]="
-baruborosu_gouketu: -DSUPER=1
+baruborosu_gouketu: -DGOUKETU=1
 "
 
 
