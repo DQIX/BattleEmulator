@@ -314,9 +314,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 preAction = enemyAction[counter];
                 if (counter == 1 && (enemyAction[0] == enemyAction[1])) {
                     if (preAction != SWITCH_2B) {
-                        if (enemyAction[counter] == DARK_BREATH) {
-                            enemyAction[counter] = ATTACK_ENEMY;
-                        } else if (enemyAction[counter] == WAVE_OF_PANIC) {
+                        if (enemyAction[counter] == WAVE_OF_PANIC) {
                             enemyAction[counter] = CLAW_SLASH_B1;
                         } else if (enemyAction[counter] == CLAW_SLASH_B1) {
                             enemyAction[counter] = WAVE_OF_PANIC;
@@ -353,7 +351,10 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     startTurn = counterJ - 1;
                     return true;
                 }
-                if (need != enemyAction[counter]) {
+                auto & ac = enemyAction[counter];
+                if (need == CLAW_SLASH && (ac == CLAW_SLASH_A2 || ac == CLAW_SLASH_B1 || ac == CLAW_SLASH)) {
+
+                }else if (need != ac) {
                     return false;
                 }
             }
@@ -466,31 +467,23 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     } else if (mode != -1 && mode != -2) {
                         if (
                             c == ATTACK_ENEMY ||
-                            c == ULTRA_HIGH_SPEED_COMBO ||
+                            c == CLAW_SLASH_A2 ||
                             c == SKY_ATTACK ||
-                            c == CRITICAL_ATTACK ||
+                            c == KAZAM ||
                             c == DARK_BREATH ||
-                            c == FREEZING_BLIZZARD ||
-                            c == MERA_ZOMA ||
-                            c == LIGHTNING_STORM ||
-                            c == MAGIC_BURST
+                            c == CLAW_SLASH_B1 ||
+                            c == CLAW_SLASH
                         ) {
                             if (damages[exCounter] == -1) {
                                 startTurn = counterJ - 1;
                                 return true;
                             }
-                            //                            int need = damages[exCounter++] - basedamage;
-                            //                            if (std::abs(need) == 0) {
-                            //                                return false;
-                            //                            }
                             if (damages[exCounter++] != basedamage) {
                                 return false;
                             }
                         }
                     }
-                    if (c == BattleEmulator::MEDITATION) {
-                        Player::heal(players[1], basedamage);
-                    } else if ((c == BattleEmulator::MERA_ZOMA || c == KAZAM) && players[0].hasMagicMirror) {
+                    if ((c == KAZAM) && players[0].hasMagicMirror) {
                         Player::reduceHp(players[1], basedamage);
                     } else {
                         Player::reduceHp(players[0], basedamage);
@@ -795,7 +788,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             if (players[defender].hasMagicMirror) {
                 (*position)++; // 会心(2)
                 baseDamage = FUN_021e8458_typeD(position, 30.0, 150.0);
-                tmp = baseDamage * 0.5;
+                tmp = baseDamage * 0.5;//闇0.5倍
                 tmp = processCombo(Id & 0xffff, tmp, NowState);
                 baseDamage = static_cast<int>(floor(tmp));
                 (*position)++; //不明 0x021e54fc

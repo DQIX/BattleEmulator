@@ -146,6 +146,7 @@ public:
     static constexpr int TYPE_2CWeight = 174;
     static constexpr int TYPE_2DWeight = 175;
     static constexpr int TYPE_2EWeight = 176;
+    static constexpr int SpeedLevelWeight = 177;
 };
 
 #endif // SIMPLE_PARAMETER_OPTIMIZER_H

@@ -869,10 +869,9 @@ int main(){
 	int actions1[350] = {};
 	auto counter1 = 0;
 	actions1[counter1++] = BattleEmulator::BUFF;
-	actions1[counter1++] = BattleEmulator::MAGIC_MIRROR;
-	actions1[counter1++] = BattleEmulator::PSYCHE_UP_ALLY;
+	actions1[counter1++] = BattleEmulator::BUFF;
 	actions1[counter1] = -1;
-	SimpleParameterOptimizer::optimize(copiedPlayers, 0x11060049ull, actions1, 100000, counter1);
+	SimpleParameterOptimizer::optimize(copiedPlayers, 0x279473666ull, actions1, 100000, counter1);
 	return 0;
 #endif
 
@@ -880,7 +879,7 @@ int main(){
 #ifdef DEBUG2
 	//THIS DEBUG CODE!
 	//THIS DEBUG CODE
-	uint64_t time1 = 0x265d9157;
+	uint64_t time1 = 0x26b30bb0;
 
 	int dummy[100];
 	lcg::init(time1);
@@ -913,9 +912,13 @@ int main(){
 	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
 	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
 	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-	gene1[counter++] = BattleEmulator::DOUBLE_UP;
+	gene1[counter++] = BattleEmulator::BUFF;
+	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
 	gene1[counter++] = BattleEmulator::FULLHEAL;
-	gene1[counter++] = BattleEmulator::MULTITHRUST;
+	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	gene1[counter++] = BattleEmulator::DOUBLE_UP;
 	gene1[counter++] = BattleEmulator::MULTITHRUST;
 	gene1[counter++] = BattleEmulator::FULLHEAL;
 	gene1[counter++] = BattleEmulator::BUFF;
@@ -974,12 +977,11 @@ int main(){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x04a1ff68;
+	uint64_t time1 = 0x350e5772;
 
 	auto counter = 0;
 	int actions[350] = {0};
-	actions[counter++] = BattleEmulator::DEFENCE;
-	actions[counter++] = BattleEmulator::MAGIC_MIRROR;
+	actions[counter++] = BattleEmulator::BUFF;
 	//actions[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
 	actions[counter] = -1;
 
