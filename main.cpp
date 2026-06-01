@@ -482,14 +482,14 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 	uint64_t totalSeconds = hours * 3600 + minutes * 60 + seconds;
 	totalSeconds = totalSeconds;
 	//数字は探索範囲(秒)
-	auto time1 = static_cast<uint64_t>(floor((totalSeconds - 8) * (1 / 0.12515)));
+	auto time1 = static_cast<uint64_t>(floor((totalSeconds - 100) * (1 / 0.12515)));
 	time1 = time1 << 16;
 	std::cout << time1 << std::endl;
 
 
 
 	//数字は探索範囲(秒)
-	auto time2 = static_cast<uint64_t>(floor((totalSeconds + 8) * (1 / 0.125155)));
+	auto time2 = static_cast<uint64_t>(floor((totalSeconds + 100) * (1 / 0.125155)));
 	time2 = time2 << 16;
 	std::cout << time2 << std::endl;
 	int32_t gene[350] = {0};

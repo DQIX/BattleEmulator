@@ -468,7 +468,6 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         if (
                             c == ATTACK_ENEMY ||
                             c == CLAW_SLASH_A2 ||
-                            c == SKY_ATTACK ||
                             c == KAZAM ||
                             c == DARK_BREATH ||
                             c == CLAW_SLASH_B1 ||
