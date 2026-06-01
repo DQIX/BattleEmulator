@@ -46,7 +46,7 @@ constexpr bool validateActionTable(const ActionEntry (&table)[N]){
 constexpr ActionEntry ACTION_TABLE[] = {
 	{
 		BattleEmulator::MIDHEAL, [](const Genome& g){
-			return (g.AllyPlayer.hp / (g.AllyPlayer.maxHp)) < 0.7;
+			return (g.AllyPlayer.hp / (g.AllyPlayer.maxHp)) < 0.7 && g.AllyPlayer.mp >= 4;
 		},
 		[](const Genome&, const Genome&){ return true; }
 	},
