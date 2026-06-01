@@ -5,14 +5,14 @@ declare(strict_types=1);
 return [
 	'id' => 'baruborosu',
 	'thresholds' => [
-		'whiteSaturationMaxDark' => 0.13,//こっちのほうを小さくないといけない
-		'whiteSaturationMaxBright' => 0.20,  //こっちが大きい
+		'whiteSaturationMaxDark' => 0.18,//こっちのほうを小さくないといけない
+		'whiteSaturationMaxBright' => 0.22,  //こっちが大きい
         "matchWhiteThresholdBright" => 0.70,
 		"matchWhiteThresholdDark" => 0.50,
 		'whiteThreshold' => 0.60,
-        'numberWhiteSaturationMaxDark' => 0.22,
-        'numberWhiteSaturationMaxBright' => 0.15,
-        'numberWhiteThresholdBright' => 0.70,  // 0.91から下げる
+        'numberWhiteSaturationMaxDark' => 0.18,
+        'numberWhiteSaturationMaxBright' => 0.22,
+        'numberWhiteThresholdBright' => 0.65,  // 0.91から下げる
         'numberWhiteThresholdDark' => 0.60,    // 0.82から下げる
 	],
 	'names' => [
@@ -82,6 +82,7 @@ return [
 			'fullheal.png' => 37,
 			'more_heal.png' => 32,
 			'song.png' => 52,
+			'kuroi.png' => 18,
 			'sippuu.png' => 44,
 			'sage.png' => 47,
 			'elven.png' => 48,
@@ -93,6 +94,8 @@ return [
 			'dorumo.png' => 153,
 			'surudo.png' => 85,
 			'yamino.png' => 154,
+			'otake.png' => 84,
+			'yasumi2.png' => 22,
 		],
 	],
 ];
