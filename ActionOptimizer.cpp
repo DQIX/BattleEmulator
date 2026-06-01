@@ -51,8 +51,8 @@ constexpr ActionEntry ACTION_TABLE[] = {
 		[](const Genome&, const Genome&){ return true; }
 	},
 	{
-		BattleEmulator::DEFENDING_CHAMPION, [](const Genome&){
-			return true;
+		BattleEmulator::DEFENDING_CHAMPION, [](const Genome& g){
+			return g.AllyPlayer.mp >= 2;
 		},
 		[](const Genome&, const Genome&){ return true; }
 	},
@@ -64,13 +64,13 @@ constexpr ActionEntry ACTION_TABLE[] = {
 	},
 	{
 		BattleEmulator::MORE_HEAL, [](const Genome& g){
-			return true;
+			return g.AllyPlayer.mp < 8;
 		},
 		[](const Genome&, const Genome&){ return true; }
 	},
 	{
 		BattleEmulator::FULLHEAL, [](const Genome& g){
-			return true;
+			return g.AllyPlayer.mp >= 24;
 		},
 		[](const Genome&, const Genome&){ return true; }
 	},
@@ -137,7 +137,7 @@ constexpr ActionEntry ACTION_TABLE[] = {
 				EnhancedCostCalculator::getCostTable() != EnhancedCostCalculator::CostTable::TableG
 			) return false;
 #endif
-			return g.AllyPlayer.InsulateLevel <= 1 && g.AllyPlayer.InsulateTurns <= 2;
+			return g.AllyPlayer.InsulateLevel <= 1 && g.AllyPlayer.InsulateTurns <= 2 && g.AllyPlayer.mp >= 10;
 		},
 		[](const Genome& b, const Genome& a){ return true; }
 	},
