@@ -7,3 +7,5 @@
 /cmake-build-release
 /out
 /.vs
+/public
+/interface-design-main
