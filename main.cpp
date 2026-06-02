@@ -24,12 +24,12 @@
 
 int startturn = -1;
 
-#if defined(RUBII)
+#if defined(erugi1)
 
 const Player copiedPlayers[2] = {
 	// プレイヤー1
 	{
-		305, 305.0, 310, 310, 313, 313, 170, 222, 120, // 最初のメンバー
+		305, 300.0, 322, 322, 297, 297, 190, 222, 130, // 最初のメンバー
 		165, false, false, 0, false, 0, -1,
 		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
 		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
@@ -38,38 +38,16 @@ const Player copiedPlayers[2] = {
 
 	// プレイヤー2
 	{
-		1653, 1653.0, 234, 234, 256, 256, 172, 25, 25, // 最初のメンバー
+		2790, 2790.0, 214, 214, 272, 272, 167, 0, 255, // 最初のメンバー
 		255, false, false, 0, false, 0, -1,
 		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
 		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
 		false, -1, 0, -1, 0, false, 0, 0, 0 ,false
 	} // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 };
-
-#elif defined(gilyumei1)
-
-const Player copiedPlayers[2] = {
-	// プレイヤー1
-	{
-		301, 301.0, 320, 320, 295, 295, 187, 226, 120, // 最初のメンバー
-		165, false, false, 0, false, 0, -1,
-		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-		2, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-		false, -1, 0, -1, 0, false, 1, 1, 0, false
-	}, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
-
-	// プレイヤー2
-	{
-		2306, 2306.0, 220, 220, 256, 256, 162, 25, 25, // 最初のメンバー
-		255, false, false, 0, false, 0, -1,
-		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-		false, -1, 0, -1, 0, false, 0, 0, 0 ,false
-	} // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
-};
-
 
 #endif
+
 
 
 // 勝利フラグと確定した敵残HPを返す
@@ -870,7 +848,7 @@ int main(){
 #ifdef DEBUG2
 	//THIS DEBUG CODE!
 	//THIS DEBUG CODE
-	uint64_t time1 = 0x4a1ff3c8;
+	uint64_t time1 = 0x0630cea7;
 
 	int dummy[100];
 	lcg::init(time1);
@@ -891,13 +869,16 @@ int main(){
 	auto* NowState = new uint64_t(0); //エミュレーターの内部ステートを表すint
 
 	Player players1[2];
-	//int32_t gene1[350] = {0};
+	int32_t gene1[350] = {0};
 	//THIS DEBUG CODE!
-	int32_t gene1[350] = { 30, 37, 62, 62, 62, 62, 33, 34,    };
+	//int32_t gene1[350] = { 30, 37, 62, 62, 62, 62, 33, 34,    };
 	//gene1[19-1] = BattleEmulator::DEFENCE;
 	int counter = 0;
 
-	//gene1[counter++] = BattleEmulator::BUFF;
+	gene1[counter++] = BattleEmulator::BUFF;
+	gene1[counter++] = BattleEmulator::FULLHEAL;
+	gene1[counter++] = BattleEmulator::BUFF;
+	gene1[counter++] = BattleEmulator::BUFF;
 	//gene1[counter++] = BattleEmulator::FULLHEAL;
 	//gene1[counter++] = BattleEmulator::INSULATE;
 	// gene1[counter++] = BattleEmulator::BUFF;

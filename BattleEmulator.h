@@ -106,6 +106,9 @@ public:
 	static const int UPWARD_SLICE = 67;// 切り上げ
 	static const int MULTISLASH = 68;// さみだれ斬り
 
+	static constexpr int ATTACK_ENEMY_A3 = 160;
+	static constexpr int KASWOOSH = 161;
+	static constexpr int LIGHTNING = 162;
 
     static bool
     Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
@@ -154,7 +157,6 @@ private:
 
     static int ProcessEnemyRandomAction2A(int *position);
 
-    static int ProcessEnemyRandomAction44(int *position);
 
     static void process7A8(int *position, int baseDamage, Player players[2], int defender);
 };
