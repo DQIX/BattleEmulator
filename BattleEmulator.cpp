@@ -2122,7 +2122,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
             }
 
-            tmp *= 1.25 * 1.1; //雷属性
+            tmp *= 1.25; //雷属性
             baseDamage = static_cast<int>((tmp));
 
             if (!kaihi) {
