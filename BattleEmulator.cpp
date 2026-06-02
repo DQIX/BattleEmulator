@@ -275,7 +275,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         DEBUG_COUT2((*position));
         DEBUG_COUT2(counterJ);
         //THIS DEBUG CODE!
-        if ((*position) == 132) { //THIS DEBUG CODE!
+        if ((*position) == 391) { //THIS DEBUG CODE!
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -369,7 +369,6 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 for (int & counter : enemyAction) {
                     //--------start_FUN_02158dfc-------
                     auto flag = false;
-                    auto flag2 = false;
 
                     do {
                         const uint8_t type = ((*NowState) & 0xf);
@@ -380,8 +379,6 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             if (preAction != 0 && enemyAction[0] == enemyAction[1] && preAction != SWITCH_2A) {
                                 if (counter == SKY_ATTACK) {
                                     if (flag) {
-                                        counter = PSYCHE_UP_ALLY;
-                                    } if (flag2) {
                                         counter = SWITCH_2B;
                                     } else {
                                         counter = ATTACK_ENEMY;
@@ -397,7 +394,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             }
                             if (counter == ATTACK_ENEMY_A3 && (players[1].defaultATK * 2) <= players[0].def) {
                                 counter = SKY_ATTACK;
-                                flag2 = true;
+                                flag = true;
                                 continue;
                             }
                             const bool hasBUF = (players[0].hasMagicMirror || players[0].BuffLevel > 0 || players[0].AtkBuffLevel > 0 || players[0].InsulateLevel > 0);
@@ -436,7 +433,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         }
                         break;
                     } while (true);
-
+                    preAction = counter;
 
 
                     if (mode != -1 && mode != -2) {
@@ -455,7 +452,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         (*position) += 1;
                     } else if (c == ATTACK_ENEMY || c == ATTACK_ENEMY_A3 || c == ATTACK_ENEMY  || c == SKY_ATTACK) {
                         (*position) += 2;
-                    }else if (c == LIGHTNING) {
+                    }else if (c == LIGHTNING || c == LAUGH) {
                         (*position) += 3;
                     }
 
@@ -1305,7 +1302,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
 
                 //ここの小数点以下は引き継がれる
-                tmp = tmp * 1.25 * 1.1; //1.25倍は雷属性になってるから
+                tmp = tmp * 1.25; //1.25倍は雷属性になってるから
                 baseDamage = static_cast<int>((tmp));
 
                 if (!kaihi) {
