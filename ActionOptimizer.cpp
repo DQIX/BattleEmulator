@@ -80,14 +80,12 @@ constexpr ActionEntry ACTION_TABLE[] = {
 		},
 		[](const Genome&, const Genome&){ return true; }
 	},
-#if defined(RUBII)
 	{
-		BattleEmulator::SAGE_ELIXIR, [](const Genome& g){
-			return g.AllyPlayer.SageElixirCount > 0;
+		BattleEmulator::MAGIC_WATER, [](const Genome& g){
+			return g.AllyPlayer.MagicWaterCount > 0;
 		},
 		[](const Genome&, const Genome&){ return true; }
 	},
-#endif
 	{
 		BattleEmulator::FLEE_ALLY, [](const Genome&){ return true; },
 		[](const Genome&, const Genome&){ return true; }

@@ -62,10 +62,10 @@ target_compile_definitions(erugi1_gouketu PRIVATE erugi1=1)
 
 
 add_executable(erugi1_gouketu_opt ${SOURCES})
-target_compile_definitions(erugi1_gouketu_opt PRIVATE erugi1=1 OPTIMIZE_MODE=1)  # `#define MULTITHREADING` を適用
+target_compile_definitions(erugi1_gouketu_opt PRIVATE hayate=1 OPTIMIZE_MODE=1)  # `#define MULTITHREADING` を適用
 
-add_executable(gilyumei1 ${SOURCES})
-target_compile_definitions(gilyumei1 PRIVATE gilyumei1=1)
+add_executable(erugi1_hayate ${SOURCES})
+target_compile_definitions(erugi1_hayate PRIVATE hayate=1)
 
 
 string(TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)
@@ -73,8 +73,8 @@ string(TIMESTAMP BUILD_TIME "%H:%M:%S" UTC)
 add_definitions(-DBUILD_DATE="${BUILD_DATE}" -DBUILD_TIME="${BUILD_TIME}")
 
 if(MINGW)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections -fno-inline-small-functions")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections -fno-inline-small-functions")
     set(CMAKE_EXE_LINKER_FLAGS "-static -Wl,--gc-sections")
 elseif(MSVC)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi /O2")

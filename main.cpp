@@ -46,6 +46,27 @@ const Player copiedPlayers[2] = {
 	} // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 };
 
+#elif defined(hayate)
+const Player copiedPlayers[2] = {
+// プレイヤー1
+{
+	305, 300.0, 310, 310, 297, 297, 210, 222, 130, // 最初のメンバー
+	165, false, false, 0, false, 0, -1,
+	// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
+	8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
+	false, -1, 0, -1, 0, false, 1, 1, 1 , false
+}, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
+
+// プレイヤー2
+{
+	2790, 2790.0, 214, 214, 272, 272, 167, 0, 255, // 最初のメンバー
+	255, false, false, 0, false, 0, -1,
+	// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
+	8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
+	false, -1, 0, -1, 0, false, 0, 0, 0 ,false
+} // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
+};
+
 #endif
 
 
@@ -100,12 +121,12 @@ void printHeader(std::stringstream& ss){
 		<< std::setw(6) << "amp"
 
 		<< std::setw(6) << "ini"
-		<< std::setw(6) << "Para"
-		<< std::setw(6) << "Sle"
+		//<< std::setw(6) << "Para"
+		//<< std::setw(6) << "Sle"
 		<< std::setw(6) << "ATT"
 		<< std::setw(6) << "DET"
 		//<< std::setw(6) << "MMT"
-		//<< std::setw(6) << "Tab"
+		<< std::setw(6) << "Tab"
 		<< std::setw(6) << "Sct" << "\n";
 	ss << std::string(140, '-') << "\n"; // 区切り線を出力
 }
@@ -149,7 +170,7 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 		}
 
 		// ターンが変わったら、前のターンのデータを出力
-		if(turn != currentTurn){
+		if(turn != currentTurn) {
 			if(currentTurn != -1){
 				// 前のターンの出力
 				if(turn > PastTurns){
@@ -166,12 +187,12 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 						<< std::setw(6) << ehp2
 						<< std::setw(6) << amp2
 						<< std::setw(6) << (initiative_tmp ? "yes" : "")
-						<< std::setw(6) << ((aAction == "Paralysis" || aAction == "Cure Paralysis") ? "yes" : "")
-						<< std::setw(6) << ((aAction == "Sleeping" || aAction == "Cure Sleeping") ? "yes" : "")
+						//<< std::setw(6) << ((aAction == "Paralysis" || aAction == "Cure Paralysis") ? "yes" : "")
+						//<< std::setw(6) << ((aAction == "Sleeping" || aAction == "Cure Sleeping") ? "yes" : "")
 						<< std::setw(6) << ATKTurn1
 						<< std::setw(6) << DEFTurn1
 						//<< std::setw(6) << magicMirrorTurn1
-						//<< std::setw(6) << tmpState
+						<< std::setw(6) << tmpState
 						<< std::setw(6) << specialChargeTurn1
 						<< std::setw(11) << "" << "\n";
 				}
@@ -191,6 +212,7 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 			DEFTurn1 = "";
 			magicMirrorTurn1 = "";
 			specialChargeTurn1 = "";
+			tmpState = (state == 0) ? "A" : "B";
 		}
 
 		// 敵か味方の行動を適切な変数に格納
@@ -199,8 +221,7 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 			eDamage[counter] = damage;
 			counter++;
 			ahp2 = std::to_string(ahp1);
-		}
-		else{
+		}else{
 			ehp2 = std::to_string(ehp1);
 			amp2 = std::to_string(amp);
 			aAction = BattleEmulator::getActionName(action);
@@ -253,12 +274,12 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 			<< std::setw(6) << ehp2
 			<< std::setw(6) << amp2
 			<< std::setw(6) << (initiative_tmp ? "yes" : "")
-			<< std::setw(6) << ((aAction == "Paralysis" || aAction == "Cure Paralysis") ? "yes" : "")
-			<< std::setw(6) << ((aAction == "Sleeping") ? "yes" : "")
+			//<< std::setw(6) << ((aAction == "Paralysis" || aAction == "Cure Paralysis") ? "yes" : "")
+			//<< std::setw(6) << ((aAction == "Sleeping") ? "yes" : "")
 			<< std::setw(6) << ATKTurn1
 			<< std::setw(6) << DEFTurn1
 			//<< std::setw(6) << magicMirrorTurn1
-			//<< std::setw(6) << tmpState
+			<< std::setw(6) << tmpState
 			<< std::setw(6) << specialChargeTurn1
 			<< std::setw(11) << "" << "\n";
 	}
@@ -839,8 +860,9 @@ int main(){
 	int actions1[350] = {};
 	auto counter1 = 0;
 	actions1[counter1++] = BattleEmulator::BUFF;
+	actions1[counter1++] = BattleEmulator::BUFF;
 	actions1[counter1] = -1;
-	SimpleParameterOptimizer::optimize(copiedPlayers, 0x13456974ull, actions1, 100000, counter1);
+	SimpleParameterOptimizer::optimize(copiedPlayers, 0x35457909ull, actions1, 100000, counter1);
 	return 0;
 #endif
 
@@ -853,6 +875,7 @@ int main(){
 	int dummy[100];
 	lcg::init(time1);
 	int* position1 = new int(1);
+
 	/*
 	    *NowStateの各ビットの使用状況は下記の通りである。
 	    +-+-+-+-+-+-+-+-+- (* NowState) -+-+-+-+-+-+-+-+-+
@@ -944,7 +967,7 @@ int main(){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x04a1ff382;
+	uint64_t time1 = 0x0f83eb95;
 
 	auto counter = 0;
 	int actions[350] = {0};
@@ -956,7 +979,7 @@ int main(){
 	SearchRequest(copiedPlayers, time1, actions, false, ss);
 	ss << std::endl;
 
-	if(true){
+	if(false){
 		SearchRequest(copiedPlayers, time1+1, actions, false, ss);
 		ss << std::endl;
 

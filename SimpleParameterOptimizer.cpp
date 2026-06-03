@@ -66,9 +66,6 @@ static constexpr std::array<int, ids> TUNE_IDS = {
     SimpleParameterOptimizerNode::hasMagicMirrorHeight, // 追加
     SimpleParameterOptimizerNode::TYPE_2AWeight, // 追加
     SimpleParameterOptimizerNode::TYPE_2BWeight, // 追加
-    SimpleParameterOptimizerNode::TYPE_2CWeight, // 追加
-    SimpleParameterOptimizerNode::TYPE_2DWeight, // 追加
-    SimpleParameterOptimizerNode::TYPE_2EWeight, // 追加
 };
 
 // action cost テーブル（一次真実源）

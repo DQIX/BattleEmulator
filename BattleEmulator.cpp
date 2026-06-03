@@ -30,6 +30,13 @@ constexpr int shieldGuardP = 9; //盾ガード率 9%
 constexpr int kaisinnP = 500;
 constexpr int WooshSlashKaisinnP = 100;
 constexpr int Enemy_level = 51;
+#elif defined(hayate)
+constexpr int Ally_Level = 49;
+constexpr double Ally_TensionTable[4] = {1.5, 2.5, 4.0, 6.0};
+constexpr int shieldGuardP = 9; //盾ガード率 9%
+constexpr int kaisinnP = 500;
+constexpr int WooshSlashKaisinnP = 100;
+constexpr int Enemy_level = 51;
 #endif
 
 
@@ -118,6 +125,8 @@ std::string BattleEmulator::getActionName(int actionId) {
             return "Buff";
         case BattleEmulator::ATTACK_ENEMY:
             return "Attack";
+        case BattleEmulator::ATTACK_ENEMY_A3:
+            return "Attack 3a";
         case BattleEmulator::MEDICINAL_HERBS:
             return "Medicinal Herbs";
         case BattleEmulator::PARALYSIS:
@@ -392,11 +401,6 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                                 flag = true;
                                 continue;
                             }
-                            if (counter == ATTACK_ENEMY_A3 && (players[1].defaultATK * 2) <= players[0].def) {
-                                counter = SKY_ATTACK;
-                                flag = true;
-                                continue;
-                            }
                             const bool hasBUF = (players[0].hasMagicMirror || players[0].BuffLevel > 0 || players[0].AtkBuffLevel > 0 || players[0].InsulateLevel > 0);
                             if (counter == DISRUPTIVE_WAVE && !hasBUF) {
                                 counter = SWITCH_2B;
@@ -437,7 +441,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
 
                     if (mode != -1 && mode != -2) {
-                        int need = eActions[exCounter1++];
+                        const int & need = eActions[exCounter1++];
                         if (need == -1) {
                             startTurn = counterJ - 1;
                             return true;
@@ -2317,7 +2321,7 @@ constexpr std::array<int, 6> ratios = {
 constexpr std::array<int, 6> ids = {
     BattleEmulator::ATTACK_ENEMY,
     BattleEmulator::SKY_ATTACK,
-    BattleEmulator::ATTACK_ENEMY_A3,
+    BattleEmulator::ATTACK_ENEMY,
     BattleEmulator::SWITCH_2B,
     BattleEmulator::DISRUPTIVE_WAVE,
     BattleEmulator::KASWOOSH,
