@@ -231,7 +231,8 @@
         85: {names: {ja: "するどい爪", en: "claw slash"}, ally: false, damage: true},
         154: {names: {ja: "やみのはどう", en: "Wave Of Panic"}, ally: false, damage: false},
         84: {names: {ja: "おたけび", en: "War Cry"}, ally: false, damage: false},
-        21: {names: {ja: "敵やすみ", en: "Inactive Enemy"}, ally: false, damage: false}
+        21: {names: {ja: "敵やすみ", en: "Inactive Enemy"}, ally: false, damage: false},
+        162: {names: {ja: "いなずま", en: "Lightning"}, ally: false, damage: true}
     };
     const ACTION_IDS = Object.freeze({
         ATTACK_ENEMY: 1,
@@ -295,6 +296,7 @@
         CLAW_SLASH: 85,
         WAVE_OF_PANIC: 154,
         WAR_CRY: 84,
+        LIGHTNING: 162,
     });
     const ACTIONS_BY_ID = ACTIONS;
 
@@ -2269,6 +2271,33 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
     }
 
+    function pickCorvus1Candidate(matches){
+        const {templateThreshold} = getActiveThresholds();
+        const main = matches.main || emptyMatch("main");
+        const sub = matches.sub || emptyMatch("sub");
+        const ally = matches.ally || emptyMatch("ally");
+        const target = matches.target || emptyMatch("target");
+        const mode = getActiveMode();
+        const erugioMain = modeRuleHasFile(mode, "Main", main.file);
+
+        if (erugioMain && modeRuleHasFile(mode, "resetSub", sub.file) && main.score >= 0.4 && sub.score >= 0.4) {
+            return {kind: "reset", score: Math.min(main.score, sub.score), detail: `${main.file} + ${sub.file}`};
+        }else if(erugioMain){
+            return {kind: "action", actionId: ACTION_IDS.ATTACK_ENEMY, detail: main.file, score: main.score};
+        }
+
+        if(modeRuleHasFile(mode, "samidare", main.file) && main.score >= templateThreshold) {
+            if(target.file === "aha.png" && target.score >= templateThreshold) {
+                return {kind: "action", actionId: ACTION_IDS.MULTITHRUST, detail: main.file, score: main.score};
+            }
+        }
+
+        const directAction = getModeRuleMap(mode, "directMainActions")[main.file];
+        if (directAction && main.score >= templateThreshold) {
+            return {kind: "action", actionId: directAction, detail: main.file, score: main.score};
+        }
+    }
+
     function pickhexagoonCandidate(matches){
         const {templateThreshold} = getActiveThresholds();
         const main = matches.main || emptyMatch("main");
@@ -2313,6 +2342,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
         if(picker === "baruborosu"){
             return pickBaruborosuCandidate(matches);
+        }
+        if(picker === "corvus1"){
+            return pickCorvus1Candidate(matches);
         }
         return null;
     }
@@ -2591,6 +2623,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             ACTION_IDS.HOLY_WATER,
             ACTION_IDS.KAZAM,
             ACTION_IDS.CLAW_SLASH,
+            ACTION_IDS.LIGHTNING,
         ].includes(actionId)) {
             return 1;
         }

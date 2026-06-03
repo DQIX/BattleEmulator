@@ -47,21 +47,6 @@ return [
     ],
     'identify' => [
         'templates' => [
-            [
-                'slot' => 'main',
-                'directory' => 'message_v2',
-                'file' => 'erugio.png',
-            ],
-            [
-                'slot' => 'main',
-                'directory' => 'message_v2',
-                'file' => 'erugio2.png',
-            ],
-            [
-                'slot' => 'main',
-                'directory' => 'message_v2',
-                'file' => 'erugio4.png',
-            ],
         ],
     ],
     'rules' => [
@@ -100,6 +85,7 @@ return [
             'elven.png' => 48,
             'flee.png' => 53,
             'tokuyaku.png' => 50,
+            'lightning.png' => 162,
         ],
     ],
 ];
