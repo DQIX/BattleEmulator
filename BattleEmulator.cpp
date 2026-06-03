@@ -102,8 +102,8 @@ RBE_FORCE_INLINE BattleEmulator::StepResult BattleEmulator::Step(int *position, 
 
     int32_t turnActions[3] = {0, 0, 0};
     int turnActionPosition = 0;
-    double speed0 = players[0].speed * lcg::floatRand051_1(position);
-    double speed1 = players[1].speed * lcg::floatRand051_1(position);
+    double speed0 = players[0].speed * lcg::floatRand(position, 0.51, 1.0);
+    double speed1 = players[1].speed * lcg::floatRand(position, 0.51, 1.0);
 
     // 素早さを比較
     const bool player0_has_initiative = speed0 > speed1;
