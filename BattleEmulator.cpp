@@ -1126,6 +1126,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             players[0].BuffLevel = 0;
             players[0].BuffTurns = -1;
             players[0].TensionLevel = 0;
+            players[0].InsulateLevel = 0;
+            players[0].InsulateTurns = -1;
 
 
             RecalculateBuff(players);
