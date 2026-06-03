@@ -275,7 +275,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         DEBUG_COUT2((*position));
         DEBUG_COUT2(counterJ);
         //THIS DEBUG CODE!
-        if ((*position) == 391) { //THIS DEBUG CODE!
+        if ((*position) == 179) { //THIS DEBUG CODE!
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -288,8 +288,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             action = -1;
         }
         actionsPosition = 0;
-        double speed0 = players[0].speed * lcg::floatRand051_1(position);
-        double speed1 = players[1].speed * lcg::floatRand051_1(position);
+        double speed0 = players[0].speed * lcg::floatRand(position, 0.51, 1.0);
+        double speed1 = players[1].speed * lcg::floatRand(position, 0.51, 1.0);
 
         // 素早さを比較
         if (speed0 > speed1) {

@@ -1,0 +1,74 @@
+# ルール
+- gitはリードオンリーコマンド除き使用してはならない。
+- スクリプトを実行する場合はphpコマンドバージョン8.4を使用すること。イータープリンター経由で実行する場合、exitしなければ永遠に帰ってこないので注意すること。
+- ファイルを書く場合、ideが提供する機能を使用して書け。応答に時間がかかるからという理由で、コマンド書き込みに切り替えるのは無し。
+- $content.Replaceで書き換えるのはエンコーディングがぶっ壊れるので基本無し。
+- 
+# uiデザイン
+- .interface-design/.claude/commands/init.md
+- .interface-design/.claude/skills/interface-design/SKILL.md
+を読むこと。
+
+* Read this file at the start of every chat.
+* Only solve the requested problem. Do not do extra work.
+* However, for creative tasks, it is acceptable to implement features other than those requested.
+* All file writes must use `apply_patch`.
+* Never use command-based replacement. Use partial edits only.
+* Do not delete existing comments.
+* Do not read large files without a clear reason.
+* Limit searches to the smallest relevant path.
+* If you're unsure whether a file is worth reading, read only the first 100~280 lines and then decide whether you should read further.
+* When using `apply_patch`, you should avoid deleting all lines and then rewriting the entire file with the same content whenever possible. This does not mean you should not replace the file.
+* If you write Japanese with` apply_patch`, the characters will not be garbled. Garbled characters are a Powershell problem. If the characters are garbled, we will notify you so you can complete the task with confidence.
+* Don't translate everything into English just because the output of Get-Content is garbled. As long as you use apply_patch, you won't have garbled characters.
+* [Console]::InputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-Content -Encoding UTF8 file.txt
+* [Console]::InputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $i=1; Get-Content -Encoding UTF8 file.txt | % { "$i: $_"; $i++ }
+    * This project avoids circular references as much as possible
+* You don't need to submit me the line numbers you edited. I don't need to reread the file in the final submission just to know the line numbers. Because of Git, the filename alone is sufficient.
+* rg command installed
+* Minimize the number of differences during editing. If this is not possible, break it down into smaller parts.
+* Please submit the differences one file at a time, if possible.
+* It's a waste of tokens, so you don't need to check the entire diff with git diff and submit the line numbers to me.
+* Do not install additional software without permission. Permission means not just displaying a message, but interrupting the process to prompt the user for permission to install and completing the task.
+* Do not read public/branches or public/emulators.json. These are automatically generated assets and should not be included in searches.
+* When implementing the UI, you should not insert anything from JavaScript at startup to prevent CLS issues. All elements are implemented in HTML, and optional elements are hidden by default (though their width is reserved).
+  * This doesn't mean you can't use dynamic elements in JavaScript. Dynamic additions using templates are still permitted.
+  * Furthermore, this does not mean that dynamic elements should not be initialized at startup.
+* The BattleEmulator.cpp file in this branch is not related to video recognition. If necessary, be sure to run `git stash` before going to the target branch. After returning to the branch, be sure to run `git stash apply`.
+* Also, when switching branches, please remember the name of the branch you are currently on.
+* Do not use git stash pop. Also, please do not delete the stash after you have finished working on it.
+* Please do not delete branches without asking me.
+* Remote branches are protected by GitHub, but please do not delete them without asking me.
+* This is the current and most recent branch.
+* Please do not git push without asking me. You cannot undo changes using force push.
+* Files like `public` and `interface-design-main` are not listed in `.gitignore` in some branches. Therefore, do not use `git add .` to add them.
+* There is no need to follow agent.md from another branch. always prefer this branch
+```
+  origin/HEAD -> origin/bilyouma_new_arugo
+  origin/anonn_new_arugo
+  origin/bilyouma_new_arugo
+  origin/erugiosu_new_arugo
+  origin/erusionn_new_arugo
+  origin/gadonnko_new_arugo
+  origin/gilyumei2_new_arugo　(including gilyumei1 & gilyumei2) This includes the first and second forms
+  origin/goreonn_new_arugo
+  origin/nusisama1_v2_new_arugo
+  origin/reokonn_lv8_new_arugo
+  origin/silyarumana_new_arugo
+  origin/yo2_lv5_algorithm_v4 (isilyudaru)
+  origin/zilyadama_new_arugo
+  origin/zuo_v2_new_arugo
+```
+
+
+
+When modifying the UI, read interface-design-main/.claude/skills/interface-design/SKILL.md.
+A UI description is not a specification report. When adding a description, you should write about what the user should expect and what they should input, rather than just saying "it's based on xx" or "it uses performance.now()".
+In a UI description, you need to explain what it is, what happens as a result, and what the user needs to do
+
+# build command
+cmake -S . -B cmake-build-release2 -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build cmake-build-release2 --target rbe_lv15_sp22_v2 --config Release
+
+# agents.md End
+If the context has been injected up to this point, do not reread AGENTS.md file
