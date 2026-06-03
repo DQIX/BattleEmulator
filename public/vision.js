@@ -363,7 +363,8 @@
         154: {names: {ja: "やみのはどう", en: "Wave Of Panic"}, ally: false, damage: false},
         84: {names: {ja: "おたけび", en: "War Cry"}, ally: false, damage: false},
         21: {names: {ja: "敵やすみ", en: "Inactive Enemy"}, ally: false, damage: false},
-        162: {names: {ja: "いなずま", en: "Lightning"}, ally: false, damage: true}
+        162: {names: {ja: "いなずま", en: "Lightning"}, ally: false, damage: true},
+        161: {names: {ja: "バギクロス", en: "Kaswoosh"}, ally: false, damage: true}
     };
     const ACTION_IDS = Object.freeze({
         ATTACK_ENEMY: 1,
@@ -427,6 +428,7 @@
         CLAW_SLASH: 85,
         WAVE_OF_PANIC: 154,
         WAR_CRY: 84,
+        KASWOOSH: 161,
         LIGHTNING: 162,
     });
     const ACTIONS_BY_ID = ACTIONS;
@@ -470,6 +472,7 @@
         activeMode: null,
         activeThresholds: DEFAULT_VISION_THRESHOLDS,
         lastMatches: Object.create(null),
+        lastDamageReadings: Object.create(null),
         turnIndex: 1,
         actionIndex: 0,
         preAction: -1,
@@ -1733,6 +1736,17 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return Number.parseInt(file.split("_")[0], 10);
     }
 
+    function formatNumberTemplateLabel(file, digit) {
+        if (typeof file === "string" && file) {
+            const stem = file.replace(/\.[^.]+$/, "");
+            const [name] = stem.split("_");
+            if (name) {
+                return name;
+            }
+        }
+        return digit === -1 ? "?" : String(digit);
+    }
+
     function convertMatchResults(digits) {
         if (!digits.length || digits[0] === -1) {
             return -1;
@@ -1759,22 +1773,41 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         const digits = config.actionAreas.map((area) => {
             const trimmed = trimFirstPixel(cropMask(binary, area), 26, 40);
             // サイズチェックを撤廃（trimFirstPixelが常にtargetWidth×targetHeightを返すため）
+            let acceptedDigit = -1;
+            let acceptedScore = 0;
             let bestDigit = -1;
             let bestScore = 0;
+            let bestFile = "";
             state.numberTemplates.forEach((template) => {
                 const score = compareBinaryImages(trimmed, template.mask);
-                if (score >= thresholds.numberThreshold && score >= bestScore) {
+                if (score >= bestScore) {
                     bestDigit = template.digit;
                     bestScore = score;
+                    bestFile = template.file;
+                }
+                if (score >= thresholds.numberThreshold && score >= acceptedScore) {
+                    acceptedDigit = template.digit;
+                    acceptedScore = score;
                 }
             });
             // trimFirstPixel が返す sourceX/sourceY = actionArea内での検出起点
-            return {digit: bestDigit, score: bestScore, localX: trimmed.sourceX ?? 0, localY: trimmed.sourceY ?? 0};
+            return {
+                digit: acceptedDigit,
+                score: acceptedScore,
+                bestDigit,
+                bestScore,
+                bestLabel: formatNumberTemplateLabel(bestFile, bestDigit),
+                localX: trimmed.sourceX ?? 0,
+                localY: trimmed.sourceY ?? 0
+            };
         });
         return {
             digits: digits.map((item) => item.digit),
             scores: digits.map((item) => item.score),
             score: digits.reduce((max, item) => Math.max(max, item.score), 0),
+            bestDigits: digits.map((item) => item.bestDigit),
+            bestScores: digits.map((item) => item.bestScore),
+            bestLabels: digits.map((item) => item.bestLabel),
             value: convertMatchResults(digits.map((item) => item.digit)),
             // 各桁の実際の検出位置（絶対座標）。認識失敗時は null
             positions: digits.map((item, i) => {
@@ -2381,7 +2414,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                     crops.push({
                         key: `${damageKey}-area${i}`,
                         label: crop.exportName,
-                        displayLabel: `${crop.exportName} (${crop.canvas.width}x${crop.canvas.height})`,
+                        displayLabel: formatDamageCropDebugLabel(damageKey, i, crop.canvas),
                         fileName: `${crop.exportName}-mono.png`,
                         canvas: crop.canvas
                     });
@@ -2396,6 +2429,15 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         const file = match?.file || "???.png";
         const score = Number.isFinite(match?.score) ? match.score : 0;
         return `${slot}-${file} ${(score * 100).toFixed(1)}% (${canvas.width}x${canvas.height})`;
+    }
+
+    function formatDamageCropDebugLabel(damageKey, areaIndex, canvas) {
+        const reading = state.lastDamageReadings?.[damageKey];
+        const label = reading?.bestLabels?.[areaIndex] || "?";
+        const score = Number.isFinite(reading?.bestScores?.[areaIndex])
+            ? reading.bestScores[areaIndex]
+            : 0;
+        return `${damageKey}-area${areaIndex}: ${label} ${(score * 100).toFixed(1)}% (${canvas.width}x${canvas.height})`;
     }
 
     function downloadRecognizedMatchCrops() {
@@ -2814,6 +2856,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         state.pendingDamage1Enabled = false;
         state.pendingDamage2 = -1;
         state.pendingDamage2Enabled = false;
+        state.lastDamageReadings = Object.create(null);
         state.lastDamage1 = -1;
         state.lastDamage2 = -1;
         state.pendingDamage1ConfirmUntil = 0;
@@ -2896,6 +2939,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         syncVisionThresholdSliders();
         state.lastModeHitAt = Date.now();
         state.lastMatches = Object.create(null);
+        state.lastDamageReadings = Object.create(null);
         syncModeSelect();
         if (syncEmulator) {
             syncModeBattleEmulator(nextMode);
@@ -3065,6 +3109,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             ACTION_IDS.KAZAM,
             ACTION_IDS.CLAW_SLASH,
             ACTION_IDS.LIGHTNING,
+            ACTION_IDS.KASWOOSH,
         ].includes(actionId)) {
             return 1;
         }
@@ -3751,8 +3796,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                     updateNumberWhiteDebug(now);
                     const matches = await state.matcher.match(processingCanvas, state.templatesBySlot);
                     state.lastMatches = matches;
-                    updateVisionImageDebug(now);
                     const damageReadings = recognizePendingDamageValues();
+                    state.lastDamageReadings = damageReadings;
+                    updateVisionImageDebug(now);
                     updateMatchCards(matches);
                     drawOverlay(matches, damageReadings);
                     if (maybeReturnToIdentifyMode(matches)) {
