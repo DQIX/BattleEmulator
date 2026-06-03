@@ -511,13 +511,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             }
                         }
                     }
-                    if (c == BattleEmulator::MEDITATION) {
-                        Player::heal(players[1], basedamage);
-                    } else if (c == BattleEmulator::MERA_ZOMA && players[0].hasMagicMirror) {
-                        Player::reduceHp(players[1], basedamage);
-                    } else {
-                        Player::reduceHp(players[0], basedamage);
-                    }
+                    Player::reduceHp(players[0], basedamage);
                     //--------start_FUN_021594bc-------
                     if (Player::isPlayerAlive(players[0]) && Player::isPlayerAlive(players[1])) {
                         (*position) += 1;
