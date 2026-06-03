@@ -31,6 +31,8 @@
         numberWhiteSaturationMove: document.getElementById("visionNumberWhiteSaturationMove"),
         numberWhiteDebugOutput: document.getElementById("visionNumberWhiteDebugOutput"),
         numberWhiteDebugCopy: document.getElementById("visionNumberWhiteDebugCopy"),
+        imageDebugToggle: document.getElementById("visionImageDebugToggle"),
+        imageDebugMount: document.getElementById("visionImageDebugMount"),
         matches: Array.from(document.querySelectorAll("#visionMatches .vision-match-card")),
         copyMarkdown: document.getElementById("visionCopyMarkdown"),
         copyCsv: document.getElementById("visionCopyCsv")
@@ -117,6 +119,134 @@
         matchWhiteWeight: 1.0,
         templateAlphaThreshold: 0.05
     });
+    const VISION_THRESHOLD_SLIDERS = Object.freeze([
+        Object.freeze({
+            key: "templateThreshold",
+            min: 0,
+            max: 1,
+            step: 0.01,
+            description: "通常テンプレート一致スコアの採用ライン。上げると誤検出は減りますが、文字欠けやブレで拾いにくくなります。"
+        }),
+        Object.freeze({
+            key: "resetLatchClearScore",
+            min: 0,
+            max: 1,
+            step: 0.01,
+            description: "リセット検出後、候補スコアがこの値を下回るまで次のリセットを受け付けません。低いほど連続発火しにくく、高いほど解除が早くなります。"
+        }),
+        Object.freeze({
+            key: "whiteThreshold",
+            min: 0,
+            max: 1,
+            step: 0.01,
+            description: "背景推定に失敗した時などに使う通常文字の明度下限。値を上げるほど暗い白文字を捨て、下げるほど薄い文字や背景ノイズも白扱いしやすくなります。"
+        }),
+        Object.freeze({
+            key: "matchWhiteThresholdDark",
+            min: 0,
+            max: 1,
+            step: 0.01,
+            description: "通常テンプレート照合で、暗い背景側の白文字とみなす明度下限。値を上げるほど厳しくなります。"
+        }),
+        Object.freeze({
+            key: "matchWhiteThresholdBright",
+            min: 0,
+            max: 1,
+            step: 0.01,
+            description: "通常テンプレート照合で、明るい背景側の白文字とみなす明度下限。値を上げるほど厳しくなります。"
+        }),
+        Object.freeze({
+            key: "whiteSaturationMaxDark",
+            min: 0,
+            max: 1,
+            step: 0.01,
+            description: "通常テンプレート照合で、暗い背景側の白文字とみなす彩度上限。値を上げるほど色付きピクセルも白扱いします。"
+        }),
+        Object.freeze({
+            key: "whiteSaturationMaxBright",
+            min: 0,
+            max: 1,
+            step: 0.01,
+            description: "通常テンプレート照合で、明るい背景側の白文字とみなす彩度上限。背景ノイズを避けたい時は小さくします。"
+        }),
+        Object.freeze({
+            key: "whiteSaturationDarkValue",
+            min: 0,
+            max: 1,
+            step: 0.01,
+            description: "背景の明るさをDark側へ寄せる基準。認識対象の文字ではなく、背景推定値に対する境界です。"
+        }),
+        Object.freeze({
+            key: "numberWhiteSaturationMaxDark",
+            min: 0,
+            max: 1,
+            step: 0.01,
+            description: "数字認識で、暗い背景側の白数字とみなす彩度上限。値を上げるほど数字の白判定が緩くなります。"
+        }),
+        Object.freeze({
+            key: "numberWhiteSaturationMaxBright",
+            min: 0,
+            max: 1,
+            step: 0.01,
+            description: "数字認識で、明るい背景側の白数字とみなす彩度上限。背景が明るい時のノイズを避けたいならDark以下にします。"
+        }),
+        Object.freeze({
+            key: "numberWhiteThresholdBright",
+            min: 0,
+            max: 1,
+            step: 0.01,
+            description: "数字認識で、明るい背景側の白数字とみなす明度下限。値を上げるほど数字は厳しくなります。"
+        }),
+        Object.freeze({
+            key: "whiteSaturationBrightValue",
+            min: 0,
+            max: 1,
+            step: 0.01,
+            description: "背景の明るさをBright側へ寄せる基準。DarkValueとの間は線形補間されます。"
+        }),
+        Object.freeze({
+            key: "numberWhiteThresholdDark",
+            min: 0,
+            max: 1,
+            step: 0.01,
+            description: "数字認識で、暗い背景側の白数字とみなす明度下限。値を上げるほど暗い数字や薄い数字は落ちやすくなります。"
+        }),
+        Object.freeze({
+            key: "actionThreshold",
+            min: 0,
+            max: 1,
+            step: 0.01,
+            description: "pickCandidate後、実際に行動として処理する候補スコアの採用ライン。候補化されてもここ未満なら行動履歴には進みません。"
+        }),
+        Object.freeze({
+            key: "numberThreshold",
+            min: 0,
+            max: 1,
+            step: 0.01,
+            description: "数字テンプレート一致スコアの採用ライン。上げると誤読は減りますが、桁欠け時に数字が-1になりやすくなります。"
+        }),
+        Object.freeze({
+            key: "matchPenaltyWeight",
+            min: 0,
+            max: 2,
+            step: 0.01,
+            description: "通常テンプレートにない白画素への減点重み。通常は0のまま、余計な白ノイズを抑えたい時だけ上げます。"
+        }),
+        Object.freeze({
+            key: "matchWhiteWeight",
+            min: 0,
+            max: 2,
+            step: 0.01,
+            description: "通常テンプレート一致スコアで、一致した白画素を評価する重み。上げると白画素一致を強く見ます。"
+        }),
+        Object.freeze({
+            key: "templateAlphaThreshold",
+            min: 0,
+            max: 1,
+            step: 0.01,
+            description: "テンプレート画像の透明度下限。上げると薄い半透明ピクセルを無視しやすくなります。"
+        })
+    ]);
     const VISION_MODE_THRESHOLDS = Object.freeze({
         identify: normalizeVisionThresholds({
             // 待機(認識) モード
@@ -129,6 +259,7 @@
     });
     const DAMAGE_CONFIRMATION_MS = 1500;
     const NUMBER_WHITE_DEBUG_INTERVAL_MS = 500;
+    const VISION_IMAGE_DEBUG_INTERVAL_MS = 500;
     const MATCH_SLOT_KEYS = ["main", "sub", "ally", "target"];
     const overlayContext = ui.overlay.getContext("2d");
     overlayContext.imageSmoothingEnabled = false; // ★ 追加
@@ -364,6 +495,11 @@
         gpuRecoveryInProgress: false,
         gpuWarningResolver: null,
         lastNumberWhiteDebugAt: 0,
+        lastImageDebugAt: 0,
+        imageDebugBuilt: false,
+        imageDebugCropGrid: null,
+        imageDebugCropItems: new Map(),
+        visionThresholdSliders: new Map(),
         lastModeHitAt: 0,
         captureRect: {
             sourceWidth: BASE_WIDTH,
@@ -390,6 +526,37 @@
 
     function getActiveThresholds() {
         return state.activeThresholds || DEFAULT_VISION_THRESHOLDS;
+    }
+
+    function ensureMutableActiveThresholds() {
+        if (!state.activeThresholds || Object.isFrozen(state.activeThresholds)) {
+            state.activeThresholds = {...getActiveThresholds()};
+        }
+        return state.activeThresholds;
+    }
+
+    function setActiveThresholdValue(key, value) {
+        if (!Object.prototype.hasOwnProperty.call(DEFAULT_VISION_THRESHOLDS, key) || !Number.isFinite(value)) {
+            return;
+        }
+        const thresholds = ensureMutableActiveThresholds();
+        thresholds[key] = value;
+    }
+
+    function syncVisionThresholdSliders() {
+        if (!state.visionThresholdSliders.size) {
+            return;
+        }
+        const thresholds = getActiveThresholds();
+        for (const config of VISION_THRESHOLD_SLIDERS) {
+            const control = state.visionThresholdSliders.get(config.key);
+            if (!control) {
+                continue;
+            }
+            const value = thresholds[config.key];
+            control.input.value = String(value);
+            control.value.textContent = formatDebugNumber(value);
+        }
     }
 
     function normalizeVisionAssetMap(rawAssets) {
@@ -1679,6 +1846,250 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         );
     }
 
+    function formatThresholdPhpValue(value) {
+        const rounded = Math.round(value * 10000) / 10000;
+        let text = rounded.toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
+        if (!text.includes(".")) {
+            text += ".0";
+        }
+        return text;
+    }
+
+    function buildVisionThresholdPhpSnippet() {
+        const thresholds = getActiveThresholds();
+        const rows = VISION_THRESHOLD_SLIDERS.map((config) => {
+            const value = thresholds[config.key];
+            return `        '${config.key}' => ${formatThresholdPhpValue(value)},`;
+        });
+        return [
+            "    'thresholds' => [",
+            ...rows,
+            "    ],"
+        ].join("\n");
+    }
+
+    function copyVisionThresholds() {
+        const text = buildVisionThresholdPhpSnippet();
+        if (typeof copyText === "function") {
+            copyText(text);
+        } else if (navigator.clipboard?.writeText) {
+            navigator.clipboard.writeText(text).catch((error) => {
+                console.error("threshold copy failed:", error);
+            });
+        }
+    }
+
+    function createVisionImageDebugText(tagName, className, text) {
+        const node = document.createElement(tagName);
+        if (className) {
+            node.className = className;
+        }
+        node.textContent = text;
+        return node;
+    }
+
+    function createVisionThresholdSlider(config) {
+        const thresholds = getActiveThresholds();
+        const value = thresholds[config.key];
+        const item = document.createElement("label");
+        item.className = "vision-threshold-slider";
+
+        const header = document.createElement("div");
+        header.className = "vision-threshold-slider-header";
+        const name = createVisionImageDebugText("span", "vision-threshold-name", config.key);
+        const valueOutput = createVisionImageDebugText("strong", "vision-threshold-value", formatDebugNumber(value));
+        header.append(name, valueOutput);
+
+        const description = createVisionImageDebugText("p", "vision-threshold-description", config.description);
+
+        const input = document.createElement("input");
+        input.type = "range";
+        input.min = String(config.min);
+        input.max = String(config.max);
+        input.step = String(config.step);
+        input.value = String(value);
+        input.setAttribute("aria-label", config.key);
+        input.addEventListener("input", () => {
+            const nextValue = Number.parseFloat(input.value);
+            setActiveThresholdValue(config.key, nextValue);
+            valueOutput.textContent = formatDebugNumber(nextValue);
+        });
+
+        item.append(header, description, input);
+        state.visionThresholdSliders.set(config.key, {
+            input,
+            value: valueOutput
+        });
+        return item;
+    }
+
+    function ensureVisionImageDebugCropItem(entry) {
+        let item = state.imageDebugCropItems.get(entry.key);
+        if (item) {
+            return item;
+        }
+
+        const card = document.createElement("div");
+        card.className = "vision-image-debug-crop";
+        const label = createVisionImageDebugText("div", "vision-image-debug-crop-label", entry.label);
+        const canvas = document.createElement("canvas");
+        canvas.width = entry.canvas.width;
+        canvas.height = entry.canvas.height;
+        canvas.style.width = `${entry.canvas.width * 3}px`;
+        canvas.style.height = `${entry.canvas.height * 3}px`;
+        card.append(label, canvas);
+        state.imageDebugCropGrid?.appendChild(card);
+
+        item = {card, label, canvas};
+        state.imageDebugCropItems.set(entry.key, item);
+        return item;
+    }
+
+    function renderVisionImageDebugCrops() {
+        if (!state.imageDebugCropGrid) {
+            return;
+        }
+
+        const crops = createRecognizedMatchCropCanvases();
+        const activeKeys = new Set();
+        for (const crop of crops) {
+            activeKeys.add(crop.key);
+            const item = ensureVisionImageDebugCropItem(crop);
+            if (item.canvas.width !== crop.canvas.width || item.canvas.height !== crop.canvas.height) {
+                item.canvas.width = crop.canvas.width;
+                item.canvas.height = crop.canvas.height;
+                item.canvas.style.width = `${crop.canvas.width * 3}px`;
+                item.canvas.style.height = `${crop.canvas.height * 3}px`;
+            }
+            item.label.textContent = `${crop.label} (${crop.canvas.width}x${crop.canvas.height})`;
+            const context = item.canvas.getContext("2d");
+            context.imageSmoothingEnabled = false;
+            context.clearRect(0, 0, item.canvas.width, item.canvas.height);
+            context.drawImage(crop.canvas, 0, 0);
+        }
+
+        for (const [key, item] of state.imageDebugCropItems.entries()) {
+            if (!activeKeys.has(key)) {
+                item.card.remove();
+                state.imageDebugCropItems.delete(key);
+            }
+        }
+    }
+
+    function buildVisionImageDebugPanel() {
+        if (!ui.imageDebugMount || state.imageDebugBuilt) {
+            return;
+        }
+
+        state.imageDebugBuilt = true;
+        state.imageDebugCropGrid = null;
+        state.imageDebugCropItems.clear();
+        state.visionThresholdSliders.clear();
+        ui.imageDebugMount.textContent = "";
+        ui.imageDebugMount.hidden = false;
+
+        const shell = document.createElement("div");
+        shell.className = "vision-image-debug-shell";
+
+        const header = document.createElement("div");
+        header.className = "vision-image-debug-header";
+        const titleWrap = document.createElement("div");
+        titleWrap.append(
+            createVisionImageDebugText("h3", "", t("visionImageDebugTitle", "画像デバッグ")),
+            createVisionImageDebugText(
+                "p",
+                "hint",
+                t("visionImageDebugHint", "オンの間だけ、認識枠モノクロ保存と同じ切り抜きを500ms間隔で3倍表示します。")
+            )
+        );
+        const copyButton = document.createElement("button");
+        copyButton.type = "button";
+        copyButton.className = "run-button run-button-secondary";
+        copyButton.textContent = t("visionThresholdCopy", "しきい値をコピー");
+        copyButton.addEventListener("click", copyVisionThresholds);
+        header.append(titleWrap, copyButton);
+
+        const description = createVisionImageDebugText(
+            "p",
+            "vision-image-debug-description",
+            t(
+                "visionImageDebugDescription",
+                "画像を見ながら下のスライダーを動かすと、現在の認識処理で使うパラメータがその場で変わります。最適値が見つかったら、PHPの 'thresholds' => [...] 形式でコピーできます。"
+            )
+        );
+
+        const cropsTitle = createVisionImageDebugText(
+            "h4",
+            "vision-image-debug-section-title",
+            t("visionImageDebugCrops", "認識枠モノクロ画像")
+        );
+        const cropGrid = document.createElement("div");
+        cropGrid.className = "vision-image-debug-crops";
+        state.imageDebugCropGrid = cropGrid;
+
+        const thresholdsTitle = createVisionImageDebugText(
+            "h4",
+            "vision-image-debug-section-title",
+            t("visionThresholdControls", "リアルタイムしきい値")
+        );
+        const copyHint = createVisionImageDebugText(
+            "p",
+            "vision-threshold-copy-hint",
+            t("visionThresholdCopyHint", "コピー内容は現在の全スライダー値です。モード別定義の thresholds に貼り付けて使います。")
+        );
+        const sliderGrid = document.createElement("div");
+        sliderGrid.className = "vision-threshold-grid";
+        for (const config of VISION_THRESHOLD_SLIDERS) {
+            sliderGrid.appendChild(createVisionThresholdSlider(config));
+        }
+
+        shell.append(header, description, cropsTitle, cropGrid, thresholdsTitle, copyHint, sliderGrid);
+        ui.imageDebugMount.appendChild(shell);
+    }
+
+    function destroyVisionImageDebugPanel() {
+        if (!ui.imageDebugMount) {
+            return;
+        }
+        ui.imageDebugMount.hidden = true;
+        ui.imageDebugMount.textContent = "";
+        state.imageDebugBuilt = false;
+        state.imageDebugCropGrid = null;
+        state.imageDebugCropItems.clear();
+        state.visionThresholdSliders.clear();
+        state.lastImageDebugAt = 0;
+    }
+
+    function setVisionImageDebugEnabled(enabled) {
+        if (enabled) {
+            buildVisionImageDebugPanel();
+            updateVisionImageDebug(performance.now(), {force: true});
+            return;
+        }
+        destroyVisionImageDebugPanel();
+    }
+
+    function refreshVisionImageDebugPanel() {
+        if (!ui.imageDebugToggle?.checked) {
+            return;
+        }
+        destroyVisionImageDebugPanel();
+        buildVisionImageDebugPanel();
+        updateVisionImageDebug(performance.now(), {force: true});
+    }
+
+    function updateVisionImageDebug(now, options = {}) {
+        if (!ui.imageDebugToggle?.checked) {
+            return;
+        }
+        buildVisionImageDebugPanel();
+        if (!options.force && now - state.lastImageDebugAt < VISION_IMAGE_DEBUG_INTERVAL_MS) {
+            return;
+        }
+        state.lastImageDebugAt = now;
+        renderVisionImageDebugCrops();
+    }
+
     function getActionLabel(actionId) {
         const action = ACTIONS_BY_ID[actionId];
         if (!action) {
@@ -1941,16 +2352,20 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         };
     }
 
-    function downloadRecognizedMatchCrops() {
+    function createRecognizedMatchCropCanvases() {
         const matches = state.lastMatches || {};
-        let downloaded = 0;
+        const crops = [];
 
         // 既存: スロットの切り抜き
         for (const slot of MATCH_SLOT_KEYS) {
             const match = matches[slot];
             const crop = createMonochromeCropCanvas(slot, match);
-            downloadCanvas(crop.canvas, `${crop.exportName}-mono.png`);
-            downloaded += 1;
+            crops.push({
+                key: slot,
+                label: crop.exportName,
+                fileName: `${crop.exportName}-mono.png`,
+                canvas: crop.canvas
+            });
         }
 
         // 追加: DAMAGE_ROISのactionAreaごとの数字切り抜き
@@ -1959,12 +2374,26 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             for (let i = 0; i < config.actionAreas.length; i++) {
                 const crop = createDamageActionAreaCanvas(damageKey, i);
                 if (crop) {
-                    downloadCanvas(crop.canvas, `${crop.exportName}-mono.png`);
-                    downloaded += 1;
+                    crops.push({
+                        key: `${damageKey}-area${i}`,
+                        label: crop.exportName,
+                        fileName: `${crop.exportName}-mono.png`,
+                        canvas: crop.canvas
+                    });
                 }
             }
         }
 
+        return crops;
+    }
+
+    function downloadRecognizedMatchCrops() {
+        const crops = createRecognizedMatchCropCanvases();
+        let downloaded = 0;
+        for (const crop of crops) {
+            downloadCanvas(crop.canvas, crop.fileName);
+            downloaded += 1;
+        }
         return downloaded;
     }
 
@@ -2453,6 +2882,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         state.modeId = nextMode.id;
         state.activeMode = nextMode;
         state.activeThresholds = resolveModeThresholds(nextMode);
+        syncVisionThresholdSliders();
         state.lastModeHitAt = Date.now();
         state.lastMatches = Object.create(null);
         syncModeSelect();
@@ -3038,6 +3468,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             state.modeId = state.activeMode.id;
         }
         state.activeThresholds = resolveModeThresholds(state.activeMode);
+        syncVisionThresholdSliders();
         populateModeOptions();
     }
 
@@ -3309,6 +3740,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                     updateNumberWhiteDebug(now);
                     const matches = await state.matcher.match(processingCanvas, state.templatesBySlot);
                     state.lastMatches = matches;
+                    updateVisionImageDebug(now);
                     const damageReadings = recognizePendingDamageValues();
                     updateMatchCards(matches);
                     drawOverlay(matches, damageReadings);
@@ -3369,6 +3801,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         setStatus(state.statusKey);
         setBridgeStatus(state.bridgeStatusKey, ui.encodedPayload.value);
         setNumberWhiteDebugPlaceholder();
+        refreshVisionImageDebugPanel();
         renderHistory();
     }
 
@@ -3459,6 +3892,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             if (text && typeof copyText === "function") {
                 copyText(text);
             }
+        });
+        ui.imageDebugToggle?.addEventListener("change", () => {
+            setVisionImageDebugEnabled(ui.imageDebugToggle.checked);
         });
         const observer = new MutationObserver(() => {
             syncLanguage();

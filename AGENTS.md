@@ -5,8 +5,8 @@
 - $content.Replaceで書き換えるのはエンコーディングがぶっ壊れるので基本無し。
 - 
 # uiデザイン
-- .interface-design/.claude/commands/init.md
-- .interface-design/.claude/skills/interface-design/SKILL.md
+- interface-design-main/.claude/commands/init.md
+- interface-design-main/.claude/skills/interface-design/SKILL.md
 を読むこと。
 
 * Read this file at the start of every chat.

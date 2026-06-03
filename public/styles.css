@@ -857,6 +857,174 @@ h2 {
   white-space: pre;
 }
 
+.vision-image-debug-toggle-row {
+  margin-top: 14px;
+  max-width: 340px;
+}
+
+.vision-image-debug-mount[hidden] {
+  display: none !important;
+}
+
+.vision-image-debug-shell {
+  display: grid;
+  gap: 16px;
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 84%, var(--fg) 6%);
+  background: color-mix(in srgb, var(--card) 84%, var(--panel));
+}
+
+.vision-image-debug-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vision-image-debug-header h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.vision-image-debug-description,
+.vision-threshold-copy-hint,
+.vision-threshold-description {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.vision-image-debug-section-title {
+  margin: 2px 0 -6px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.vision-image-debug-crops {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.vision-image-debug-crop {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--input-bg) 90%, var(--panel));
+}
+
+.vision-image-debug-crop-label {
+  max-width: 100%;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.vision-image-debug-crop canvas {
+  display: block;
+  max-width: 100%;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  background: #050505;
+  image-rendering: pixelated;
+}
+
+.vision-threshold-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+.vision-threshold-slider {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--input-bg) 88%, var(--panel));
+}
+
+.vision-threshold-slider-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vision-threshold-name,
+.vision-threshold-value {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.vision-threshold-name {
+  min-width: 0;
+  color: var(--fg);
+  font-weight: 700;
+  word-break: break-word;
+}
+
+.vision-threshold-value {
+  color: var(--accent);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.vision-threshold-slider input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  min-height: 38px;
+  margin: 0;
+  background: transparent;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.vision-threshold-slider input[type="range"]::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 78%, var(--fg) 12%);
+}
+
+.vision-threshold-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 26px;
+  height: 26px;
+  margin-top: -8px;
+  border-radius: 50%;
+  border: 2px solid var(--panel);
+  background: var(--accent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--bg) 55%, transparent);
+}
+
+.vision-threshold-slider input[type="range"]::-moz-range-track {
+  height: 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 78%, var(--fg) 12%);
+}
+
+.vision-threshold-slider input[type="range"]::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--panel);
+  background: var(--accent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--bg) 55%, transparent);
+}
+
 .action-input {
   min-height: 150px;
   max-height: 240px;
@@ -1244,6 +1412,18 @@ h2 {
   }
 
   .vision-debug-body {
+    grid-template-columns: 1fr;
+  }
+
+  .vision-image-debug-header {
+    flex-direction: column;
+  }
+
+  .vision-image-debug-header .run-button {
+    width: 100%;
+  }
+
+  .vision-threshold-grid {
     grid-template-columns: 1fr;
   }
 

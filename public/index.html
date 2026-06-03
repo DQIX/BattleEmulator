@@ -167,6 +167,14 @@
                         visionNumberWhiteDebugOutput: "Number white params",
                         visionNumberWhiteDebugCopy: "Copy",
                         visionNumberWhiteDebugPlaceholder: "Enable the switch to show how far the number-white threshold moved from the background brightness.",
+                        visionImageDebugEnable: "Show image debug",
+                        visionImageDebugTitle: "Image debug",
+                        visionImageDebugHint: "While enabled, recognized monochrome crops are refreshed every 500ms at 3x size.",
+                        visionImageDebugDescription: "Move the sliders while watching the crops to change the parameters used by the current recognizer immediately. When you find good values, copy them as a PHP 'thresholds' => [...] block.",
+                        visionImageDebugCrops: "Recognized monochrome crops",
+                        visionThresholdControls: "Realtime thresholds",
+                        visionThresholdCopy: "Copy thresholds",
+                        visionThresholdCopyHint: "The copied text contains every current slider value for a mode thresholds definition.",
                         memoCopyInput: "Copy input",
                         autoTimer: "Auto Timer",
                         autoTimerHint: "Starts timer from zero and auto-corrects it using search results",
@@ -323,6 +331,14 @@
                         visionNumberWhiteDebugOutput: "数字白判定パラメータ",
                         visionNumberWhiteDebugCopy: "コピー",
                         visionNumberWhiteDebugPlaceholder: "ここにデバッグ情報が表示されます",
+                        visionImageDebugEnable: "画像デバッグを表示",
+                        visionImageDebugTitle: "画像デバッグ",
+                        visionImageDebugHint: "オンの間だけ、認識枠モノクロ保存と同じ切り抜きを500ms間隔で3倍表示します。",
+                        visionImageDebugDescription: "画像を見ながら下のスライダーを動かすと、現在の認識処理で使うパラメータがその場で変わります。最適値が見つかったら、PHPの 'thresholds' => [...] 形式でコピーできます。",
+                        visionImageDebugCrops: "認識枠モノクロ画像",
+                        visionThresholdControls: "リアルタイムしきい値",
+                        visionThresholdCopy: "しきい値をコピー",
+                        visionThresholdCopyHint: "コピー内容は現在の全スライダー値です。モード別定義の thresholds に貼り付けて使います。",
                         memoCopyInput: "Inputコピー",
                         visionApplyFormatButtonDescription: "現在のアクション入力を映像認識のデータで置き換えます。",
                         visionApplyFormat: "フォーマットを使用する",
@@ -1102,6 +1118,16 @@
                                   placeholder="Enable the switch to show how far the number-white threshold moved from the background brightness."></textarea>
                     </label>
                 </div>
+                <div class="vision-image-debug-toggle-row">
+                    <label class="field field-inline vision-debug-toggle">
+                        <span data-i18n="visionImageDebugEnable">Show image debug</span>
+                        <div class="toggle">
+                            <input id="visionImageDebugToggle" type="checkbox"/>
+                            <div class="toggle-ui"></div>
+                        </div>
+                    </label>
+                </div>
+                <div id="visionImageDebugMount" class="vision-image-debug-mount" hidden></div>
             </div>
         </section>
         <section class="panel panel-copyright" style="--delay: 320ms">
