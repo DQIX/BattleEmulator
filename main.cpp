@@ -887,8 +887,15 @@ int main(){
 	gene1[counter++] = BattleEmulator::BUFF;
 	gene1[counter++] = BattleEmulator::DOUBLE_UP;
 	gene1[counter++] = BattleEmulator::MULTITHRUST;
-	gene1[counter++] = BattleEmulator::ATTACK_ALLY;
+	gene1[counter++] = BattleEmulator::BUFF;
+	gene1[counter++] = BattleEmulator::DOUBLE_UP;
 	gene1[counter++] = BattleEmulator::MULTITHRUST;
+	gene1[counter++] = BattleEmulator::MULTITHRUST;
+	gene1[counter++] = BattleEmulator::MULTITHRUST;
+	gene1[counter++] = BattleEmulator::MULTITHRUST;
+	gene1[counter++] = BattleEmulator::DOUBLE_UP;
+	gene1[counter++] = BattleEmulator::DOUBLE_UP;
+	gene1[counter++] = BattleEmulator::DOUBLE_UP;
 	//gene1[counter++] = BattleEmulator::FULLHEAL;
 	//gene1[counter++] = BattleEmulator::INSULATE;
 	// gene1[counter++] = BattleEmulator::BUFF;

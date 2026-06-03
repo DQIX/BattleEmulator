@@ -68,7 +68,7 @@ In a UI description, you need to explain what it is, what happens as a result, a
 
 # build command
 cmake -S . -B cmake-build-release2 -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build cmake-build-release2 --target rbe_lv15_sp22_v2 --config Release
+cmake --build cmake-build-release2 --target erugi1_gouketu --config Release
 
 # agents.md End
 If the context has been injected up to this point, do not reread AGENTS.md file
