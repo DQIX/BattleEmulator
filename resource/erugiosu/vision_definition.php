@@ -21,7 +21,7 @@ return [
         'whiteSaturationMaxDark' => 0.18,
         'whiteSaturationMaxBright' => 0.22,
         'whiteSaturationDarkValue' => 0.1,
-        'numberWhiteSaturationMaxDark' => 0.2,
+        'numberWhiteSaturationMaxDark' => 0.37,
         'numberWhiteSaturationMaxBright' => 0.15,
         'numberWhiteThresholdBright' => 0.75,
         'whiteSaturationBrightValue' => 0.9,
