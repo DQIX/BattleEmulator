@@ -12,6 +12,26 @@ return [
     'battleEmulator' => [
         'id' => 'erugiosu_gouketu',
     ],
+    'thresholds' => [
+        'templateThreshold' => 0.45,
+        'resetLatchClearScore' => 0.6,
+        'whiteThreshold' => 0.72,
+        'matchWhiteThresholdDark' => 0.59,
+        'matchWhiteThresholdBright' => 0.7,
+        'whiteSaturationMaxDark' => 0.2,
+        'whiteSaturationMaxBright' => 0.09,
+        'whiteSaturationDarkValue' => 0.1,
+        'numberWhiteSaturationMaxDark' => 0.2,
+        'numberWhiteSaturationMaxBright' => 0.28,
+        'numberWhiteThresholdBright' => 0.7,
+        'whiteSaturationBrightValue' => 0.9,
+        'numberWhiteThresholdDark' => 0.59,
+        'actionThreshold' => 0.45,
+        'numberThreshold' => 0.65,
+        'matchPenaltyWeight' => 0.0,
+        'matchWhiteWeight' => 1.0,
+        'templateAlphaThreshold' => 0.05,
+    ],
     'templateGroups' => [
         [
             'slot' => 'main',

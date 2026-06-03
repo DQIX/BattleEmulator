@@ -1789,6 +1789,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function shouldRecognizeDamageValue(key) {
+        if (ui.imageDebugToggle?.checked) {
+            return Object.prototype.hasOwnProperty.call(DAMAGE_ROIS, key);
+        }
         if (state.modeId === "identify") {
             return false;
         }
@@ -1937,7 +1940,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         canvas.height = entry.canvas.height;
         canvas.style.width = `${entry.canvas.width * 3}px`;
         canvas.style.height = `${entry.canvas.height * 3}px`;
-        card.append(label, canvas);
+        card.append(canvas, label);
         state.imageDebugCropGrid?.appendChild(card);
 
         item = {card, label, canvas};
@@ -1961,7 +1964,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 item.canvas.style.width = `${crop.canvas.width * 3}px`;
                 item.canvas.style.height = `${crop.canvas.height * 3}px`;
             }
-            item.label.textContent = `${crop.label} (${crop.canvas.width}x${crop.canvas.height})`;
+            item.label.textContent = crop.displayLabel || `${crop.label} (${crop.canvas.width}x${crop.canvas.height})`;
             const context = item.canvas.getContext("2d");
             context.imageSmoothingEnabled = false;
             context.clearRect(0, 0, item.canvas.width, item.canvas.height);
@@ -2363,6 +2366,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             crops.push({
                 key: slot,
                 label: crop.exportName,
+                displayLabel: formatMatchCropDebugLabel(slot, match, crop.canvas),
                 fileName: `${crop.exportName}-mono.png`,
                 canvas: crop.canvas
             });
@@ -2377,6 +2381,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                     crops.push({
                         key: `${damageKey}-area${i}`,
                         label: crop.exportName,
+                        displayLabel: `${crop.exportName} (${crop.canvas.width}x${crop.canvas.height})`,
                         fileName: `${crop.exportName}-mono.png`,
                         canvas: crop.canvas
                     });
@@ -2385,6 +2390,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
 
         return crops;
+    }
+
+    function formatMatchCropDebugLabel(slot, match, canvas) {
+        const file = match?.file || "???.png";
+        const score = Number.isFinite(match?.score) ? match.score : 0;
+        return `${slot}-${file} ${(score * 100).toFixed(1)}% (${canvas.width}x${canvas.height})`;
     }
 
     function downloadRecognizedMatchCrops() {
