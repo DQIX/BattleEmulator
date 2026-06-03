@@ -494,11 +494,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     } else if (mode != -1 && mode != -2) {
                         if (
                             c == ATTACK_ENEMY ||
-                            c == FLAME_SLASH ||
-                            c == HATCHET_MAN ||
-                            c == UPWARD_SLICE ||
-                            c == KACRACKLE_SLASH ||
-                            c == MULTISLASH
+                            c == SKY_ATTACK ||
+                            c == KASWOOSH ||
+                            c == LIGHTNING
                         ) {
                             if (damages[exCounter] == -1) {
                                 startTurn = counterJ - 1;
