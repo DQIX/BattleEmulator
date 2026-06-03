@@ -318,8 +318,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         int32_t actions[3] = {0, 0, 0};
         int actionsPosition = 0;
         if constexpr (setting::SPEED_IMMUTABLE) {
-            double speed0 = setting::ALLY_SPEED * lcg::floatRand051_1(position);
-            double speed1 = setting::ENEMY_SPEED * lcg::floatRand051_1(position);
+            double speed0 = setting::ALLY_SPEED * lcg::floatRand(position, 0.51, 1.0);
+            double speed1 = setting::ENEMY_SPEED * lcg::floatRand(position, 0.51, 1.0);
             // 素早さを比較
             if (speed0 > speed1) {
                 player0_has_initiative = true;
@@ -327,8 +327,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 player0_has_initiative = false;
             }
         } else {
-            double speed0 = players[0].speed * lcg::floatRand051_1(position);
-            double speed1 = players[1].speed * lcg::floatRand051_1(position);
+            double speed0 = players[0].speed * lcg::floatRand(position, 0.51, 1.0);
+            double speed1 = players[1].speed * lcg::floatRand(position, 0.51, 1.0);
             // 素早さを比較
             if (speed0 > speed1) {
                 player0_has_initiative = true;
