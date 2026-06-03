@@ -37,6 +37,13 @@ constexpr int shieldGuardP = 9; //盾ガード率 9%
 constexpr int kaisinnP = 500;
 constexpr int WooshSlashKaisinnP = 100;
 constexpr int Enemy_level = 51;
+#elif defined(gilyumei)
+constexpr int Ally_Level = 49;
+constexpr double Ally_TensionTable[4] = {1.5, 2.5, 4.0, 6.0};
+constexpr int shieldGuardP = 9; //盾ガード率 9%
+constexpr int kaisinnP = 500;
+constexpr int WooshSlashKaisinnP = 100;
+constexpr int Enemy_level = 51;
 #endif
 
 

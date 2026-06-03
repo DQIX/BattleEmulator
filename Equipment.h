@@ -60,6 +60,13 @@ struct Equipment {
     }
 };
 
+
+//竜戦士のかぶと
+inline constexpr Equipment DragonWarriorGloves("Dragon warrior gloves", {
+                                          {Attribute::Fire, 5},
+                                          {Attribute::Darkness, 5}
+                                      });
+
 // 装備の初期化
 //ダークシールド
 // グローバル変数を inline 変数として定義
@@ -101,10 +108,20 @@ inline constexpr Equipment DragonWarriorBoots("Dragon warrior boots", {
  * @note この配列はconstexprとして定義されているため、コンパイル時に初期化され、実行時に変更することはできません。
  * @note 配列内の順序は、装備品管理や計算処理で一貫性を保つために重要です。
  */
+
+#if defined(gilyumei)
 // 同様に、配列も inline 化
+inline constexpr std::array<Equipment, 5> allEquipments = {
+    DarkShield, EtherealArmour, EnchantedGloves, DragonWarriorBoots,DragonWarriorGloves
+};
+
+#else
+
 inline constexpr std::array<Equipment, 4> allEquipments = {
     DarkShield, EtherealArmour, EnchantedGloves, DragonWarriorBoots
 };
+#endif
+
 
 
 /**

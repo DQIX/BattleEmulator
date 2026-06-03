@@ -67,6 +67,28 @@ const Player copiedPlayers[2] = {
 } // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 };
 
+#elif defined(gilyumei)
+
+const Player copiedPlayers[2] = {
+	// プレイヤー1
+	{
+		305, 300.0, 310, 310, 313, 313, 170, 222, 130, // 最初のメンバー
+		165, false, false, 0, false, 0, -1,
+		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
+		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
+		false, -1, 0, -1, 0, false, 1, 1, 1 , false
+	}, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
+
+	// プレイヤー2
+	{
+		2790, 2790.0, 214, 214, 272, 272, 167, 0, 255, // 最初のメンバー
+		255, false, false, 0, false, 0, -1,
+		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
+		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
+		false, -1, 0, -1, 0, false, 0, 0, 0 ,false
+	} // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
+};
+
 #endif
 
 
@@ -967,7 +989,7 @@ int main(){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x0f83eb95;
+	uint64_t time1 = 0x1a7d14c2;
 
 	auto counter = 0;
 	int actions[350] = {0};

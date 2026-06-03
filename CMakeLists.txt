@@ -67,6 +67,8 @@ target_compile_definitions(erugi1_gouketu_opt PRIVATE hayate=1 OPTIMIZE_MODE=1) 
 add_executable(erugi1_hayate ${SOURCES})
 target_compile_definitions(erugi1_hayate PRIVATE hayate=1)
 
+add_executable(erugi1_gilyumei ${SOURCES})
+target_compile_definitions(erugi1_gilyumei PRIVATE gilyumei=1)
 
 string(TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)
 string(TIMESTAMP BUILD_TIME "%H:%M:%S" UTC)
