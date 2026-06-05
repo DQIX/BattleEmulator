@@ -24,7 +24,7 @@
 
 int startturn = -1;
 
-#if defined(erugi1)
+#if defined(ganasadai)
 
 const Player copiedPlayers[2] = {
 	// プレイヤー1
@@ -38,7 +38,7 @@ const Player copiedPlayers[2] = {
 
 	// プレイヤー2
 	{
-		2790, 2790.0, 214, 214, 272, 272, 167, 0, 255, // 最初のメンバー
+		1970, 1970.0, 168, 168, 266, 266, 145, 0, 255, // 最初のメンバー
 		255, false, false, 0, false, 0, -1,
 		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
 		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
@@ -892,7 +892,7 @@ int main(){
 #ifdef DEBUG2
 	//THIS DEBUG CODE!
 	//THIS DEBUG CODE
-	uint64_t time1 = 0x0f65337a;
+	uint64_t time1 = 0x3c8c86c0;
 
 	int dummy[100];
 	lcg::init(time1);
@@ -922,25 +922,6 @@ int main(){
 
 	gene1[counter++] = BattleEmulator::BUFF;
 	gene1[counter++] = BattleEmulator::BUFF;
-	gene1[counter++] = BattleEmulator::MORE_HEAL;
-	gene1[counter++] = BattleEmulator::BUFF;
-	gene1[counter++] = BattleEmulator::DOUBLE_UP;
-	gene1[counter++] = BattleEmulator::MULTITHRUST;
-	gene1[counter++] = BattleEmulator::MULTITHRUST;
-	gene1[counter++] = BattleEmulator::MULTITHRUST;
-	gene1[counter++] = BattleEmulator::MULTITHRUST;
-	gene1[counter++] = BattleEmulator::BUFF;
-	gene1[counter++] = BattleEmulator::DOUBLE_UP;
-	gene1[counter++] = BattleEmulator::MULTITHRUST;
-	gene1[counter++] = BattleEmulator::BUFF;
-	gene1[counter++] = BattleEmulator::DOUBLE_UP;
-	gene1[counter++] = BattleEmulator::MULTITHRUST;
-	gene1[counter++] = BattleEmulator::MULTITHRUST;
-	gene1[counter++] = BattleEmulator::MULTITHRUST;
-	gene1[counter++] = BattleEmulator::MULTITHRUST;
-	gene1[counter++] = BattleEmulator::DOUBLE_UP;
-	gene1[counter++] = BattleEmulator::DOUBLE_UP;
-	gene1[counter++] = BattleEmulator::DOUBLE_UP;
 	//gene1[counter++] = BattleEmulator::FULLHEAL;
 	//gene1[counter++] = BattleEmulator::INSULATE;
 	// gene1[counter++] = BattleEmulator::BUFF;

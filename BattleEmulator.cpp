@@ -23,7 +23,7 @@ thread_local int preHP[3] = {0, 0, 0};
 thread_local bool player0_has_initiative = false;
 thread_local bool TiggerSkyAttack = false;
 
-#if defined(erugi1)
+#if defined(ganasadai)
 constexpr int Ally_Level = 49;
 constexpr double Ally_TensionTable[4] = {1.5, 2.5, 4.0, 6.0};
 constexpr int shieldGuardP = 9; //盾ガード率 9%
@@ -2321,11 +2321,11 @@ constexpr std::array<int, 6> ratios = {
 
 constexpr std::array<int, 6> ids = {
     BattleEmulator::ATTACK_ENEMY,
-    BattleEmulator::SKY_ATTACK,
-    BattleEmulator::ATTACK_ENEMY,
-    BattleEmulator::SWITCH_2B,
+    BattleEmulator::SCEPTER_BALL,
+    BattleEmulator::MERA_ZOMA,
     BattleEmulator::DISRUPTIVE_WAVE,
-    BattleEmulator::KASWOOSH,
+    BattleEmulator::THIN_AIR,
+    BattleEmulator::ATTACK_ENEMY,
 };
 
 static_assert(sum(ratios) == TABLE_MAX, "Ratio sum must be 256");

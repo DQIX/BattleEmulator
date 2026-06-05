@@ -57,12 +57,12 @@ set(SOURCES
         LinearIdPool.h
 )
 
-add_executable(erugi1_gouketu ${SOURCES})
-target_compile_definitions(erugi1_gouketu PRIVATE erugi1=1)
+add_executable(ganasadai_gouketu ${SOURCES})
+target_compile_definitions(ganasadai_gouketu PRIVATE ganasadai=1)
 
 
-add_executable(erugi1_gouketu_opt ${SOURCES})
-target_compile_definitions(erugi1_gouketu_opt PRIVATE hayate=1 OPTIMIZE_MODE=1)  # `#define MULTITHREADING` を適用
+add_executable(ganasadai_gouketu_opt ${SOURCES})
+target_compile_definitions(ganasadai_gouketu_opt PRIVATE ganasadai=1 OPTIMIZE_MODE=1)  # `#define MULTITHREADING` を適用
 
 add_executable(erugi1_hayate ${SOURCES})
 target_compile_definitions(erugi1_hayate PRIVATE hayate=1)
