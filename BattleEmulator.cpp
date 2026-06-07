@@ -162,6 +162,8 @@ std::string BattleEmulator::getActionName(int actionId) {
             return "Buff";
         case BattleEmulator::ATTACK_ENEMY:
             return "Attack";
+        case BattleEmulator::ATTACK_ENEMY_A6:
+            return "Attack A6";
         case BattleEmulator::ATTACK_ENEMY_A3:
             return "Attack 3a";
         case BattleEmulator::MEDICINAL_HERBS:
@@ -325,7 +327,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         DEBUG_COUT2((*position));
         DEBUG_COUT2(counterJ);
         //THIS DEBUG CODE!
-        if ((*position) == 760) { //THIS DEBUG CODE!
+        if ((*position) == 243) { //THIS DEBUG CODE!
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -490,7 +492,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     auto & c = counter;
                     if (c == DISRUPTIVE_WAVE) {
                         (*position) += 1;
-                    } else if (c == ATTACK_ENEMY || c == MERA_ZOMA) {
+                    } else if (c == ATTACK_ENEMY || c == MERA_ZOMA || c == ATTACK_ENEMY_A6) {
                         if (players[1].rage) {
                             (*position)++;
                         } else {
@@ -1757,7 +1759,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     }
                     (*position)++; //回避
 
-                    baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def) + 37;
+                    tmp = FUN_0207564c(position, players[attacker].atk, players[defender].def) * 0.5;
+                    baseDamage = static_cast<int>(tmp) + 37;
 
                     if (kaihi) {
                         if (!players[0].paralysis && !players[0].sleeping && !players[0].specialCharge && !players[0].inactive) {

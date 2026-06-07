@@ -892,7 +892,7 @@ int main(){
 #ifdef DEBUG2
 	//THIS DEBUG CODE!
 	//THIS DEBUG CODE
-	uint64_t time1 = 0x3c8b7537;
+	uint64_t time1 = 0x3f13c1b6;
 
 	int dummy[100];
 	lcg::init(time1);
@@ -921,11 +921,11 @@ int main(){
 	int counter = 0;
 
 	gene1[counter++] = BattleEmulator::BUFF;
+	gene1[counter++] = BattleEmulator::MAGIC_MIRROR;
 	gene1[counter++] = BattleEmulator::BUFF;
 	gene1[counter++] = BattleEmulator::MORE_HEAL;
+	gene1[counter++] = BattleEmulator::BUFF;
 	gene1[counter++] = BattleEmulator::DOUBLE_UP;
-	gene1[counter++] = BattleEmulator::MULTITHRUST;
-	gene1[counter++] = BattleEmulator::MORE_HEAL;
 	gene1[counter++] = BattleEmulator::MULTITHRUST;
 	gene1[counter++] = BattleEmulator::MORE_HEAL;
 	gene1[counter++] = BattleEmulator::MULTITHRUST;
