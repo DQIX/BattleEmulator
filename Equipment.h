@@ -98,6 +98,10 @@ inline constexpr Equipment DragonWarriorBoots("Dragon warrior boots", {
                                                   {Attribute::Fire, 5},
                                                   {Attribute::Darkness, 5}
                                               });
+inline constexpr Equipment RedTights("RedTights", {
+                                                  {Attribute::Fire, 7},
+                                                  {Attribute::ThunderExplosion, 7}
+                                              });
 
 /**
  * すべての装備品を格納する定数配列です。
@@ -109,19 +113,10 @@ inline constexpr Equipment DragonWarriorBoots("Dragon warrior boots", {
  * @note 配列内の順序は、装備品管理や計算処理で一貫性を保つために重要です。
  */
 
-#if defined(gilyumei)
-// 同様に、配列も inline 化
+
 inline constexpr std::array<Equipment, 5> allEquipments = {
-    DarkShield, EtherealArmour, EnchantedGloves, DragonWarriorBoots,DragonWarriorGloves
+    DarkShield, EtherealArmour, EnchantedGloves, DragonWarriorBoots, RedTights
 };
-
-#else
-
-inline constexpr std::array<Equipment, 4> allEquipments = {
-    DarkShield, EtherealArmour, EnchantedGloves, DragonWarriorBoots
-};
-#endif
-
 
 
 /**

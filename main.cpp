@@ -29,7 +29,7 @@ int startturn = -1;
 const Player copiedPlayers[2] = {
 	// プレイヤー1
 	{
-		305, 300.0, 322, 322, 297, 297, 190, 222, 130, // 最初のメンバー
+		301, 301.0, 320, 320, 290, 290, 187, 226, 130, // 最初のメンバー
 		165, false, false, 0, false, 0, -1,
 		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
 		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
@@ -892,7 +892,7 @@ int main(){
 #ifdef DEBUG2
 	//THIS DEBUG CODE!
 	//THIS DEBUG CODE
-	uint64_t time1 = 0x3c8c86c0;
+	uint64_t time1 = 0x3c8b7537;
 
 	int dummy[100];
 	lcg::init(time1);
@@ -921,6 +921,12 @@ int main(){
 	int counter = 0;
 
 	gene1[counter++] = BattleEmulator::BUFF;
+	gene1[counter++] = BattleEmulator::BUFF;
+	gene1[counter++] = BattleEmulator::MORE_HEAL;
+	gene1[counter++] = BattleEmulator::DOUBLE_UP;
+	gene1[counter++] = BattleEmulator::BUFF;
+	gene1[counter++] = BattleEmulator::MULTITHRUST;
+	gene1[counter++] = BattleEmulator::MORE_HEAL;
 	gene1[counter++] = BattleEmulator::BUFF;
 	//gene1[counter++] = BattleEmulator::FULLHEAL;
 	//gene1[counter++] = BattleEmulator::INSULATE;

@@ -111,6 +111,7 @@ public:
 	static constexpr int LIGHTNING = 162;
 	static constexpr int SCEPTER_BALL = 170;
 	static constexpr int THIN_AIR = 171;
+	static constexpr int ATTACK_ENEMY_A6 = 172;
 
     static bool
     Main(int *position, int RunCount, const int32_t Gene[350], Player *players,

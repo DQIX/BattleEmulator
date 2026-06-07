@@ -30,6 +30,7 @@ constexpr int shieldGuardP = 9; //盾ガード率 9%
 constexpr int kaisinnP = 500;
 constexpr int WooshSlashKaisinnP = 100;
 constexpr int Enemy_level = 51;
+constexpr int baseHP = 301;
 #elif defined(hayate)
 constexpr int Ally_Level = 49;
 constexpr double Ally_TensionTable[4] = {1.5, 2.5, 4.0, 6.0};
@@ -46,6 +47,35 @@ constexpr int WooshSlashKaisinnP = 100;
 constexpr int Enemy_level = 51;
 #endif
 
+
+
+/**
+ * @brief 味方のhpを基に、hpテーブルをコンパイル時に生成します。
+ *
+ * この関数は、基準値 (baseHP) を使用して縮小された割合に基づき整数値のテーブルを計算し、
+ * それを配列として返します。
+ *
+ * @return 生成された9要素の整数配列。
+ */
+constexpr std::array<int, 9> makeProportionTable3() {
+    std::array<int, 9> table{};
+    // iを9から1までループし、対応する値を生成する
+    for (int i = 9; i >= 1; --i) {
+        double multiplier = static_cast<double>(i) / 10.0;
+        // base * multiplier の結果は正の数なので、static_cast<int>でfloor相当の効果が得られる
+        int value = static_cast<int>(baseHP * multiplier);
+        table[9 - i] = value + 1;
+    }
+    return table;
+}
+
+/**
+ * @brief コンパイル時に生成されたHPの割合テーブル。
+ *
+ * 基準値 (baseHP) を使用して、割合に基づく9要素の整数値を含む配列。
+ * この配列は makeProportionTable3 関数によって計算され、戦闘計算ロジックに利用されます。
+ */
+constexpr auto proportionTable3 = makeProportionTable3();
 
 constexpr int determineTurn(const int level) {
     return (level >= 10 && level <= 24)
@@ -235,6 +265,10 @@ std::string BattleEmulator::getActionName(int actionId) {
             return "Kaswosh";
         case LIGHTNING:
             return "Lightning";
+        case THIN_AIR:
+            return "Thin Air";
+        case SCEPTER_BALL:
+            return "Scepter Ball";
         default:
             return "Unknown Action";
     }
@@ -291,7 +325,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         DEBUG_COUT2((*position));
         DEBUG_COUT2(counterJ);
         //THIS DEBUG CODE!
-        if ((*position) == 179) { //THIS DEBUG CODE!
+        if ((*position) == 422) { //THIS DEBUG CODE!
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -382,66 +416,61 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             int basedamage = 0;
 
             if ((t == 0 && !player0_has_initiative) || (t == 1 && player0_has_initiative)) {
-                for (int & counter : enemyAction) {
+                const auto ProcessCount = (((counterJ & 1) ^ 1) + 1);
+                auto counter2 = 0;
+                while (counter2 != ProcessCount) {
+                    auto & counter = enemyAction[counter2];
+                    counter2++;
                     //--------start_FUN_02158dfc-------
+                    counter = ProcessEnemyRandomAction2A(position);
                     auto flag = false;
-
+                    auto flag2 = false;
+                    auto flag3 = false;
                     do {
-                        const uint8_t type = ((*NowState) & 0xf);
-                        if (type == TYPE_2A) {
-                            if (counter == SWITCH_2A || counter == 0) {
-                                counter = ProcessEnemyRandomAction2A(position);
+                        if (preAction != 0 && enemyAction[0] == enemyAction[1]) {
+                            if (counter == SCEPTER_BALL) {
+                                if (flag) {
+                                    counter = MERA_ZOMA;
+                                }else {
+                                    counter = ATTACK_ENEMY;
+                                }
+                            } else if (counter == MERA_ZOMA) {
+                                counter = SCEPTER_BALL;
                             }
-                            if (preAction != 0 && enemyAction[0] == enemyAction[1] && preAction != SWITCH_2A) {
-                                if (counter == SKY_ATTACK) {
-                                    if (flag) {
-                                        counter = SWITCH_2B;
-                                    } else {
-                                        counter = ATTACK_ENEMY;
-                                    }
-                                } else if (counter == KASWOOSH) {
+                        }
+                        if (counter == ATTACK_ENEMY && (players[1].defaultATK * 2) <= players[0].def) {
+                            counter = SCEPTER_BALL;
+                            flag = true;
+                            continue;
+                        }
+                        if (counter == ATTACK_ENEMY_A6 && (players[1].defaultATK * 2) <= players[0].def) {
+                            counter = THIN_AIR;
+                            continue;
+                        }
+                        if (counter == MERA_ZOMA && (players[0].hasMagicMirror)) {
+                            if (flag) {
+                                counter = SCEPTER_BALL;
+                                flag2 = true;
+                            }else {
+                                if (flag3) {
+                                    counter = SCEPTER_BALL;
+                                }else{
                                     counter = DISRUPTIVE_WAVE;
                                 }
                             }
-                            if (counter == ATTACK_ENEMY && (players[1].defaultATK * 2) <= players[0].def) {
-                                counter = SKY_ATTACK;
-                                flag = true;
-                                continue;
-                            }
-                            const bool hasBUF = (players[0].hasMagicMirror || players[0].BuffLevel > 0 || players[0].AtkBuffLevel > 0 || players[0].InsulateLevel > 0);
-                            if (counter == DISRUPTIVE_WAVE && !hasBUF) {
-                                counter = SWITCH_2B;
-                                continue;
-                            }
-                            if (counter == KASWOOSH && players[0].hasMagicMirror) {
-                                counter = DISRUPTIVE_WAVE;
-                                continue;
-                            }
-                        }else{
-                            constexpr int table[6] = {
-                                PSYCHE_UP, ATTACK_ENEMY,
-                                LIGHTNING, SKY_ATTACK,
-                                LAUGH, SWITCH_2A,
-                            };
-                            counter = table[FUN_0208aecc(position, NowState)];
-                            if (counter == ATTACK_ENEMY && (players[1].defaultATK * 2) <= players[0].def) {
-                                counter = PSYCHE_UP;
-                            }
-                        }
-                        if (counter == SWITCH_2B) {
-                            (*position) += 2;
-                            preAction = counter;
-                            (*NowState) &= ~0xff;
-                            (*NowState) |= TYPE_2B;
                             continue;
                         }
-                        if (counter == SWITCH_2A) {
-                            (*position) += 2;
-                            preAction = counter;
-                            (*NowState) &= ~0xff;
-                            (*NowState) |= TYPE_2A;
+                        const bool hasBUF = (players[0].hasMagicMirror || players[0].BuffLevel > 0 || players[0].AtkBuffLevel > 0 || players[0].InsulateLevel > 0);
+                        if (counter == DISRUPTIVE_WAVE && !hasBUF) {
+                            if (flag2) {
+                                counter = THIN_AIR;
+                            }else {
+                                counter = MERA_ZOMA;
+                            }
+                            flag3 = true;
                             continue;
                         }
+
                         break;
                     } while (true);
                     preAction = counter;
@@ -461,10 +490,12 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     auto & c = counter;
                     if (c == PSYCHE_UP || c == DISRUPTIVE_WAVE || c == KASWOOSH) {
                         (*position) += 1;
-                    } else if (c == ATTACK_ENEMY || c == ATTACK_ENEMY_A3 || c == ATTACK_ENEMY  || c == SKY_ATTACK) {
+                    } else if (c == ATTACK_ENEMY || c == MERA_ZOMA) {
                         (*position) += 2;
-                    }else if (c == LIGHTNING || c == LAUGH) {
+                    }else if (c == THIN_AIR) {
                         (*position) += 3;
+                    }else if (c == SCEPTER_BALL) {
+                        (*position) += 5;
                     }
 
 
@@ -743,7 +774,6 @@ double BattleEmulator::FUN_021dbc04(int baseHp, double maxHp) {
 
 //コンパイラが毎回コピーするコードを生成するからグローバルスコープに追い出しとく
 const int proportionTable2[9] = {90, 90, 64, 32, 16, 8, 4, 2, 1}; //最後の項目を調べるのは手動　P:\lua\isilyudaru\hissatuteki.lua
-const int proportionTable3[9] = {279, 248, 217, 186, 155, 124, 93, 62, 31}; //6ダメージ以下で0% 309
 // double proportionTable1[9] = {0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 3.0, 0.2, 0.1};// 21/70が2.99999...になるから最初から20/70より大きい2.89にしちゃう
 constexpr double Enemy_TensionTable[4] = {1.3, 2.0, 3.0, 4.5}; //一部の敵は特殊テンションテーブルを倍率として使う
 
@@ -766,6 +796,22 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
     auto attackCount = 0;
     bool defenseFlag = false; //防御した場合0x021e81a0のほうが優先度高いらしい。なんで
     switch (Id & 0xffff) {
+        case THIN_AIR:
+            {
+                (*position)+=2;
+                (*position)++;//会心
+                (*position)++;//不明
+                (*position)++;//回避
+                baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
+                auto tmp2 = 34.0 * lcg::floatRand(position, -0.1, 0.1) + 34;
+                baseDamage = static_cast<int>(tmp2);
+                baseDamage = static_cast<int>(Equipments::applyDamageReduction(baseDamage, Attribute::Wind));
+                (*position)++;//0x02158ac4
+                (*position)++; //不明 0x021e54fc
+                process7A8(position, baseDamage, players, defender);
+                resetCombo(NowState);
+            }
+            break;
         case BattleEmulator::INSULATE:
             players[0].mp -= 4;
             (*position) += 2;
@@ -1279,11 +1325,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                         hasKaisinn = true;
                     }
                 }
-                if (lcg::getPercent(position, 100) < 4) {
-                    kaihi = true;
-                } else {
-                    (*position)++; //盾ガード 0x021586fc 0%
-                }
+                (*position)++;//みかわし
+                (*position)++; //盾ガード 0x021586fc 0%
+
                 (*position)++; //ニセ回避 0x02157f58 100%
                 baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
 
@@ -1307,7 +1351,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
 
                 //ここの小数点以下は引き継がれる
-                tmp = tmp * 1.25; //1.25倍は雷属性になってるから
+                tmp = tmp * 1.0; //1.25倍は雷属性になってるから
                 baseDamage = static_cast<int>((tmp));
 
                 if (!kaihi) {
@@ -1676,11 +1720,10 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             baseDamage = 0;
             resetCombo(NowState);
             break;
-        case BattleEmulator::ULTRA_HIGH_SPEED_COMBO:
-        case MULTISLASH:
+        case BattleEmulator::SCEPTER_BALL:
             (*position) += 2;
-            (*position) += 4;
-            for (int i = 0; i < 4; ++i) {
+            (*position) += 2;
+            for (int i = 0; i < 2; ++i) {
                 if (preHP[defender] > totalDamage) {
                     //hp0時特殊消費
                     defenseFlag = false;
@@ -1701,7 +1744,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     }
                     (*position)++; //回避
 
-                    baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
+                    baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def) + 37;
 
                     if (kaihi) {
                         if (!players[0].paralysis && !players[0].sleeping && !players[0].specialCharge && !players[0].inactive) {
@@ -1714,8 +1757,6 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                         }
                         baseDamage = 0;
                     } else {
-                        tmp = baseDamage * 0.5;
-                        baseDamage = static_cast<int>((tmp));
                         if (baseDamage == 0) {
                             //&& players[0].defence != 0.1
                             baseDamage = lcg::getPercent(position, 2); //TODO: 0x021e81a0
@@ -1893,8 +1934,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             resetCombo(NowState);
             break;
         case BattleEmulator::ATTACK_ENEMY:
-        case ATTACK_ENEMY_A3:
         case BattleEmulator::SKY_ATTACK:
+        case ATTACK_ENEMY_A6:
             (*position) += 2;
             (*position)++; // アクロバットスターとか
 
@@ -2086,12 +2127,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 
             //みかわし(相手)
             if (!players[0].paralysis) {
-                if (lcg::getPercent(position, 100) < 4) {
-                    kaihi = true;
-                }
-                if (!kaihi) {
-                    (*position)++; //盾ガード(幼女は盾を持っていないので0%)
-                }
+                (*position)++;//みかわし
+                (*position)++; //盾ガード(幼女は盾を持っていないので0%)
             }
 
             (*position)++; //回避
@@ -2127,7 +2164,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
             }
 
-            tmp *= 1.25; //雷属性
+            tmp *= 1.0; //雷属性
             baseDamage = static_cast<int>((tmp));
 
             if (!kaihi) {
@@ -2325,7 +2362,7 @@ constexpr std::array<int, 6> ids = {
     BattleEmulator::MERA_ZOMA,
     BattleEmulator::DISRUPTIVE_WAVE,
     BattleEmulator::THIN_AIR,
-    BattleEmulator::ATTACK_ENEMY,
+    BattleEmulator::ATTACK_ENEMY_A6,
 };
 
 static_assert(sum(ratios) == TABLE_MAX, "Ratio sum must be 256");
