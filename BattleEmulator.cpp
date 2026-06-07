@@ -364,26 +364,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 CURE_PARALYSIS || actionTable == PARALYSIS) {
                 actionTable = ATTACK_ALLY;
             }
-            //genePosition++;
-            if (actionTable == HEAL && players[0].mp <= 0) {
-                if (players[0].SpecialMedicineCount >= 1) {
-                    actionTable = MEDICINAL_HERBS;
-                } else {
-                    actionTable = ATTACK_ALLY;
-                }
-            }
         } else {
-            if (players[0].hp >= 35) {
-                actionTable = ATTACK_ALLY;
-            } else {
-                if (players[0].mp >= 2) {
-                    actionTable = HEAL;
-                } else if (players[0].SpecialMedicineCount >= 1) {
-                    actionTable = MEDICINAL_HERBS;
-                } else {
-                    actionTable = ATTACK_ALLY;
-                }
-            }
+            actionTable = ATTACK_ALLY;
         }
 
 
@@ -438,6 +420,13 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                                 }
                             } else if (counter == MERA_ZOMA) {
                                 counter = SCEPTER_BALL;
+                            } else if (counter == THIN_AIR) {
+                                if (flag3) {
+                                    counter = ATTACK_ENEMY_A6;
+                                }else {
+                                    counter = DISRUPTIVE_WAVE;
+                                }
+
                             }
                         }
                         if (counter == ATTACK_ENEMY && (players[1].defaultATK * 2) <= players[0].def) {
@@ -1759,15 +1748,10 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     }
                     (*position)++; //回避
 
-                    tmp = FUN_0207564c(position, players[attacker].atk, players[defender].def) * 0.5;
-                    baseDamage = static_cast<int>(tmp) + 37;
+                    tmp = FUN_0207564c(position, players[attacker].atk, players[defender].def) * 0.5 + 37;
+                    baseDamage = static_cast<int>(tmp);
 
-                    if (kaihi) {
-                        if (!players[0].paralysis && !players[0].sleeping && !players[0].specialCharge && !players[0].inactive) {
-                            (*position)++; //0x021ed7a8
-                        }
-                        baseDamage = 0;
-                    } else if (tate) {
+                    if (kaihi || tate) {
                         if (!players[0].paralysis && !players[0].sleeping && !players[0].specialCharge && !players[0].inactive) {
                             (*position)++; //0x021ed7a8
                         }
