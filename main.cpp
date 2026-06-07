@@ -29,7 +29,7 @@ int startturn = -1;
 const Player copiedPlayers[2] = {
 	// プレイヤー1
 	{
-		301, 301.0, 320, 320, 290, 290, 187, 226, 130, // 最初のメンバー
+		301, 301, 320, 320, 290, 290, 187, 226, 130, // 最初のメンバー
 		165, false, false, 0, false, 0, -1,
 		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
 		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
@@ -38,7 +38,7 @@ const Player copiedPlayers[2] = {
 
 	// プレイヤー2
 	{
-		1970, 1970.0, 168, 168, 266, 266, 145, 0, 255, // 最初のメンバー
+		1970, 1970, 168, 168, 266, 266, 145, 0, 255, // 最初のメンバー
 		255, false, false, 0, false, 0, -1,
 		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
 		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
@@ -924,10 +924,25 @@ int main(){
 	gene1[counter++] = BattleEmulator::BUFF;
 	gene1[counter++] = BattleEmulator::MORE_HEAL;
 	gene1[counter++] = BattleEmulator::DOUBLE_UP;
-	gene1[counter++] = BattleEmulator::BUFF;
 	gene1[counter++] = BattleEmulator::MULTITHRUST;
 	gene1[counter++] = BattleEmulator::MORE_HEAL;
+	gene1[counter++] = BattleEmulator::MULTITHRUST;
+	gene1[counter++] = BattleEmulator::MORE_HEAL;
+	gene1[counter++] = BattleEmulator::MULTITHRUST;
 	gene1[counter++] = BattleEmulator::BUFF;
+	gene1[counter++] = BattleEmulator::MORE_HEAL;
+	gene1[counter++] = BattleEmulator::DOUBLE_UP;
+	gene1[counter++] = BattleEmulator::FULLHEAL;
+	gene1[counter++] = BattleEmulator::MULTITHRUST;
+	gene1[counter++] = BattleEmulator::MORE_HEAL;
+	gene1[counter++] = BattleEmulator::MULTITHRUST;
+	gene1[counter++] = BattleEmulator::MULTITHRUST;
+	gene1[counter++] = BattleEmulator::FULLHEAL;
+	gene1[counter++] = BattleEmulator::BUFF;
+	gene1[counter++] = BattleEmulator::DOUBLE_UP;
+	gene1[counter++] = BattleEmulator::MORE_HEAL;
+	gene1[counter++] = BattleEmulator::MULTITHRUST;
+	gene1[counter++] = BattleEmulator::MULTITHRUST;
 	//gene1[counter++] = BattleEmulator::FULLHEAL;
 	//gene1[counter++] = BattleEmulator::INSULATE;
 	// gene1[counter++] = BattleEmulator::BUFF;

@@ -325,7 +325,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         DEBUG_COUT2((*position));
         DEBUG_COUT2(counterJ);
         //THIS DEBUG CODE!
-        if ((*position) == 422) { //THIS DEBUG CODE!
+        if ((*position) == 760) { //THIS DEBUG CODE!
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -488,10 +488,15 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     }
 
                     auto & c = counter;
-                    if (c == PSYCHE_UP || c == DISRUPTIVE_WAVE || c == KASWOOSH) {
+                    if (c == DISRUPTIVE_WAVE) {
                         (*position) += 1;
                     } else if (c == ATTACK_ENEMY || c == MERA_ZOMA) {
-                        (*position) += 2;
+                        if (players[1].rage) {
+                            (*position)++;
+                        } else {
+                            (*position) += 2;
+                        }
+
                     }else if (c == THIN_AIR) {
                         (*position) += 3;
                     }else if (c == SCEPTER_BALL) {
@@ -556,6 +561,14 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     } else {
                         break;
                     }
+
+                    if (players[1].rage) {
+                        players[1].rageTurns--;
+                        if (players[1].rageTurns <= 0) {
+                            players[1].rage = false;
+                        }
+                    }
+
                     //--------end_FUN_021594bc-------
                 }
             } else {
@@ -2431,20 +2444,35 @@ void BattleEmulator::RecalculateBuff(Player *players) {
     }
 }
 
-void BattleEmulator::ProcessRage(int *position, int baseDamage, const Player *players) {
-    auto percent1 = FUN_021dbc04(preHP[1] - baseDamage, players[1].maxHp);
-    if (percent1 < 0.5) {
-        double percent = FUN_021dbc04(preHP[1], players[1].maxHp);
-        if (percent >= 0.5) {
+void BattleEmulator::ProcessRage(int *position, int baseDamage, Player players[2]) {
+    // if (kaisinn) {
+    //     return;
+    // }
+
+    int hp_before = preHP[1];
+    int hp_after  = preHP[1] - baseDamage;
+    int maxHp     = players[1].maxHp;
+
+    if (hp_after < 0) {
+        hp_after = 0;
+    }
+
+    //    if (percent1 < 0.5) {
+    //        if (percent >= 0.5) {
+    if (hp_after * 2 < maxHp) {
+        if (hp_before * 2 >= maxHp) {
             if (!players[1].rage) {
                 (*position)++;
-                (*position)++;
+                players[1].rage = true;
+                players[1].rageTurns = lcg::intRangeRand(position, 2, 4);
             } else {
                 (*position)++;
             }
         } else {
-            if (percent1 < 0.25) {
-                if (percent >= 0.25) {
+            // if (percent1 < 0.25) {
+            //     if (percent >= 0.25) {
+            if (hp_after * 4 < maxHp){
+                if (hp_before * 4 >= maxHp){
                     if (!players[1].rage) {
                         (*position)++;
                         (*position)++;
@@ -2456,7 +2484,6 @@ void BattleEmulator::ProcessRage(int *position, int baseDamage, const Player *pl
         }
     }
 }
-
 int BattleEmulator::ProcessMagicBurst(int *position) {
     auto rand1 = lcg::floatRand(position, 0.9, 1.0);
     auto rand2 = lcg::floatRand(position, 0.9, 1.1);

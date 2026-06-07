@@ -11,7 +11,7 @@
 
 struct Player {
     int hp;
-    double maxHp;
+    int maxHp;
     int atk;
     int defaultATK;
     int def;
@@ -45,6 +45,7 @@ struct Player {
     int InsulateLevel = 0;
     int InsulateTurns = -1;
     bool inactive = false;
+    int rageTurns = -1;
 
     // 他のメンバー変数やメンバー関数を追加する可能性があります
 
@@ -59,7 +60,7 @@ struct Player {
 
     static void heal(Player &obj, int amount) {
         obj.hp += amount;
-        obj.hp = std::min(static_cast<int>(obj.maxHp), obj.hp);
+        obj.hp = std::min((obj.maxHp), obj.hp);
     }
 };
 
