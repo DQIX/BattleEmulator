@@ -275,6 +275,9 @@
         sub: {x: 518, y: 619, width: 100, height: 90, label: "sub"},
         target: {x: 78, y: 578, width: 140, height: 65, label: "target"}
     };
+    const DEFAULT_MATCH_ROIS = Object.freeze(Object.fromEntries(
+        Object.entries(ROI_DEFS).map(([slot, roi]) => [slot, Object.freeze({...roi})])
+    ));
     const RECOGNIZED_CROP_DEFS = {
         main: {width: 130, height: 45},
         number: {width: 26, height: 40},
@@ -282,6 +285,9 @@
         sub: {width: 40, height: 60},
         target: {width: 130, height: 45}
     };
+    const DEFAULT_RECOGNIZED_CROP_DEFS = Object.freeze(Object.fromEntries(
+        Object.entries(RECOGNIZED_CROP_DEFS).map(([slot, crop]) => [slot, Object.freeze({...crop})])
+    ));
 
     const DAMAGE_ROIS = {
         damage1: {
@@ -449,6 +455,23 @@
     }
 
     const LEGACY_VISION_MODE_DEFINITIONS = Object.freeze({
+        ganasadai: Object.freeze({
+            id: "ganasadai",
+            matchRois: Object.freeze({
+                sourceWidth: 958,
+                sourceHeight: 718,
+                slots: Object.freeze({
+                    sub: Object.freeze({x: 560, y: 645, sz: 130, zy: 90})
+                })
+            }),
+            recognizedCrops: Object.freeze({
+                sourceWidth: 958,
+                sourceHeight: 718,
+                slots: Object.freeze({
+                    sub: Object.freeze({sz: 130, zy: 45})
+                })
+            })
+        })
     });
 
     const state = {
@@ -471,6 +494,8 @@
         modeId: "identify",
         activeMode: null,
         activeThresholds: DEFAULT_VISION_THRESHOLDS,
+        activeMatchRois: DEFAULT_MATCH_ROIS,
+        activeRecognizedCrops: DEFAULT_RECOGNIZED_CROP_DEFS,
         lastMatches: Object.create(null),
         lastDamageReadings: Object.create(null),
         turnIndex: 1,
@@ -562,12 +587,176 @@
         }
     }
 
+    function readFiniteRoiNumber(source, keys) {
+        if (!source || typeof source !== "object" || Array.isArray(source)) {
+            return null;
+        }
+        for (const key of keys) {
+            const value = source[key];
+            if (Number.isFinite(value)) {
+                return value;
+            }
+            if (typeof value === "string" && value.trim() !== "") {
+                const parsed = Number.parseFloat(value);
+                if (Number.isFinite(parsed)) {
+                    return parsed;
+                }
+            }
+        }
+        return null;
+    }
+
+    function clampRoiNumber(value, min, max) {
+        return Math.max(min, Math.min(max, Math.round(value)));
+    }
+
+    function getMatchRoiDefinitionSlots(definition) {
+        if (!definition || typeof definition !== "object" || Array.isArray(definition)) {
+            return null;
+        }
+        if (definition.slots && typeof definition.slots === "object" && !Array.isArray(definition.slots)) {
+            return definition.slots;
+        }
+        return definition;
+    }
+
+    function normalizeMatchRoiSlot(slotDefinition, fallback, scaleX, scaleY) {
+        const fallbackSourceX = fallback.x / scaleX;
+        const fallbackSourceY = fallback.y / scaleY;
+        const fallbackSourceWidth = fallback.width / scaleX;
+        const fallbackSourceHeight = fallback.height / scaleY;
+        const sourceX = readFiniteRoiNumber(slotDefinition, ["x", "left"]) ?? fallbackSourceX;
+        const sourceY = readFiniteRoiNumber(slotDefinition, ["y", "top"]) ?? fallbackSourceY;
+        const sourceWidth = readFiniteRoiNumber(slotDefinition, ["width", "w", "sz"]) ?? fallbackSourceWidth;
+        const sourceHeight = readFiniteRoiNumber(slotDefinition, ["height", "h", "zy"]) ?? fallbackSourceHeight;
+        const x = clampRoiNumber(sourceX * scaleX, 0, BASE_WIDTH - 1);
+        const y = clampRoiNumber(sourceY * scaleY, 0, BASE_HEIGHT - 1);
+        const width = clampRoiNumber(sourceWidth * scaleX, 1, BASE_WIDTH - x);
+        const height = clampRoiNumber(sourceHeight * scaleY, 1, BASE_HEIGHT - y);
+
+        return {
+            x,
+            y,
+            width,
+            height,
+            label: fallback.label
+        };
+    }
+
+    function normalizeModeMatchRois(...definitions) {
+        const rois = Object.fromEntries(
+            Object.entries(DEFAULT_MATCH_ROIS).map(([slot, roi]) => [slot, {...roi}])
+        );
+
+        for (const definition of definitions) {
+            if (!definition || typeof definition !== "object" || Array.isArray(definition)) {
+                continue;
+            }
+            const source = definition.source || definition.image || definition.imageSize || {};
+            const sourceWidth = readFiniteRoiNumber(definition, ["sourceWidth", "imageWidth"])
+                ?? readFiniteRoiNumber(source, ["width", "w"])
+                ?? BASE_WIDTH;
+            const sourceHeight = readFiniteRoiNumber(definition, ["sourceHeight", "imageHeight"])
+                ?? readFiniteRoiNumber(source, ["height", "h"])
+                ?? BASE_HEIGHT;
+            const scaleX = BASE_WIDTH / Math.max(1, sourceWidth);
+            const scaleY = BASE_HEIGHT / Math.max(1, sourceHeight);
+            const slots = getMatchRoiDefinitionSlots(definition);
+            for (const slot of MATCH_SLOT_KEYS) {
+                if (!slots?.[slot] || typeof slots[slot] !== "object" || Array.isArray(slots[slot])) {
+                    continue;
+                }
+                rois[slot] = normalizeMatchRoiSlot(slots[slot], rois[slot], scaleX, scaleY);
+            }
+        }
+
+        return rois;
+    }
+
+    function normalizeRecognizedCropSlot(slotDefinition, fallback, scaleX, scaleY) {
+        const fallbackSourceWidth = fallback.width / scaleX;
+        const fallbackSourceHeight = fallback.height / scaleY;
+        const sourceWidth = readFiniteRoiNumber(slotDefinition, ["width", "w", "sz"]) ?? fallbackSourceWidth;
+        const sourceHeight = readFiniteRoiNumber(slotDefinition, ["height", "h", "zy"]) ?? fallbackSourceHeight;
+
+        return {
+            width: clampRoiNumber(sourceWidth * scaleX, 1, BASE_WIDTH),
+            height: clampRoiNumber(sourceHeight * scaleY, 1, BASE_HEIGHT)
+        };
+    }
+
+    function normalizeModeRecognizedCrops(...definitions) {
+        const crops = Object.fromEntries(
+            Object.entries(DEFAULT_RECOGNIZED_CROP_DEFS).map(([slot, crop]) => [slot, {...crop}])
+        );
+
+        for (const definition of definitions) {
+            if (!definition || typeof definition !== "object" || Array.isArray(definition)) {
+                continue;
+            }
+            const source = definition.source || definition.image || definition.imageSize || {};
+            const sourceWidth = readFiniteRoiNumber(definition, ["sourceWidth", "imageWidth"])
+                ?? readFiniteRoiNumber(source, ["width", "w"])
+                ?? BASE_WIDTH;
+            const sourceHeight = readFiniteRoiNumber(definition, ["sourceHeight", "imageHeight"])
+                ?? readFiniteRoiNumber(source, ["height", "h"])
+                ?? BASE_HEIGHT;
+            const scaleX = BASE_WIDTH / Math.max(1, sourceWidth);
+            const scaleY = BASE_HEIGHT / Math.max(1, sourceHeight);
+            const slots = getMatchRoiDefinitionSlots(definition);
+            for (const slot of MATCH_SLOT_KEYS) {
+                if (!slots?.[slot] || typeof slots[slot] !== "object" || Array.isArray(slots[slot])) {
+                    continue;
+                }
+                crops[slot] = normalizeRecognizedCropSlot(slots[slot], crops[slot], scaleX, scaleY);
+            }
+        }
+
+        return crops;
+    }
+
+    function resolveModeMatchRois(mode) {
+        return mode?.matchRois || DEFAULT_MATCH_ROIS;
+    }
+
+    function resolveModeRecognizedCrops(mode) {
+        return mode?.recognizedCrops || DEFAULT_RECOGNIZED_CROP_DEFS;
+    }
+
+    function getActiveMatchRois() {
+        return state.activeMatchRois || DEFAULT_MATCH_ROIS;
+    }
+
+    function getActiveMatchRoi(slot) {
+        return getActiveMatchRois()[slot] || DEFAULT_MATCH_ROIS[slot];
+    }
+
+    function getActiveRecognizedCrop(slot) {
+        return (state.activeRecognizedCrops || DEFAULT_RECOGNIZED_CROP_DEFS)[slot]
+            || DEFAULT_RECOGNIZED_CROP_DEFS[slot];
+    }
+
+    function buildMatchedTemplateResult(slot, template, score, x, y) {
+        const crop = getActiveRecognizedCrop(slot);
+        return {
+            slot,
+            file: template.file,
+            score,
+            x,
+            y,
+            width: crop.width,
+            height: crop.height
+        };
+    }
+
     function normalizeVisionAssetMap(rawAssets) {
         return rawAssets && typeof rawAssets === "object" && !Array.isArray(rawAssets) ? rawAssets : {};
     }
 
     function normalizeVisionAssetPack(rawPack) {
-        const normalizedModes = rawPack.modes.map((mode) => {
+        const pack = rawPack && typeof rawPack === "object" ? rawPack : {};
+        const rawModes = Array.isArray(pack.modes) ? pack.modes : [];
+        const normalizedModes = rawModes.map((mode) => {
             const legacy = getLegacyModeDefinition(mode.id);
             return {
                 ...legacy,
@@ -577,6 +766,18 @@
                     ...(mode.names || {})
                 },
                 thresholds: normalizeVisionThresholds(legacy?.thresholds, mode?.thresholds),
+                matchRois: normalizeModeMatchRois(
+                    legacy?.matchRois,
+                    legacy?.recognitionRois,
+                    mode?.matchRois,
+                    mode?.recognitionRois
+                ),
+                recognizedCrops: normalizeModeRecognizedCrops(
+                    legacy?.recognizedCrops,
+                    legacy?.recognizedCropDefs,
+                    mode?.recognizedCrops,
+                    mode?.recognizedCropDefs
+                ),
                 rules: {
                     ...(legacy?.rules || {}),
                     ...(mode.rules || {})
@@ -593,7 +794,15 @@
         const modeIds = new Set(normalizedModes.map((mode) => mode.id));
         for (const legacyMode of Object.values(LEGACY_VISION_MODE_DEFINITIONS)) {
             if (!modeIds.has(legacyMode.id)) {
-                normalizedModes.push({...legacyMode, templates: []});
+                normalizedModes.push({
+                    ...legacyMode,
+                    matchRois: normalizeModeMatchRois(legacyMode.matchRois, legacyMode.recognitionRois),
+                    recognizedCrops: normalizeModeRecognizedCrops(
+                        legacyMode.recognizedCrops,
+                        legacyMode.recognizedCropDefs
+                    ),
+                    templates: []
+                });
             }
         }
 
@@ -605,6 +814,8 @@
                 timeoutMs: 0,
                 battleEmulator: null,
                 thresholds: VISION_MODE_THRESHOLDS.identify,
+                matchRois: normalizeModeMatchRois(),
+                recognizedCrops: normalizeModeRecognizedCrops(),
                 rules: {detections: []},
                 identify: {templates: []},
                 templates: []
@@ -612,11 +823,11 @@
         }
 
         return {
-            version: rawPack.version || 2,
-            generatedAt: rawPack.generatedAt || null,
+            version: pack.version || 2,
+            generatedAt: pack.generatedAt || null,
             modes: normalizedModes,
-            numberTemplates: rawPack.numberTemplates || [],
-            assets: normalizeVisionAssetMap(rawPack.assets)
+            numberTemplates: pack.numberTemplates || [],
+            assets: normalizeVisionAssetMap(pack.assets)
         };
     }
 
@@ -834,7 +1045,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             const device = this.device;
             const frameView = this.frameTexture.createView();
             const thresholds = getActiveThresholds();
-            const whiteParamsBySlot = buildWhiteParamsBySlotFromCanvas(processingContext);
+            const activeRois = getActiveMatchRois();
+            const whiteParamsBySlot = buildWhiteParamsBySlotFromCanvas(processingContext, activeRois);
 
             // --- パス1: 全テンプレートのGPUジョブを1つのencoderに積む ---
             // 各テンプレートのメタ情報（オフセット・サイズ・バッファ参照）を収集
@@ -842,7 +1054,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             let totalScoreCount = 0;
 
             for (const slot of MATCH_SLOT_KEYS) {
-                const roi = ROI_DEFS[slot];
+                const roi = activeRois[slot] || getActiveMatchRoi(slot);
                 for (const template of (templatesBySlot.get(slot) || [])) {
                     const scoreWidth = roi.width - template.width + 1;
                     const scoreHeight = roi.height - template.height + 1;
@@ -967,15 +1179,13 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                     }
                 }
                 if (bestScore > bestBySlot[slot].score) {
-                    bestBySlot[slot] = {
+                    bestBySlot[slot] = buildMatchedTemplateResult(
                         slot,
-                        file: template.file,
-                        score: bestScore,
-                        x: roi.x + (bestIndex % scoreWidth),
-                        y: roi.y + Math.floor(bestIndex / scoreWidth),
-                        width: template.width,
-                        height: template.height
-                    };
+                        template,
+                        bestScore,
+                        roi.x + (bestIndex % scoreWidth),
+                        roi.y + Math.floor(bestIndex / scoreWidth)
+                    );
                 }
             }
 
@@ -1024,10 +1234,11 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         async match(source, templatesBySlot) {
             this.frameContext.drawImage(source, 0, 0, BASE_WIDTH, BASE_HEIGHT);
             const frame = this.frameContext.getImageData(0, 0, BASE_WIDTH, BASE_HEIGHT);
-            const whiteParamsBySlot = buildWhiteParamsBySlot(frame);
+            const activeRois = getActiveMatchRois();
+            const whiteParamsBySlot = buildWhiteParamsBySlot(frame, {x: 0, y: 0}, activeRois);
             const matches = {};
             for (const slot of MATCH_SLOT_KEYS) {
-                matches[slot] = this.matchSlot(frame, ROI_DEFS[slot], templatesBySlot.get(slot) || [], slot, whiteParamsBySlot[slot]);
+                matches[slot] = this.matchSlot(frame, activeRois[slot] || getActiveMatchRoi(slot), templatesBySlot.get(slot) || [], slot, whiteParamsBySlot[slot]);
             }
             return matches;
         }
@@ -1041,15 +1252,13 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                     for (let offsetX = 0; offsetX <= maxX; offsetX += 1) {
                         const score = compareMask(frame, template.mask, roi.x + offsetX, roi.y + offsetY, template.width, template.height, whiteParams);
                         if (score > best.score) {
-                            best = {
+                            best = buildMatchedTemplateResult(
                                 slot,
-                                file: template.file,
+                                template,
                                 score,
-                                x: roi.x + offsetX,
-                                y: roi.y + offsetY,
-                                width: template.width,
-                                height: template.height
-                            };
+                                roi.x + offsetX,
+                                roi.y + offsetY
+                            );
                         }
                     }
                 }
@@ -1249,10 +1458,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         };
     }
 
-    function buildWhiteParamsBySlot(frame, origin = {x: 0, y: 0}) {
+    function buildWhiteParamsBySlot(frame, origin = {x: 0, y: 0}, rois = getActiveMatchRois()) {
         const params = {};
         for (const slot of MATCH_SLOT_KEYS) {
-            const roi = ROI_DEFS[slot];
+            const roi = rois[slot] || getActiveMatchRoi(slot);
             params[slot] = buildWhiteParamsForImageData(frame, {
                 x: roi.x - origin.x,
                 y: roi.y - origin.y,
@@ -1263,14 +1472,15 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return params;
     }
 
-    function buildWhiteParamsBySlotFromCanvas(context) {
-        const bounds = getBoundsForAreas(MATCH_SLOT_KEYS.map((slot) => ROI_DEFS[slot]));
+    function buildWhiteParamsBySlotFromCanvas(context, rois = getActiveMatchRois()) {
+        const bounds = getBoundsForAreas(MATCH_SLOT_KEYS.map((slot) => rois[slot] || getActiveMatchRoi(slot)));
         if (!bounds.width || !bounds.height) {
             return Object.fromEntries(MATCH_SLOT_KEYS.map((slot) => [slot, buildWhiteParamsForImageData(new ImageData(1, 1))]));
         }
         return buildWhiteParamsBySlot(
             context.getImageData(bounds.x, bounds.y, bounds.width, bounds.height),
-            bounds
+            bounds,
+            rois
         );
     }
 
@@ -1608,7 +1818,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         ];
 
         for (const slot of MATCH_SLOT_KEYS) {
-            rows.push(buildMatchWhiteParamDebugLine(`slot.${slot}`, frame, ROI_DEFS[slot]));
+            rows.push(buildMatchWhiteParamDebugLine(`slot.${slot}`, frame, getActiveMatchRoi(slot)));
         }
 
         rows.push("");
@@ -1850,7 +2060,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function emptyMatch(slot) {
-        const roi = ROI_DEFS[slot];
+        const roi = getActiveMatchRoi(slot);
         return {
             slot,
             file: "",
@@ -2263,7 +2473,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         // --- テンプレートマッチング枠（既存） ---
         overlayContext.font = "18px Bahnschrift, sans-serif";
         for (const slot of MATCH_SLOT_KEYS) {
-            const roi = ROI_DEFS[slot];
+            const roi = getActiveMatchRoi(slot);
             const match = matches[slot] || emptyMatch(slot);
             overlayContext.strokeStyle = "rgba(230, 230, 230, 0.72)";
             overlayContext.lineWidth = 1;
@@ -2284,7 +2494,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function resolveExportRect(slot, match) {
-        const roi = ROI_DEFS[slot];
+        const roi = getActiveMatchRoi(slot);
         if (!match || !match.file) {
             return {...roi, exportName: `${slot}-roi`};
         }
@@ -2298,8 +2508,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function createMonochromeCropCanvas(slot, match) {
-        const roi = ROI_DEFS[slot];
-        const cropDef = RECOGNIZED_CROP_DEFS[slot];
+        const roi = getActiveMatchRoi(slot);
+        const cropDef = getActiveRecognizedCrop(slot);
         const exportName = match && match.file
             ? `${slot}-${match.file.replace(/[^a-zA-Z0-9._-]/g, "_")}`
             : `${slot}-roi`;
@@ -2807,6 +3017,33 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
     }
 
+    function pickGanasadaiCandidate(matches){
+        const {templateThreshold} = getActiveThresholds();
+        const main = matches.main || emptyMatch("main");
+        const sub = matches.sub || emptyMatch("sub");
+        const ally = matches.ally || emptyMatch("ally");
+        const target = matches.target || emptyMatch("target");
+        const mode = getActiveMode();
+        const erugioMain = modeRuleHasFile(mode, "Main", main.file);
+
+        if(erugioMain && sub.file === "end.png"){
+            return undefined;
+        }
+
+        // reset
+        if (erugioMain && modeRuleHasFile(mode, "resetSub", sub.file) && main.score >= 0.4 && sub.score >= 0.4) {
+            return {kind: "reset", score: Math.min(main.score, sub.score), detail: `${main.file} + ${sub.file}`};
+        }else if(erugioMain){
+            return {kind: "action", actionId: ACTION_IDS.ATTACK_ENEMY, detail: main.file, score: main.score};
+        }
+
+
+        const directAction = getModeRuleMap(mode, "directMainActions")[main.file];
+        if (directAction && main.score >= templateThreshold) {
+            return {kind: "action", actionId: directAction, detail: main.file, score: main.score};
+        }
+    }
+
     function pickCandidate(matches) {
         const mode = getActiveMode();
         const picker = mode?.picker || mode?.id || "identify";
@@ -2825,8 +3062,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         if(picker === "baruborosu"){
             return pickBaruborosuCandidate(matches);
         }
-        if(picker === "corvus1"){
-            return pickCorvus1Candidate(matches);
+        if(picker === "ganasadai"){
+            return pickGanasadaiCandidate(matches);
         }
         return null;
     }
@@ -2936,6 +3173,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         state.modeId = nextMode.id;
         state.activeMode = nextMode;
         state.activeThresholds = resolveModeThresholds(nextMode);
+        state.activeMatchRois = resolveModeMatchRois(nextMode);
+        state.activeRecognizedCrops = resolveModeRecognizedCrops(nextMode);
         syncVisionThresholdSliders();
         state.lastModeHitAt = Date.now();
         state.lastMatches = Object.create(null);
@@ -3524,6 +3763,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             state.modeId = state.activeMode.id;
         }
         state.activeThresholds = resolveModeThresholds(state.activeMode);
+        state.activeMatchRois = resolveModeMatchRois(state.activeMode);
+        state.activeRecognizedCrops = resolveModeRecognizedCrops(state.activeMode);
         syncVisionThresholdSliders();
         populateModeOptions();
     }
