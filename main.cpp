@@ -365,23 +365,23 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 
     // --- TableA で探索 ---
     EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableA);
-	Genome genomeA = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 6000, gene, 0);
+	Genome genomeA = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 10000, gene, 0);
 
     // --- TableB で探索 ---
     EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableB);
-    Genome genomeB = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 6000, gene, 0);
+    Genome genomeB = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 10000, gene, 0);
 
     // --- TableC で探索 ---
     EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableC);
-    Genome genomeC = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 6000, gene, 0);
+    Genome genomeC = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 10000, gene, 0);
 
 	// --- TableC で探索 ---
 	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableD);
-	Genome genomeD = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 6000, gene, 0);
+	Genome genomeD = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 10000, gene, 0);
 
 	// --- TableC で探索 ---
 	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableF);
-	Genome genomeF = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 6000, gene, 0);
+	Genome genomeF = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 10000, gene, 0);
 
 	// --- TableC で探索 ---
 	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableG);
@@ -882,9 +882,8 @@ int main(){
 	int actions1[350] = {};
 	auto counter1 = 0;
 	actions1[counter1++] = BattleEmulator::BUFF;
-	actions1[counter1++] = BattleEmulator::BUFF;
 	actions1[counter1] = -1;
-	SimpleParameterOptimizer::optimize(copiedPlayers, 0x35457909ull, actions1, 100000, counter1);
+	SimpleParameterOptimizer::optimize(copiedPlayers, 0x12398731ull, actions1, 100000, counter1);
 	return 0;
 #endif
 
@@ -893,7 +892,8 @@ int main(){
 	//THIS DEBUG CODE!
 	//THIS DEBUG CODE
 	//0x3f1b3c6c: 30, 62, 33, 37, 49, 62, 62, 62, 37, 33, 34,
-	uint64_t time1 = 0x3f1b3c6c;
+	//0x3c98d058: 30, 62, 62, 62, 37, 62, 37, 33, 34,
+	uint64_t time1 = 0x3c98d058;
 
 	int dummy[100];
 	lcg::init(time1);
@@ -917,7 +917,7 @@ int main(){
 	Player players1[2];
 	//int32_t gene1[350] = {0};
 	//THIS DEBUG CODE!
-	int32_t gene1[350] = { 30, 62, 33, 37, 49, 62, 62, 62, 37, 33, 34,    };
+	int32_t gene1[350] = { 30, 62, 62, 62, 37, 62, 37, 33, 34,     };
 	//gene1[19-1] = BattleEmulator::DEFENCE;
 	int counter = 0;
 
@@ -941,11 +941,12 @@ int main(){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x3c97360d;
+	uint64_t time1 = 0x450ff41f;
 
 	auto counter = 0;
 	int actions[350] = {0};
 	actions[counter++] = BattleEmulator::BUFF;
+	actions[counter++] = BattleEmulator::FLEE_ALLY;
 	//actions[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
 	actions[counter] = -1;
 

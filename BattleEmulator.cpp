@@ -327,7 +327,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         DEBUG_COUT2((*position));
         DEBUG_COUT2(counterJ);
         //THIS DEBUG CODE!
-        if ((*position) == 468) { //THIS DEBUG CODE!
+        if ((*position) == 28) { //THIS DEBUG CODE!
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -455,7 +455,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             }
                             continue;
                         }
-                        const bool hasBUF = (players[0].hasMagicMirror || players[0].BuffLevel > 0 || players[0].AtkBuffLevel > 0 || players[0].InsulateLevel > 0);
+                        const bool hasBUF = (players[0].hasMagicMirror || players[0].BuffLevel > 0 || players[0].AtkBuffLevel > 0 || players[0].InsulateLevel > 0 || players[0].TensionLevel > 0);
                         if (counter == DISRUPTIVE_WAVE && !hasBUF) {
                             if (flag2) {
                                 counter = THIN_AIR;
@@ -470,6 +470,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     } while (true);
                     preAction = counter;
 
+                    if (counter == ATTACK_ENEMY_A6) {
+                        counter = ATTACK_ENEMY;
+                    }
 
                     if (mode != -1 && mode != -2) {
                         const int & need = eActions[exCounter1++];
