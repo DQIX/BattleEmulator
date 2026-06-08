@@ -535,9 +535,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     } else if (mode != -1 && mode != -2) {
                         if (
                             c == ATTACK_ENEMY ||
-                            c == SKY_ATTACK ||
-                            c == KASWOOSH ||
-                            c == LIGHTNING
+                            c == SCEPTER_BALL ||
+                            c == MERA_ZOMA ||
+                            c == THIN_AIR
                         ) {
                             if (damages[exCounter] == -1) {
                                 startTurn = counterJ - 1;
