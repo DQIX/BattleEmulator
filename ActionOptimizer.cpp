@@ -342,11 +342,13 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 				continue;
 			}
 
-			// Victory condition check
+			constexpr int RequiredAllyHpOnVictory = 200;
 			if(currentGenome.EnemyPlayer.hp <= 0){
-				if(!solutionFound || currentGenome.turn < bestSolution.turn){
-					bestSolution = currentGenome;
-					solutionFound = true;
+				if(currentGenome.AllyPlayer.hp >= RequiredAllyHpOnVictory){
+					if(!solutionFound || currentGenome.turn < bestSolution.turn){
+						bestSolution = currentGenome;
+						solutionFound = true;
+					}
 				}
 				continue;
 			}

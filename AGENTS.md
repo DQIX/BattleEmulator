@@ -3,11 +3,6 @@
 - スクリプトを実行する場合はphpコマンドバージョン8.4を使用すること。イータープリンター経由で実行する場合、exitしなければ永遠に帰ってこないので注意すること。
 - ファイルを書く場合、ideが提供する機能を使用して書け。応答に時間がかかるからという理由で、コマンド書き込みに切り替えるのは無し。
 - $content.Replaceで書き換えるのはエンコーディングがぶっ壊れるので基本無し。
-- 
-# uiデザイン
-- .interface-design/.claude/commands/init.md
-- .interface-design/.claude/skills/interface-design/SKILL.md
-を読むこと。
 
 * Read this file at the start of every chat.
 * Only solve the requested problem. Do not do extra work.
@@ -42,7 +37,6 @@
 * This is the current and most recent branch.
 * Please do not git push without asking me. You cannot undo changes using force push.
 * Files like `public` and `interface-design-main` are not listed in `.gitignore` in some branches. Therefore, do not use `git add .` to add them.
-* There is no need to follow agent.md from another branch. always prefer this branch
 ```
   origin/HEAD -> origin/bilyouma_new_arugo
   origin/anonn_new_arugo
@@ -59,12 +53,7 @@
   origin/zilyadama_new_arugo
   origin/zuo_v2_new_arugo
 ```
-
-
-
-When modifying the UI, read interface-design-main/.claude/skills/interface-design/SKILL.md.
-A UI description is not a specification report. When adding a description, you should write about what the user should expect and what they should input, rather than just saying "it's based on xx" or "it uses performance.now()".
-In a UI description, you need to explain what it is, what happens as a result, and what the user needs to do
+Even if there are uncommitted changes, do not roll them back unless they are causing an error. Ignore them.
 
 # build command
 cmake -S . -B cmake-build-release2 -G Ninja -DCMAKE_BUILD_TYPE=Release
