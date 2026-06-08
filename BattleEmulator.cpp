@@ -408,7 +408,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                                 flag = true;
                                 continue;
                             }
-                            const bool hasBUF = (players[0].hasMagicMirror || players[0].BuffLevel > 0 || players[0].AtkBuffLevel > 0 || players[0].InsulateLevel > 0);
+                            const bool hasBUF = (players[0].hasMagicMirror || players[0].BuffLevel > 0 || players[0].AtkBuffLevel > 0 || players[0].InsulateLevel > 0 || players[0].TensionLevel > 0);
                             if (counter == DISRUPTIVE_WAVE && !hasBUF) {
                                 counter = SWITCH_2B;
                                 continue;
