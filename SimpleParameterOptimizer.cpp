@@ -62,10 +62,10 @@ static constexpr std::array<int, ids> TUNE_IDS = {
     SimpleParameterOptimizerNode::AntidoteWeight,
     SimpleParameterOptimizerNode::MagicWaterCost,
     SimpleParameterOptimizerNode::SpecialMedicineCost, // 追加
-    SimpleParameterOptimizerNode::ElfinElixirCost, // 追加
+    //SimpleParameterOptimizerNode::ElfinElixirCost, // 追加
     SimpleParameterOptimizerNode::hasMagicMirrorHeight, // 追加
-    SimpleParameterOptimizerNode::TYPE_2AWeight, // 追加
-    SimpleParameterOptimizerNode::TYPE_2BWeight, // 追加
+    //SimpleParameterOptimizerNode::TYPE_2AWeight, // 追加
+    //SimpleParameterOptimizerNode::TYPE_2BWeight, // 追加
 };
 
 // action cost テーブル（一次真実源）

@@ -327,7 +327,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         DEBUG_COUT2((*position));
         DEBUG_COUT2(counterJ);
         //THIS DEBUG CODE!
-        if ((*position) == 243) { //THIS DEBUG CODE!
+        if ((*position) == 468) { //THIS DEBUG CODE!
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -440,8 +440,12 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         }
                         if (counter == MERA_ZOMA && (players[0].hasMagicMirror)) {
                             if (flag) {
-                                counter = SCEPTER_BALL;
-                                flag2 = true;
+                                if (flag2) {
+                                    counter = SCEPTER_BALL;
+                                    flag2 = true;
+                                }else {
+                                    counter = DISRUPTIVE_WAVE;
+                                }
                             }else {
                                 if (flag3) {
                                     counter = SCEPTER_BALL;
@@ -743,13 +747,6 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             (*position) += 1;
         }
         camera::Main(position, actions, NowState, player0_has_initiative, TiggerSkyAttack);
-
-#ifdef DEBUG2
-        DEBUG_COUT2((*position));
-        if ((*position) == 557) {
-            std::cout << "!!" << std::endl;
-        }
-#endif
 
         if (!Player::isPlayerAlive(players[1])) {
             return false;
