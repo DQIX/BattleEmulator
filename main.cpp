@@ -685,7 +685,7 @@ namespace {
         }
 #if defined(BattleEmulatorLV15)
         auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 20000, gene, 0);
+                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 40000, gene, 0);
 #endif
 
         auto turnProcessed = BattleEmulator::getTurnProcessed();

@@ -485,7 +485,9 @@
     }
 
     function normalizeTurnActions(...sources) {
-        const layout = {...DEFAULT_TURN_ACTIONS};
+        let enemyOdd = DEFAULT_TURN_ACTIONS.enemyOdd;
+        let enemyEven = DEFAULT_TURN_ACTIONS.enemyEven;
+        let ally = DEFAULT_TURN_ACTIONS.ally;
         for (const source of sources) {
             if (!source || typeof source !== "object" || Array.isArray(source)) {
                 continue;
@@ -493,17 +495,17 @@
             const enemy = source.enemy && typeof source.enemy === "object" && !Array.isArray(source.enemy)
                 ? source.enemy
                 : source;
-            layout.enemyOdd = normalizeTurnActionCount(
+            enemyOdd = normalizeTurnActionCount(
                 source.enemyOdd ?? source.odd ?? source.oddTurns ?? enemy.odd,
-                layout.enemyOdd
+                enemyOdd
             );
-            layout.enemyEven = normalizeTurnActionCount(
+            enemyEven = normalizeTurnActionCount(
                 source.enemyEven ?? source.even ?? source.evenTurns ?? enemy.even,
-                layout.enemyEven
+                enemyEven
             );
-            layout.ally = normalizeTurnActionCount(source.ally, layout.ally, {min: 1});
+            ally = normalizeTurnActionCount(source.ally, ally, {min: 1});
         }
-        return layout;
+        return {enemyOdd, enemyEven, ally};
     }
 
     function getTurnActionLimit(layout, turn) {
@@ -2888,11 +2890,32 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         };
     }
 
-    function setVisionTurnActionCounts(oddOrDefinition, even, ally = 1) {
+    function resolveTurnActionApiOptions(oddOrDefinition, even, options) {
+        if (options && typeof options === "object" && !Array.isArray(options)) {
+            return options;
+        }
+        if (
+            oddOrDefinition &&
+            typeof oddOrDefinition === "object" &&
+            !Array.isArray(oddOrDefinition) &&
+            even &&
+            typeof even === "object" &&
+            !Array.isArray(even)
+        ) {
+            return even;
+        }
+        return {};
+    }
+
+    function setVisionTurnActionCounts(oddOrDefinition, even, ally = 1, options = {}) {
         const nextLayout = normalizeTurnActions(
             state.displayTurnActions || state.activeTurnActions,
             createTurnActionLayoutFromApiInput(oddOrDefinition, even, ally)
         );
+        const apiOptions = resolveTurnActionApiOptions(oddOrDefinition, even, options);
+        if (apiOptions.persistReset || apiOptions.resetBaseline || apiOptions.keepOnReset) {
+            state.activeTurnActions = nextLayout;
+        }
         state.displayTurnActions = nextLayout;
         state.historyActionColumnCount = Math.max(
             state.historyActionColumnCount || 1,
@@ -3231,6 +3254,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 score: main.score,
                 maybeCritical: true
             };
+        }else if(erugioMain && sub.file === "taosi.png"){
+            //window.setVisionTurnActionCounts({ enemy: { odd: 3, even: 3 }, ally: 1 });
+            window.setVisionTurnActionCounts(2, 2, 1, { persistReset: true });
+            // window.getVisionTurnActionCounts();
         }
 
 
@@ -4495,6 +4522,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         state.activeMode = null;
         state.lastModeHitAt = Date.now();
         window.setVisionTurnActionCounts = setVisionTurnActionCounts;
+        window.setVisionTurnActionCountsForMode = (oddOrDefinition, even, ally = 1) =>
+            setVisionTurnActionCounts(oddOrDefinition, even, ally, {persistReset: true});
         window.getVisionTurnActionCounts = () => ({...(state.displayTurnActions || DEFAULT_TURN_ACTIONS)});
         populateModeOptions();
         updateTurnChip();
