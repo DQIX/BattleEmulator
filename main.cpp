@@ -797,7 +797,7 @@ namespace {
         int64_t totalSeconds = static_cast<int64_t>(hours) * 3600 +
                                static_cast<int64_t>(minutes) * 60 +
                                static_cast<int64_t>(seconds);
-        totalSeconds -= 15;
+        //totalSeconds -= 15;
         int64_t numerator1 = (2 * totalSeconds - 9) * 100000;
         auto time1 = static_cast<uint64_t>(numerator1 / (2 * 12515));
         time1 = time1 << 16;
@@ -1095,7 +1095,7 @@ namespace {
         }
 
         auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 30000, gene, 0);
+                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 40000, gene, 0);
 
         if (genome.turn >= 100) {
             return "SearchRequest failed: turn limit reached.";
