@@ -3400,6 +3400,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
     }
 
+    function pickLargestDamageValue(...values) {
+        return values.reduce((best, value) => {
+            return typeof value === "number" && value > best ? value : best;
+        }, -1);
+    }
+
     function handlePendingDamages(matches, damageReadings, nextActionDetected) {
         const {templateThreshold} = getActiveThresholds();
         const now = Date.now();
@@ -3410,6 +3416,11 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         const confirmingDamage2 = state.pendingDamage2 !== -1 && !state.pendingDamage2Enabled && now < state.pendingDamage2ConfirmUntil;
         const candidateDamage1 = (needsDamage1 || confirmingDamage1) ? (damageReadings.damage1?.value ?? -1) : -1;
         const candidateDamage2 = (needsDamage2 || confirmingDamage2) ? (damageReadings.damage2?.value ?? -1) : -1;
+        const needsLargestDamage = needsDamage1 && needsDamage2 && state.pendingDamage1 === state.pendingDamage2;
+        const confirmingLargestDamage = confirmingDamage1 && confirmingDamage2 && state.pendingDamage1 === state.pendingDamage2;
+        const candidateLargestDamage = (needsLargestDamage || confirmingLargestDamage)
+            ? pickLargestDamageValue(candidateDamage1, candidateDamage2)
+            : -1;
 
         // maybeCritical: critical.png検出時に攻撃(敵)→痛恨(6)に上書き
         if (state.maybeCritical !== -1) {
@@ -3427,7 +3438,42 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             }
         }
 
-        if (needsDamage1) {
+        if (needsLargestDamage) {
+            if (["guard.png", "miss.png", "miss2.png", "mikawasi.png"].includes(main.file) && main.score >= templateThreshold) {
+                state.pendingDamage1Enabled = false;
+                state.pendingDamage2Enabled = false;
+                state.maybeCritical = -1;
+                state.lastDamage1 = -1;
+                state.lastDamage2 = -1;
+                resolvePendingDamage(state.pendingDamage1, 0);
+                state.preAction = -1;
+                return true;
+            }
+            if (candidateLargestDamage !== -1) {
+                state.lastDamage1 = candidateLargestDamage;
+                state.lastDamage2 = candidateLargestDamage;
+                state.pendingDamage1Enabled = false;
+                state.pendingDamage2Enabled = false;
+                state.pendingDamage1ConfirmUntil = now + DAMAGE_CONFIRMATION_MS;
+                state.pendingDamage2ConfirmUntil = state.pendingDamage1ConfirmUntil;
+                resolvePendingDamage(state.pendingDamage1, candidateLargestDamage);
+                state.preAction = -1;
+                return true;
+            }
+        } else if (confirmingLargestDamage) {
+            const lastLargestDamage = pickLargestDamageValue(state.lastDamage1, state.lastDamage2);
+            if (candidateLargestDamage !== -1 && lastLargestDamage < candidateLargestDamage) {
+                state.lastDamage1 = candidateLargestDamage;
+                state.lastDamage2 = candidateLargestDamage;
+                resolvePendingDamage(state.pendingDamage1, candidateLargestDamage);
+            }
+            if (nextActionDetected || now >= state.pendingDamage1ConfirmUntil) {
+                clearPendingDamageConfirmation("damage1");
+                clearPendingDamageConfirmation("damage2");
+                return false;
+            }
+            return true;
+        } else if (needsDamage1) {
             if (["guard.png", "miss.png", "miss2.png", "mikawasi.png"].includes(main.file) && main.score >= templateThreshold) {
                 state.pendingDamage1Enabled = false;
                 state.maybeCritical = -1;
@@ -3535,9 +3581,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
         const pendingSlotRef = (state.actionIndex << 12) | (state.turnIndex - 1);
         const damageChannel = getDamageChannel(candidate.actionId);
-        state.pendingDamage1 = damageChannel === 1 ? pendingSlotRef : -1;
+        state.pendingDamage1 = damageChannel === 1 || damageChannel === 2 ? pendingSlotRef : -1;
         state.pendingDamage2 = damageChannel === 2 ? pendingSlotRef : -1;
-        state.pendingDamage1Enabled = damageChannel === 1;
+        state.pendingDamage1Enabled = damageChannel === 1 || damageChannel === 2;
         state.pendingDamage2Enabled = damageChannel === 2;
         state.lastDamage1 = -1;
         state.lastDamage2 = -1;

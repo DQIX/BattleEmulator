@@ -43,6 +43,8 @@
 * Please do not git push without asking me. You cannot undo changes using force push.
 * Files like `public` and `interface-design-main` are not listed in `.gitignore` in some branches. Therefore, do not use `git add .` to add them.
 * There is no need to follow agent.md from another branch. always prefer this branch
+* Please do not arbitrarily roll back changes that have not been committed.
+* Do not edit or delete files outside your workspace. However, you are allowed to edit and commit them if you are switching branches.
 ```
   origin/HEAD -> origin/bilyouma_new_arugo
   origin/anonn_new_arugo
