@@ -113,7 +113,7 @@
         numberWhiteThresholdBright: 0.70,
         whiteSaturationBrightValue: 0.9,
         numberWhiteThresholdDark: 0.59,
-        actionThreshold: 0.45,
+        actionThreshold: 0.58,
         numberThreshold: 0.65,//これ結果スコアの一致率 score >= thresholds.numberThreshold
         matchPenaltyWeight: 0.0,
         matchWhiteWeight: 1.0,
@@ -372,7 +372,8 @@
         162: {names: {ja: "いなずま", en: "Lightning"}, ally: false, damage: true},
         161: {names: {ja: "バギクロス", en: "Kaswoosh"}, ally: false, damage: true},
         171: {names: {ja: "真空波", en: "Thin Air"}, ally: false, damage: true},
-        170: {names: {ja: "つえの先のたま", en: "Scepter Ball"}, ally: false, damage: true}
+        170: {names: {ja: "つえの先のたま", en: "Scepter Ball"}, ally: false, damage: true},
+        172: {names: {ja: "はげしい炎", en: "Inferno"}, ally: false, damage: true},
     };
     const ACTION_IDS = Object.freeze({
         ATTACK_ENEMY: 1,
@@ -440,6 +441,7 @@
         LIGHTNING: 162,
         THIN_AIR: 171,
         SCEPTER_BALL: 170,
+        INFERNO: 172,
     });
     const ACTIONS_BY_ID = ACTIONS;
 
@@ -3010,7 +3012,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         // reset
         if (erugioMain && modeRuleHasFile(mode, "resetSub", sub.file) && main.score >= 0.4 && sub.score >= 0.4) {
             return {kind: "reset", score: Math.min(main.score, sub.score), detail: `${main.file} + ${sub.file}`};
-        }else if(erugioMain){
+        }else if(erugioMain && sub.file !== "taosi.png"){
             return {kind: "action", actionId: ACTION_IDS.ATTACK_ENEMY, detail: main.file, score: main.score};
         }
 
@@ -3326,6 +3328,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             ACTION_IDS.CLAW_SLASH,
             ACTION_IDS.LIGHTNING,
             ACTION_IDS.KASWOOSH,
+            ACTION_IDS.INFERNO,
             ACTION_IDS.THIN_AIR,
         ].includes(actionId)) {
             return 1;

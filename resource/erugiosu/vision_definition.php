@@ -26,7 +26,7 @@ return [
         'numberWhiteThresholdBright' => 0.75,
         'whiteSaturationBrightValue' => 0.9,
         'numberWhiteThresholdDark' => 0.57,
-        'actionThreshold' => 0.45,
+        'actionThreshold' => 0.58,
         'numberThreshold' => 0.65,
         'matchPenaltyWeight' => 0.0,
         'matchWhiteWeight' => 1.0,
