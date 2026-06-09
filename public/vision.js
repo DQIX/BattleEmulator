@@ -16,9 +16,14 @@
         bridgeStatus: document.getElementById("visionBridgeStatus"),
         encodedPayload: document.getElementById("visionEncodedPayload"),
         turnChip: document.getElementById("visionTurnChip"),
+        historyColgroup: document.getElementById("visionHistoryColgroup"),
+        historyHeaderRow: document.getElementById("visionHistoryHeaderRow"),
         historyBody: document.getElementById("visionHistoryBody"),
         historyEmpty: document.getElementById("visionHistoryEmpty"),
         historyScroll: document.getElementById("visionHistoryScroll"),
+        historyActionColTemplate: document.getElementById("visionHistoryActionColTemplate"),
+        historyActionHeaderTemplate: document.getElementById("visionHistoryActionHeaderTemplate"),
+        historyActionCellTemplate: document.getElementById("visionHistoryActionCellTemplate"),
         resetDialog: document.getElementById("visionResetDialog"),
         resetCancel: document.getElementById("visionResetCancel"),
         resetConfirm: document.getElementById("visionResetConfirm"),
@@ -261,6 +266,12 @@
     const NUMBER_WHITE_DEBUG_INTERVAL_MS = 500;
     const VISION_IMAGE_DEBUG_INTERVAL_MS = 500;
     const MATCH_SLOT_KEYS = ["main", "sub", "ally", "target"];
+    const DEFAULT_TURN_ACTIONS = Object.freeze({
+        enemyOdd: 2,
+        enemyEven: 2,
+        ally: 1
+    });
+    const MAX_HISTORY_ACTION_COLUMNS = 12;
     const overlayContext = ui.overlay.getContext("2d");
     overlayContext.imageSmoothingEnabled = false; // ★ 追加
     const processingCanvas = document.createElement("canvas");
@@ -464,9 +475,58 @@
         return thresholds;
     }
 
+    function normalizeTurnActionCount(value, fallback, options = {}) {
+        const min = options.min ?? 0;
+        const parsed = Number.parseInt(value, 10);
+        if (!Number.isFinite(parsed)) {
+            return fallback;
+        }
+        return Math.min(MAX_HISTORY_ACTION_COLUMNS, Math.max(min, parsed));
+    }
+
+    function normalizeTurnActions(...sources) {
+        const layout = {...DEFAULT_TURN_ACTIONS};
+        for (const source of sources) {
+            if (!source || typeof source !== "object" || Array.isArray(source)) {
+                continue;
+            }
+            const enemy = source.enemy && typeof source.enemy === "object" && !Array.isArray(source.enemy)
+                ? source.enemy
+                : source;
+            layout.enemyOdd = normalizeTurnActionCount(
+                source.enemyOdd ?? source.odd ?? source.oddTurns ?? enemy.odd,
+                layout.enemyOdd
+            );
+            layout.enemyEven = normalizeTurnActionCount(
+                source.enemyEven ?? source.even ?? source.evenTurns ?? enemy.even,
+                layout.enemyEven
+            );
+            layout.ally = normalizeTurnActionCount(source.ally, layout.ally, {min: 1});
+        }
+        return layout;
+    }
+
+    function getTurnActionLimit(layout, turn) {
+        const resolved = normalizeTurnActions(layout);
+        const enemyActions = turn % 2 === 1 ? resolved.enemyOdd : resolved.enemyEven;
+        return Math.max(1, enemyActions + resolved.ally);
+    }
+
+    function getTurnActionColumnCount(layout) {
+        const resolved = normalizeTurnActions(layout);
+        return Math.max(1, Math.min(MAX_HISTORY_ACTION_COLUMNS, Math.max(resolved.enemyOdd, resolved.enemyEven) + resolved.ally));
+    }
+
     const LEGACY_VISION_MODE_DEFINITIONS = Object.freeze({
         ganasadai: Object.freeze({
             id: "ganasadai",
+            turnActions: Object.freeze({
+                enemy: Object.freeze({
+                    odd: 1,
+                    even: 2
+                }),
+                ally: 1
+            }),
             matchRois: Object.freeze({
                 sourceWidth: 958,
                 sourceHeight: 718,
@@ -480,6 +540,16 @@
                 slots: Object.freeze({
                     sub: Object.freeze({sz: 130, zy: 45})
                 })
+            })
+        }),
+        hexagoon: Object.freeze({
+            id: "hexagoon",
+            turnActions: Object.freeze({
+                enemy: Object.freeze({
+                    odd: 1,
+                    even: 1
+                }),
+                ally: 1
             })
         })
     });
@@ -506,6 +576,11 @@
         activeThresholds: DEFAULT_VISION_THRESHOLDS,
         activeMatchRois: DEFAULT_MATCH_ROIS,
         activeRecognizedCrops: DEFAULT_RECOGNIZED_CROP_DEFS,
+        activeTurnActions: DEFAULT_TURN_ACTIONS,
+        displayTurnActions: DEFAULT_TURN_ACTIONS,
+        displayTurnIndex: 1,
+        displayActionIndex: 0,
+        historyActionColumnCount: getTurnActionColumnCount(DEFAULT_TURN_ACTIONS),
         lastMatches: Object.create(null),
         lastDamageReadings: Object.create(null),
         turnIndex: 1,
@@ -560,6 +635,10 @@
 
     function resolveModeThresholds(mode) {
         return normalizeVisionThresholds(mode?.thresholds);
+    }
+
+    function resolveModeTurnActions(mode) {
+        return normalizeTurnActions(mode?.turnActions);
     }
 
     function getActiveThresholds() {
@@ -776,6 +855,7 @@
                     ...(mode.names || {})
                 },
                 thresholds: normalizeVisionThresholds(legacy?.thresholds, mode?.thresholds),
+                turnActions: normalizeTurnActions(legacy?.turnActions, mode?.turnActions),
                 matchRois: normalizeModeMatchRois(
                     legacy?.matchRois,
                     legacy?.recognitionRois,
@@ -806,6 +886,7 @@
             if (!modeIds.has(legacyMode.id)) {
                 normalizedModes.push({
                     ...legacyMode,
+                    turnActions: normalizeTurnActions(legacyMode.turnActions),
                     matchRois: normalizeModeMatchRois(legacyMode.matchRois, legacyMode.recognitionRois),
                     recognizedCrops: normalizeModeRecognizedCrops(
                         legacyMode.recognizedCrops,
@@ -824,6 +905,7 @@
                 timeoutMs: 0,
                 battleEmulator: null,
                 thresholds: VISION_MODE_THRESHOLDS.identify,
+                turnActions: normalizeTurnActions(),
                 matchRois: normalizeModeMatchRois(),
                 recognizedCrops: normalizeModeRecognizedCrops(),
                 rules: {detections: []},
@@ -2092,6 +2174,66 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return dictionary[key] || fallback;
     }
 
+    function getHistoryActionHeaderLabel(index) {
+        return t(`visionAct${index}`, state.lang === "ja" ? `行動${index}` : `Act ${index}`);
+    }
+
+    function getHistoryDamageHeaderLabel(index) {
+        return t(`visionDamage${index}`, state.lang === "ja" ? `ダメージ${index}` : `Damage ${index}`);
+    }
+
+    function renderHistoryStructure(force = false) {
+        const columnCount = Math.max(1, state.historyActionColumnCount || getTurnActionColumnCount(state.displayTurnActions));
+        const currentCount = ui.historyHeaderRow
+            ? ui.historyHeaderRow.querySelectorAll("[data-vision-action-header]").length
+            : 0;
+        if (!force && currentCount === columnCount) {
+            ui.historyHeaderRow?.querySelectorAll("[data-vision-action-header]").forEach((cell, index) => {
+                cell.textContent = getHistoryActionHeaderLabel(index + 1);
+            });
+            ui.historyHeaderRow?.querySelectorAll("[data-vision-damage-header]").forEach((cell, index) => {
+                cell.textContent = getHistoryDamageHeaderLabel(index + 1);
+            });
+            return;
+        }
+
+        if (ui.historyColgroup && ui.historyActionColTemplate) {
+            Array.from(ui.historyColgroup.children).forEach((child, index) => {
+                if (index > 0) {
+                    child.remove();
+                }
+            });
+            for (let index = 0; index < columnCount; index += 1) {
+                ui.historyColgroup.appendChild(ui.historyActionColTemplate.content.cloneNode(true));
+            }
+        }
+
+        if (ui.historyHeaderRow && ui.historyActionHeaderTemplate) {
+            Array.from(ui.historyHeaderRow.children).forEach((child, index) => {
+                if (index > 0) {
+                    child.remove();
+                }
+            });
+            for (let index = 1; index <= columnCount; index += 1) {
+                const fragment = ui.historyActionHeaderTemplate.content.cloneNode(true);
+                const actionHeader = fragment.querySelector("[data-vision-action-header]");
+                const damageHeader = fragment.querySelector("[data-vision-damage-header]");
+                if (actionHeader) {
+                    actionHeader.textContent = getHistoryActionHeaderLabel(index);
+                }
+                if (damageHeader) {
+                    damageHeader.textContent = getHistoryDamageHeaderLabel(index);
+                }
+                ui.historyHeaderRow.appendChild(fragment);
+            }
+        }
+
+        const table = ui.historyBody?.closest("table");
+        if (table) {
+            table.style.minWidth = `${72 + columnCount * 300}px`;
+        }
+    }
+
     function setNumberWhiteDebugPlaceholder() {
         if (!ui.numberWhiteDebugOutput) {
             return;
@@ -2366,7 +2508,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function updateTurnChip() {
-        ui.turnChip.textContent = `T${state.turnIndex} / A${state.actionIndex + 1}`;
+        ui.turnChip.textContent = `T${state.displayTurnIndex} / A${state.displayActionIndex + 1}`;
     }
 
     function scheduleMovementSafety() {
@@ -2670,25 +2812,38 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return downloaded;
     }
 
-    function emptyTurnRow(turn) {
+    function emptyHistorySlot() {
+        return {actionId: null, detail: "", score: null, damage: null};
+    }
+
+    function emptyTurnRow(turn, slotCount = state.historyActionColumnCount) {
         return {
             turn,
-            slots: [
-                {actionId: null, detail: "", score: null, damage: null},
-                {actionId: null, detail: "", score: null, damage: null},
-                {actionId: null, detail: "", score: null, damage: null}
-            ]
+            slots: Array.from({length: Math.max(1, slotCount)}, () => emptyHistorySlot())
         };
     }
 
     function getTurnRows() {
+        let columnCount = Math.max(1, state.historyActionColumnCount || getTurnActionColumnCount(state.displayTurnActions));
+        state.history.forEach((entry) => {
+            columnCount = Math.max(columnCount, entry.displaySlot || entry.slot || 1);
+        });
+        if (columnCount !== state.historyActionColumnCount) {
+            state.historyActionColumnCount = columnCount;
+            renderHistoryStructure(true);
+        }
         const rows = [];
         state.history.forEach((entry) => {
-            const index = Math.max(0, entry.turn - 1);
+            const displayTurn = entry.displayTurn || entry.turn;
+            const displaySlot = entry.displaySlot || entry.slot;
+            const index = Math.max(0, displayTurn - 1);
             if (!rows[index]) {
-                rows[index] = emptyTurnRow(entry.turn);
+                rows[index] = emptyTurnRow(displayTurn, columnCount);
             }
-            rows[index].slots[entry.slot - 1] = {
+            while (rows[index].slots.length < columnCount) {
+                rows[index].slots.push(emptyHistorySlot());
+            }
+            rows[index].slots[displaySlot - 1] = {
                 actionId: entry.actionId,
                 detail: entry.detail,
                 score: entry.score,
@@ -2696,6 +2851,58 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             };
         });
         return rows.filter(Boolean);
+    }
+
+    function moveToNextDisplayTurn() {
+        state.displayTurnIndex += 1;
+        state.displayActionIndex = 0;
+    }
+
+    function normalizeDisplayPointer() {
+        while (state.displayActionIndex >= getTurnActionLimit(state.displayTurnActions, state.displayTurnIndex)) {
+            moveToNextDisplayTurn();
+        }
+    }
+
+    function advanceDisplayPointer() {
+        state.displayActionIndex += 1;
+        normalizeDisplayPointer();
+    }
+
+    function resetDisplayTurnState() {
+        state.displayTurnActions = state.activeTurnActions || DEFAULT_TURN_ACTIONS;
+        state.displayTurnIndex = 1;
+        state.displayActionIndex = 0;
+        state.historyActionColumnCount = getTurnActionColumnCount(state.displayTurnActions);
+        renderHistoryStructure(true);
+    }
+
+    function createTurnActionLayoutFromApiInput(oddOrDefinition, even, ally) {
+        if (oddOrDefinition && typeof oddOrDefinition === "object" && !Array.isArray(oddOrDefinition)) {
+            return oddOrDefinition;
+        }
+        return {
+            enemyOdd: oddOrDefinition,
+            enemyEven: even,
+            ally
+        };
+    }
+
+    function setVisionTurnActionCounts(oddOrDefinition, even, ally = 1) {
+        const nextLayout = normalizeTurnActions(
+            state.displayTurnActions || state.activeTurnActions,
+            createTurnActionLayoutFromApiInput(oddOrDefinition, even, ally)
+        );
+        state.displayTurnActions = nextLayout;
+        state.historyActionColumnCount = Math.max(
+            state.historyActionColumnCount || 1,
+            getTurnActionColumnCount(nextLayout)
+        );
+        normalizeDisplayPointer();
+        renderHistoryStructure(true);
+        renderHistory();
+        updateTurnChip();
+        return {...nextLayout};
     }
 
     function getScaledFpsTarget() {
@@ -3076,6 +3283,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         state.history = [];
         state.turnIndex = 1;
         state.actionIndex = 0;
+        resetDisplayTurnState();
         state.preAction = -1;
         state.lastDetectionAt = 0;
         state.pendingDamage1 = -1;
@@ -3164,6 +3372,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         state.activeThresholds = resolveModeThresholds(nextMode);
         state.activeMatchRois = resolveModeMatchRois(nextMode);
         state.activeRecognizedCrops = resolveModeRecognizedCrops(nextMode);
+        state.activeTurnActions = resolveModeTurnActions(nextMode);
+        if (!reset) {
+            state.historyActionColumnCount = Math.max(
+                state.historyActionColumnCount || 1,
+                getTurnActionColumnCount(state.activeTurnActions)
+            );
+            renderHistoryStructure(true);
+        }
         syncVisionThresholdSliders();
         state.lastModeHitAt = Date.now();
         state.lastMatches = Object.create(null);
@@ -3220,12 +3436,17 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     function historyToMarkdown() {
         const rows = getTurnRows();
         if (!rows.length) return "";
-        const header = "| Turn | Act 1 | Damage 1 | Act 2 | Damage 2 | Act 3 | Damage 3 |";
-        const sep    = "| --- | --- | --- | --- | --- | --- | --- |";
+        const columnCount = Math.max(1, state.historyActionColumnCount || rows[0]?.slots.length || 1);
+        const headerCells = ["Turn"];
+        for (let index = 1; index <= columnCount; index += 1) {
+            headerCells.push(getHistoryActionHeaderLabel(index), getHistoryDamageHeaderLabel(index));
+        }
+        const header = `| ${headerCells.join(" | ")} |`;
+        const sep = `| ${headerCells.map(() => "---").join(" | ")} |`;
         const lines = rows.map((row) => {
             const cells = row.slots.map((slot) => {
-                const act = slot.actionId ? getActionLabel(slot.actionId) : "-";
-                const dmg = typeof slot.damage === "number" && slot.damage >= 0 ? String(slot.damage) : slot.actionId ? "..." : "-";
+                const act = slot.actionId ? getActionLabel(slot.actionId) : "";
+                const dmg = typeof slot.damage === "number" && slot.damage >= 0 ? String(slot.damage) : slot.actionId ? "..." : "";
                 return `${act} | ${dmg}`;
             });
             return `| T${row.turn} | ${cells.join(" | ")} |`;
@@ -3236,7 +3457,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     function historyToCsv() {
         const rows = getTurnRows();
         if (!rows.length) return "";
-        const header = "Turn,Act 1,Damage 1,Act 2,Damage 2,Act 3,Damage 3";
+        const columnCount = Math.max(1, state.historyActionColumnCount || rows[0]?.slots.length || 1);
+        const headerCells = ["Turn"];
+        for (let index = 1; index <= columnCount; index += 1) {
+            headerCells.push(getHistoryActionHeaderLabel(index), getHistoryDamageHeaderLabel(index));
+        }
+        const header = headerCells.join(",");
         const lines = rows.map((row) => {
             const cells = row.slots.flatMap((slot) => {
                 const act = slot.actionId ? getActionLabel(slot.actionId) : "";
@@ -3249,6 +3475,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function renderHistory() {
+        renderHistoryStructure();
         ui.historyBody.innerHTML = "";
         const rows = getTurnRows();
         if (!rows.length) {
@@ -3269,13 +3496,23 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             const turnCell = document.createElement("td");
             turnCell.textContent = `T${rowData.turn}`;
             row.appendChild(turnCell);
-            rowData.slots.forEach((slot) => {
-                const actionCell = document.createElement("td");
-                actionCell.textContent = slot.actionId ? getActionLabel(slot.actionId) : "-";
+            rowData.slots.forEach((slot, index) => {
+                const fragment = ui.historyActionCellTemplate
+                    ? ui.historyActionCellTemplate.content.cloneNode(true)
+                    : document.createDocumentFragment();
+                let actionCell = fragment.querySelector?.("[data-vision-field='action']");
+                let damageCell = fragment.querySelector?.("[data-vision-field='damage']");
+                if (!actionCell || !damageCell) {
+                    actionCell = document.createElement("td");
+                    damageCell = document.createElement("td");
+                    fragment.append(actionCell, damageCell);
+                }
+                actionCell.textContent = slot.actionId ? getActionLabel(slot.actionId) : "";
                 actionCell.title = slot.detail || "";
-                const damageCell = document.createElement("td");
+                actionCell.dataset.visionActionIndex = String(index + 1);
                 damageCell.textContent =
-                    typeof slot.damage === "number" && slot.damage >= 0 ? String(slot.damage) : slot.actionId ? "..." : "-";
+                    typeof slot.damage === "number" && slot.damage >= 0 ? String(slot.damage) : slot.actionId ? "..." : "";
+                damageCell.dataset.visionActionIndex = String(index + 1);
                 row.append(actionCell, damageCell);
             });
             ui.historyBody.appendChild(row);
@@ -3668,15 +3905,19 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             state.actionTaken = true;
         }
 
+        normalizeDisplayPointer();
         const entry = {
             turn: state.turnIndex,
             slot: state.actionIndex + 1,
+            displayTurn: state.displayTurnIndex,
+            displaySlot: state.displayActionIndex + 1,
             actionId: candidate.actionId,
             detail: candidate.detail,
             score: candidate.score,
             damage: damageChannel ? -1 : 0
         };
         state.history.push(entry);
+        advanceDisplayPointer();
 
         if (state.actionIndex === 2) {
             state.actionIndex = 0;
@@ -3802,6 +4043,16 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         state.activeThresholds = resolveModeThresholds(state.activeMode);
         state.activeMatchRois = resolveModeMatchRois(state.activeMode);
         state.activeRecognizedCrops = resolveModeRecognizedCrops(state.activeMode);
+        state.activeTurnActions = resolveModeTurnActions(state.activeMode);
+        if (!state.history.length) {
+            resetDisplayTurnState();
+        } else {
+            state.historyActionColumnCount = Math.max(
+                state.historyActionColumnCount || 1,
+                getTurnActionColumnCount(state.activeTurnActions)
+            );
+            renderHistoryStructure(true);
+        }
         syncVisionThresholdSliders();
         populateModeOptions();
     }
@@ -4243,6 +4494,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     async function init() {;
         state.activeMode = null;
         state.lastModeHitAt = Date.now();
+        window.setVisionTurnActionCounts = setVisionTurnActionCounts;
+        window.getVisionTurnActionCounts = () => ({...(state.displayTurnActions || DEFAULT_TURN_ACTIONS)});
         populateModeOptions();
         updateTurnChip();
         renderHistory();

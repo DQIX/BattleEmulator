@@ -294,6 +294,7 @@ function normalizeModeDefinitionForPack(array $definition, array $templates): ar
         'rules' => $definition['rules'] ?? new stdClass(),
         'identify' => $definition['identify'] ?? ['templates' => []],
         'thresholds' => $definition['thresholds'] ?? null,  // ← 追加
+        'turnActions' => $definition['turnActions'] ?? null,
         'matchRois' => $definition['matchRois'] ?? null,
         'recognizedCrops' => $definition['recognizedCrops'] ?? null,
         'templates' => $templates,

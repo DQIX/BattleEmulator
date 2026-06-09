@@ -23,6 +23,13 @@ return [
 	'battleEmulator' => [
 		 'id' => 'burudoga_v6',
 	],
+	'turnActions' => [
+		'enemy' => [
+			'odd' => 1,
+			'even' => 1,
+		],
+		'ally' => 1,
+	],
 	'templateGroups' => [
 		[
 			'slot' => 'main',

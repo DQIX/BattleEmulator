@@ -647,28 +647,28 @@
             <div id="visionHistoryEmpty" class="memo-empty" data-i18n="visionEmpty">No accepted actions yet</div>
             <div class="memo-scroll vision-history-scroll" id="visionHistoryScroll" hidden>
                 <table class="memo-grid vision-history-grid">
-                    <colgroup>
-                        <col style="width: 72px"/>
-                        <col style="width: 190px"/>
-                        <col style="width: 110px"/>
-                        <col style="width: 190px"/>
-                        <col style="width: 110px"/>
-                        <col style="width: 190px"/>
-                        <col style="width: 110px"/>
+                    <colgroup id="visionHistoryColgroup">
+                        <col style="width: 72px" data-vision-turn-column/>
                     </colgroup>
                     <thead>
-                    <tr>
+                    <tr id="visionHistoryHeaderRow">
                         <th data-i18n="visionTurn">Turn</th>
-                        <th data-i18n="visionAct1">Act 1</th>
-                        <th data-i18n="visionDamage1">Damage 1</th>
-                        <th data-i18n="visionAct2">Act 2</th>
-                        <th data-i18n="visionDamage2">Damage 2</th>
-                        <th data-i18n="visionAct3">Act 3</th>
-                        <th data-i18n="visionDamage3">Damage 3</th>
                     </tr>
                     </thead>
                     <tbody id="visionHistoryBody"></tbody>
                 </table>
+                <template id="visionHistoryActionColTemplate">
+                    <col style="width: 190px"/>
+                    <col style="width: 110px"/>
+                </template>
+                <template id="visionHistoryActionHeaderTemplate">
+                    <th data-vision-action-header></th>
+                    <th data-vision-damage-header></th>
+                </template>
+                <template id="visionHistoryActionCellTemplate">
+                    <td data-vision-field="action"></td>
+                    <td data-vision-field="damage"></td>
+                </template>
             </div>
         </section>
 

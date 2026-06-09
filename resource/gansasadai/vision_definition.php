@@ -10,6 +10,13 @@ return [
     ],
     'picker' => 'ganasadai',
     'battleEmulator' => [],
+    'turnActions' => [
+        'enemy' => [
+            'odd' => 1,
+            'even' => 2,
+        ],
+        'ally' => 1,
+    ],
     // 通常認識枠をモード別に上書きする例。sourceWidth/sourceHeightは座標を測った画像サイズです。
     // matchRoisは白ピクセルを探す範囲、recognizedCropsは見つかった位置から切り出す大きさです。
     // 未指定のスロットや項目はレガシー枠から補完されます。width/heightの代わりにsz/zyも使えます。
