@@ -147,6 +147,8 @@ return [
             'ball.png' => 170,
             'hadou.png' => 16,
             'hagsi.png' => 172,
+            'sukuru.png' => 173,
+            'mazikku.png' => 174,
         ],
     ],
 ];

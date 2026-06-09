@@ -374,6 +374,8 @@
         171: {names: {ja: "真空波", en: "Thin Air"}, ally: false, damage: true},
         170: {names: {ja: "つえの先のたま", en: "Scepter Ball"}, ally: false, damage: true},
         172: {names: {ja: "はげしい炎", en: "Inferno"}, ally: false, damage: true},
+        173: {names: {ja: "スクルト", en: "Kabuff"}, ally: false, damage: false},
+        174: {names: {ja: "マジックバリア", en: "Magic Barrier"}, ally: false, damage: false},
     };
     const ACTION_IDS = Object.freeze({
         ATTACK_ENEMY: 1,
@@ -442,6 +444,8 @@
         THIN_AIR: 171,
         SCEPTER_BALL: 170,
         INFERNO: 172,
+        KABUFF: 173,
+        MAGIC_BARRIER: 174,
     });
     const ACTIONS_BY_ID = ACTIONS;
 
@@ -3013,7 +3017,13 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         if (erugioMain && modeRuleHasFile(mode, "resetSub", sub.file) && main.score >= 0.4 && sub.score >= 0.4) {
             return {kind: "reset", score: Math.min(main.score, sub.score), detail: `${main.file} + ${sub.file}`};
         }else if(erugioMain && sub.file !== "taosi.png"){
-            return {kind: "action", actionId: ACTION_IDS.ATTACK_ENEMY, detail: main.file, score: main.score};
+            return {
+                kind: "action",
+                actionId: ACTION_IDS.ATTACK_ENEMY,
+                detail: main.file,
+                score: main.score,
+                maybeCritical: true
+            };
         }
 
 
@@ -3594,7 +3604,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         state.pendingDamage2ConfirmUntil = 0;
 
         // maybeCritical: 攻撃(敵)のとき記録
-        if (candidate.actionId === ACTION_IDS.ATTACK_ENEMY) {
+        if (candidate.actionId === ACTION_IDS.ATTACK_ENEMY || candidate.maybeCritical === true) {
             state.maybeCritical = pendingSlotRef;
         } else if (!candidate.detail?.includes("attack.png")) {
             state.maybeCritical = -1;
