@@ -70,9 +70,12 @@ double EnhancedCostCalculator::calculateStatusEffectCost(const Genome &genome) {
 
     // Negative status effects (penalties)
     //if (genome.AllyPlayer.paralysis) statusCost += getActionCost(SimpleParameterOptimizerNode::paralysisWeight);
-    //if (genome.AllyPlayer.sleeping) statusCost += getActionCost(SimpleParameterOptimizerNode::sleepWeight);
-    //if (genome.AllyPlayer.PoisonEnable) statusCost += getActionCost(SimpleParameterOptimizerNode::poisonWeight);
-    if (genome.AllyPlayer.paralysis) statusCost += getActionCost(SimpleParameterOptimizerNode::paralysisWeight);
+    if (genome.AllyPlayer.sleeping) statusCost += getActionCost(SimpleParameterOptimizerNode::sleepWeight);
+    if (genome.AllyPlayer.PoisonEnable) statusCost += getActionCost(SimpleParameterOptimizerNode::poisonWeight);
+
+    statusCost += getActionCost(SimpleParameterOptimizerNode::speedLevelWeight) * genome.AllyPlayer.speedLevel;
+    statusCost += getActionCost(SimpleParameterOptimizerNode::BuffWeight) * genome.AllyPlayer.BuffLevel;
+
     // Special abilities
     if (genome.AllyPlayer.acrobaticStar) statusCost -= getActionCost(SimpleParameterOptimizerNode::ActHeight);
     if (genome.AllyPlayer.specialCharge) statusCost -= getActionCost(SimpleParameterOptimizerNode::SpHeight);
@@ -89,7 +92,8 @@ double EnhancedCostCalculator::calculateResourceCost(const Genome &genome) {
         resourceCost += (1.0 - mpRatio) * getActionCost(SimpleParameterOptimizerNode::ResourceHPCost); // Penalty for low MP
     }
 
-    resourceCost += (8 - genome.AllyPlayer.medicinal_herbs_count) * getActionCost(SimpleParameterOptimizerNode::SpecialMedicineCost);
+    resourceCost += (6 - genome.AllyPlayer.SpecialMedicineCount) * getActionCost(SimpleParameterOptimizerNode::SpecialMedicineCost);
+    resourceCost += (2 - genome.AllyPlayer.SpecialAntidoteCount) * getActionCost(SimpleParameterOptimizerNode::SpecialAntiCost);
 
     return resourceCost;
 }
@@ -193,49 +197,53 @@ static constexpr std::array<double, 201> GENOME_B = {
         };
 
 static constexpr std::array<double, 201> GENOME_C = {
+    0.0,
+        /* 1 */ -0.199243,
+        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+        /* 23 */ 7.13278,
         0.0,
-            /* 1 */ -0.253984,
-            0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-            /* 23 */ 4.26005,
-            0.0,
-            /* 25 */ -2.78256,
-            /* 26 */ 4.70359,
-            /* 27 */ 4.89656,
-            0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-            /* 53 */ 2.45029,
-            0.0,0.0,
-            /* 56 */ -4.0056,
-            0.0,0.0,
-            /* 59 */ -0.873535,
-            0.0,
-            /* 61 */ -0.0407614,
-            0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-            /* 69 */ 1.07232,
-            /* 70 */ -1.7872,
-            0.0,0.0,
-            /* 73 */ 1.18612,
-            /* 74 */ 3.09315,
-            /* 75 */ -0.397769,
-            /* 76 */ 1.616,
-            /* 77 */ 1.01712,
-            0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-            /* 150 */ 1.13876,
-            /* 151 */ 0.787916,
-            /* 152 */ 2.46691,
-            /* 153 */ -2.64515,
-            /* 154 */ 1.51308,
-            /* 155 */ 1.19558,
-            /* 156 */ 2.28977,
-            /* 157 */ 2.41499,
-            /* 158 */ 1.76048,
-            /* 159 */ 0.312878,
-            /* 160 */ 1.37537,
-            /* 161 */ 0.662856,
-            /* 162 */ 1.60807,
-            0.0,0.0,0.0,0.0,0.0,0.0,
-            /* 169 */ -5.5731,
-            0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
-        };
+        /* 25 */ -1.47138,
+        /* 26 */ 3.4773,
+        /* 27 */ 7.40181,
+        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+        /* 53 */ 3.45499,
+        0.0,0.0,
+        /* 56 */ -1.63137,
+        0.0,0.0,
+        /* 59 */ 1.62175,
+        0.0,
+        /* 61 */ -1.27423,
+        0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+        /* 69 */ 1.34451,
+        /* 70 */ -5.99235,
+        0.0,0.0,
+        /* 73 */ 11.1061,
+        /* 74 */ 4.00036,
+        /* 75 */ 2.4836,
+        /* 76 */ 1.4873,
+        /* 77 */ 1.11393,
+        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+        /* 150 */ 1.39759,
+        /* 151 */ 9.07343,
+        /* 152 */ 2.19577,
+        /* 153 */ -1.8636,
+        /* 154 */ 1.77267,
+        /* 155 */ -1.28969,
+        /* 156 */ 1.45554,
+        /* 157 */ -0.314135,
+        /* 158 */ -0.421166,
+        /* 159 */ 3.79117,
+        /* 160 */ 1.63471,
+        /* 161 */ -2.1406,
+        /* 162 */ 0.272961,
+        /* 163 */ 1.91749,
+        0.0,0.0,0.0,0.0,0.0,
+        /* 169 */ 2.98098,
+        0.0,0.0,
+        /* 172 */ -4.60907,
+        /* 173 */ 0.914692,
+        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    };
 constexpr std::array<double, 201> GENOME_D = {
         0.0,
             /* 1 */ 0.878605,
@@ -436,7 +444,12 @@ double EnhancedCostCalculator::calculateStatusEffectCost(const Genome &genome) {
     double statusCost = 0.0;
 
     // Negative status effects (penalties)
-    if (genome.AllyPlayer.paralysis) statusCost += getActionCost(SimpleParameterOptimizerNode::paralysisWeight);
+    //if (genome.AllyPlayer.paralysis) statusCost += s_genome[SimpleParameterOptimizerNode::paralysisWeight];
+    if (genome.AllyPlayer.sleeping) statusCost += s_genome[SimpleParameterOptimizerNode::sleepWeight];
+    if (genome.AllyPlayer.PoisonEnable) statusCost += s_genome[SimpleParameterOptimizerNode::poisonWeight];
+
+    statusCost += s_genome[SimpleParameterOptimizerNode::speedLevelWeight] * genome.AllyPlayer.speedLevel;
+    statusCost += s_genome[SimpleParameterOptimizerNode::BuffWeight] * genome.AllyPlayer.BuffLevel;
 
     // Special abilities
     if (genome.AllyPlayer.acrobaticStar) statusCost -= s_genome[SimpleParameterOptimizerNode::ActHeight];
@@ -454,7 +467,8 @@ double EnhancedCostCalculator::calculateResourceCost(const Genome &genome) {
         resourceCost += (1.0 - mpRatio) * s_genome[SimpleParameterOptimizerNode::ResourceHPCost]; // Penalty for low MP
     }
 
-    resourceCost += (8 - genome.AllyPlayer.medicinal_herbs_count) * s_genome[SimpleParameterOptimizerNode::SpecialMedicineCost];
+    resourceCost += (6 - genome.AllyPlayer.SpecialMedicineCount) * s_genome[SimpleParameterOptimizerNode::SpecialMedicineCost];
+    resourceCost += (2 - genome.AllyPlayer.SpecialAntidoteCount) * s_genome[SimpleParameterOptimizerNode::SpecialAntiCost];
 
     return resourceCost;
 }

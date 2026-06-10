@@ -69,7 +69,9 @@ static const std::vector<int>& getTuneIds() {
             SimpleParameterOptimizerNode::ResourceHPCost,
             SimpleParameterOptimizerNode::SpecialMedicineCost,
             SimpleParameterOptimizerNode::NoResourceCost,
-            SimpleParameterOptimizerNode::paralysisWeight,
+            SimpleParameterOptimizerNode::SpecialAntiCost,
+            SimpleParameterOptimizerNode::speedLevelWeight,
+            SimpleParameterOptimizerNode::BuffWeight,
         };
         for (int id : parameterIds) {
             appendUniqueTuneId(values, id);
