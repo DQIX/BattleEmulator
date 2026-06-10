@@ -9,6 +9,7 @@
 #if defined(MULTITHREADING)
 #include <atomic>
 #endif
+#include <array>
 #include <cstdint>
 #include <optional>
 #include "Player.h"
@@ -123,6 +124,15 @@ public:
     static constexpr int WOOSH_ALLY = 85;
     static constexpr int RUBBLE = 150;
     static constexpr int HOLY_WATER = 151;
+
+    inline static constexpr std::array<int, 6> EnemyActionCandidates = {
+        ATTACK_ENEMY,
+        POISON_ATTACK,
+        ATTACK_ENEMY,
+        DECELERATLE,
+        KASAP,
+        SWEET_BREATH
+    };
 
     static void ResetTurnProcessed();
 

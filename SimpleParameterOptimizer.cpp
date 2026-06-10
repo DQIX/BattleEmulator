@@ -24,38 +24,63 @@
 #include <string>
 #include <cstdint>
 
-// --- 設定 ---
-// この配列に最適化対象の aABILITY_EXTRA_ACTIONS_MAX = 3;
-//// 各挿入を行う確率（1.0=必ずction id を並べるだけで追加完了
-static constexpr std::array<int, ids> TUNE_IDS = {
-    BattleEmulator::SPECIAL_MEDICINE,
-    BattleEmulator::SPECIAL_ANTIDOTE,
-    BattleEmulator::FLEE_ALLY,
-    BattleEmulator::DRAGON_SLASH,
-    BattleEmulator::HEAL,
-    BattleEmulator::CRACK_ALLY,
-    BattleEmulator::WOOSH_ALLY,
-    BattleEmulator::ATTACK_ALLY,
-    BattleEmulator::DEFENCE,
-    BattleEmulator::ACROBATIC_STAR,
-    BattleEmulator::ACROBATSTAR_KAIHI,
-    BattleEmulator::COUNTER,
-    SimpleParameterOptimizerNode::turnHeignt,
-    SimpleParameterOptimizerNode::enemyHpWeight,
-    SimpleParameterOptimizerNode::playerHpWeight,
-    SimpleParameterOptimizerNode::resourceWeight,
-    SimpleParameterOptimizerNode::StatusEffectWeight,
-    SimpleParameterOptimizerNode::paralysisWeight,
-    SimpleParameterOptimizerNode::sleepWeight,
-    SimpleParameterOptimizerNode::poisonWeight,
-    SimpleParameterOptimizerNode::inactiveWeight,
-    SimpleParameterOptimizerNode::SpHeight,
-    SimpleParameterOptimizerNode::ActHeight,
-    SimpleParameterOptimizerNode::ResourceHPCost,
-    SimpleParameterOptimizerNode::SpecialMedicineCost,
-    SimpleParameterOptimizerNode::NoResourceCost,
-    SimpleParameterOptimizerNode::SpecialAntiCost,
-};
+static void appendUniqueTuneId(std::vector<int> &values, int id) {
+    if (std::find(values.begin(), values.end(), id) == values.end()) {
+        values.push_back(id);
+    }
+}
+
+static const std::vector<int>& getTuneIds() {
+    static const std::vector<int> tuneIds = [] {
+        std::vector<int> values;
+        values.reserve(64);
+
+        const int allyAndEventIds[] = {
+            BattleEmulator::SPECIAL_MEDICINE,
+            BattleEmulator::SPECIAL_ANTIDOTE,
+            BattleEmulator::FLEE_ALLY,
+            BattleEmulator::DRAGON_SLASH,
+            BattleEmulator::HEAL,
+            BattleEmulator::CRACK_ALLY,
+            BattleEmulator::WOOSH_ALLY,
+            BattleEmulator::ATTACK_ALLY,
+            BattleEmulator::DEFENCE,
+            BattleEmulator::ACROBATIC_STAR,
+            BattleEmulator::ACROBATSTAR_KAIHI,
+            BattleEmulator::COUNTER,
+        };
+        for (int id : allyAndEventIds) {
+            appendUniqueTuneId(values, id);
+        }
+        for (int id : BattleEmulator::EnemyActionCandidates) {
+            appendUniqueTuneId(values, id);
+        }
+
+        const int parameterIds[] = {
+            SimpleParameterOptimizerNode::turnHeignt,
+            SimpleParameterOptimizerNode::enemyHpWeight,
+            SimpleParameterOptimizerNode::playerHpWeight,
+            SimpleParameterOptimizerNode::resourceWeight,
+            SimpleParameterOptimizerNode::StatusEffectWeight,
+            SimpleParameterOptimizerNode::paralysisWeight,
+            SimpleParameterOptimizerNode::sleepWeight,
+            SimpleParameterOptimizerNode::poisonWeight,
+            SimpleParameterOptimizerNode::inactiveWeight,
+            SimpleParameterOptimizerNode::SpHeight,
+            SimpleParameterOptimizerNode::ActHeight,
+            SimpleParameterOptimizerNode::ResourceHPCost,
+            SimpleParameterOptimizerNode::SpecialMedicineCost,
+            SimpleParameterOptimizerNode::NoResourceCost,
+            SimpleParameterOptimizerNode::SpecialAntiCost,
+        };
+        for (int id : parameterIds) {
+            appendUniqueTuneId(values, id);
+        }
+
+        return values;
+    }();
+    return tuneIds;
+}
 
 // action cost テーブル（一次真実源）
 static thread_local std::array<double, MAX_ACTION_ID> s_actionCosts;
@@ -166,8 +191,9 @@ static uint64_t evaluateGenome(
 ) {
     // genes を s_actionCosts に適用（評価時のみ）
     auto backup = s_actionCosts;
+    const auto &tuneIds = getTuneIds();
     for (size_t i = 0; i < g.genes.size(); ++i) {
-        int aid = TUNE_IDS[i];
+        int aid = tuneIds[i];
         if (aid >= 0 && aid < MAX_ACTION_ID) s_actionCosts[aid] = g.genes[i];
     }
 
@@ -203,8 +229,9 @@ static void dumpGenome(const GAGenome &g, uint64_t bestTurn) {
     constexpr int MAX_ID = 200;
 
     std::vector<double> tmp(MAX_ID + 1, 0.0);
+    const auto &tuneIds = getTuneIds();
     for (size_t i = 0; i < g.genes.size(); ++i) {
-        int id = TUNE_IDS[i];
+        int id = tuneIds[i];
         if (id >= 0 && id <= MAX_ID) tmp[id] = g.genes[i];
     }
 
@@ -261,7 +288,8 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
     std::random_device rd;
     std::mt19937 rng(static_cast<uint32_t>(seed ^ rd()));
 
-    const size_t geneCount = TUNE_IDS.size();
+    const auto &tuneIds = getTuneIds();
+    const size_t geneCount = tuneIds.size();
 
     // // ★ 追加：評価用 seed 生成関数（世代内で固定に使う）
     // auto makeEvalSeeds = [&](uint64_t base) {
@@ -307,7 +335,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
     // GENOME 配列を初期値として使用
     std::vector<double> startVals(geneCount);
     for (size_t i = 0; i < geneCount; ++i) {
-        int aid = TUNE_IDS[i];
+        int aid = tuneIds[i];
         startVals[i] = (aid >= 0 && aid < MAX_ACTION_ID) ? s_actionCosts[aid] : DEFAULT_ACTION_COST;
     }
 
@@ -476,10 +504,10 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
                     uint64_t penaltyToApply = GA_INSTABILITY_WEIGHT * instabilityPenalty;
                     population.front().fitness += penaltyToApply;
 
-                    std::cout << "[GA] stability checks(performed)=" << performedChecks
-                              << " baseline=" << baselineTurn
-                              << " applied penalty=" << penaltyToApply
-                              << " (mean diff=" << (instabilitySum / static_cast<uint64_t>(performedChecks)) << ")\n";
+                    //std::cout << "[GA] stability checks(performed)=" << performedChecks
+                    //          << " baseline=" << baselineTurn
+                    //          << " applied penalty=" << penaltyToApply
+                    //          << " (mean diff=" << (instabilitySum / static_cast<uint64_t>(performedChecks)) << ")\n";
 
                     std::sort(population.begin(), population.end(), [](const GAGenome &a, const GAGenome &b){
                         return a.fitness < b.fitness;
@@ -564,7 +592,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
         const GAGenome &best = population.front();
         // best を s_actionCosts に反映
         for (size_t i = 0; i < best.genes.size(); ++i) {
-            int aid = TUNE_IDS[i];
+            int aid = tuneIds[i];
             if (aid >= 0 && aid < MAX_ACTION_ID) s_actionCosts[aid] = best.genes[i];
         }
         applyActionCostsToCostParams();

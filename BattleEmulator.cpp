@@ -530,6 +530,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     //--------start_FUN_02158dfc-------
                     (*position)++;
                     //--------end_FUN_02158dfc-------
+                    if (transitionEvents != nullptr && transitionEventCount != nullptr && *transitionEventCount < 8) {
+                        transitionEvents[(*transitionEventCount)++] = c;
+                    }
                     basedamage = callAttackFun(c, position, players, 1, 0, NowState,
                                                transitionEvents, transitionEventCount);
                     actions[actionsPosition++] = c;
@@ -1607,18 +1610,9 @@ constexpr std::array<int, 6> ratios = {
     17  // 239 + 17 = 256
 };
 
-constexpr std::array<int, 6> ids = {
-    BattleEmulator::ATTACK_ENEMY,
-    BattleEmulator::POISON_ATTACK,
-    BattleEmulator::ATTACK_ENEMY,
-    BattleEmulator::DECELERATLE,
-    BattleEmulator::KASAP,
-    BattleEmulator::SWEET_BREATH
-};
-
 static_assert(sum(ratios) == TABLE_MAX, "Ratio sum must be 256");
 
-constexpr auto actionTable = makeProbabilityTable(ratios, ids);
+constexpr auto actionTable = makeProbabilityTable(ratios, BattleEmulator::EnemyActionCandidates);
 
 
 int BattleEmulator::ProcessEnemyRandomAction44(int *position) {

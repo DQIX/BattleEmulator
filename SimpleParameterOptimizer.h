@@ -17,7 +17,6 @@
 #include "BattleEmulator.h"
 
 static constexpr int MAX_ACTION_ID = 512;
-static constexpr int ids = 41;
 static constexpr double DEFAULT_ACTION_COST = 1.0;
 static constexpr double DEFAULT_STEP = 0.5; // 変異の基本スケール
 
@@ -62,7 +61,7 @@ struct EvalResult {
 
 // --- 遺伝的アルゴリズム実装 ---
 struct GAGenome {
-    std::vector<double> genes; // size = TUNE_IDS.size()
+    std::vector<double> genes; // size = getTuneIds().size()
     uint64_t fitness; // 小さいほど良い（ターン優先）
     uint64_t measuredTurns; // 実測ターン
     double measuredMs; // 実測時間（ms）
