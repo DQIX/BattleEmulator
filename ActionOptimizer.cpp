@@ -252,11 +252,13 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 				CopedPlayers3[1] = currentGenome.EnemyPlayer;
 				position = currentGenome.position;
 				nowState = currentGenome.state;
+				int transitionEvents[8] = {};
+				int transitionEventCount = 0;
 
 				// Execute one turn
 				BattleEmulator::Main(&position, newGenome.turn - newGenome.processed, newGenome.actions, CopedPlayers3,
 				                     nullptr, seed,
-				                     nullptr, nullptr, -2, &nowState);
+				                     nullptr, nullptr, -2, &nowState, false, transitionEvents, &transitionEventCount);
 
 				if(CopedPlayers3[0].hp > 0){
 					// Update genome with results
@@ -277,7 +279,9 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
 					// Create new node with enhanced cost calculation
 					EnhancedAStarNode newNode{};
-					newNode.gCost = EnhancedCostCalculator::calculateGCost(newGenome, BattleEmulator::ATTACK_ALLY, preGCost, nowState);
+					newNode.gCost = EnhancedCostCalculator::calculateGCost(newGenome, BattleEmulator::ATTACK_ALLY,
+					                                                       preGCost, nowState, transitionEvents,
+					                                                       transitionEventCount);
 					newNode.hCost = EnhancedCostCalculator::calculateHCost(newGenome, enemyMaxHp, playerMaxHp, nowState);
 					newNode.fCost = newNode.gCost + newNode.hCost;
 					newNode.stateHash = newStateHash;
@@ -340,11 +344,13 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 				CopedPlayers3[1] = currentGenome.EnemyPlayer;
 				position = currentGenome.position;
 				nowState = currentGenome.state;
+				int transitionEvents[8] = {};
+				int transitionEventCount = 0;
 
 				// Execute one turn
 				BattleEmulator::Main(&position, newGenome.turn - newGenome.processed, newGenome.actions, CopedPlayers3,
 				                     nullptr, seed,
-				                     nullptr, nullptr, -2, &nowState);
+				                     nullptr, nullptr, -2, &nowState, false, transitionEvents, &transitionEventCount);
 
 				if(CopedPlayers3[0].hp > 0){
 					// Update genome with results
@@ -365,7 +371,8 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
 					// Create new node with enhanced cost calculation
 					EnhancedAStarNode newNode{};
-					newNode.gCost = EnhancedCostCalculator::calculateGCost(newGenome, entry.action, preGCost, nowState);
+					newNode.gCost = EnhancedCostCalculator::calculateGCost(newGenome, entry.action, preGCost, nowState,
+					                                                       transitionEvents, transitionEventCount);
 					newNode.hCost = EnhancedCostCalculator::calculateHCost(newGenome, enemyMaxHp, playerMaxHp, nowState);
 					newNode.fCost = newNode.gCost + newNode.hCost;
 					newNode.stateHash = newStateHash;

@@ -133,7 +133,8 @@ public:
     static bool
     Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
         BattleResult* result, uint64_t seed, const int eActions[350], const int damages[350], int mode,
-         uint64_t *NowState, bool logicalTurnStart = false);
+         uint64_t *NowState, bool logicalTurnStart = false, int transitionEvents[8] = nullptr,
+         int *transitionEventCount = nullptr);
 
     static void resetCombo(uint64_t *NowState);
 
@@ -166,7 +167,8 @@ private:
     static int FUN_021e8458_typeD(int *position, double difference, double base);
 
     static int callAttackFun(int32_t Id, int *position, Player *players, int attacker, int defender,
-                             uint64_t *NowState);
+                             uint64_t *NowState, int transitionEvents[8] = nullptr,
+                             int *transitionEventCount = nullptr);
 
     static double FUN_021dbc04(int baseHp, double maxHp);
 

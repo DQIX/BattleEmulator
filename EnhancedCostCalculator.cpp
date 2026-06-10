@@ -22,13 +22,19 @@ EnhancedCostCalculator::getCostTable() noexcept {
 
 #include "SimpleParameterOptimizer.h"
 
-double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, double preGCost, uint64_t NowState) {
+double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, double preGCost, uint64_t NowState,
+                                              const int transitionEvents[8], int transitionEventCount) {
     (void) NowState;
     // Base cost is turn number (maintains depth-first preference)
     double gCost = preGCost + getActionCost(SimpleParameterOptimizerNode::turnHeignt);
 
     // Add fine-grained action costs to break ties
     gCost += getActionCost(action);
+    if (transitionEvents != nullptr) {
+        for (int i = 0; i < transitionEventCount; ++i) {
+            gCost += getActionCost(transitionEvents[i]);
+        }
+    }
     return gCost;
 }
 
@@ -91,41 +97,45 @@ double EnhancedCostCalculator::calculateResourceCost(const Genome &genome) {
 
 #else
 static constexpr std::array<double, 201> GENOME_A = {
-        /* 0 */ 1.13705,
+        /* 0 */ 1.1475,
         0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 25 */ -0.455175,
-        /* 26 */ 2.7775,
-        /* 27 */ 4.34221,
+        /* 25 */ -0.0370009,
+        /* 26 */ 1.08667,
+        /* 27 */ 2.89689,
         0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 50 */ 1.90127,
+        /* 50 */ -0.756621,
         0.0,0.0,
-        /* 53 */ -0.0981912,
+        /* 53 */ 3.73399,
         0.0,
-        /* 55 */ 1.31334,
-        /* 56 */ -0.879251,
+        /* 55 */ 0.57513,
+        /* 56 */ -1.05402,
         0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 73 */ 0.563695,
+        /* 73 */ 0.373826,
         0.0,
-        /* 75 */ -0.537869,
-        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 85 */ 0.816824,
+        /* 75 */ -3.17316,
+        /* 76 */ 0.220407,
+        /* 77 */ -3.15261,
+        0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+        /* 85 */ 4.64605,
         0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 150 */ 0.56253,
-        /* 151 */ 3.61521,
-        /* 152 */ 1.27676,
-        /* 153 */ 1.90016,
-        /* 154 */ 1.67882,
-        /* 155 */ 0.18871,
-        /* 156 */ -0.0876287,
-        /* 157 */ 0.826711,
-        /* 158 */ 2.10445,
-        /* 159 */ 2.04741,
-        /* 160 */ 1.76839,
-        /* 161 */ 1.29972,
-        /* 162 */ 2.37094,
+        /* 150 */ 1.54709,
+        /* 151 */ -0.570389,
+        /* 152 */ -3.23956,
+        /* 153 */ 1.42151,
+        /* 154 */ 0.724899,
+        /* 155 */ 2.99589,
+        /* 156 */ 5.4153,
+        /* 157 */ 1.82886,
+        /* 158 */ 4.79071,
+        /* 159 */ 2.20497,
+        /* 160 */ 0.0235097,
+        /* 161 */ -0.539499,
+        /* 162 */ 1.27263,
         0.0,0.0,0.0,0.0,0.0,0.0,
-        /* 169 */ 2.45706,
-        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+        /* 169 */ 4.16655,
+        0.0,0.0,
+        /* 172 */ 2.37851,
+        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
     };
 static constexpr std::array<double, 201> GENOME_B = {
     /* 0 */ 0.846385,
@@ -375,12 +385,18 @@ constexpr std::array<double, 201> GENOME_G = {
 // ---- staticメンバの実体 ----
 const double* EnhancedCostCalculator::s_genome = GENOME_A.data();
 
-double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, double preGCost, uint64_t NowState) {
+double EnhancedCostCalculator::calculateGCost(const Genome &genome, int action, double preGCost, uint64_t NowState,
+                                              const int transitionEvents[8], int transitionEventCount) {
     // Base cost is turn number (maintains depth-first preference)
     double gCost = preGCost + s_genome[SimpleParameterOptimizerNode::turnHeignt];
 
     // Add fine-grained action costs to break ties
     gCost += getActionCost(action);
+    if (transitionEvents != nullptr) {
+        for (int i = 0; i < transitionEventCount; ++i) {
+            gCost += getActionCost(transitionEvents[i]);
+        }
+    }
 
     return gCost;
 }

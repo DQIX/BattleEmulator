@@ -38,6 +38,8 @@ static constexpr std::array<int, ids> TUNE_IDS = {
     BattleEmulator::ATTACK_ALLY,
     BattleEmulator::DEFENCE,
     BattleEmulator::ACROBATIC_STAR,
+    BattleEmulator::ACROBATSTAR_KAIHI,
+    BattleEmulator::COUNTER,
     SimpleParameterOptimizerNode::turnHeignt,
     SimpleParameterOptimizerNode::enemyHpWeight,
     SimpleParameterOptimizerNode::playerHpWeight,
@@ -463,7 +465,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
                     auto r = f.get();
                     instabilitySum += r.instabilitySum;
                     performedChecks += r.performed;
-                    std::cout << "[GA] stability check=" << r.performed << " instability=" << r.instabilitySum << " turns=" << r.turns << std::endl;
+                    //std::cout << "[GA] stability check=" << r.performed << " instability=" << r.instabilitySum << " turns=" << r.turns << std::endl;
                 }
 
                 evaluations += performedChecks;

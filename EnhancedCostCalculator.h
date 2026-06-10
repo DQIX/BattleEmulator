@@ -28,7 +28,8 @@ public:
 #endif
 
     // Calculate enhanced g-cost with action-specific costs
-    static double calculateGCost(const Genome &genome, int action, double preGCost, uint64_t NoState);
+    static double calculateGCost(const Genome &genome, int action, double preGCost, uint64_t NoState,
+                                 const int transitionEvents[8] = nullptr, int transitionEventCount = 0);
 
     // Calculate enhanced h-cost with multiple factors
     static double calculateHCost(const Genome &genome, double enemyMaxHp, double playerMaxHp, uint64_t NoStat);

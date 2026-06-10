@@ -346,7 +346,8 @@ inline void BattleEmulator::processTurn() {
 bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
                           BattleResult* result,
                           uint64_t seed, const int eActions[350], const int damages[350], int mode,
-                          uint64_t *NowState, bool logicalTurnStart) {
+                          uint64_t *NowState, bool logicalTurnStart, int transitionEvents[8],
+                          int *transitionEventCount) {
     resetCombo(NowState);
     bool player0_has_initiative = false;
     int genePosition = 0;
@@ -529,7 +530,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     //--------start_FUN_02158dfc-------
                     (*position)++;
                     //--------end_FUN_02158dfc-------
-                    basedamage = callAttackFun(c, position, players, 1, 0, NowState);
+                    basedamage = callAttackFun(c, position, players, 1, 0, NowState,
+                                               transitionEvents, transitionEventCount);
                     actions[actionsPosition++] = c;
 
                     if (players[0].sleeping) {
@@ -647,7 +649,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
 
                     //--------end_FUN_02158dfc-------
-                    basedamage = callAttackFun(action, position, players, 0, 1, NowState);
+                    basedamage = callAttackFun(action, position, players, 0, 1, NowState,
+                                               transitionEvents, transitionEventCount);
                     actions[actionsPosition++] = action;
 
                     if (mode == -1) {
@@ -854,7 +857,7 @@ echo implode(", ", $results);
 
 
 int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, int attacker, int defender,
-                                  uint64_t *NowState) {
+                                  uint64_t *NowState, int transitionEvents[8], int *transitionEventCount) {
     for (int j = 0; j < 2; ++j) {
         preHP[j] = players[j].hp;
     }
@@ -1154,6 +1157,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             resetCombo(NowState);
             break;
         case BattleEmulator::COUNTER:
+            if (transitionEvents != nullptr && transitionEventCount != nullptr && *transitionEventCount < 8) {
+                transitionEvents[(*transitionEventCount)++] = BattleEmulator::COUNTER;
+            }
             (*position)++; //0x02158584 会心(無効)
             if (lcg::getPercent(position, 0x2710) < kaisinnP) {
                 kaisinn = true;
@@ -1176,6 +1182,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             baseDamage = 0;
             break;
         case BattleEmulator::ACROBATSTAR_KAIHI:
+            if (transitionEvents != nullptr && transitionEventCount != nullptr && *transitionEventCount < 8) {
+                transitionEvents[(*transitionEventCount)++] = BattleEmulator::ACROBATSTAR_KAIHI;
+            }
             //(*position) += 2;
             //(*position)++;//アクロバットスター判定
             (*position)++; //0x2710
@@ -1210,10 +1219,12 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 //0x021ec6f8 アクロバットスター
                 percent_tmp = lcg::getPercent(position, 100);
                 if (percent_tmp >= 0 && percent_tmp <= 49) {
-                    return callAttackFun(ACROBATSTAR_KAIHI, position, players, attacker, defender, NowState);
+                    return callAttackFun(ACROBATSTAR_KAIHI, position, players, attacker, defender, NowState,
+                                         transitionEvents, transitionEventCount);
                 }
                 if (percent_tmp >= 50 && percent_tmp < 75) {
-                    return callAttackFun(COUNTER, position, players, defender, attacker, NowState);
+                    return callAttackFun(COUNTER, position, players, defender, attacker, NowState,
+                                         transitionEvents, transitionEventCount);
                 }
             } else {
                 (*position)++;
