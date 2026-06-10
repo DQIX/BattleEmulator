@@ -46,14 +46,6 @@ public:
         obj->position = pos + 1;
     }
 
-    static void
-    add(BattleResult* obj, int action, int damage, bool isEnemy, int turn,
-        bool player0_has_initiative, int ehp, int ahp, uint64_t nowState, int scTurn, int amp, int Paralysis1,
-        bool Inactive1) {
-        add(obj, action, damage, isEnemy, 0, 0, 0, turn,
-            player0_has_initiative, ehp, ahp, nowState, scTurn, amp, Inactive1, false);
-    }
-
     int position = 0;
     int turn = 0;
     int actions[1000] = {};
