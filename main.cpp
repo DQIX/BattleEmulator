@@ -1159,9 +1159,12 @@ namespace {
         damages[result.AII_damageCounter] = -1;
     }
 
-    std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed, const ResultStructure &result,
-                                int numThreads, bool dropbug) {
-        int32_t gene[350] = {0};
+    std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed, ResultStructure &result) {
+        lcg::init(seed, true);
+
+        BattleEmulator::ResetTurnProcessed();
+
+        int gene[350] = {0};
         int turns = 0;
         for (int i = 0; i < 349; ++i) {
             if (i < result.AactionsCounter) {
@@ -1176,36 +1179,31 @@ namespace {
             gene[349] = -1;
         }
 
-        auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 40000, gene, 0);
-
-        if (genome.turn >= 100) {
-            return "SearchRequest failed: turn limit reached.";
-        }
-
-        BattleResult result1;
-        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
-
-        int position = 1;
-        uint64_t nowState = 0;
-
-        BattleEmulator::Main(&position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
-                             &nowState);
-
         std::stringstream ss;
-        ss << dumpTable(result1, genome.actions, foundTurn) << "\n";
-        ss << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
-        ss << "0x" << std::hex << seed << std::dec << "\n" << "actions: ";
-        for (auto i = 0; i < 100; ++i) {
-            if (genome.actions[i] == 0 || genome.actions[i] == -1) {
-                break;
-            }
-            ss << genome.actions[i] << ", ";
+        if (!SearchRequest(copiedPlayers, seed, gene, false, ss)) {
+            ss << std::endl;
+            ss << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
+            ss << "      **YOU WILL NOW LOSE!**       " << std::endl;
+            ss << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
+            ss << std::endl;
+
+            BattleResult res;
+            Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
+            lcg::init(seed);
+            int position = 1;
+            uint64_t nowState = 0;
+            BattleEmulator::Main(&position, 100, gene, players, &res, seed, nullptr, nullptr, -1, &nowState);
+            ss << dumpTable(res, gene, foundTurn);
+            ss << "startturn=" << foundTurn << std::endl;
+            return ss.str();
         }
-        ss << "\n";
+        std::cout << ss.str();
+        ss << "startturn=" << foundTurn << std::endl;
+        wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
         return ss.str();
     }
 }
+
 
 extern "C" {
 EMSCRIPTEN_KEEPALIVE int wasm_prepare_input(const char *input) {
