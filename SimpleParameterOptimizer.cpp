@@ -36,15 +36,13 @@ static const std::vector<int>& getTuneIds() {
         values.reserve(64);
 
         const int allyAndEventIds[] = {
-            BattleEmulator::SPECIAL_MEDICINE,
-            BattleEmulator::SPECIAL_ANTIDOTE,
-            BattleEmulator::FLEE_ALLY,
+            BattleEmulator::ATTACK_ALLY,
             BattleEmulator::DRAGON_SLASH,
+            BattleEmulator::DEFENCE,
+            BattleEmulator::FLEE_ALLY,
+            BattleEmulator::MEDICINAL_HERBS,
             BattleEmulator::HEAL,
             BattleEmulator::CRACK_ALLY,
-            BattleEmulator::WOOSH_ALLY,
-            BattleEmulator::ATTACK_ALLY,
-            BattleEmulator::DEFENCE,
             BattleEmulator::ACROBATIC_STAR,
             BattleEmulator::ACROBATSTAR_KAIHI,
             BattleEmulator::COUNTER,
@@ -428,8 +426,8 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
                     ++evaluations;
                     ++result.testCount;
 
-                    //std::cout << "[GA] eval=" << evaluations << " turn=" << r.measuredTurns
-                    //          << " ms=" << r.measuredMs << " fitness=" << r.fitness << std::endl;
+                    std::cout << "[GA] eval=" << evaluations << " turn=" << r.measuredTurns
+                              << " ms=" << r.measuredMs << " fitness=" << r.fitness << std::endl;
 
                     if (r.measuredTurns < result.bestTurn) {
                         result.bestTurn = r.measuredTurns;

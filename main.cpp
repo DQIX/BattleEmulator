@@ -1282,9 +1282,8 @@ int main(int argc, char *argv[]) {
     int act[350] = {0};
     int counter = 0;
     act[counter++] = BattleEmulator::ATTACK_ALLY;
-    act[counter++] = BattleEmulator::SPECIAL_MEDICINE;
     act[counter++] = -1;
-    SimpleParameterOptimizer::optimize(BasePlayers, 531724652309, act, 1000000, counter);
+    SimpleParameterOptimizer::optimize(BasePlayers, 10534859, act, 10000, counter);
 
     return 0;
 #endif
@@ -1378,7 +1377,7 @@ int main(int argc, char *argv[]) {
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed =  0x01091a91;
+    uint64_t seed =   139924927+8;
 
     int actions[350] = {
         BattleEmulator::ATTACK_ALLY,
