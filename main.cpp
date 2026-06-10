@@ -1256,8 +1256,7 @@ EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed
         return wasmLastDump.c_str();
     }
 
-    wasmLastDump = buildDumpOutput(BasePlayers, seed, wasmResults[static_cast<size_t>(resultIndex)], numThreads,
-                                   dropbug != 0);
+    wasmLastDump = buildDumpOutput(BasePlayers, seed, wasmResults[static_cast<size_t>(resultIndex)]);
     wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
     return wasmLastDump.c_str();
 }
