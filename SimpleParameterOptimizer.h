@@ -140,6 +140,7 @@ public:
     static constexpr int ElfinElixirCost = 170; // 追加
     static constexpr int hasMagicMirrorHeight = 171; // 追加
     static constexpr int SpecialAntiCost = 172;
+    static constexpr int speedLevelWeight = 173;
 };
 
 #endif // SIMPLE_PARAMETER_OPTIMIZER_H
