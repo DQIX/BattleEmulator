@@ -14,8 +14,6 @@ private:
 
     static uint64_t lcg_rand(uint64_t seed);
 
-    static uint64_t nextTop32NoCache(int position);
-
     static int calculatePercent(uint64_t input);
 
 public:
@@ -32,8 +30,6 @@ public:
     static int intRangeRand(int *position, int min, int max);
 
     static uint8_t getSeed(int * position);
-
-    static int32_t getTop32(int *position);
 };
 
 

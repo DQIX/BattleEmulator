@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.28)
 project(newDirectory)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 option(multithreading "Enable multithreading" OFF)
 
@@ -24,8 +24,7 @@ if(MSVC AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "AddressSanitizer (ASan) is enabled for Debug build")
 
     # AddressSanitizer を有効化
-    add_compile_options(/fsanitize=address /Zi /Od)
-    add_link_options(/fsanitize=address)
+    add_compile_options(/fsanitize=address)
     add_link_options(/INCREMENTAL:NO /DEBUG)  # INCREMENTAL LINKING は無効化
 endif()
 #if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -45,43 +44,26 @@ set(SOURCES
         debug.cpp
         debug.h
         BattleResult.h
+        Genome.h
         ActionOptimizer.cpp
         ActionOptimizer.h
-        Genome.h
-        InputBuilder.cpp
-        InputBuilder.h
-        ResultStructure.h
         EnhancedCostCalculator.cpp
-        EnhancedHashCalculator.cpp
-        EnhancedHeapQueue.cpp
         EnhancedCostCalculator.h
+        EnhancedHashCalculator.cpp
         EnhancedHashCalculator.h
+        EnhancedHeapQueue.cpp
         EnhancedHeapQueue.h
         SimpleParameterOptimizer.cpp
         SimpleParameterOptimizer.h
 )
 
-# シングルスレッド版（multithreading = OFF）
-#add_executable(rbe_single ${SOURCES})
-#target_compile_definitions(rbe_single PRIVATE NO_MULTITHREADING BattleEmulatorLV19)  # `#define NO_MULTITHREADING` を適用
-
 # マルチスレッド版（multithreading = ON）
-add_executable(rbe_multi_lv18_sp35 ${SOURCES})
-target_compile_definitions(rbe_multi_lv18_sp35 PRIVATE MULTITHREADING=1 BattleEmulatorLV19=1)  # `#define MULTITHREADING` を適用
-
-# マルチスレッド版（multithreading = ON）
-add_executable(rbe_multi_lv13_sp13 ${SOURCES})
-target_compile_definitions(rbe_multi_lv13_sp13 PRIVATE MULTITHREADING=1 BattleEmulatorLV13=1)  # `#define MULTITHREADING` を適用
-
-# マルチスレッド版（multithreading = ON）
-add_executable(rbe_lv15_sp22_v2 ${SOURCES}
-        BattleResult.h)
-target_compile_definitions(rbe_lv15_sp22_v2 PRIVATE MULTITHREADING=1 BattleEmulatorLV15=1)  # `#define MULTITHREADING` を適用
+add_executable(ybe_v5_lv10 ${SOURCES})
+target_compile_definitions(ybe_v5_lv10 PRIVATE MULTITHREADING)  # `#define MULTITHREADING` を適用
 
 
-# マルチスレッド版（multithreading = ON）
-add_executable(rbe_lv15_sp22_v2_opt ${SOURCES})
-target_compile_definitions(rbe_lv15_sp22_v2_opt PRIVATE MULTITHREADING=1 BattleEmulatorLV15=1 OPTIMIZE_MODE=1)  # `#define MULTITHREADING` を適用
+add_executable(ybe_v5_lv10_opt ${SOURCES})
+target_compile_definitions(ybe_v5_lv10_opt PRIVATE MULTITHREADING OPTIMIZE_MODE)  # `#define MULTITHREADING` を適用
 
 
 string(TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)
@@ -90,23 +72,12 @@ add_definitions(-DBUILD_DATE="${BUILD_DATE}" -DBUILD_TIME="${BUILD_TIME}")
 
 if(MINGW)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections") #  -fno-inline-small-functions
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections") ##-fno-inline-small-functions
     set(CMAKE_EXE_LINKER_FLAGS "-static -Wl,--gc-sections")
 elseif(MSVC)
-    #set_property(TARGET rbe_single PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-    #set_property(TARGET rbe_multi_lv18_sp35 PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-    #set_property(TARGET rbe_multi_lv13_sp13 PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-    #set_property(TARGET rbe_lv15_sp22_v2 PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    target_compile_options(ybe_v5_lv10 PRIVATE /W4 /MP)  # `/MP` で並列コンパイル
 
-    #target_compile_options(rbe_single PRIVATE /W4 /MP)
-    target_compile_options(rbe_multi_lv18_sp35 PRIVATE /W4 /MP)  # `/MP` で並列コンパイル
-    target_compile_options(rbe_multi_lv13_sp13 PRIVATE /W4 /MP)  # `/MP` で並列コンパイル
-    target_compile_options(rbe_lv15_sp22_v2 PRIVATE /W4 /MP)  # `/MP` で並列コンパイル
-
-    #target_link_options(rbe_single PRIVATE /INCREMENTAL:NO /DEBUG)
-    target_link_options(rbe_multi_lv18_sp35 PRIVATE /INCREMENTAL:NO /DEBUG)
-    target_link_options(rbe_multi_lv13_sp13 PRIVATE /INCREMENTAL:NO /DEBUG)
-    target_link_options(rbe_lv15_sp22_v2 PRIVATE /INCREMENTAL:NO /DEBUG)
+    target_link_options(ybe_v5_lv10 PRIVATE /INCREMENTAL:NO /DEBUG)
 
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi /O2")
     set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")

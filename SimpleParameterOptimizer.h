@@ -2,145 +2,87 @@
 // Simple Parameter Optimizer - シンプルで高速なパラメータ自動調整
 //
 
-#ifndef SIMPLE_PARAMETER_OPTIMIZER_H
-#define SIMPLE_PARAMETER_OPTIMIZER_H
-
 #if defined(OPTIMIZE_MODE)
 
-#include <array>
-#include <limits>
+#ifndef SIMPLE_PARAMETER_OPTIMIZER_H
+#define SIMPLE_PARAMETER_OPTIMIZER_H
 
 #include "Player.h"
 #include "Genome.h"
 #include <vector>
 
-#include "BattleEmulator.h"
+// グローバルパラメータ（シンプルに直接アクセス）
+struct CostParams {
+    // 基本重み
+    static double enemyHpWeight;        // 敵HP重み
+    static double playerHpWeight;       // プレイヤーHP重み
+    static double resourceWeight;       // リソース重み
+    static double StatusEffectWeight;       // リソース重み
+    static double turnHeignt;       // リソース重み
+    static double SpHeight;       // リソース重み
+    static double ActHeight;       // リソース重み
 
-static constexpr int MAX_ACTION_ID = 512;
-static constexpr double DEFAULT_ACTION_COST = 1.0;
-static constexpr double DEFAULT_STEP = 0.5; // 変異の基本スケール
+    // アクションペナルティ
+    static double AttackPenalty;
+    static double healPenalty;
+    static double dragonSlashPenalty;
+    static double itemHealPenalty;
+    static double defensePenalty;
+    static double fleePenalty;
+    static double buffPenalty;
+    static double specialPenalty;
 
-// GA パラメータ（必要なら調整）
-static constexpr int GA_POPULATION = 65; // 1世代あたり生成する子の数
-static constexpr double GA_MUTATION_PROB = 0.15; // 各遺伝子が変異する確率
-static constexpr double GA_CROSSOVER_PROB = 0.9; // 親から交叉する確率
-static constexpr int GA_EVAL_SEEDS = 10;
-static constexpr uint64_t kNumThreads = 8; // ★固定スレッド数（好きに調整）
+    // ステータス効果
+    static double paralysisWeight;
+    static double sleepWeight;
+    static double poisonWeight;
+    static double buffBonus;
+    static double atkBuffBonus;
 
-// --- Stability tuning parameters (内部定義・調整可能) ---
-constexpr uint64_t STABILITY_CHECKS = 30;           // 世代ごとに最良個体を何回別 seed で再評価するか
-constexpr uint64_t GA_INSTABILITY_WEIGHT = 10.0; // instability を fitness に掛ける重み（経験則で調整）
+    static std::string toText() ;
 
-// ---- 安定性チェック用: ランダム追加 actions（compile 時に決める） ----
-// ここを編集するだけで「追加しうる行動」を切り替え可能
-static constexpr std::array<int, 3> STABILITY_RANDOM_ACTION_POOL = {
-    BattleEmulator::ATTACK_ALLY,
-    BattleEmulator::HEAL,
+    // デフォルト値設定
+    static void setDefaults();
+    static void copyFrom(const CostParams& other);
 };
-// 1回の stability check で最大いくつ挿入するか（0なら無効）
-static constexpr double STABILITY_EXTRA_ACTION_INSERT_PROB = 0.60;
-// 1回の stability check で最大いくつ挿入するか（0なら無効）
-static constexpr int STABILITY_EXTRA_ACTIONS_MAX = 2;
-
 
 // 最適化結果
 struct OptimResult {
-    uint64_t bestTurn = 999;
-    uint64_t testCount = 0;
+    CostParams bestParams;
+    int bestTurn = 999;
+    int testCount = 0;
     bool found = false;
 };
 
-
-// --- 追加: クッション関数（範囲を評価して結果だけ返す） ---
-struct EvalResult {
-    int index = -1;
-    uint64_t fitness = std::numeric_limits<uint64_t>::max();
-    int measuredTurns = 0;
-    double measuredMs = 0.0;
-};
-
-// --- 遺伝的アルゴリズム実装 ---
-struct GAGenome {
-    std::vector<double> genes; // size = getTuneIds().size()
-    uint64_t fitness; // 小さいほど良い（ターン優先）
-    uint64_t measuredTurns; // 実測ターン
-    double measuredMs; // 実測時間（ms）
-};
-
-// --- 追加: stability check のクッション関数（範囲を評価して合計だけ返す） ---
-struct StabilityChunkResult {
-    uint64_t instabilitySum = 0;
-    int performed = 0;
-    uint64_t turns = 0;
-};
-
-
 class SimpleParameterOptimizer {
-
-
-    public:
+public:
     // メイン最適化実行（シンプルなランダムサーチ）
     static OptimResult optimize(const Player players[2], uint64_t seed,
                                const int actions[350], int maxTests = 50, int turns = 0);
 
-    static double getActionCost(int action);
+    // グリッドサーチ（確実だが遅い）
+    static OptimResult gridSearch(const Player players[2], uint64_t seed,
+                                 const int actions[350], int resolution = 3);
 
-    // パラメータセットをテスト
-    static int testParameters(const Player players[2],
-                             uint64_t seed, const int actions[350], int turns);
+    // 山登り法（高速で実用的）
+    static OptimResult hillClimbing(const Player players[2], uint64_t seed,
+                                   const int actions[350], int maxSteps = 20);
+
 private:
-    static std::vector<EvalResult> evaluateGenomeRange(
-        std::vector<GAGenome> *population,
-        const std::vector<int> *pendingIndices,
-        int start,
-        int end,
-        const Player players[2],
-        const std::array<uint64_t, GA_EVAL_SEEDS> &evalSeeds,
-        const int actions[350],
-        int turnsLimit,
-        uint64_t seedForThread
-    );
+    // パラメータセットをテスト
+    static int testParameters(const CostParams& params, const Player players[2],
+                             uint64_t seed, const int actions[350], int turns);
 
-    static StabilityChunkResult stabilityCheckRange(
-        const GAGenome *bestGenomeCopy,
-        int baselineTurn,
-        int beginIdx,
-        int endIdx,
-        uint64_t baseSeed,
-        const Player players[2],
-        const int actions[350],
-        int turnsLimit
-    );
+    // ランダムパラメータ生成
+    static CostParams generateRandom();
 
-};
+    // パラメータを少し変更
+    static CostParams mutate(const CostParams& base, double strength = 0.2);
 
-#endif
-class SimpleParameterOptimizerNode {
-public:
-    static constexpr int turnHeignt = 150;
-    static constexpr int enemyHpWeight = 151;
-    static constexpr int playerHpWeight = 152;
-    static constexpr int resourceWeight = 153;
-    static constexpr int StatusEffectWeight = 154;
-    static constexpr int paralysisWeight = 155;
-    static constexpr int sleepWeight = 156;
-    static constexpr int poisonWeight = 157;
-    static constexpr int inactiveWeight = 158;
-    static constexpr int SpHeight = 159;
-    static constexpr int ActHeight = 160;
-    static constexpr int ResourceHPCost = 161;
-    static constexpr int NoResourceCost = 162;
-    static constexpr int BuffWeight = 163;
-    static constexpr int AtkBuffWeight = 164;
-    static constexpr int TensionWeight = 165;
-    static constexpr int AntidoteWeight = 166;
-    static constexpr int MagicWaterCost = 167;
-    static constexpr int DazzleWdeight = 168; // 追加
-    static constexpr int SpecialMedicineCost = 169; // 追加
-    static constexpr int ElfinElixirCost = 170; // 追加
-    static constexpr int hasMagicMirrorHeight = 171; // 追加
-    static constexpr int SpecialAntiCost = 172;
-    static constexpr int speedLevelWeight = 173;
+    // パラメータの妥当性チェック
+    static void clampParams(CostParams& params);
 };
 
 #endif // SIMPLE_PARAMETER_OPTIMIZER_H
+
+#endif

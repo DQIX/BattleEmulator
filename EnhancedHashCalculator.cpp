@@ -31,8 +31,8 @@ uint64_t EnhancedHashCalculator::computeStateHash(const Genome &genome) {
     
     // Important status effects that affect battle outcome
     hash = mixHash(hash, (genome.AllyPlayer.paralysis ? 1ULL : 0ULL) << 48);
-    hash = mixHash(hash, (genome.AllyPlayer.sleeping ? 1ULL : 0ULL) << 47);
-    hash = mixHash(hash, (genome.AllyPlayer.PoisonEnable ? 1ULL : 0ULL) << 46);
+    // hash = mixHash(hash, (genome.AllyPlayer.sleeping ? 1ULL : 0ULL) << 47);
+    // hash = mixHash(hash, (genome.AllyPlayer.PoisonEnable ? 1ULL : 0ULL) << 46);
     
     // // Buff levels that significantly impact combat
     // hash = mixHash(hash, static_cast<uint64_t>(genome.AllyPlayer.BuffLevel) << 44);

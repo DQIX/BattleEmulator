@@ -12,59 +12,57 @@
 #include "Genome.h"
 
 struct EnhancedAStarNode {
+    Genome genome;
     double fCost; // g(n) + h(n)
     double gCost; // Actual cost (turn number + action costs)
     double hCost; // Heuristic cost
-    int enemyHP;
-    int allyHP;
-    uint32_t nodeId;
     uint64_t stateHash;
-
+    
+    // Enhanced comparison with proper tie-breaking
     bool operator<(const EnhancedAStarNode& other) const {
         // Primary comparison: f-cost (with epsilon for floating point)
         if (std::abs(fCost - other.fCost) > 1e-9) {
             return fCost > other.fCost; // Min-heap (smaller f-cost has higher priority)
         }
-
+        
         // First tie-breaker: prefer higher g-cost (deeper nodes, closer to goal)
         if (std::abs(gCost - other.gCost) > 1e-9) {
             return gCost < other.gCost;
         }
-
+        
         // Second tie-breaker: prefer lower enemy HP (closer to victory)
-        if (enemyHP != other.enemyHP) {
-            return enemyHP > other.enemyHP;
+        if (genome.EnemyPlayer.hp != other.genome.EnemyPlayer.hp) {
+            return genome.EnemyPlayer.hp > other.genome.EnemyPlayer.hp;
         }
-
+        
         // Third tie-breaker: prefer higher player HP (safer states)
-        if (allyHP != other.allyHP) {
-            return allyHP < other.allyHP;
+        if (genome.AllyPlayer.hp != other.genome.AllyPlayer.hp) {
+            return genome.AllyPlayer.hp < other.genome.AllyPlayer.hp;
         }
-
+        
         // Final tie-breaker: use state hash for consistent ordering
         return stateHash > other.stateHash;
     }
 };
 
 class EnhancedHeapQueue {
+private:
+    std::vector<EnhancedAStarNode> heap;
+    size_t maxSize;
+
 public:
-    void push(const EnhancedAStarNode& x) {
-        heap_.push_back(x);
-        std::push_heap(heap_.begin(), heap_.end());
-    }
-    void pop() {
-        std::pop_heap(heap_.begin(), heap_.end());
-        heap_.pop_back();
+    explicit EnhancedHeapQueue(size_t maxSize) : maxSize(maxSize) {
+        heap.reserve(maxSize);
     }
 
-    [[nodiscard]] const EnhancedAStarNode& top() const { return heap_.front(); }
-    [[nodiscard]] bool empty() const { return heap_.empty(); }
-    [[nodiscard]] size_t size() const { return heap_.size(); }
-
-    [[nodiscard]] uint32_t topId() const { return heap_.front().nodeId; } // これが便利
+    void push(const EnhancedAStarNode &node);
+    void pop();
+    EnhancedAStarNode top() const;
+    bool empty() const;
+    size_t size() const;
 
 private:
-    std::vector<EnhancedAStarNode> heap_;
+    static bool compare(const EnhancedAStarNode &a, const EnhancedAStarNode &b);
 };
 
 #endif // ENHANCED_HEAP_QUEUE_H

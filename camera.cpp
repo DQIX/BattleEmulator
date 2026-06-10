@@ -7,38 +7,45 @@
 #include "BattleEmulator.h"
 #include "lcg.h"
 
-/**
- * 指定されたアクションに基づいてdq9のカメラをシミュレーションします。
- *
- * @param position 現在のlcgの乱数の位置を示すポインタ。
- * @param actions アクションの配列。実際のこのターンで行動したアクションが含まれる。
- * @param NowState 現在の状態を示すポインタ。カメラの内部状態を管理するために使用される。
- */
-void camera::Main(int *position, const int32_t actions[5], uint64_t * NowState) {
+void camera::Main(int *position, const int32_t actions[5], uint64_t *NowState, bool preemptive1, bool bakuti) {
     bool preemptive = true;
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 2; ++i) {
         int32_t after = actions[i];
+        //一部の特異点の挙動について対策する
+
+        //守備力が高すぎる場合(ダメージ0)true、盾ガードは偽
+        // if (bakuti && after == BattleEmulator::SKY_ATTACK) {
+        //     moture = true;
+        // }
+        // if (moture && after == BattleEmulator::MERA_ZOMA) {
+        //     onFreeCameraMove(position, after, 1, NowState);
+        //     continue;
+        // }
+        // }else
+        /*        if (before == BattleEmulator::SKY_ATTACK&&after == BattleEmulator::MERA_ZOMA){//寝てる必要ないの???? isSleeping
+                    //寝ていて、スカイアタックで起きず、メラゾーマされるとparam5がtrueになる。マジで謎
+                    onFreeCameraMove(position, after, 1, NowState);
+                }else */
+        /*if (!preemptive1&&before == BattleEmulator::MERA_ZOMA&&after == BattleEmulator::SKY_ATTACK){//寝てる必要ないの???? isSleeping
+                    //暫定
+                    onFreeCameraMove(position, after, 1, NowState);
+                }else*/
         if (after == BattleEmulator::ATTACK_ALLY) {
             onFreeCameraMove(position, after, preemptive ? 1 : 0, NowState);
-        } else if (after == BattleEmulator::POISON_ATTACK || after == BattleEmulator::MIRACLE_SLASH || after ==
+        } else if (after == BattleEmulator::ATTACK_ENEMY || after == BattleEmulator::MIRACLE_SLASH || after ==
                    BattleEmulator::DRAGON_SLASH) {
-            (*position)++;//追尾カメラ
+            (*position)++; //追尾カメラ
         }
-        if (after != BattleEmulator::ATTACK_ALLY) {//味方の攻撃→上空だとフリーカメラが特異点の挙動する
+        if (after != BattleEmulator::ATTACK_ALLY) {
+            //味方の攻撃→上空だとフリーカメラが特異点の挙動する
+            //if (!(before == BattleEmulator::ATTACK_ALLY&&after == BattleEmulator::SKY_ATTACK)) { // TODO: 攻撃→スカイアタック→メラゾーマの場合、ガチもんの不定消費が発生する。これは回避しなければならない。
             preemptive = false;
+            //}
         }
     }
 }
 
-/**
- * dq9のフリーカメラの乱数消費をシミュレーションします。
- *
- * @param position 現在のlcg乱数の位置を示すポインタ。変更可能です。
- * @param action 実行されるアクションを示す値。BattleEmulatorクラスで定義されたアクションを使用します。
- * @param param5 移動の制御に使用される追加の引数。0または1の値を取ります。
- * @param NowState 現在の状態を格納するポインタ。カメラの状態を管理するために使用され、内部の「カウンタ」に関連する部分を更新します。
- */
-void camera::onFreeCameraMove(int *position, const int action, const int param5, uint64_t * NowState) {
+void camera::onFreeCameraMove(int *position, const int action, const int param5, uint64_t *NowState) {
     auto counter = ((*NowState) >> 8) & 0xf;
     do {
         if (param5 == 0) {
@@ -51,29 +58,19 @@ void camera::onFreeCameraMove(int *position, const int action, const int param5,
             if (ret == 0 || counter == 5) {
                 counter = 0;
                 (*position) += 1;
-                if (action == BattleEmulator::ATTACK_ALLY){
-                    (*position)+=2;
-                }
             } else {
                 counter++;
             }
         } else {
             (*position)++;
             if (counter == 0) {
-                (*position)++;//引数5が1なら強制的に実行
+                (*position)++; //引数5が1なら強制的に実行
                 counter = 0;
-                if (action == BattleEmulator::ATTACK_ALLY){
-                    (*position)+=2;
-                }
                 break;
             }
             (*position)++;
             counter = 0;
             (*position)++;
-            if (action == BattleEmulator::ATTACK_ALLY){
-                (*position)+=2;
-            }
-
         }
     } while (false);
     (*NowState) &= ~0xf00;

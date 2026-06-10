@@ -9,22 +9,16 @@
 #include <iostream>
 
 
-/**
- * @brief プレイヤーのステータスや状態を管理する構造体
- *
- * この構造体は、ゲーム内のプレイヤーのパラメータ、状態、行動ステータス、
- * 特殊な効果やターン制状態異常などを管理します。
- */
 struct Player {
-    int hp = 0;
-    int maxHp = 0;
-    int atk = 0;
-    int defaultATK = 0;
-    int def = 0;
-    int defaultDEF = 0;
-    int speed = 0;
-    int defaultSpeed = 0;
-    int HealPower = 0;
+    int hp;
+    int maxHp;
+    int atk;
+    int defaultATK;
+    int def;
+    int defaultDEF;
+    int speed;
+    int defaultSpeed;
+    int HealPower;
     int mp = 0;
     int maxMp = 0;
     bool specialCharge = false;
@@ -56,43 +50,19 @@ struct Player {
     int SpecialAntidoteCount = 2;
     bool acrobaticStar = false;
     int acrobaticStarTurn = 0;
+    int rageTurns = -1;
+    int medicinal_herbs_count = 7;
+    bool inactive = false;
 
-    /**
-     * @brief プレイヤーが生存しているかを判定する関数
-     *
-     * 指定されたプレイヤーオブジェクトの現在のHPが0でないかを確認し、
-     * 生存しているかどうかを判定します。
-     *
-     * @param obj 判定対象のプレイヤーオブジェクト
-     * @return プレイヤーが生存している場合はtrue、死亡している場合はfalse
-     */
     constexpr static bool isPlayerAlive(const Player &obj) {
         return obj.hp != 0;
     }
 
-    /**
-     * @brief プレイヤーのHPを減少させる関数
-     *
-     * 指定されたプレイヤーオブジェクトのHPを指定された量だけ減少させます。
-     * HPが0未満になる場合、最小値0として補正されます。
-     *
-     * @param obj HPを減少させる対象のプレイヤーオブジェクト
-     * @param amount 減少させるHPの量
-     */
     static void reduceHp(Player &obj, int amount) {
         obj.hp -= amount;
         obj.hp = std::max(0, obj.hp);
     }
 
-    /**
-     * @brief プレイヤーのHPを回復する関数
-     *
-     * 指定されたプレイヤーオブジェクトのHPを指定された量だけ回復します。
-     * 回復後のHPは最大HPを超えないように制限されます。
-     *
-     * @param obj HPを回復させる対象のプレイヤーオブジェクト
-     * @param amount 回復させるHPの量
-     */
     static void heal(Player &obj, int amount) {
         obj.hp += amount;
         obj.hp = std::min(obj.maxHp, obj.hp);
