@@ -165,7 +165,6 @@ static inline void applyActionCostsToCostParams() {
 }
 
 double SimpleParameterOptimizer::getActionCost(int action) {
-    initActionCostsIfNeeded();
     if (action < 0 || action >= MAX_ACTION_ID) {
         throw std::invalid_argument("Invalid action ID");
     }
