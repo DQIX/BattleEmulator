@@ -35,16 +35,11 @@ public:
     static double calculateHCost(const Genome &genome, double enemyMaxHp, double playerMaxHp, uint64_t NoStat);
 
 private:
+#if !defined(OPTIMIZE_MODE)
     // アクティブなテーブルへのポインタ（切り替えの実体）
     static const double* s_genome;
-#if !defined(OPTIMIZE_MODE)
-    // Get action-specific cost modifier（インライン化でホットパスを最速に）
-    static inline double getActionCost(int action) {
-        return (action >= 0 && action < 201) ? s_genome[action] : 0.0;
-    }
-#else
-    static double getActionCost(int action);
 #endif
+    static double getActionCost(int action);
 
     // Calculate status effect penalties/bonuses
     static double calculateStatusEffectCost(const Genome &genome);
