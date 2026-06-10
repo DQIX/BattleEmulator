@@ -9,6 +9,7 @@
 #if defined(MULTITHREADING)
 #include <atomic>
 #endif
+#include <array>
 #include <cstdint>
 #include <optional>
 #include "Player.h"
@@ -95,26 +96,43 @@ public:
     static constexpr int SPECIAL_ANTIDOTE = 55; //特毒消し草
     static constexpr int ACROBATIC_STAR = 56; //アクロバットスター
     static constexpr int CRACKLE = 57; //ヒャダルコ
+    static constexpr int FLAME_SLASH = 64; //火炎斬り
+    static constexpr int KACRACKLE_SLASH = 65;// マヒャド斬り
+    static constexpr int HATCHET_MAN = 66;// 魔人切り
+    static constexpr int UPWARD_SLICE = 67;// 切り上げとか
+    static constexpr int MULTISLASH = 68;// さみだれ斬り(さみだれ突きとは別行動)
 
     //病魔
-    static constexpr int POISON_ATTACK = 65; // 毒攻撃
-    static constexpr int DECELERATLE = 66; //ボミオス
-    static constexpr int KASAP = 67; //ルカナン
-    static constexpr int SWEET_BREATH = 68; //ルカナン
+    static constexpr int POISON_ATTACK = 69; // 毒攻撃
+    static constexpr int DECELERATLE = 70; //ボミオス
+    static constexpr int KASAP = 71; //ルカナン
+    static constexpr int SWEET_BREATH = 72; //ルカナン
 
-    static constexpr int DRAGON_SLASH = 59; //ドラゴン切り
-    static constexpr int ITEM_USE = 60; //ドラゴン切り
-    static constexpr int CRACK_ALLY = 61; //ドラゴン切り
+    static constexpr int DRAGON_SLASH = 73; //ドラゴン切り
+    static constexpr int ITEM_USE = 74; //ドラゴン切り
+    static constexpr int CRACK_ALLY = 75; //ドラゴン切り
 
-    static constexpr int ACROBATSTAR_KAIHI = 69;
-    static constexpr int COUNTER = 70;
-    static constexpr int TIDAL_WAVE = 71; // つなみ
-    static constexpr int MASSIVE_SWIPE = 72; // なぎはらい
-    static constexpr int VICTIMISER = 73;
-    static constexpr int PUFF_PUFF = 74;
-    static constexpr int CRACK_ENEMY = 75;
-    static constexpr int MANAZASHI = 76;
-    static constexpr int HP_HOOVER = 77;
+    static constexpr int ACROBATSTAR_KAIHI = 76;
+    static constexpr int COUNTER = 77;
+    static constexpr int TIDAL_WAVE = 78; // つなみ
+    static constexpr int MASSIVE_SWIPE = 79; // なぎはらい
+    static constexpr int VICTIMISER = 80;
+    static constexpr int PUFF_PUFF = 81;
+    static constexpr int CRACK_ENEMY = 82;
+    static constexpr int MANAZASHI = 83;
+    static constexpr int HP_HOOVER = 84;
+    static constexpr int WOOSH_ALLY = 85;
+    static constexpr int RUBBLE = 150;
+    static constexpr int HOLY_WATER = 151;
+
+    inline static constexpr std::array<int, 6> EnemyActionCandidates = {
+        ATTACK_ENEMY,
+        POISON_ATTACK,
+        ATTACK_ENEMY,
+        DECELERATLE,
+        KASAP,
+        SWEET_BREATH
+    };
 
     static void ResetTurnProcessed();
 
@@ -125,7 +143,12 @@ public:
     static bool
     Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
         BattleResult* result, uint64_t seed, const int eActions[350], const int damages[350], int mode,
-         uint64_t *NowState, bool logicalTurnStart = false);
+         uint64_t *NowState, bool logicalTurnStart = false, int transitionEvents[8] = nullptr,
+         int *transitionEventCount = nullptr);
+
+    static void resetCombo(uint64_t *NowState);
+
+    static double processCombo(int32_t Id, double damage, uint64_t *NowState);
 
     static const char *getActionName(int actionid);
 
@@ -137,7 +160,7 @@ public:
 private:
     static int ProcessMagicBurst(int *position);
 
-    static void ProcessRage(int *position, int baseDamage, Player players[2]);
+    static void ProcessRage(int *position, int baseDamage, Player players[2], bool kaisinn);
 
     static void RecalculateBuff(Player players[2]);
 
@@ -154,11 +177,14 @@ private:
     static int FUN_021e8458_typeD(int *position, double difference, double base);
 
     static int callAttackFun(int32_t Id, int *position, Player *players, int attacker, int defender,
-                             uint64_t *NowState);
+                             uint64_t *NowState, int transitionEvents[8] = nullptr,
+                             int *transitionEventCount = nullptr);
 
     static double FUN_021dbc04(int baseHp, double maxHp);
 
     static int ProcessEnemyRandomAction2A(int *position);
+
+    static int ProcessEnemyRandomAction44(int *position);
 
     static int ProcessEnemyRandomAction2B(int *position);
 
