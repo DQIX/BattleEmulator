@@ -11,6 +11,7 @@
 #include "BattleEmulator.h"
 #include "debug.h"
 #include "ActionOptimizer.h"
+#include "EnhancedCostCalculator.h"
 #include "EnhancedHeapQueue.h"
 #include "InputBuilder.h"
 #if defined(OPTIMIZE_MODE)
@@ -50,7 +51,7 @@ namespace {
 
     void help(const char *program_name);
 
-    bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads, bool Dropbug);
+    bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream& ss);
 
     uint64_t BruteForceRequest(const Player copiedPlayers[2], int hours, int minutes, int seconds, int turns,
                                int aActions[350], int damages[350]);
@@ -180,7 +181,7 @@ namespace {
 #endif
     }
 
-    std::string dumpTable(BattleResult &result, int32_t gene[350], int PastTurns);
+    std::string dumpTable(const BattleResult &result, const int32_t gene[350], int PastTurns);
 
     /**
      * バトル結果および対応するデータからテーブルを作成し、その内容を文字列として返します。
@@ -191,7 +192,7 @@ namespace {
      * @param PastTurns 結果の出力に含めない過去のターン数
      * @return 整形されたテーブルを表す文字列
      */
-    std::string dumpTable(BattleResult &result, int32_t gene[350], int PastTurns) {
+    std::string dumpTable(const BattleResult& result, const int32_t gene[350], int PastTurns){
         std::stringstream ss6;
         printHeader(ss6);
         int currentTurn = -1;
@@ -571,13 +572,12 @@ namespace {
                 auto seed = BruteForceRequest(BasePlayers, hours, minutes, seconds, result.AactionsCounter, aActions,
                                               damages);
                 if (foundSeeds == 1) {
-                    auto test = SearchRequest(BasePlayers, seed, aActions, THREAD_COUNT, true);
+                    std::stringstream ss;
+                    auto test = SearchRequest(BasePlayers, seed, aActions, true, ss);
                     if (!test) {
-                        std::cout << "The first search request failed." << std::endl;
-                        if (!SearchRequest(BasePlayers, seed, aActions, THREAD_COUNT, false)) {
-                            std::cout << "The second search request failed" << std::endl;
-                        }
+
                     }
+                    std::cout << ss.str() << std::endl;
                 }
             }
         } catch (const std::runtime_error &e) {
@@ -666,61 +666,143 @@ namespace {
         os << std::endl;
     }
 
+    // 勝利フラグと確定した敵残HPを返す
+    struct RunResult {
+        bool win;
+        int enemyHp;   // 使わなくなったが一応残す
+        int turn;
+        int position;
+    };
 
-    bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads, bool Dropbug) {
-#ifdef DEBUG
-        auto t0 = std::chrono::high_resolution_clock::now();
-        BattleEmulator::ResetTurnProcessed();
-#endif
 
-        int32_t gene[350] = {0};
-        auto turns = 0;
-        for (int i = 0; i < 349; ++i) {
-            gene[i] = aActions[i];
-            if (aActions[i] == -1) {
-                gene[i] = -1;
-                break;
-            }
-            turns++;
-        }
-#if defined(BattleEmulatorLV15)
-        auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 40000, gene, 0);
-#endif
+bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream &ss){
+	int32_t gene[350] = {0};
+	auto turns = 0;
+	for(int i = 0; i < 349; ++i){
+		gene[i] = aActions[i];
+		if(aActions[i] == -1){
+			gene[i] = -1;
+			break;
+		}
+		turns++;
+	}
 
-        auto turnProcessed = BattleEmulator::getTurnProcessed();
+	lcg::init(seed);
 
-#ifdef DEBUG
-        auto t3 = std::chrono::high_resolution_clock::now();
-        auto elapsed_time1 =
-                std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
-        PerformanceDebug("Searcher", turnProcessed, static_cast<double>(elapsed_time1), 0);
-        logMemoryUsage(performanceLogger, ActionOptimizer::getNodesUsed(), sizeof(Genome), sizeof(EnhancedAStarNode));
+#if !defined(OPTIMIZE_MODE)
 
-#endif
+    // --- TableA で探索 ---
+    EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableA);
+	Genome genomeA = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 30000, gene, 0);
 
-        if (genome.turn >= 100) {
-            return false;
-        }
+    // --- TableB で探索 ---
+    EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableB);
+    Genome genomeB = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 20000, gene, 0);
 
-        BattleResult result1;
-        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
+    // --- TableC で探索 ---
+    EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableC);
+    Genome genomeC = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 30000, gene, 0);
 
-        int position = 1;
-        uint64_t nowState = 0;
+	// --- TableC で探索 ---
+	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableD);
+	Genome genomeD = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 30000, gene, 0);
 
-        BattleEmulator::Main(&position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
-                             &nowState);
+	// --- TableC で探索 ---
+	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableF);
+	Genome genomeF = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 30000, gene, 0);
 
-        std::cout << "foundTurn: " << foundTurn << ", " << turns << std::endl;
-#ifdef MINGW_BUILD
-        dumpTableMain(result1, genome, seed, foundTurn);
-#else
-        dumpTableMain(result1, genome, seed, foundTurn);
-#endif
+	// --- TableC で探索 ---
+	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableG);
+	Genome genomeG = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 30000, gene, 0);
 
-        return true;
+
+    BattleResult resultA, resultB, resultC, resultD, resultF, resultG;
+
+	auto runMain = [&](const Genome& g, BattleResult& res) -> RunResult {
+		Player players[2] = {copiedPlayers2[0], copiedPlayers2[1]};
+		int position = 1;
+		uint64_t nowState = 0;
+		BattleEmulator::Main(&position, 100, g.actions, players, &res, seed, nullptr, nullptr, -1, &nowState);
+		bool win = players[1].hp <= 0;
+		return { win, players[1].hp, res.turn, res.position };
+	};
+
+    auto rrA = runMain(genomeA, resultA);
+    auto rrB = runMain(genomeB, resultB);
+    auto rrC = runMain(genomeC, resultC);
+    auto rrD = runMain(genomeD, resultD);
+    auto rrF = runMain(genomeF, resultF);
+    auto rrG = runMain(genomeG, resultG);
+
+    if (!rrA.win && !rrB.win && !rrC.win && !rrD.win) {
+        return false;
     }
+
+    // 勝利したもの同士でターン数→敵残HP（メモ化済み）で比較
+    // 負けたものは無条件で除外
+	auto isBetter = [](const RunResult& a, const RunResult& b) -> bool {
+		if (a.turn != b.turn) return a.turn < b.turn;
+		return a.position < b.position;  // 同ターンなら行動数が少ない方
+    };
+
+    const Genome* chosenGenome = nullptr;
+    const BattleResult* chosenResult = nullptr;
+    const RunResult* chosenRR = nullptr;
+
+    auto tryUpdate = [&](const RunResult& rr, const Genome& g, const BattleResult& r) {
+        if (!rr.win) return;  // 負けは無価値
+        if (chosenRR == nullptr || isBetter(rr, *chosenRR)) {
+            chosenGenome = &g;
+            chosenResult = &r;
+            chosenRR = &rr;
+        }
+    };
+
+	//A（ケース1）: ためる・すてみ → Multithrust のテンション蓄積戦法
+	//B（ケース3）: メラゾーマ反射しながら長期消耗戦
+	//C（ケース2）: 最短ルートでメラゾーマ反射 → 最速決着
+    tryUpdate(rrA, genomeA, resultA);
+    tryUpdate(rrB, genomeB, resultB);
+    tryUpdate(rrC, genomeC, resultC);
+    tryUpdate(rrD, genomeD, resultD);
+    tryUpdate(rrF, genomeF, resultF);
+    tryUpdate(rrG, genomeG, resultG);
+
+    ss << dumpTable(*chosenResult, chosenGenome->actions, foundTurn) << std::endl;
+
+    ss << "0x" << std::hex << seed << std::dec << ": ";
+
+	for (auto i = 0; i < 100; ++i) {
+		if (chosenGenome->actions[i] == 0 || chosenGenome->actions[i] == -1) {
+			break;
+		}
+		ss << chosenGenome->actions[i] << ", ";
+	}
+	ss << std::endl;
+
+	// --- 各テーブルの結果をログ出力 ---
+	auto printRunResult = [&](const char* label, const RunResult& rr) {
+		ss << "[" << label << "] ";
+		if (rr.win) {
+			ss << "Win  turn=" << (rr.turn + 1) << " position=" << rr.position;
+		} else {
+			ss << "Lose";
+		}
+		ss << std::endl;
+	};
+	printRunResult("TableA", rrA);
+	printRunResult("TableB", rrB);
+	printRunResult("TableC", rrC);
+	printRunResult("TableD", rrD);
+	printRunResult("TableF", rrF);
+	printRunResult("TableG", rrG);
+
+
+#endif
+
+	//探索成功
+	return true;
+}
 
     /**
      * 指定された範囲のシードを使って総当たりを行い、一致するシード知を探索します。
@@ -1202,7 +1284,7 @@ int main(int argc, char *argv[]) {
     act[counter++] = BattleEmulator::ATTACK_ALLY;
     act[counter++] = BattleEmulator::SPECIAL_MEDICINE;
     act[counter++] = -1;
-    SimpleParameterOptimizer::optimize(BasePlayers, 98033215, act, 1000, counter);
+    SimpleParameterOptimizer::optimize(BasePlayers, 98033215653, act, 1000000, counter);
 
     return 0;
 #endif
@@ -1302,8 +1384,12 @@ int main(int argc, char *argv[]) {
         BattleEmulator::ATTACK_ALLY,
         -1,
     };
-    SearchRequest(BasePlayers, seed, actions, THREAD_COUNT, false);
+    std::stringstream ss;
+    if (!SearchRequest(BasePlayers, seed, actions, false, ss)) {
+        std::cout << "SearchRequest failed" << std::endl;
+    }
 
+    std::cout << ss.str() << std::endl;
     std::cout << performanceLogger.rdbuf() << std::endl;
 
     return 0;

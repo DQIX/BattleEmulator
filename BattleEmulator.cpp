@@ -1612,7 +1612,7 @@ constexpr auto actionTable = makeProbabilityTable(ratios, ids);
 
 int BattleEmulator::ProcessEnemyRandomAction44(int *position) {
     //0x0208aca8
-    int rnd = lcg::getPercent(position, 0x100);
+    int rnd = static_cast<int>(static_cast<uint32_t>(lcg::getTop32(position)) >> 24);
     return actionTable[rnd];
 }
 
