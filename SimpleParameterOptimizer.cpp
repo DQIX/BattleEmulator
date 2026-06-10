@@ -61,6 +61,8 @@ static const std::vector<int>& getTuneIds() {
             SimpleParameterOptimizerNode::resourceWeight,
             SimpleParameterOptimizerNode::StatusEffectWeight,
             SimpleParameterOptimizerNode::paralysisWeight,
+            SimpleParameterOptimizerNode::sleepWeight,
+            SimpleParameterOptimizerNode::poisonWeight,
             SimpleParameterOptimizerNode::inactiveWeight,
             SimpleParameterOptimizerNode::SpHeight,
             SimpleParameterOptimizerNode::ActHeight,
@@ -624,7 +626,7 @@ int SimpleParameterOptimizer::testParameters(
     if (genome.EnemyPlayer.hp <= 0) {
         return genome.turn - 1;
     } else {
-        return 10000;
+        return 9999;
     }
 }
 

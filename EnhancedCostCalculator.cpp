@@ -73,10 +73,9 @@ double EnhancedCostCalculator::calculateStatusEffectCost(const Genome &genome) {
     //if (genome.AllyPlayer.sleeping) statusCost += getActionCost(SimpleParameterOptimizerNode::sleepWeight);
     //if (genome.AllyPlayer.PoisonEnable) statusCost += getActionCost(SimpleParameterOptimizerNode::poisonWeight);
     if (genome.AllyPlayer.paralysis) statusCost += getActionCost(SimpleParameterOptimizerNode::paralysisWeight);
-    if (genome.AllyPlayer.inactive) statusCost += getActionCost(SimpleParameterOptimizerNode::inactiveWeight);
     // Special abilities
-    if (genome.AllyPlayer.acrobaticStar) statusCost -= getActionCost(SimpleParameterOptimizerNode::SpHeight);
-    if (genome.AllyPlayer.specialCharge) statusCost -= getActionCost(SimpleParameterOptimizerNode::ActHeight);
+    if (genome.AllyPlayer.acrobaticStar) statusCost -= getActionCost(SimpleParameterOptimizerNode::ActHeight);
+    if (genome.AllyPlayer.specialCharge) statusCost -= getActionCost(SimpleParameterOptimizerNode::SpHeight);
 
     return statusCost;
 }
@@ -97,48 +96,53 @@ double EnhancedCostCalculator::calculateResourceCost(const Genome &genome) {
 
 #else
 static constexpr std::array<double, 201> GENOME_A = {
+    0.0,
+        /* 1 */ 1.77919,
+        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+        /* 23 */ 7.1119,
         0.0,
-            /* 1 */ 0.510236,
-            0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-            /* 23 */ -0.224248,
-            0.0,
-            /* 25 */ -0.713014,
-            /* 26 */ 5.52147,
-            /* 27 */ 8.00172,
-            0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-            /* 53 */ 5.54519,
-            0.0,0.0,
-            /* 56 */ -2.9495,
-            0.0,0.0,
-            /* 59 */ 0.064274,
-            0.0,
-            /* 61 */ 1.45207,
-            0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-            /* 69 */ 2.95357,
-            /* 70 */ -4.07395,
-            0.0,0.0,
-            /* 73 */ 1.10007,
-            /* 74 */ 1.75749,
-            /* 75 */ 1.41705,
-            /* 76 */ 3.47927,
-            /* 77 */ 0.436676,
-            0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
-            /* 150 */ -0.10963,
-            /* 151 */ -2.33655,
-            /* 152 */ 0.173825,
-            /* 153 */ 4.63998,
-            /* 154 */ 1.97399,
-            /* 155 */ 0.83054,
-            0.0,0.0,
-            /* 158 */ 2.73974,
-            /* 159 */ 2.44454,
-            /* 160 */ 3.77383,
-            /* 161 */ 0.224242,
-            /* 162 */ 0.526138,
-            0.0,0.0,0.0,0.0,0.0,0.0,
-            /* 169 */ 2.42715,
-            0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
-        };
+        /* 25 */ -0.600363,
+        /* 26 */ 5.20363,
+        /* 27 */ 8.2138,
+        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+        /* 53 */ 6.91054,
+        0.0,0.0,
+        /* 56 */ 1.05663,
+        0.0,0.0,
+        /* 59 */ 1.38015,
+        0.0,
+        /* 61 */ 3.29117,
+        0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+        /* 69 */ 0.498307,
+        /* 70 */ -5.33702,
+        0.0,0.0,
+        /* 73 */ -7.13347,
+        /* 74 */ 2.0297,
+        /* 75 */ 1.21955,
+        /* 76 */ 8.91256,
+        /* 77 */ -0.0847585,
+        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+        /* 150 */ -0.178075,
+        /* 151 */ 8.25281,
+        /* 152 */ -3.81255,
+        /* 153 */ 3.51966,
+        /* 154 */ 2.56217,
+        /* 155 */ 0.61116,
+        /* 156 */ 6.21784,
+        /* 157 */ -0.830143,
+        /* 158 */ 9.43772,
+        /* 159 */ 1.87433,
+        /* 160 */ 1.48388,
+        /* 161 */ 2.40294,
+        /* 162 */ 5.7291,
+        /* 163 */ -2.79765,
+        0.0,0.0,0.0,0.0,0.0,
+        /* 169 */ 2.56159,
+        0.0,0.0,
+        /* 172 */ 1.83742,
+        /* 173 */ 0.842993,
+        0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    };
 static constexpr std::array<double, 201> GENOME_B = {
         0.0,
             /* 1 */ -0.920533,
@@ -432,12 +436,11 @@ double EnhancedCostCalculator::calculateStatusEffectCost(const Genome &genome) {
     double statusCost = 0.0;
 
     // Negative status effects (penalties)
-    if (genome.AllyPlayer.paralysis) statusCost += s_genome[SimpleParameterOptimizerNode::paralysisWeight];
-    if (genome.AllyPlayer.inactive) statusCost += s_genome[SimpleParameterOptimizerNode::inactiveWeight];
+    if (genome.AllyPlayer.paralysis) statusCost += getActionCost(SimpleParameterOptimizerNode::paralysisWeight);
 
     // Special abilities
-    if (genome.AllyPlayer.acrobaticStar) statusCost -= s_genome[SimpleParameterOptimizerNode::SpHeight];
-    if (genome.AllyPlayer.specialCharge) statusCost -= s_genome[SimpleParameterOptimizerNode::ActHeight];
+    if (genome.AllyPlayer.acrobaticStar) statusCost -= s_genome[SimpleParameterOptimizerNode::ActHeight];
+    if (genome.AllyPlayer.specialCharge) statusCost -= s_genome[SimpleParameterOptimizerNode::SpHeight];
 
     return statusCost;
 }
