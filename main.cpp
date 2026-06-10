@@ -1221,7 +1221,7 @@ int main(int argc, char *argv[]) {
     int counter = 0;
     act[counter++] = BattleEmulator::ATTACK_ALLY;
     act[counter++] = -1;
-    SimpleParameterOptimizer::optimize(BasePlayers, 10534859, act, 15000, counter);
+    SimpleParameterOptimizer::optimize(BasePlayers, 10534859, act, 10000, counter);
 
     return 0;
 #endif
