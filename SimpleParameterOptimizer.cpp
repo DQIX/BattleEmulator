@@ -620,7 +620,7 @@ int SimpleParameterOptimizer::testParameters(
         if (actions[i] == -1) { gene[i] = -1; break; }
     }
 
-    auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
+    auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 15000, gene, 0);
 
     if (genome.EnemyPlayer.hp <= 0) {
         return genome.turn - 1;
