@@ -158,27 +158,16 @@ namespace {
                 << std::setw(18) << "sp"
                 << std::setw(18) << "aAct"
                 << std::setw(18) << "eAct1"
-                << std::setw(18) << "eAct2"
                 << std::setw(6) << "aD"
                 << std::setw(6) << "eD1"
-                << std::setw(6) << "eD2"
                 << std::setw(6) << "ahp"
                 << std::setw(6) << "ehp"
                 << std::setw(6) << "amp"
+
                 << std::setw(6) << "ini"
-#if defined(MINGW_BUILD)
-                << std::setw(6) << "Sle"
-                << std::setw(6) << "DET"
-                << std::setw(6) << "POT"
-                << std::setw(6) << "BOT"
-                << std::setw(6) << "Sct"
-#endif
-                << "\n";
-#if defined(MINGW_BUILD)
-        ss << std::string(153, '-') << "\n"; // 区切り線を出力
-#else
-        ss << std::string(117, '-') << "\n"; // 区切り線を出力
-#endif
+                << std::setw(6) << "Para"
+                << std::setw(6) << "Sct" << "\n";
+        ss << std::string(99, '-') << "\n"; // 区切り線を出力
     }
 
     std::string dumpTable(const BattleResult &result, const int32_t gene[350], int PastTurns);
@@ -193,20 +182,19 @@ namespace {
      * @return 整形されたテーブルを表す文字列
      */
     std::string dumpTable(const BattleResult& result, const int32_t gene[350], int PastTurns){
-        std::stringstream ss6;
+         std::stringstream ss6;
         printHeader(ss6);
         int currentTurn = -1;
         int eDamage[2] = {-1, -1}, aDamage = -1;
         bool initiative_tmp = false;
-        std::string eAction[2], aAction, sp, tmpState, ATKTurn1, DEFTurn1, magicMirrorTurn1, specialChargeTurn1, amp1,
+        std::string eAction[2], aAction, sp, tmpState, ATKTurn1, specialChargeTurn1, amp1,
                 ahp2,
-                ehp2, amp2, poisonTurn1, SpeedTurn1;
+                ehp2, amp2;
         auto counter = 0;
         // データのループ
         for (int i = 0; i < result.position; ++i) {
             auto action = result.actions[i];
             auto damage = result.damages[i];
-            auto DEFTurn = result.BuffTurnss[i];
             auto turn = result.turns[i];
             auto initiative = result.initiative[i];
             auto ehp1 = result.ehp[i];
@@ -214,10 +202,6 @@ namespace {
             auto isEnemy = result.isEnemy[i];
             auto state = result.state[i] & 0xf;
             auto specialChargeTurn = result.scTurn[i];
-            auto poisonTurn = result.PoisonTurns[i];
-            auto SpeedTurn = result.SpeedTurn[i];
-            auto defenseFlag = result.defenseFlag[i];
-            auto sleep = result.sleepFlag[i];
             int amp = -1;
             if (i >= 1) {
                 amp = result.amp[i - 1];
@@ -240,23 +224,18 @@ namespace {
                                 << std::setw(18) << sp
                                 << std::setw(18) << aAction
                                 << std::setw(18) << eAction[0]
-                                << std::setw(18) << eAction[1]
                                 << std::setw(6) << aDamage
                                 << std::setw(6) << eDamage[0]
-                                << std::setw(6) << eDamage[1]
                                 << std::setw(6) << ahp2
                                 << std::setw(6) << ehp2
                                 << std::setw(6) << amp2
                                 << std::setw(6) << (initiative_tmp ? "yes" : "")
-#if defined(MINGW_BUILD)
+                                << std::setw(6) << ((aAction == "Paralysis" || aAction == "Cure Paralysis")
+                                                        ? "yes"
+                                                        : "")
                                 << std::setw(6) << ((aAction == "Sleeping" || aAction == "Cure Sleeping") ? "yes" : "")
-                                << std::setw(6) << DEFTurn1
-                                << std::setw(6) << poisonTurn1
-                                << std::setw(6) << SpeedTurn1
                                 << std::setw(6) << specialChargeTurn1
-                                << std::setw(11) << ""
-#endif
-                                << "\n";
+                                << std::setw(11) << "" << "\n";
                     }
                 }
                 // ターンの初期化
@@ -271,19 +250,12 @@ namespace {
                 initiative_tmp = false;
                 counter = 0;
                 ATKTurn1 = "";
-                DEFTurn1 = "";
-                poisonTurn1 = "";
-                SpeedTurn1 = "";
-                magicMirrorTurn1 = "";
                 specialChargeTurn1 = "";
             }
 
             // 敵か味方の行動を適切な変数に格納
             if (isEnemy) {
                 eAction[counter] = BattleEmulator::getActionName(action);
-                if (sleep) {
-                    eAction[counter] = "!sle " + eAction[counter];
-                }
                 eDamage[counter] = damage;
                 counter++;
                 ahp2 = std::to_string(ahp1);
@@ -292,16 +264,6 @@ namespace {
                 amp2 = std::to_string(amp);
                 aAction = BattleEmulator::getActionName(action);
                 aDamage = damage;
-                if (DEFTurn >= 0) {
-                    DEFTurn1 = std::to_string(DEFTurn);
-                }
-                if (poisonTurn >= 0) {
-                    poisonTurn1 = std::to_string(poisonTurn);
-                }
-
-                if (SpeedTurn >= 0) {
-                    SpeedTurn1 = std::to_string(SpeedTurn);
-                }
                 if (specialChargeTurn > 0) {
                     specialChargeTurn1 = std::to_string(specialChargeTurn);
                 }
@@ -312,15 +274,9 @@ namespace {
                 sp = specialAction;
 
                 if (eAction[0] != "magic Burst" && eAction[1] != "magic Burst") {
-                    if (!initiative && (action == BattleEmulator::TURN_SKIPPED || action == BattleEmulator::PARALYSIS ||
-                                        action == BattleEmulator::SLEEPING)) {
+                    //動けない場合、テーブルにアクションを表示しない
+                    if ((action == BattleEmulator::INACTIVE_ALLY || action == BattleEmulator::PARALYSIS || action == BattleEmulator::CURE_SLEEPING || action == BattleEmulator::CURE_PARALYSIS)) {
                         sp = "---------------";
-                    }
-                    if ((action == BattleEmulator::CURE_SLEEPING || action == BattleEmulator::CURE_PARALYSIS)) {
-                        sp = "---------------";
-                    }
-                    if (!initiative && defenseFlag && action != BattleEmulator::DEFENCE) {
-                        sp = "Defense !Sleep";
                     }
                 }
             }
@@ -333,29 +289,20 @@ namespace {
                     << std::setw(18) << sp
                     << std::setw(18) << aAction
                     << std::setw(18) << eAction[0]
-                    << std::setw(18) << eAction[1]
                     << std::setw(6) << aDamage
                     << std::setw(6) << eDamage[0]
-                    << std::setw(6) << eDamage[1]
                     << std::setw(6) << ahp2
                     << std::setw(6) << ehp2
                     << std::setw(6) << amp2
                     << std::setw(6) << (initiative_tmp ? "yes" : "")
-#if defined(MINGW_BUILD)
+                    << std::setw(6) << ((aAction == "Paralysis" || aAction == "Cure Paralysis") ? "yes" : "")
                     << std::setw(6) << ((aAction == "Sleeping") ? "yes" : "")
-                    << std::setw(6) << DEFTurn1
-                    << std::setw(6) << poisonTurn1
-                    << std::setw(6) << SpeedTurn1
                     << std::setw(6) << specialChargeTurn1
-                    << std::setw(11) << ""
-#endif
-
-                    << "\n";
+                    << std::setw(11) << "" << "\n";
         }
 
         return ss6.str();
     }
-
     void showHeader() {
 #ifdef BUILD_DATE
         const auto buildDate = BUILD_DATE;
@@ -1160,49 +1107,40 @@ namespace {
     }
 
     std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed, const ResultStructure &result,
-                                int numThreads, bool dropbug) {
-        int32_t gene[350] = {0};
-        int turns = 0;
-        for (int i = 0; i < 349; ++i) {
-            if (i < result.AactionsCounter) {
-                gene[i] = result.Aactions[i];
-                turns++;
-                continue;
-            }
-            gene[i] = -1;
-            break;
-        }
-        if (result.AactionsCounter >= 349) {
-            gene[349] = -1;
-        }
+                               int numThreads, bool dropbug) {
+        lcg::init(seed, true);
 
-        auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 40000, gene, 0);
-
-        if (genome.turn >= 100) {
-            return "SearchRequest failed: turn limit reached.";
-        }
-
-        BattleResult result1;
-        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
-
-        int position = 1;
-        uint64_t nowState = 0;
-
-        BattleEmulator::Main(&position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
-                             &nowState);
+        BattleEmulator::ResetTurnProcessed();
 
         std::stringstream ss;
-        ss << dumpTable(result1, genome.actions, foundTurn) << "\n";
-        ss << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
-        ss << "0x" << std::hex << seed << std::dec << "\n" << "actions: ";
-        for (auto i = 0; i < 100; ++i) {
-            if (genome.actions[i] == 0 || genome.actions[i] == -1) {
-                break;
+        if (!SearchRequest(copiedPlayers, seed, result.Aactions, true, ss)) {
+            ss << std::endl;
+            ss << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
+            ss << "      **YOU WILL NOW LOSE!**       " << std::endl;
+            ss << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
+            ss << std::endl;
+
+            auto turns = 0;
+            for (int a_action: result.Aactions) {
+                if (a_action == -1) {
+                    break;
+                }
+                turns++;
             }
-            ss << genome.actions[i] << ", ";
+
+            BattleResult res;
+            Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
+            lcg::init(seed);
+            int position = 1;
+            uint64_t nowState = 0;
+            BattleEmulator::Main(&position, 100, result.Aactions, players, &res, seed, nullptr, nullptr, -1, &nowState);
+            ss << dumpTable(res, result.Aactions, foundTurn);
+            ss << "startturn=" << foundTurn << std::endl;
+            return ss.str();
         }
-        ss << "\n";
+        std::cout << ss.str();
+        ss << "startturn=" << foundTurn << std::endl;
+        wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
         return ss.str();
     }
 }
