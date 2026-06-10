@@ -396,8 +396,8 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
                     ++evaluations;
                     ++result.testCount;
 
-                    std::cout << "[GA] eval=" << evaluations << " turn=" << r.measuredTurns
-                              << " ms=" << r.measuredMs << " fitness=" << r.fitness << std::endl;
+                    //std::cout << "[GA] eval=" << evaluations << " turn=" << r.measuredTurns
+                    //          << " ms=" << r.measuredMs << " fitness=" << r.fitness << std::endl;
 
                     if (r.measuredTurns < result.bestTurn) {
                         result.bestTurn = r.measuredTurns;
