@@ -248,7 +248,8 @@ inline void BattleEmulator::processTurn() {
 bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
                           BattleResult* result,
                           uint64_t seed, const int eActions[350], const int damages[350], int mode,
-                          uint64_t *NowState, bool logicalTurnStart) {
+                          uint64_t *NowState, bool logicalTurnStart, int transitionEvents[8],
+                          int *transitionEventCount) {
     bool player0_has_initiative = false;
     int genePosition = 0;
     int exCounter = 0;
@@ -403,7 +404,11 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
                 (*position)++;
                 //--------end_FUN_02158dfc-------
-                basedamage = callAttackFun(c, position, players, 1, 0, NowState);
+                if (transitionEvents != nullptr && transitionEventCount != nullptr && *transitionEventCount < 8) {
+                    transitionEvents[(*transitionEventCount)++] = c;
+                }
+                basedamage = callAttackFun(c, position, players, 1, 0, NowState,
+                                           transitionEvents, transitionEventCount);
                 actions[actionsPosition++] = c;
 
                 if (mode != -1 && mode != -2) {
@@ -493,7 +498,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
 
                     //--------end_FUN_02158dfc-------
-                    basedamage = callAttackFun(action, position, players, 0, 1, NowState);
+                    basedamage = callAttackFun(action, position, players, 0, 1, NowState,
+                                               transitionEvents, transitionEventCount);
                     actions[actionsPosition++] = action;
 
                     if (mode == -1) {
@@ -667,7 +673,7 @@ echo implode(", ", $results);
 
 
 int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, int attacker, int defender,
-                                  uint64_t *NowState) {
+                                  uint64_t *NowState, int transitionEvents[8], int *transitionEventCount) {
     int baseDamage = 0;
     double tmp = 0;
     bool kaisinn = false;
@@ -696,6 +702,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             }
             break;
         case BattleEmulator::ACROBATSTAR_KAIHI:
+            if (transitionEvents != nullptr && transitionEventCount != nullptr && *transitionEventCount < 8) {
+                transitionEvents[(*transitionEventCount)++] = BattleEmulator::ACROBATSTAR_KAIHI;
+            }
             //(*position) += 2;
             //(*position)++;//アクロバットスター判定
             if (lcg::getPercent(position, 0x2710) < kaisinnP) {
@@ -709,6 +718,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             return 0;
             break;
         case BattleEmulator::COUNTER:
+            if (transitionEvents != nullptr && transitionEventCount != nullptr && *transitionEventCount < 8) {
+                transitionEvents[(*transitionEventCount)++] = BattleEmulator::COUNTER;
+            }
             //(*position) += 2;
             //(*position)++;//アクロバットスター判定
             (*position)++; //0x02158584 会心(無効)
@@ -795,9 +807,11 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             if (players[0].acrobaticStar && !players[0].paralysis && !players[0].inactive) {
                 percent_tmp = lcg::getPercent(position, 100);
                 if (percent_tmp >= 0 && percent_tmp <= 49) {
-                    return callAttackFun(ACROBATSTAR_KAIHI, position, players, attacker, defender, NowState);
+                    return callAttackFun(ACROBATSTAR_KAIHI, position, players, attacker, defender, NowState,
+                                         transitionEvents, transitionEventCount);
                 } else if (percent_tmp >= 50 && percent_tmp < 75) {
-                    return callAttackFun(COUNTER, position, players, defender, attacker, NowState);
+                    return callAttackFun(COUNTER, position, players, defender, attacker, NowState,
+                                         transitionEvents, transitionEventCount);
                 }
             } else {
                 (*position)++;
@@ -936,9 +950,11 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             if (players[0].acrobaticStar && !players[0].paralysis && !players[0].inactive) {
                 percent_tmp = lcg::getPercent(position, 100);
                 if (percent_tmp >= 0 && percent_tmp <= 49) {
-                    return callAttackFun(ACROBATSTAR_KAIHI, position, players, attacker, defender, NowState);
+                    return callAttackFun(ACROBATSTAR_KAIHI, position, players, attacker, defender, NowState,
+                                         transitionEvents, transitionEventCount);
                 } else if (percent_tmp >= 50 && percent_tmp < 75) {
-                    return callAttackFun(COUNTER, position, players, defender, attacker, NowState);
+                    return callAttackFun(COUNTER, position, players, defender, attacker, NowState,
+                                         transitionEvents, transitionEventCount);
                 }
             } else {
                 (*position)++;
