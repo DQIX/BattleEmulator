@@ -45,15 +45,8 @@ constexpr bool validateActionTable(const ActionEntry (&table)[N]){
 
 constexpr ActionEntry ACTION_TABLE[] = {
 	{
-		BattleEmulator::SPECIAL_MEDICINE, [](const Genome& g){
+		BattleEmulator::MEDICINAL_HERBS, [](const Genome& g){
 			return g.AllyPlayer.SpecialMedicineCount > 0;
-		},
-		[](const Genome&, const Genome&){ return true; }
-	},
-	{
-		BattleEmulator::SPECIAL_ANTIDOTE, [](const Genome& g){
-			return g.AllyPlayer.SpecialMedicineCount >= 1 &&
-				  g.AllyPlayer.PoisonEnable;
 		},
 		[](const Genome&, const Genome&){ return true; }
 	},
