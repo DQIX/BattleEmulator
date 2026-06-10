@@ -351,7 +351,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
             // if (v < 0.0) v = 0.0;
             g.genes[i] = v;
         }
-        g.fitness = std::numeric_limits<uint64_t>::infinity();
+        g.fitness = std::numeric_limits<uint64_t>::max();
         population.push_back(std::move(g));
     }
 
@@ -378,7 +378,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
         const auto budget = maxEvaluations - evaluations;
         if (budget > 0) {
             for (int i = 0; i < static_cast<int>(population.size()) && static_cast<int>(pending.size()) < budget; ++i) {
-                if (population[i].fitness < 0xffffffffffffffffULL) {
+                if (population[i].fitness == std::numeric_limits<uint64_t>::max()) {
                     pending.push_back(i);
                 }
             }
@@ -418,7 +418,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
                 for (const auto &r : results) {
                     auto &ind = population[r.index];
 
-                    // r.fitness は uint64_t。population[].fitness は double のまま想定のため明示キャスト
+                    // r.fitness は uint64_t。population[].fitness も uint64_t。
                     ind.fitness = r.fitness;
                     ind.measuredTurns = r.measuredTurns;
                     ind.measuredMs = r.measuredMs;
@@ -559,7 +559,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
                     child.genes[i] = clampDouble(child.genes[i] + delta, -1e6-1, 1e6);
                 }
             }
-            child.fitness = std::numeric_limits<uint64_t>::infinity();
+            child.fitness = std::numeric_limits<uint64_t>::max();
             nextGen.push_back(std::move(child));
 
             // 評価は次ループで一括して行うことで評価回数制御をシンプルにしている
@@ -572,7 +572,7 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
     // 最終的な best を決定
     // population が評価済みであることを仮定するが、保険として評価されていないものは評価する
     for (auto &ind : population) {
-        if (!std::isfinite(ind.fitness) && evaluations < maxEvaluations) {
+        if (ind.fitness == std::numeric_limits<uint64_t>::max() && evaluations < maxEvaluations) {
             int measuredTurn;
             double measuredMs;
             uint64_t fit = evaluateGenome(ind, players, evalSeeds, actions, turns, rng, measuredTurn, measuredMs);

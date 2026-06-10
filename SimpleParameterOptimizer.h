@@ -54,7 +54,7 @@ struct OptimResult {
 // --- 追加: クッション関数（範囲を評価して結果だけ返す） ---
 struct EvalResult {
     int index = -1;
-    uint64_t fitness = std::numeric_limits<uint64_t>::infinity();
+    uint64_t fitness = std::numeric_limits<uint64_t>::max();
     int measuredTurns = 0;
     double measuredMs = 0.0;
 };
