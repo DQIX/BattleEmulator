@@ -1159,61 +1159,37 @@ void BattleEmulator::process7A8(int *position, int baseDamage, Player *players, 
         (*position)++;
     }*/
 }
-#include <array>
-#include <cstddef>
 
-constexpr std::size_t TABLE_MAX = 256;
-template<std::size_t N>
-constexpr std::array<int, TABLE_MAX>
-makeProbabilityTable(const std::array<int, N>& ratios,
-                     const std::array<int, N>& ids)
-{
-    std::array<int, TABLE_MAX> table{};
+int BattleEmulator::ProcessEnemyRandomAction2A(int *position) {
+    //0x0208aca8
+    const int patternTable[6] = {43, 42, 43, 43, 42, 43};
+    //125
+    //43+42+43+43
+    int rand = lcg::getPercent(position, 0x100) + 1;
 
-    std::size_t index = 0;
+    //std::cout << "actions rand: " << rand << std::endl;
 
-    for (std::size_t i = 0; i < N; ++i)
-    {
-        for (int j = 0; j < ratios[i]; ++j)
-        {
-            table[index++] = ids[i];  // ← ここが重要
+    for (int i = 0; i < 6; ++i) {
+        if (rand <= patternTable[i]) {
+            return i;
         }
+        rand = rand - patternTable[i];
     }
-
-    return table;
+    return 5;
 }
-
-
-template<std::size_t N>
-constexpr int sum(const std::array<int, N>& arr)
-{
-    int s = 0;
-    for (int v : arr) s += v;
-    return s;
-}
-
-constexpr std::array<int, 6> ratios = {
-    0x2b,
-    0x2a,
-    0x2b,
-    0x2b,
-    0x2a,
-    0x2b  // 239 + 17 = 256
-};
-
-
-static_assert(sum(ratios) == TABLE_MAX, "Ratio sum must be 256");
-
-constexpr auto actionTable = makeProbabilityTable(ratios, BattleEmulator::EnemyActionCandidates);
 
 
 int BattleEmulator::ProcessEnemyRandomAction2B(int *position) {
     //0x0208aca8
-    int rnd = static_cast<int>(static_cast<uint32_t>(lcg::getTop32(position)) >> 24);
-    return actionTable[rnd];
+    //VICTIMISER, HP_HOOVER, CRACK_ENEMY, ATTACK_ENEMY, MANAZASHI, PUFF_PUFF
+    int rnd = lcg::getPercent(position, 0x100) + 1;
+    if (rnd <= 43) return VICTIMISER;
+    if (rnd <= 43 + 42) return HP_HOOVER;
+    if (rnd <= 43 + 42 + 43) return CRACK_ENEMY;
+    if (rnd <= 43 + 42 + 43 + 43) return ATTACK_ENEMY;
+    if (rnd <= 43 + 42 + 43 + 43 + 42) return MANAZASHI;
+    return PUFF_PUFF;
 }
-
-
 
 int BattleEmulator::CalculateMoreHealBase(Player *players) {
     //ベホイミ

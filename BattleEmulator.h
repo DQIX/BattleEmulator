@@ -4,7 +4,7 @@
 
 #ifndef NEWDIRECTORY_BATTLEEMULATOR_H
 #define NEWDIRECTORY_BATTLEEMULATOR_H
-#include <array>
+
 
 #if defined(MULTITHREADING)
 #include <atomic>
@@ -21,6 +21,7 @@ public:
     static constexpr int TYPE_2C = 2;
     static constexpr int TYPE_2E = 3;
     static constexpr int TYPE_2D = 4;
+
 
     //0は配列の初期であり、永久欠番とする
 
@@ -114,16 +115,6 @@ public:
     static constexpr int CRACK_ENEMY = 75;
     static constexpr int MANAZASHI = 76;
     static constexpr int HP_HOOVER = 77;
-
-
-    inline static constexpr std::array<int, 6> EnemyActionCandidates = {
-        VICTIMISER,
-        HP_HOOVER,
-        CRACK_ENEMY,
-        ATTACK_ENEMY,
-        MANAZASHI,
-        PUFF_PUFF
-    };
 
     static void ResetTurnProcessed();
 
