@@ -58,6 +58,9 @@
   origin/zuo_v2_new_arugo
 ```
 
+* PLEASE DO NOT RESTORE the differences that I deleted for my own convenience.
+  * These deletions were intentional. Do not attempt to restore them, assuming that "THE CHAT HISTORY IS CORRECT BUT WAS DELETED!!!!!"
+  * Restoring this would be a waste of time for both parties.
 
 
 When modifying the UI, read interface-design-main/.claude/skills/interface-design/SKILL.md.
