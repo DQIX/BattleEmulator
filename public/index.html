@@ -667,7 +667,19 @@
                 </template>
                 <template id="visionHistoryActionCellTemplate">
                     <td data-vision-field="action"></td>
-                    <td data-vision-field="damage"></td>
+                    <td data-vision-field="damage">
+                        <span data-vision-damage-value></span>
+                        <input
+                                type="text"
+                                class="vision-history-damage-input"
+                                data-vision-damage-input
+                                inputmode="numeric"
+                                pattern="[0-9]*"
+                                autocomplete="off"
+                                aria-label="Damage correction"
+                                readonly
+                                hidden/>
+                    </td>
                 </template>
             </div>
         </section>

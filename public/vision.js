@@ -600,6 +600,7 @@
         lastDamage2: -1,
         pendingDamage1ConfirmUntil: 0,
         pendingDamage2ConfirmUntil: 0,
+        damageEdit: null,
         maybeCritical: -1,
         // 以下追加
         actionTaken: false,   // C#のActionTaken相当
@@ -2513,6 +2514,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         ui.turnChip.textContent = `T${state.displayTurnIndex} / A${state.displayActionIndex + 1}`;
     }
 
+    function isPointerUnsafe() {
+        return state.becameActive;
+    }
+
     function scheduleMovementSafety() {
         if (state.movementTimer !== null) {
             return;
@@ -2537,6 +2542,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 state.movementTimer = null;
             }
             scheduleMovementSafety();
+        });
+        document.addEventListener("mouseleave", () => {
+            blurActiveDamageInput();
         });
     }
 
@@ -2815,7 +2823,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function emptyHistorySlot() {
-        return {actionId: null, detail: "", score: null, damage: null};
+        return {actionId: null, detail: "", score: null, damage: null, sourceTurn: null, sourceSlot: null};
     }
 
     function emptyTurnRow(turn, slotCount = state.historyActionColumnCount) {
@@ -2849,7 +2857,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 actionId: entry.actionId,
                 detail: entry.detail,
                 score: entry.score,
-                damage: entry.damage
+                damage: entry.damage,
+                sourceTurn: entry.turn,
+                sourceSlot: entry.slot
             };
         });
         return rows.filter(Boolean);
@@ -3307,6 +3317,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function resetConsoleState() {
+        cancelDamageEdit();
         state.history = [];
         state.turnIndex = 1;
         state.actionIndex = 0;
@@ -3460,6 +3471,190 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return true;
     }
 
+    function getHistoryDamageText(slot) {
+        if (typeof slot.damage === "number" && slot.damage >= 0) {
+            return String(slot.damage);
+        }
+        return slot.actionId ? "..." : "";
+    }
+
+    function canEditHistoryDamage(slot) {
+        const action = ACTIONS_BY_ID[slot.actionId];
+        return Boolean(
+            action?.damage &&
+            typeof slot.damage === "number" &&
+            slot.damage >= 0 &&
+            Number.isInteger(slot.sourceTurn) &&
+            Number.isInteger(slot.sourceSlot)
+        );
+    }
+
+    function normalizeDamageEditText(value) {
+        return String(value || "").replace(/[０-９]/g, (char) =>
+            String.fromCharCode(char.charCodeAt(0) - 0xfee0)
+        );
+    }
+
+    function isValidDamageEditText(value) {
+        if (!/^[0-9]+$/.test(value)) {
+            return false;
+        }
+        return Number.isSafeInteger(Number(value));
+    }
+
+    function isAllowedDamageEditKey(event) {
+        if (event.ctrlKey || event.metaKey) {
+            return true;
+        }
+        if ([
+            "Backspace",
+            "Delete",
+            "End",
+            "Home",
+            "ArrowLeft",
+            "ArrowRight",
+            "Tab"
+        ].includes(event.key)) {
+            return true;
+        }
+        return /^[0-9０-９]$/.test(event.key);
+    }
+
+    function blurActiveDamageInput() {
+        const input = state.damageEdit?.input;
+        if (input && typeof input.blur === "function") {
+            input.blur();
+        }
+    }
+
+    function cancelDamageEdit(input = state.damageEdit?.input) {
+        if (!input || state.damageEdit?.input !== input) {
+            return;
+        }
+        const cell = input.closest("[data-vision-field='damage']");
+        const originalValue = state.damageEdit.originalValue;
+        state.damageEdit = null;
+        input.blur();
+        input.value = originalValue;
+        input.readOnly = true;
+        input.hidden = true;
+        cell?.removeAttribute("data-vision-damage-editing");
+    }
+
+    function clearPendingDamageForManualEdit(turn, slotIndex) {
+        const pendingSlotRef = (slotIndex << 12) | (turn - 1);
+        if (state.pendingDamage1 === pendingSlotRef) {
+            clearPendingDamageConfirmation("damage1");
+        }
+        if (state.pendingDamage2 === pendingSlotRef) {
+            clearPendingDamageConfirmation("damage2");
+        }
+        if (state.maybeCritical === pendingSlotRef) {
+            state.maybeCritical = -1;
+        }
+    }
+
+    function commitDamageEdit(input = state.damageEdit?.input) {
+        if (!input || state.damageEdit?.input !== input) {
+            return;
+        }
+        const edit = state.damageEdit;
+        const cell = input.closest("[data-vision-field='damage']");
+        const normalized = normalizeDamageEditText(input.value);
+        state.damageEdit = null;
+        input.readOnly = true;
+        input.hidden = true;
+        cell?.removeAttribute("data-vision-damage-editing");
+        if (!isValidDamageEditText(normalized)) {
+            input.value = edit.originalValue;
+            return;
+        }
+        const turn = edit.turn;
+        const slot = edit.slot;
+        const entry = state.history.find((item) => item.turn === turn && item.slot === slot);
+        if (!entry || !ACTIONS_BY_ID[entry.actionId]?.damage || entry.damage < 0) {
+            input.value = edit.originalValue;
+            return;
+        }
+        const damage = Number(normalized);
+        clearPendingDamageForManualEdit(turn, slot - 1);
+        updateHistoryDamage(turn, slot - 1, damage);
+        applyResolvedDamageEffects(turn, slot - 1, damage);
+    }
+
+    function beginDamageEdit(cell) {
+        if (!cell || cell.dataset.visionEditableDamage !== "true" || isPointerUnsafe()) {
+            return;
+        }
+        const input = cell.querySelector("[data-vision-damage-input]");
+        if (!input) {
+            return;
+        }
+        if (state.damageEdit?.input === input) {
+            return;
+        }
+        if (state.damageEdit?.input) {
+            blurActiveDamageInput();
+            return;
+        }
+        const originalValue = normalizeDamageEditText(input.value || cell.textContent || "");
+        input.value = originalValue;
+        input.hidden = false;
+        input.readOnly = false;
+        cell.dataset.visionDamageEditing = "true";
+        state.damageEdit = {
+            input,
+            originalValue,
+            turn: Number.parseInt(cell.dataset.visionTurn || "", 10),
+            slot: Number.parseInt(cell.dataset.visionSlot || "", 10)
+        };
+        input.focus({preventScroll: true});
+        input.select();
+    }
+
+    function handleDamageEditKeydown(event) {
+        const input = event.target;
+        if (!input.matches?.("[data-vision-damage-input]")) {
+            return;
+        }
+        if (event.key === "Enter") {
+            event.preventDefault();
+            input.blur();
+            return;
+        }
+        if (event.key === "Escape") {
+            event.preventDefault();
+            cancelDamageEdit(input);
+            return;
+        }
+        if (isPointerUnsafe() || !isAllowedDamageEditKey(event)) {
+            event.preventDefault();
+            cancelDamageEdit(input);
+        }
+    }
+
+    function handleDamageEditInput(event) {
+        const input = event.target;
+        if (!input.matches?.("[data-vision-damage-input]")) {
+            return;
+        }
+        const normalized = normalizeDamageEditText(input.value);
+        if (/[^0-9]/.test(normalized)) {
+            cancelDamageEdit(input);
+            return;
+        }
+        if (input.value !== normalized) {
+            input.value = normalized;
+        }
+    }
+
+    function handleDamageEditFocusout(event) {
+        const input = event.target;
+        if (input.matches?.("[data-vision-damage-input]")) {
+            commitDamageEdit(input);
+        }
+    }
+
     function historyToMarkdown() {
         const rows = getTurnRows();
         if (!rows.length) return "";
@@ -3502,6 +3697,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function renderHistory() {
+        if (state.damageEdit) {
+            return;
+        }
         renderHistoryStructure();
         ui.historyBody.innerHTML = "";
         const rows = getTurnRows();
@@ -3537,9 +3735,34 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 actionCell.textContent = slot.actionId ? getActionLabel(slot.actionId) : "";
                 actionCell.title = slot.detail || "";
                 actionCell.dataset.visionActionIndex = String(index + 1);
-                damageCell.textContent =
-                    typeof slot.damage === "number" && slot.damage >= 0 ? String(slot.damage) : slot.actionId ? "..." : "";
+                const damageText = getHistoryDamageText(slot);
+                const damageValue = damageCell.querySelector?.("[data-vision-damage-value]");
+                const damageInput = damageCell.querySelector?.("[data-vision-damage-input]");
+                if (damageValue && damageInput) {
+                    damageValue.textContent = damageText;
+                    damageInput.value = damageText;
+                    damageInput.hidden = true;
+                    damageInput.readOnly = true;
+                } else {
+                    damageCell.textContent = damageText;
+                }
                 damageCell.dataset.visionActionIndex = String(index + 1);
+                if (canEditHistoryDamage(slot)) {
+                    damageCell.dataset.visionEditableDamage = "true";
+                    damageCell.dataset.visionTurn = String(slot.sourceTurn);
+                    damageCell.dataset.visionSlot = String(slot.sourceSlot);
+                    damageCell.tabIndex = 0;
+                    damageCell.title = t(
+                        "visionDamageEditHint",
+                        state.lang === "ja" ? "クリックしてダメージを修正" : "Click to correct damage"
+                    );
+                } else {
+                    damageCell.dataset.visionEditableDamage = "false";
+                    damageCell.removeAttribute("data-vision-turn");
+                    damageCell.removeAttribute("data-vision-slot");
+                    damageCell.removeAttribute("tabindex");
+                    damageCell.removeAttribute("title");
+                }
                 row.append(actionCell, damageCell);
             });
             ui.historyBody.appendChild(row);
@@ -3634,19 +3857,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         setBridgeStatus(sync.key, sync.encoded);
     }
 
-    function resolvePendingDamage(encodedIndex, damage) {
-        if (encodedIndex < 0) {
-            return;
-        }
-        const turn = encodedIndex & 0xfff;
-        const slotIndex = (encodedIndex >> 12) & 0xf;
-        updateHistoryDamage(turn + 1, slotIndex, damage);
-
+    function applyResolvedDamageEffects(turn, slotIndex, damage) {
         // C#のUpdateDamage内の処理を移植:
         // 攻撃系ダメージ確定時、Act3(slotIndex==2)またはActionTaken済みならSleepingを解除
         if (damage > 0 && state.sleeping) {
             const entry = state.history.find(
-                (item) => item.turn === turn + 1 && item.slot === slotIndex + 1
+                (item) => item.turn === turn && item.slot === slotIndex + 1
             );
             if (entry) {
                 const sleepBreakActions = [
@@ -3663,6 +3879,16 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 }
             }
         }
+    }
+
+    function resolvePendingDamage(encodedIndex, damage) {
+        if (encodedIndex < 0) {
+            return;
+        }
+        const turn = encodedIndex & 0xfff;
+        const slotIndex = (encodedIndex >> 12) & 0xf;
+        updateHistoryDamage(turn + 1, slotIndex, damage);
+        applyResolvedDamageEffects(turn + 1, slotIndex, damage);
     }
 
     function clearPendingDamageConfirmation(key) {
@@ -4508,6 +4734,28 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         });
         ui.imageDebugToggle?.addEventListener("change", () => {
             setVisionImageDebugEnabled(ui.imageDebugToggle.checked);
+        });
+        ui.historyBody?.addEventListener("click", (event) => {
+            const cell = event.target.closest?.("[data-vision-field='damage']");
+            if (cell && ui.historyBody.contains(cell)) {
+                beginDamageEdit(cell);
+            }
+        });
+        ui.historyBody?.addEventListener("keydown", (event) => {
+            if (event.target.matches?.("[data-vision-damage-input]")) {
+                handleDamageEditKeydown(event);
+                return;
+            }
+            const cell = event.target.closest?.("[data-vision-field='damage']");
+            if (cell && (event.key === "Enter" || event.key === " ")) {
+                event.preventDefault();
+                beginDamageEdit(cell);
+            }
+        });
+        ui.historyBody?.addEventListener("input", handleDamageEditInput);
+        ui.historyBody?.addEventListener("focusout", handleDamageEditFocusout);
+        window.addEventListener("blur", () => {
+            blurActiveDamageInput();
         });
         const observer = new MutationObserver(() => {
             syncLanguage();
