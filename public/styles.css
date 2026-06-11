@@ -315,6 +315,11 @@ body {
   background: var(--bg);
 }
 
+body.vision-damage-edit-denied,
+body.vision-damage-edit-denied * {
+  cursor: not-allowed !important;
+}
+
 body::before {
   content: "";
   position: fixed;

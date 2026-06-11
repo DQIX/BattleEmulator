@@ -601,6 +601,7 @@
         pendingDamage1ConfirmUntil: 0,
         pendingDamage2ConfirmUntil: 0,
         damageEdit: null,
+        damageEditDeniedTimer: null,
         maybeCritical: -1,
         // 以下追加
         actionTaken: false,   // C#のActionTaken相当
@@ -3527,6 +3528,17 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
     }
 
+    function flashDamageEditDeniedCursor() {
+        document.body.classList.add("vision-damage-edit-denied");
+        if (state.damageEditDeniedTimer !== null) {
+            clearTimeout(state.damageEditDeniedTimer);
+        }
+        state.damageEditDeniedTimer = window.setTimeout(() => {
+            document.body.classList.remove("vision-damage-edit-denied");
+            state.damageEditDeniedTimer = null;
+        }, 2000);
+    }
+
     function cancelDamageEdit(input = state.damageEdit?.input) {
         if (!input || state.damageEdit?.input !== input) {
             return;
@@ -3566,6 +3578,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         input.hidden = true;
         cell?.removeAttribute("data-vision-damage-editing");
         if (!isValidDamageEditText(normalized)) {
+            flashDamageEditDeniedCursor();
             input.value = edit.originalValue;
             return;
         }
@@ -3573,6 +3586,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         const slot = edit.slot;
         const entry = state.history.find((item) => item.turn === turn && item.slot === slot);
         if (!entry || !ACTIONS_BY_ID[entry.actionId]?.damage || entry.damage < 0) {
+            flashDamageEditDeniedCursor();
             input.value = edit.originalValue;
             return;
         }
@@ -3629,6 +3643,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
         if (isPointerUnsafe() || !isAllowedDamageEditKey(event)) {
             event.preventDefault();
+            flashDamageEditDeniedCursor();
             cancelDamageEdit(input);
         }
     }
@@ -3640,6 +3655,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
         const normalized = normalizeDamageEditText(input.value);
         if (/[^0-9]/.test(normalized)) {
+            flashDamageEditDeniedCursor();
             cancelDamageEdit(input);
             return;
         }
