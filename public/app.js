@@ -46,7 +46,7 @@ const SEARCH_RANGE_STORAGE_KEY = "dq9SearchRangeSeconds";
 const SHORTCUT_STORAGE_KEY = "dq9ButtonShortcuts";
 const AUTO_TIMER_MAX_SECONDS = 30 * 60 * 60;
 const AUTO_TIMER_CORRECTION_LIMIT_MS = 5 * 60 * 1000;
-const AUTO_TIMER_FRACTION_SCALE = 10000;
+const AUTO_TIMER_FRACTION_SCALE = 10000;//これはUI表示上の精度
 const SEED_MEMO_STORAGE_KEY = "dq9SeedMemoList";
 const SEED_MEMO_LIMIT = 1000;
 const DS_TIMER_CLOCK_HZ = 33513982n; // 重要定数、変更するな
@@ -179,6 +179,15 @@ function splitPreciseSeconds(totalSeconds) {
     return {
         wholeSeconds,
         fraction
+    };
+}
+
+function splitScaledTimeUnits(totalUnits) {
+    const scale = BigInt(AUTO_TIMER_FRACTION_SCALE);
+    const safeUnits = totalUnits < 0n ? 0n : totalUnits;
+    return {
+        wholeSeconds: Number(safeUnits / scale),
+        fraction: Number(safeUnits % scale)
     };
 }
 
@@ -662,6 +671,15 @@ function formatScaledSeconds(scaledValue, scale) {
 
 function dividePositiveBigIntRounded(numerator, denominator) {
     return (numerator + denominator / 2n) / denominator;
+}
+
+function divideBigIntByPositiveRounded(numerator, denominator) {
+    const quotient = numerator / denominator;
+    const remainder = numerator % denominator;
+    if (numerator >= 0n) {
+        return remainder * 2n >= denominator ? quotient + 1n : quotient;
+    }
+    return (-remainder) * 2n > denominator ? quotient - 1n : quotient;
 }
 
 function scaledTimeUnitsToSeconds(timeUnits) {
@@ -1493,20 +1511,18 @@ function applySearchResultAutoTimerCorrection(seed) {
     }
 
     const seedTimeUnits = computeSeedTimeUnits(seed);
-    const seedSeconds = scaledTimeUnitsToSeconds(seedTimeUnits);
-
-    const toolSecondsAtUse =
-        scaledTimeUnitsToSeconds(lastUse.preciseTimeUnitsAtUse);
-
     const periodSeconds = normalizeOffsetSeconds(lastUse.offsetSecondsAtUse);
-    const correctedSeconds = periodSeconds > 0
-        ? seedSeconds + Math.round((toolSecondsAtUse - seedSeconds) / periodSeconds) * periodSeconds
-        : seedSeconds;
+    const periodUnits = BigInt(periodSeconds * AUTO_TIMER_FRACTION_SCALE);
+    const correctedTimeUnits = periodUnits > 0n
+        ? seedTimeUnits
+            + divideBigIntByPositiveRounded(lastUse.preciseTimeUnitsAtUse - seedTimeUnits, periodUnits) * periodUnits
+        : seedTimeUnits;
+    const correctedSeconds = scaledTimeUnitsToSeconds(correctedTimeUnits);
 
     setAutoTimerAnchorSeconds(correctedSeconds, lastUse.perfNow);
     state.autoTimerCorrectionCount += 1;
 
-    const preciseTime = splitPreciseSeconds(correctedSeconds);
+    const preciseTime = splitScaledTimeUnits(correctedTimeUnits);
     setAutoTimerFractionDigits(
         preciseTime.fraction,
         formatActionTime(preciseTime.wholeSeconds)
@@ -1841,10 +1857,9 @@ function applyAutoTimerToInput() {
         inputText: ui.actionInput.value,
         timeText,
         fractionDigits: preciseTime.fraction,
-        preciseTimeUnitsAtUse: BigInt(
-            (preciseTime.wholeSeconds + normalizeOffsetSeconds(state.offsetSeconds)) * AUTO_TIMER_FRACTION_SCALE
-            + preciseTime.fraction
-        ),
+        preciseTimeUnitsAtUse:
+            BigInt(preciseTime.wholeSeconds * AUTO_TIMER_FRACTION_SCALE + preciseTime.fraction)
+            + BigInt(normalizeOffsetSeconds(state.offsetSeconds) * AUTO_TIMER_FRACTION_SCALE),
         offsetSecondsAtUse: state.offsetSeconds
     };
     setAutoTimerFractionDigits(preciseTime.fraction, timeText);
