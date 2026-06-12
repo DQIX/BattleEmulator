@@ -47,12 +47,10 @@ const SHORTCUT_STORAGE_KEY = "dq9ButtonShortcuts";
 const AUTO_TIMER_MAX_SECONDS = 30 * 60 * 60;
 const AUTO_TIMER_CORRECTION_LIMIT_MS = 5 * 60 * 1000;
 const AUTO_TIMER_FRACTION_SCALE = 10000;
-const AUTO_TIMER_FRACTION_HIDE_DELAY_MS = 5 * 60 * 1000;
 const SEED_MEMO_STORAGE_KEY = "dq9SeedMemoList";
-const SEED_MEMO_LIMIT = 200;
-const SEED_TIME_SCALE = 100n;
-const SEED_SECONDS_NUMERATOR = 10000n;
-const SEED_SECONDS_DIVISOR = 799n;
+const SEED_MEMO_LIMIT = 1000;
+const DS_TIMER_CLOCK_HZ = 33513982n; // 重要定数、変更するな
+const DS_TIMER_PRESCALER = 64n; //重要定数、変更するな
 const SHORTCUT_MODIFIER_CODES = new Set([
     "ShiftLeft",
     "ShiftRight",
@@ -662,15 +660,23 @@ function formatScaledSeconds(scaledValue, scale) {
     return `${sign}${whole.toString()}.${fraction.toString().padStart(digits, "0")}`;
 }
 
-function computeSeedSecondsScaled(seed) {
-    const shifted = seed >> 16n;
-    const SCALE_RATIO = BigInt(AUTO_TIMER_FRACTION_SCALE) / SEED_TIME_SCALE; // 10000n / 100n = 100n
-    return (shifted * SEED_SECONDS_NUMERATOR * SCALE_RATIO) / SEED_SECONDS_DIVISOR;
+function dividePositiveBigIntRounded(numerator, denominator) {
+    return (numerator + denominator / 2n) / denominator;
+}
+
+function scaledTimeUnitsToSeconds(timeUnits) {
+    return Number(timeUnits) / AUTO_TIMER_FRACTION_SCALE;
 }
 
 function computeSeedTimeUnits(seed) {
-    // computeSeedSecondsScaled が既に AUTO_TIMER_FRACTION_SCALE(10000) 倍スケールになったのでそのまま返す
-    return computeSeedSecondsScaled(seed);
+    return dividePositiveBigIntRounded(
+        seed * BigInt(AUTO_TIMER_FRACTION_SCALE) * DS_TIMER_PRESCALER,
+        DS_TIMER_CLOCK_HZ
+    );
+}
+
+function computeSeedSecondsScaled(seed) {
+    return computeSeedTimeUnits(seed);
 }
 
 function computeRealSecondsScaled(parsed, preciseTimeUnits = null) {
@@ -1283,7 +1289,6 @@ function getPreciseSearchTimeUnits(parsed, rawInput) {
 }
 
 function computeSeedRange(hours, minutes, seconds, offsetSeconds, preciseTimeUnits = null) {
-    const seedShift = 65536n;
     const totalTimeUnits = preciseTimeUnits === null
         ? BigInt(Math.floor((hours * 3600 + minutes * 60 + seconds) * AUTO_TIMER_FRACTION_SCALE))
         : preciseTimeUnits;
@@ -1292,8 +1297,8 @@ function computeSeedRange(hours, minutes, seconds, offsetSeconds, preciseTimeUni
     const unitScale = BigInt(AUTO_TIMER_FRACTION_SCALE);
     const numerator1 = 2n * (totalTimeUnits - offset) - range;
     const numerator2 = 2n * (totalTimeUnits - offset) + range;
-    const start = (numerator1 * 1000000n * seedShift) / (2n * 125155n * unitScale);
-    const end   = (numerator2 * 1000000n * seedShift) / (2n * 125155n * unitScale);
+    const start = (numerator1 * DS_TIMER_CLOCK_HZ) / (2n * DS_TIMER_PRESCALER * unitScale);
+    const end   = (numerator2 * DS_TIMER_CLOCK_HZ) / (2n * DS_TIMER_PRESCALER * unitScale);
     return { start, end };
 }
 function splitRange(start, end, threads) {
@@ -1488,10 +1493,10 @@ function applySearchResultAutoTimerCorrection(seed) {
     }
 
     const seedTimeUnits = computeSeedTimeUnits(seed);
-    const seedSeconds = Number(seedTimeUnits) / AUTO_TIMER_FRACTION_SCALE;
+    const seedSeconds = scaledTimeUnitsToSeconds(seedTimeUnits);
 
     const toolSecondsAtUse =
-        Number(lastUse.preciseTimeUnitsAtUse) / AUTO_TIMER_FRACTION_SCALE;
+        scaledTimeUnitsToSeconds(lastUse.preciseTimeUnitsAtUse);
 
     const periodSeconds = normalizeOffsetSeconds(lastUse.offsetSecondsAtUse);
     const correctedSeconds = periodSeconds > 0
