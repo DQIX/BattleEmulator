@@ -2518,6 +2518,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             return;
         }
         ui.detachButton.disabled = !state.stream || !state.matcher;
+        ui.detachButton.classList.toggle("run-button-secondary", !state.detached);
         ui.detachButton.dataset.i18n = state.detached ? "visionResume" : "visionDetach";
         ui.detachButton.textContent = t(ui.detachButton.dataset.i18n, state.detached ? "Resume Vision" : "Detach Vision");
     }
