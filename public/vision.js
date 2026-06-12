@@ -6,6 +6,7 @@
         inspectRate: document.getElementById("visionInspectRate"),
         permissionButton: document.getElementById("visionPermissionButton"),
         connectButton: document.getElementById("visionConnectButton"),
+        detachButton: document.getElementById("visionDetachButton"),
         resetButton: document.getElementById("visionResetButton"),
         debugExportButton: document.getElementById("visionDebugExportButton"),
         applyFormatButton: document.getElementById("visionApplyFormatButton"),
@@ -562,6 +563,7 @@
         bridgeStatusKey: "visionBridgeIdle",
         stream: null,
         loopToken: 0,
+        detached: false,
         matcher: null,
         templatesBySlot: new Map(),
         lastFrameAt: 0,
@@ -2509,6 +2511,34 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         state.bridgeStatusKey = key;
         ui.bridgeStatus.textContent = t(key, key);
         ui.encodedPayload.value = encoded || "";
+    }
+
+    function updateDetachButton() {
+        if (!ui.detachButton) {
+            return;
+        }
+        ui.detachButton.disabled = !state.stream || !state.matcher;
+        ui.detachButton.dataset.i18n = state.detached ? "visionResume" : "visionDetach";
+        ui.detachButton.textContent = t(ui.detachButton.dataset.i18n, state.detached ? "Resume Vision" : "Detach Vision");
+    }
+
+    function setVisionDetached(detached) {
+        if (!state.stream || !state.matcher || state.detached === detached) {
+            updateDetachButton();
+            return;
+        }
+        state.detached = detached;
+        if (detached) {
+            state.loopToken += 1;
+            setStatus("visionStatusDetached");
+        } else {
+            state.lastFrameAt = 0;
+            state.lastFpsAt = 0;
+            state.processedFrames = 0;
+            setStatus(state.matcherKind === "webgpu" ? "visionStatusWatching" : "visionStatusFallback");
+            startLoop();
+        }
+        updateDetachButton();
     }
 
     function updateTurnChip() {
@@ -4534,7 +4564,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             };
             if (state.stream) {
                 state.stream.getTracks().forEach((track) => track.stop());
+                state.stream = null;
             }
+            state.detached = false;
+            updateDetachButton();
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
             state.stream = stream;
             ui.video.srcObject = stream;
@@ -4554,6 +4587,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             state.processedFrames = 0;
             setBridgeStatus("visionBridgeReady", ui.encodedPayload.value);
             setStatus("visionStatusWatching");
+            updateDetachButton();
             startLoop();
         } catch (error) {
             console.error("camera connection failed:", error);
@@ -4561,6 +4595,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 state.stream.getTracks().forEach((track) => track.stop());
                 state.stream = null;
             }
+            state.detached = false;
             ui.video.srcObject = null;
             if (error && error.name === "AbortError") {
                 setStatus("visionStatusIdle");
@@ -4575,6 +4610,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             setBridgeStatus("visionBridgeIdle", "");
         } finally {
             ui.connectButton.disabled = false;
+            updateDetachButton();
         }
     }
 
@@ -4583,7 +4619,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         const token = state.loopToken;
         const runFrame = async (now) => {
             const {actionThreshold} = getActiveThresholds();
-            if (token !== state.loopToken || !state.stream || !state.matcher) {
+            if (token !== state.loopToken || !state.stream || !state.matcher || state.detached) {
                 return;
             }
             const targetInterval = 1000 / getScaledFpsTarget();
@@ -4593,6 +4629,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                     drawProcessingFrame(ui.video);
                     updateNumberWhiteDebug(now);
                     const matches = await state.matcher.match(processingCanvas, state.templatesBySlot);
+                    if (token !== state.loopToken || state.detached) {
+                        return;
+                    }
                     state.lastMatches = matches;
                     const damageReadings = recognizePendingDamageValues();
                     state.lastDamageReadings = damageReadings;
@@ -4655,6 +4694,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         populateModeOptions();
         setStatus(state.statusKey);
         setBridgeStatus(state.bridgeStatusKey, ui.encodedPayload.value);
+        updateDetachButton();
         setNumberWhiteDebugPlaceholder();
         refreshVisionImageDebugPanel();
         renderHistory();
@@ -4677,6 +4717,13 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         });
         ui.connectButton.addEventListener("click", () => {
             connectCamera();
+        });
+        ui.detachButton?.addEventListener("click", () => {
+            if (isPointerUnsafe()) {
+                scheduleMovementSafety();
+                return;
+            }
+            setVisionDetached(!state.detached);
         });
         ui.resetButton.addEventListener("click", () => {
             openResetDialog();
@@ -4796,6 +4843,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         if (ui.applyFormatButton) {
             ui.applyFormatButton.disabled = true;
         }
+        updateDetachButton();
         initMovementSafety();
         initEvents();
         try {

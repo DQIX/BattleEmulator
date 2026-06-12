@@ -71,6 +71,7 @@
                         visionStatusWatching: "watching",
                         visionStatusFallback: "cpu fallback",
                         visionStatusError: "error",
+                        visionStatusDetached: "detached",
                         visionGpuWarningTitle: "WebGPU unavailable",
                         visionGpuWarningText: "Your environment does not seem to have a GPU connected. Vision recognition can run on CPU, but the browser may freeze heavily. Start anyway?",
                         visionGpuWarningCancel: "Cancel",
@@ -95,6 +96,8 @@
                         visionHistoryHint: "Duplicate prevention follows the desktop console flow",
                         visionEmpty: "No accepted actions yet",
                         visionConnectButtonDescription: "Connecting to an OBS camera",
+                        visionDetach: "Detach Vision",
+                        visionResume: "Resume Vision",
                         visionstageDescription: "Go to video recognition",
                         visionTurn: "Turn",
                         visionAct1: "Act 1",
@@ -244,11 +247,14 @@
                         visionStatusWatching: "認識中",
                         visionStatusFallback: "CPUフォールバック",
                         visionStatusError: "エラー",
+                        visionStatusDetached: "デタッチ中",
                         visionGpuWarningTitle: "WebGPUが使えません",
                         visionGpuWarningText: "あなたの環境にはGPUが接続されていないようです。映像認識はCPU動作にも対応しておりますが、ブラウザがめちゃくちゃフリーズします。それでも開始しますか？",
                         visionGpuWarningCancel: "キャンセル",
                         visionGpuWarningStart: "開始",
                         visionConnect: "OBSカメラ接続",
+                        visionDetach: "映像認識デタッチ",
+                        visionResume: "映像認識再開",
                         visionRequestPermission: "カメラ権限を取得",
                         visionReset: "コンソール初期化",
                          visionDebugExport: "認識枠モノクロ保存",
@@ -565,6 +571,8 @@
                         data-i18n="visionRequestPermission">Request Camera Permission
                 </button>
                 <button id="visionConnectButton" class="run-button" data-i18n="visionConnect">Connect OBS Camera
+                </button>
+                <button id="visionDetachButton" class="run-button" data-i18n="visionDetach" disabled>Detach Vision
                 </button>
                 <button id="visionResetButton" class="run-button run-button-secondary" data-i18n="visionReset">Reset
                     Console
