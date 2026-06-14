@@ -29,7 +29,7 @@ int startturn = -1;
 const Player copiedPlayers[2] = {
 	// プレイヤー1
 	{
-		200, 301, 320, 320, 290, 290, 187, 226, 155, // 最初のメンバー
+		200, 301, 320, 320, 290, 290, 187, 187, 155, // 最初のメンバー
 		161,
 	}, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 
@@ -907,7 +907,7 @@ int main(){
 	gene1[counter++] = BattleEmulator::BUFF;
 	gene1[counter++] = BattleEmulator::MAGIC_MIRROR;
 	gene1[counter++] = BattleEmulator::MORE_HEAL;
-	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	gene1[counter++] = BattleEmulator::MAGIC_MIRROR;
 	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
 	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
 	gene1[counter++] = BattleEmulator::BUFF;

@@ -251,7 +251,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 #ifdef DEBUG2
         DEBUG_COUT2((*position));
         //THIS DEBUG CODE!
-        if ((*position) == 525) { //THIS DEBUG CODE!
+        if ((*position) == 96) { //THIS DEBUG CODE!
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -347,6 +347,11 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     if (!players[1].rage) {
                         (*position)++;
                     }
+                }else if (c == ATTACK_ENEMY) {
+                    if (!players[1].rage) {
+                        (*position)++;
+                    }
+                    (*position)+=2;
                 }
             }else if (state == TYPE_2C) {
                 auto rand = FUN_0208aecc(position, NowState);
@@ -364,12 +369,15 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     (*position) += 2;
                     continue;
                 }
-                if (c == MERA_ZOMA || c == ATTACK_ENEMY) {
-                    if (players[1].rage) {
+                if (c == MERA_ZOMA) {
+                    if (!players[1].rage) {
                         (*position)++;
-                    } else {
-                        (*position) += 2;
                     }
+                }else if (c == ATTACK_ENEMY) {
+                    if (!players[1].rage) {
+                        (*position)++;
+                    }
+                    (*position)+=2;
                 }
             }
             if (counter == 0) {
