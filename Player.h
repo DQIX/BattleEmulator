@@ -49,6 +49,8 @@ struct Player {
     int SpeedTurns = -1;
     bool inactive = false;
     int rageTurns = -1;
+    int BarrierLevel = 0;
+    int BarrierTurns = -1;//25%
 
 
     // 他のメンバー変数やメンバー関数を追加する可能性があります

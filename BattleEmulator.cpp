@@ -12,7 +12,7 @@
 #include "debug.h"
 #include "BattleResult.h"
 #include "Equipment.h"
-
+#include <cassert>
 
 thread_local int32_t actions[3];
 thread_local int actionsPosition = 0;
@@ -195,6 +195,8 @@ std::string BattleEmulator::getActionName(int actionId) {
         case INACTIVE_ENEMY:
         case INACTIVE_ALLY:
             return "Inactive";
+        case MAGIC_BARRIER:
+            return "Magic Barrier";
         default:
             return "Unknown Action";
     }
@@ -276,69 +278,97 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         int enemyAction[2] = {0, 0};
         int preAction = 0;
         while (counter != 2) {
+            int& c = enemyAction[counter];
             uint8_t state = (*NowState) & 0xf;
             if (state == TYPE_2A) {
                 //TODO: 2回同じ行動が選択された時の挙動を調べる
-                enemyAction[counter] = ProcessEnemyRandomAction2A(position);
+                c = ProcessEnemyRandomAction2A(position);
                 if (counter == 1 && enemyAction[0] == enemyAction[1]) {
                     if (preAction != SWITCH_2A) {
-                        if (enemyAction[counter] == CLAW_SLASH_A2) {
-                            enemyAction[counter] = ATTACK_ENEMY;
-                        }else if (enemyAction[counter] == KAZAM){
-                            enemyAction[counter] = CLAW_SLASH_A2;
+                        if (c == CRITICAL_ATTACK) {
+                            c = DISRUPTIVE_WAVE;
+                        }else if (c == DISRUPTIVE_WAVE){
+                            c = SWITCH_2C;
+                        }else if (c == MERA_ZOMA) {
+                            c = ATTACK_ENEMY;
                         }
                     }
                 }
-                preAction = enemyAction[counter];
-                if (enemyAction[counter] == SWITCH_2B) {
+                preAction = c;
+                if (c == SWITCH_2B) {
                     (*NowState) &= ~0xff; //ついでに2Eステートもクリアしとく
                     (*NowState) |= TYPE_2B;
                     (*position) += 2;
                     //TODO
                     continue;
                 }
-                if (enemyAction[counter] == ATTACK_ENEMY) {
-                    (*position)+=2;
+
+                const bool hasBUF = (players[0].hasMagicMirror || players[0].BuffLevel > 0 || players[0].AtkBuffLevel > 0 || players[0].InsulateLevel > 0 || players[0].TensionLevel > 0);
+                if (c == DISRUPTIVE_WAVE && !hasBUF) {
+                    c = SWITCH_2C;
+                }
+                if (c == SWITCH_2C) {
+                    (*NowState) &= ~0xff; //ついでに2Eステートもクリアしとく
+                    (*NowState) |= TYPE_2C;
+                    (*position) += 2;
+                    //TODO
+                    continue;
+                }
+
+                if (c == ATTACK_ENEMY) {
+                    (*position) += 2;
                     if (!players[1].rage) {
-                        (*position) += 1;
+                        (*position)++;
                     }
-                }else if (enemyAction[counter] == CLAW_SLASH_A2 || enemyAction[counter] == KAZAM) {
+                }else if (c == CRITICAL_ATTACK  || c == MERA_ZOMA) {
                     if (!players[1].rage) {
-                        (*position) += 1;
+                        (*position)++;
                     }
-                }else if (enemyAction[counter] == WAR_CRY) {
-                    (*position)+=2;
+                }else if (c == DISRUPTIVE_WAVE) {
+                    (*position) += 2;
                 }
             } else if (state == TYPE_2B) {
-                enemyAction[counter] = ProcessEnemyRandomAction2B(position);
-                preAction = enemyAction[counter];
-                if (counter == 1 && (enemyAction[0] == enemyAction[1])) {
-                    if (preAction != SWITCH_2B) {
-                        if (enemyAction[counter] == WAVE_OF_PANIC) {
-                            enemyAction[counter] = CLAW_SLASH_B1;
-                        } else if (enemyAction[counter] == CLAW_SLASH_B1) {
-                            enemyAction[counter] = WAVE_OF_PANIC;
-                        } else if (enemyAction[counter] == CLAW_SLASH) {
-                            enemyAction[counter] = SWITCH_2A;
-                        }else if (enemyAction[counter] == DARK_BREATH) {
-                            enemyAction[counter] = ATTACK_ENEMY;
-                        }
-                    }
-                }
-                if (enemyAction[counter] == SWITCH_2A) {
+                auto rand = FUN_0208aecc(position, NowState);
+                constexpr int table[6] = {
+                    ATTACK_ENEMY, MAGIC_BARRIER,
+                    MERA_ZOMA, MERA_ZOMA,
+                    SWITCH_2A, SWITCH_2A,
+                };
+
+                c = table[rand];
+
+                if (c == SWITCH_2A) {
                     (*NowState) &= ~0xff;
                     (*NowState) |= TYPE_2A;
                     (*position) += 2;
                     continue;
                 }
-                if (enemyAction[counter] == ATTACK_ENEMY) {
-                    (*position) += 2;
-                    if (!players[1].rage) {
-                        (*position) += 1;
-                    }
-                }else if (enemyAction[counter] == CLAW_SLASH || enemyAction[counter] == CLAW_SLASH_B1) {
+                if (c == MERA_ZOMA) {
                     if (!players[1].rage) {
                         (*position)++;
+                    }
+                }
+            }else if (state == TYPE_2C) {
+                auto rand = FUN_0208aecc(position, NowState);
+                constexpr int table[6] = {
+                    ATTACK_ENEMY, KABUFF,
+                    INFERNO, ATTACK_ENEMY,
+                    SWITCH_2A, SWITCH_2A,
+                };
+
+                c = table[rand];
+
+                if (c == SWITCH_2A) {
+                    (*NowState) &= ~0xff;
+                    (*NowState) |= TYPE_2A;
+                    (*position) += 2;
+                    continue;
+                }
+                if (c == MERA_ZOMA || c == ATTACK_ENEMY) {
+                    if (players[1].rage) {
+                        (*position)++;
+                    } else {
+                        (*position) += 2;
                     }
                 }
             }
@@ -425,14 +455,6 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             if ((t == 0 && !player0_has_initiative) || (t == 1 && player0_has_initiative)) {
                 for (int c: enemyAction) {
                     //--------start_FUN_02158dfc-------
-                    if (lcg::getPercent(position, 100) < mitoreP) {
-                        //0x021588ec
-                        //次の乱数が90%以上(一致含む)なら見惚れないらしい。
-                        int mitore = lcg::getPercent(position, 100); //0x02158964
-                        if (mitore < 90) {
-                            c = INACTIVE_ENEMY;
-                        }
-                    }
                     (*position)++;//0x02159b10
                     //--------end_FUN_02158dfc-------
                     basedamage = callAttackFun(c, position, players, 1, 0, NowState);
@@ -482,7 +504,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             }
                         }
                     }
-                    if ((c == KAZAM) && players[0].hasMagicMirror) {
+                    if (c == MERA_ZOMA && players[0].hasMagicMirror) {
+                        Player::reduceHp(players[1], basedamage);
+                    }else if ((c == KAZAM) && players[0].hasMagicMirror) {
                         Player::reduceHp(players[1], basedamage);
                     } else {
                         Player::reduceHp(players[0], basedamage);
@@ -500,6 +524,18 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             players[1].rage = false;
                         }
                     }
+
+                    players[1].BarrierTurns--;
+                    if(players[1].BarrierLevel != 0 && players[1].BarrierTurns <= 0){
+                        //0x0215abdc ATK
+                        const int probability[4] = {37, 62, 87, 100};
+                        auto probability1 = probability[std::abs(players[1].BarrierTurns)];
+                        auto probability2 = lcg::getPercent(position, 100);
+                        if(probability1 >= (probability2 + (probability1 == 75 ? 1 : 0))){
+                            players[1].BarrierLevel = 0;
+                        }
+                    }
+
                     //--------end_FUN_021594bc-------
                 }
             } else {
@@ -585,7 +621,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     if (action == HEAL || action == MEDICINAL_HERBS || action == MORE_HEAL || action == MIDHEAL ||
                         action == FULLHEAL || action == SPECIAL_MEDICINE || action == GOSPEL_SONG) {
                         Player::heal(players[0], basedamage);
-                    } else {
+                    }else{
                         Player::reduceHp(players[1], basedamage);
 
                         if (mode != -1 && mode != -2) {
@@ -752,6 +788,45 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
     auto attackCount = 0;
     bool defenseFlag = false; //防御した場合0x021e81a0のほうが優先度高いらしい。なんで
     switch (Id & 0xffff) {
+        case MAGIC_BARRIER: {
+            (*position) += 2;
+            (*position)++; //会心　0x02158584
+            (*position)++; //0x021ec6f8
+            (*position)++; //回避 0x02157f58
+            FUN_0207564c(position, players[attacker].atk, players[attacker].def);
+            (*position)++; //特技固有の処理？ 0x021e54fc
+            players[attacker].BarrierTurns = 6;
+            players[attacker].BarrierLevel++;
+            break;
+        }
+        case INFERNO:
+            (*position) += 2;
+            (*position)++; //会心
+            (*position)++; //不明
+            if (!players[0].paralysis && !players[0].sleeping) {
+                if (lcg::getPercent(position, 100) < 2) {
+                    kaihi = true;
+                }
+            }
+            (*position)++; //ニセ回避 0x02157f58
+            baseDamage = FUN_021e8458_typeD(position, 5, 28);
+            tmp = Equipments::applyDamageReduction(baseDamage, Attribute::Fire);
+
+            if (players[defender].TensionLevel == 4) {
+                tmp *= 0.5;
+            }
+
+            if (!players[0].paralysis && !players[0].sleeping) {
+                tmp *= players[defender].defence;
+            }
+            baseDamage = static_cast<int>(floor(tmp));
+            if (!kaihi) {
+                (*position)++; //0x021e54fc 不明
+            } else {
+                baseDamage = 0;
+            }
+            process7A8(position, baseDamage, players, defender);
+            break;
         case WAVE_OF_PANIC: {
                 (*position) += 2;
                 (*position)++; //会心 0x02158584
@@ -1423,13 +1498,16 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     //こっちの会心判定
                     kaisinn = true;
                 }
-                (*position)++; //盾ガード 0x021586fc 0%
+                if (lcg::getPercent(position, 100) < 2) {
+                    assert(false);
+                }
                 (*position)++; //ニセ回避 0x02157f58 100%
                 tmp = BattleEmulator::FUN_021e8458_typeD(position, 12, 190);
                 if (kaisinn) {
                     tmp *= lcg::floatRand(position, 1.5, 2.0);
                 }
-                tmp *= 1.25;
+                tmp *= 1.25;//火属性1/25倍
+                tmp *= 1.0 - (players[1].BarrierLevel * 0.25);//マジックバリア
                 tmp = processCombo(Id & 0xffff, tmp, NowState);
                 baseDamage = static_cast<int>(floor(tmp));
                 (*position)++; //不明 0x021e54fc
@@ -2301,23 +2379,26 @@ void BattleEmulator::process7A8(int *position, int baseDamage, Player players[2]
         }
     }
 }
-int BattleEmulator::FUN_0208aecc(int *position, uint64_t *NowState) {
-    uint64_t previousState = ((*NowState) >> 4) & 0xf;
-    if (previousState == 3) {
-        previousState = 0;
+int BattleEmulator::FUN_0208aecc(int* position, uint64_t* nowState)
+{
+    // 現在ステート取得 (4bit〜7bit)
+    uint8_t pre = ((*nowState >> 4) & 0xF);
+    if (pre == 3) {
+        pre = 0;
     }
-    uint64_t r0_var2 = lcg::getSeed(position);
-    uint64_t r3_var3 = previousState;
-    uint64_t r2_var5 = r0_var2 & 0x1;
-    uint64_t r0_var6 = r3_var3 << 0x1 & 0xFFFFFFFF;
-    uint64_t r1_var7 = r0_var6 & 0xff;
-    uint64_t r0_var8 = r3_var3 + 0x1;
-    uint64_t r3_var9 = r1_var7 + r2_var5;
-    previousState = static_cast<int>(r0_var8);
-    uint64_t r3_var12 = r3_var9 & 0xff;
-    (*NowState) &= ~0xf0;
-    (*NowState) |= (previousState << 4);
-    return static_cast<int>(r3_var12);
+
+    // LCG の下位 1bit
+    uint8_t lcgBit = lcg::getSeed(position);
+
+    // 出力値
+    auto output = static_cast<uint8_t>(pre * 2 + lcgBit);
+    assert(output <= 6);
+
+    // 次ステート更新
+    uint8_t next = pre + 1;
+    *nowState = (*nowState & ~0xF0) | (static_cast<uint64_t>(next) << 4);
+
+    return output;
 }
 
 int BattleEmulator::CalculateMoreHealBase(const Player *players) {
@@ -2439,11 +2520,11 @@ constexpr std::array<int, 6> ratios = {
 
 constexpr std::array<int, 6> ids = {
     BattleEmulator::ATTACK_ENEMY,
-    BattleEmulator::CLAW_SLASH_A2,
-    BattleEmulator::KAZAM,
+    BattleEmulator::MERA_ZOMA,
     BattleEmulator::SWITCH_2B,
-    BattleEmulator::WAR_CRY,
-    BattleEmulator::ATTACK_ENEMY
+    BattleEmulator::SWITCH_2C,
+    BattleEmulator::DISRUPTIVE_WAVE,
+    BattleEmulator::CRITICAL_ATTACK
 };
 
 static_assert(sum(ratios) == TABLE_MAX, "Ratio sum must be 256");
@@ -2455,34 +2536,4 @@ int BattleEmulator::ProcessEnemyRandomAction2A(int *position) {
     //0x0208aca8
     int rnd = static_cast<int>(static_cast<uint32_t>(lcg::getTop32(position)) >> 24);
     return actionTable[rnd];
-}
-
-
-constexpr std::array<int, 6> ratios2 = {
-    0x44,
-    0x3a,
-    0x30,
-    0x26,
-    0x1b,
-    0x11  // 239 + 17 = 256
-};
-
-constexpr std::array<int, 6> ids2 = {
-    BattleEmulator::CLAW_SLASH_B1,
-    BattleEmulator::WAVE_OF_PANIC,
-    BattleEmulator::ATTACK_ENEMY,
-    BattleEmulator::DARK_BREATH,
-    BattleEmulator::SWITCH_2A,
-    BattleEmulator::CLAW_SLASH
-};
-
-static_assert(sum(ratios) == TABLE_MAX, "Ratio sum must be 256");
-
-constexpr auto actionTable2 = makeProbabilityTable(ratios2, ids2);
-
-
-int BattleEmulator::ProcessEnemyRandomAction2B(int *position) {
-    //0x0208aca8
-    int rnd = static_cast<int>(static_cast<uint32_t>(lcg::getTop32(position)) >> 24);
-    return actionTable2[rnd];
 }
