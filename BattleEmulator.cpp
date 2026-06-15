@@ -1474,10 +1474,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                         hasKaisinn = true;
                     }
                 }
-                if (lcg::getPercent(position, 100) < 4) {
-                    kaihi = true;
-                } else {
-                    (*position)++; //盾ガード 0x021586fc 0%
+                (*position)++; //みかわし
+                if (lcg::getPercent(position, 100) < 2) {
+                    tate = true;
                 }
                 (*position)++; //ニセ回避 0x02157f58 100%
                 baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
@@ -1504,7 +1503,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 //ここの小数点以下は引き継がれる
                 baseDamage = static_cast<int>(floor(tmp));
 
-                if (!kaihi) {
+                if (!tate) {
                     ProcessRage(position, baseDamage, players, preEnemyHp);
                     (*position)++; //目を覚ました
                     (*position)++; //不明 0x021e54fc
@@ -2199,13 +2198,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             }
 
             //みかわし(相手)
-            if (!players[0].paralysis) {
-                if (lcg::getPercent(position, 100) < 4) {
-                    kaihi = true;
-                }
-                if (!kaihi) {
-                    (*position)++; //盾ガード(幼女は盾を持っていないので0%)
-                }
+            (*position)++; //みかわし
+            if (lcg::getPercent(position, 100) < 2) {
+                tate = true;
             }
 
             (*position)++; //回避
@@ -2243,7 +2238,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 
             baseDamage = static_cast<int>(floor(tmp));
 
-            if (!kaihi) {
+            if (!tate) {
                 ProcessRage(position, baseDamage, players, preEnemyHp);
                 (*position)++; //目を覚ました
                 (*position)++; //不明

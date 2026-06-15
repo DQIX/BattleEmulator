@@ -877,9 +877,7 @@ int main(){
 #ifdef DEBUG2
 	//THIS DEBUG CODE!
 	//THIS DEBUG CODE
-	uint64_t time1 = 0x4b7c34ef;
-
-	//0x4b7c34ef: 30, 33, 31, 62, 62, 37, 33, 62, 62, 34,
+	uint64_t time1 = 0x4b015507;
 
 	int dummy[100];
 	lcg::init(time1);
@@ -899,10 +897,12 @@ int main(){
 	*/
 	auto* NowState = new uint64_t(0); //エミュレーターの内部ステートを表すint
 
+	//0x4b015507: 30, 31, 62, 62, 62, 53, 62, 33, 34,
+
 	Player players1[2];
 	//int32_t gene1[350] = {0};
 	//THIS DEBUG CODE!
-	int32_t gene1[350] = { 30, 37, 31, 62, 62, 62, 62, 30, 33, BattleEmulator::FULLHEAL, BattleEmulator::MAGIC_MIRROR, BattleEmulator::BUFF };
+	int32_t gene1[350] = {  30, 31, 62, 62, 62, 53, 62, 33, 34,  };
 	//gene1[19-1] = BattleEmulator::DEFENCE;
 	int counter = 0;
 	//
@@ -978,7 +978,7 @@ int main(){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x4b7c34ef;
+	uint64_t time1 = 0x4b015507;
 
 	auto counter = 0;
 	int actions[350] = {0};
