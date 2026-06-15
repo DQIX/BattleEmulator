@@ -255,7 +255,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 #ifdef DEBUG2
         DEBUG_COUT2((*position));
         //THIS DEBUG CODE!
-        if ((*position) == 545) { //THIS DEBUG CODE!
+        if ((*position) == 516) { //THIS DEBUG CODE!
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -287,7 +287,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             if (state == TYPE_2A) {
                 //TODO: 2回同じ行動が選択された時の挙動を調べる
                 c = ProcessEnemyRandomAction2A(position);
-                if (counter == 1 && enemyAction[0] == enemyAction[1]) {
+                if (counter == 1 && enemyAction[0] == enemyAction[1] && preAction != TYPE_2A) {
                     if (preAction != SWITCH_2A) {
                         if (c == CRITICAL_ATTACK) {
                             c = DISRUPTIVE_WAVE;
@@ -561,7 +561,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
                     players[1].BarrierTurns--;
                     if(players[1].BarrierLevel != 0 && players[1].BarrierTurns <= 0){
-                        //0x0215abdc ATK
+                        //0x0215abdc bar?
                         const int probability[4] = {37, 62, 87, 100};
                         auto probability1 = probability[std::abs(players[1].BarrierTurns)];
                         auto probability2 = lcg::getPercent(position, 100);
@@ -1328,6 +1328,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             players[0].BuffLevel = 0;
             players[0].BuffTurns = -1;
             players[0].TensionLevel = 0;
+            players[0].InsulateLevel = 0;
+            players[0].InsulateTurns = -1;
 
 
             RecalculateBuff(players);
@@ -1554,11 +1556,11 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 tmp = processCombo(Id & 0xffff, tmp, NowState);
                 baseDamage = static_cast<int>(floor(tmp));
                 if (!tate) {
+                    ProcessRage(position, baseDamage, players, preEnemyHp);
                     (*position)++; //不明 0x021e54fc
-                }else {
+                }else{
                     baseDamage = 0;
                 }
-                ProcessRage(position, baseDamage, players, preEnemyHp);
             } else {
                 if (!players[0].paralysis && !players[0].sleeping&& !players[0].inactive) {
                     if (lcg::getPercent(position, 100) < shieldGuardP) {
@@ -2017,9 +2019,6 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             if ((Id & 0xffff) != CRITICAL_ATTACK) {
                 (*position)++; //会心
             }
-            if (Id == CLAW_SLASH_B1 || Id == CLAW_SLASH_A2) {
-                Id = CLAW_SLASH;
-            }
             if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
                 if (lcg::getPercent(position, 100) < 2) {
                     kaihi = true;
@@ -2241,7 +2240,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     tmp *= 1.2000;
                 }
             }
-            
+
             baseDamage = static_cast<int>(floor(tmp));
 
             if (!kaihi) {
@@ -2467,7 +2466,8 @@ void BattleEmulator::ProcessRage(int *position, int baseDamage, Player *players,
         if (static_cast<int64_t>(preEnemyHp) * 2 >= maxHp) {
             if (!players[1].rage) {
                 (*position)++;
-                (*position)++;
+                players[1].rage = true;
+                players[1].rageTurns = lcg::intRangeRand(position, 2, 4);
             } else {
                 (*position)++;
             }
@@ -2476,8 +2476,7 @@ void BattleEmulator::ProcessRage(int *position, int baseDamage, Player *players,
                 if (static_cast<int64_t>(preEnemyHp) * 4 >= maxHp) {
                     if (!players[1].rage) {
                         (*position)++;
-                        players[1].rage = true;
-                        players[1].rageTurns = lcg::intRangeRand(position, 2, 4);
+                        (*position)++;
                     } else {
                         (*position)++;
                     }

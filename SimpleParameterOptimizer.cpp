@@ -48,10 +48,10 @@ static constexpr std::array<int, ids> TUNE_IDS = {
     SimpleParameterOptimizerNode::playerHpWeight,
     SimpleParameterOptimizerNode::resourceWeight,
     SimpleParameterOptimizerNode::StatusEffectWeight,
-    SimpleParameterOptimizerNode::paralysisWeight,
-    SimpleParameterOptimizerNode::sleepWeight,
-    SimpleParameterOptimizerNode::poisonWeight,
-    SimpleParameterOptimizerNode::inactiveWeight,
+    //SimpleParameterOptimizerNode::paralysisWeight,
+    //SimpleParameterOptimizerNode::sleepWeight,
+    //SimpleParameterOptimizerNode::poisonWeight,
+    //SimpleParameterOptimizerNode::inactiveWeight,
     SimpleParameterOptimizerNode::SpHeight,
     SimpleParameterOptimizerNode::ActHeight,
     SimpleParameterOptimizerNode::ResourceHPCost,
@@ -59,13 +59,16 @@ static constexpr std::array<int, ids> TUNE_IDS = {
     SimpleParameterOptimizerNode::BuffWeight,
     SimpleParameterOptimizerNode::AtkBuffWeight,
     SimpleParameterOptimizerNode::TensionWeight,
-    SimpleParameterOptimizerNode::AntidoteWeight,
+    //SimpleParameterOptimizerNode::AntidoteWeight,
     SimpleParameterOptimizerNode::MagicWaterCost,
     SimpleParameterOptimizerNode::SpecialMedicineCost, // 追加
     SimpleParameterOptimizerNode::ElfinElixirCost, // 追加
     SimpleParameterOptimizerNode::hasMagicMirrorHeight, // 追加
     SimpleParameterOptimizerNode::TYPE_2AWeight, // 追加
     SimpleParameterOptimizerNode::TYPE_2BWeight, // 追加
+    SimpleParameterOptimizerNode::TYPE_2CWeight, // 追加
+    SimpleParameterOptimizerNode::KABUFFWeight, // 追加
+    SimpleParameterOptimizerNode::BarrierWeight, // 追加
 };
 
 // action cost テーブル（一次真実源）
