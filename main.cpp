@@ -877,7 +877,8 @@ int main(){
 #ifdef DEBUG2
 	//THIS DEBUG CODE!
 	//THIS DEBUG CODE
-	uint64_t time1 = 0x4b58254a;
+	//0x4b539adb: 30, 30, 31, 62, 33, 62, 62, 62, 34,
+	uint64_t time1 = 0x4b539adb;
 
 	int dummy[100];
 	lcg::init(time1);
@@ -900,33 +901,33 @@ int main(){
 	//0x4b015507: 30, 31, 62, 62, 62, 53, 62, 33, 34,
 
 	Player players1[2];
-	int32_t gene1[350] = {0};
+	//int32_t gene1[350] = {0};
 	//THIS DEBUG CODE!
-	//int32_t gene1[350] = {  30, 31, 62, 62, 62, 53, 62, 33, 34,  };
+	int32_t gene1[350] = {  30, 30, 31, 62, 33, 62, 62, 62, 34,  };
 	//gene1[19-1] = BattleEmulator::DEFENCE;
 	int counter = 0;
 	//
-	gene1[counter++] = BattleEmulator::BUFF;
-	gene1[counter++] = BattleEmulator::MAGIC_MIRROR;
-	gene1[counter++] = BattleEmulator::MORE_HEAL;
-	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-	gene1[counter++] = BattleEmulator::BUFF;
-	gene1[counter++] = BattleEmulator::FULLHEAL;
-	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-	gene1[counter++] = BattleEmulator::FULLHEAL;
-	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-	gene1[counter++] = BattleEmulator::MAGIC_MIRROR;
-	gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-	gene1[counter++] = BattleEmulator::FULLHEAL;
-	gene1[counter++] = BattleEmulator::MULTITHRUST;
-	gene1[counter++] = BattleEmulator::MULTITHRUST;
-	gene1[counter++] = BattleEmulator::MULTITHRUST;
-	gene1[counter++] = BattleEmulator::MULTITHRUST;
+	// gene1[counter++] = BattleEmulator::BUFF;
+	// gene1[counter++] = BattleEmulator::MAGIC_MIRROR;
+	// gene1[counter++] = BattleEmulator::MORE_HEAL;
+	// gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	// gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	// gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	// gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	// gene1[counter++] = BattleEmulator::BUFF;
+	// gene1[counter++] = BattleEmulator::FULLHEAL;
+	// gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	// gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	// gene1[counter++] = BattleEmulator::FULLHEAL;
+	// gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	// gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	// gene1[counter++] = BattleEmulator::MAGIC_MIRROR;
+	// gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+	// gene1[counter++] = BattleEmulator::FULLHEAL;
+	// gene1[counter++] = BattleEmulator::MULTITHRUST;
+	// gene1[counter++] = BattleEmulator::MULTITHRUST;
+	// gene1[counter++] = BattleEmulator::MULTITHRUST;
+	// gene1[counter++] = BattleEmulator::MULTITHRUST;
 	// gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
 	// gene1[counter++] = BattleEmulator::DOUBLE_UP;
 	// gene1[counter++] = BattleEmulator::MULTITHRUST;
@@ -987,7 +988,7 @@ int main(){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x4b60b19a;
+	uint64_t time1 = 0x4b539adb;
 
 	auto counter = 0;
 	int actions[350] = {0};

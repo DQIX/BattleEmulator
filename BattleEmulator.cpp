@@ -255,7 +255,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 #ifdef DEBUG2
         DEBUG_COUT2((*position));
         //THIS DEBUG CODE!
-        if ((*position) == 950) { //THIS DEBUG CODE!
+        if ((*position) == 146) { //THIS DEBUG CODE!
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -2009,16 +2009,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 
             baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
 
-            if (kaihi) {
-                //                if (baseDamage == 0) {
-                //                    (*position)++;//0x021e81a0
-                //                }
-
-                if (!players[0].paralysis && !players[0].sleeping && !players[0].specialCharge && !players[0].inactive) {
-                    (*position)++; //0x021ed7a8
-                }
-                baseDamage = 0;
-            } else if (tate) {
+            if (kaihi || tate) {
                 //                if (baseDamage == 0) {
                 //                    (*position)++;//0x021e81a0
                 //                }
