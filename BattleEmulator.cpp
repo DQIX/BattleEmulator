@@ -1256,6 +1256,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 			for (int i = 0; i < attackCount; ++i) {
 				kaihi = false;
 				kaisinn = false;
+				tate = false;
 				(*position)++; //0x021ec6f8 不明
 				if (attackCount == 4) {
 					if (lcg::getPercent(position, 0x2710) < multithrust4KaisinnP) {
