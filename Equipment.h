@@ -91,6 +91,10 @@ inline constexpr Equipment DragonWarriorBoots("Dragon warrior boots", {
                                                   {Attribute::Fire, 5},
                                                   {Attribute::Darkness, 5}
                                               });
+inline constexpr Equipment RedTights("RedTights", {
+                                                  {Attribute::Fire, 7},
+                                                  {Attribute::ThunderExplosion, 7}
+                                              });
 
 /**
  * すべての装備品を格納する定数配列です。
@@ -101,12 +105,11 @@ inline constexpr Equipment DragonWarriorBoots("Dragon warrior boots", {
  * @note この配列はconstexprとして定義されているため、コンパイル時に初期化され、実行時に変更することはできません。
  * @note 配列内の順序は、装備品管理や計算処理で一貫性を保つために重要です。
  */
-// 同様に、配列も inline 化
-inline constexpr std::array<Equipment, 4> allEquipments = {
-    DarkShield, EtherealArmour, EnchantedGloves, DragonWarriorBoots
+
+
+inline constexpr std::array<Equipment, 5> allEquipments = {
+    DarkShield, EtherealArmour, EnchantedGloves, DragonWarriorBoots, RedTights
 };
-
-
 /**
  * 指定された属性について装備全体の耐性倍率を計算します。
  *
