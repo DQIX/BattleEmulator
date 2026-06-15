@@ -255,7 +255,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 #ifdef DEBUG2
         DEBUG_COUT2((*position));
         //THIS DEBUG CODE!
-        if ((*position) == 516) { //THIS DEBUG CODE!
+        if ((*position) == 950) { //THIS DEBUG CODE!
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -404,9 +404,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     return true;
                 }
                 auto & ac = enemyAction[counter];
-                if (need == CLAW_SLASH && (ac == CLAW_SLASH_A2 || ac == CLAW_SLASH_B1 || ac == CLAW_SLASH)) {
-
-                }else if (need != ac) {
+                if (need != ac) {
                     return false;
                 }
             }
@@ -426,25 +424,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 actionTable = ATTACK_ALLY;
             }
             //genePosition++;
-            if (actionTable == HEAL && players[0].mp <= 0) {
-                if (players[0].SpecialMedicineCount >= 1) {
-                    actionTable = MEDICINAL_HERBS;
-                } else {
-                    actionTable = ATTACK_ALLY;
-                }
-            }
         } else {
-            if (players[0].hp >= 35) {
-                actionTable = ATTACK_ALLY;
-            } else {
-                if (players[0].mp >= 2) {
-                    actionTable = HEAL;
-                } else if (players[0].SpecialMedicineCount >= 1) {
-                    actionTable = MEDICINAL_HERBS;
-                } else {
-                    actionTable = ATTACK_ALLY;
-                }
-            }
+            actionTable = ATTACK_ALLY;
         }
 
 
@@ -511,11 +492,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     } else if (mode != -1 && mode != -2) {
                         if (
                             c == ATTACK_ENEMY ||
-                            c == CLAW_SLASH_A2 ||
-                            c == KAZAM ||
-                            c == DARK_BREATH ||
-                            c == CLAW_SLASH_B1 ||
-                            c == CLAW_SLASH
+                            c == INFERNO ||
+                            c == MERA_ZOMA ||
+                            c == CRITICAL_ATTACK
                         ) {
                             if (damages[exCounter] == -1) {
                                 startTurn = counterJ - 1;
@@ -1460,8 +1439,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position) += attackCount;
             hasKaisinn = false;
             for (int i = 0; i < attackCount; ++i) {
-                kaihi = false;
                 kaisinn = false;
+                tate = false;
                 (*position)++; //0x021ec6f8 不明
                 if (attackCount == 4) {
                     if (lcg::getPercent(position, 0x2710) < 62) {

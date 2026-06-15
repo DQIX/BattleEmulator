@@ -106,9 +106,9 @@ public:
 
 	static constexpr int KAZAM = 153; //ドルモーア
 	static constexpr int WAVE_OF_PANIC = 154; //ステータス効果
-
-	static constexpr int KABUFF = 173;//スクルト
+	
 	static constexpr int INFERNO = 172;//はげしいほのう
+	static constexpr int KABUFF = 173;//スクルト
 	static constexpr int MAGIC_BARRIER = 174; //マジックバリア
 
     static bool
