@@ -131,12 +131,6 @@ constexpr ActionEntry ACTION_TABLE[] = {
 	{
 		BattleEmulator::INSULATE,
 		[](const Genome& g){
-#if !defined(OPTIMIZE_MODE)
-			if(
-				EnhancedCostCalculator::getCostTable() != EnhancedCostCalculator::CostTable::TableF &&
-				EnhancedCostCalculator::getCostTable() != EnhancedCostCalculator::CostTable::TableG
-			) return false;
-#endif
 			return g.AllyPlayer.InsulateLevel <= 1 && g.AllyPlayer.InsulateTurns <= 2 && g.AllyPlayer.mp >= 4;
 		},
 		[](const Genome& b, const Genome& a){ return true; }
