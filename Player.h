@@ -6,8 +6,8 @@
 #define NEWDIRECTORY_PLAYER_H
 
 #include <algorithm>
+#include <cstdint>
 #include <iostream>
-
 
 struct Player {
     int hp;

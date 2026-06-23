@@ -112,6 +112,11 @@ public:
 	static constexpr int SCEPTER_BALL = 170;
 	static constexpr int THIN_AIR = 171;
 	static constexpr int ATTACK_ENEMY_A6 = 172;
+	static constexpr int KABUFF = 173;//スクルト
+
+	static constexpr int WHIPPING_BOY = 180;//かばう
+	static constexpr int HELM_SPLITTER = 181;//かぶとわり
+	static constexpr int DOUBLE_EDGED_SLASH = 182;//もろば斬り
 
     static bool
     Main(int *position, int RunCount, const int32_t Gene[350], Player *players,

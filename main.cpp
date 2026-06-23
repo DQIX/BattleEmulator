@@ -24,26 +24,28 @@
 
 int startturn = -1;
 
-#if defined(ganasadai)
+#if defined(gerunikku)
 
-const Player copiedPlayers[2] = {
+constexpr Player copiedPlayers[4] = {
 	// プレイヤー1
 	{
-		301, 301, 320, 320, 290, 290, 187, 226, 80, // 最初のメンバー
+	301, 301, 320, 320, 289, 289, 187, 234, 161, // 最初のメンバー
 		161, false, false, 0, false, 0, -1,
 		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
 		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
 		false, -1, 0, -1, 0, false, 1, 1, 1 , false
 	}, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
-
+	{
+		402, 402, 161, 161, 256, 256, 98, 0, 10,255,
+	},
 	// プレイヤー2
 	{
-		1970, 1970, 168, 168, 266, 266, 145, 0, 255, // 最初のメンバー
-		255, false, false, 0, false, 0, -1,
-		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-		false, -1, 0, -1, 0, false, 0, 0, 0 ,false
-	} // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
+		1854, 1854, 125, 125, 238, 238, 148, 0, 255,255,
+	},
+{
+		402, 402, 161, 161, 256, 256, 98, 0, 10,255,
+	},
+
 };
 
 #elif defined(hayate)

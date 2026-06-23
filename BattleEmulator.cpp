@@ -23,8 +23,8 @@ thread_local int preHP[3] = {0, 0, 0};
 thread_local bool player0_has_initiative = false;
 thread_local bool TiggerSkyAttack = false;
 
-#if defined(ganasadai)
-constexpr int Ally_Level = 49;
+#if defined(gerunikku)
+constexpr int Ally_Level = 48;
 constexpr double Ally_TensionTable[4] = {1.5, 2.5, 4.0, 6.0};
 constexpr int shieldGuardP = 9; //盾ガード率 9%
 constexpr int kaisinnP = 500;
@@ -340,17 +340,52 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             action = -1;
         }
         actionsPosition = 0;
-        double speed0 = players[0].speed * lcg::floatRand(position, 0.51, 1.0);
-        double speed1 = players[1].speed * lcg::floatRand(position, 0.51, 1.0);
+        double speed0 = players[0].speed > 0 ? (players[0].speed * lcg::floatRand(position, 0.51, 1.0)) : -1.0;
+        double speed1 = players[1].speed > 0 ? (players[1].speed * lcg::floatRand(position, 0.51, 1.0)) : -1.0;
+        double speed2 = players[2].speed > 0 ? (players[2].speed * lcg::floatRand(position, 0.51, 1.0)) : -1.0;
+        double speed3 = players[3].speed > 0 ? (players[3].speed * lcg::floatRand(position, 0.51, 1.0)) : -1.0;
 
-        // 素早さを比較
-        if (speed0 > speed1) {
-            player0_has_initiative = true;
-        } else {
-            player0_has_initiative = false;
-        }
+        auto swap_if = [](double& a, double& b, int& ia, int& ib) {
+            if (a < b) {
+                std::swap(a, b);
+                std::swap(ia, ib);
+            }
+        };
+
+        int i0 = 0, i1 = 1, i2 = 2, i3 = 3;
+
+        swap_if(speed0, speed1, i0, i1);
+        swap_if(speed2, speed3, i2, i3);
+        swap_if(speed0, speed2, i0, i2);
+        swap_if(speed1, speed3, i1, i3);
+        swap_if(speed1, speed2, i1, i2);
 
         (*position)++;//0x02160d64
+
+        auto ini = false;
+        int TekkouAction[2] = {0};
+        if (speed1 > speed3) {
+            ini = true;
+        }
+
+        auto preaction = -1;
+        for (int & c : TekkouAction) {
+            c = ProcessEnemyRandomAction2A(position);
+            if (preaction != -1 && TekkouAction[0] == TekkouAction[1]) {
+                if (c == WHIPPING_BOY) {
+                    c = ATTACK_ENEMY;
+                }
+            }
+            if (c == ATTACK_ENEMY) {
+                (*position)++; //0x02160d64
+            }
+            if (c == WHIPPING_BOY) {
+                (*position)++;//0x02156874
+                (*position)+= 2;//0x0216139c && 0x021613b0
+            }
+            (*position)++;//0x02160d64
+            preaction = c;
+        }
 
         int32_t actionTable = -1;
 
@@ -363,7 +398,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             if (actionTable == TURN_SKIPPED || actionTable == SLEEPING || actionTable == CURE_SLEEPING || actionTable ==
                 CURE_PARALYSIS || actionTable == PARALYSIS) {
                 actionTable = ATTACK_ALLY;
-            }
+                }
         } else {
             actionTable = ATTACK_ALLY;
         }
@@ -390,375 +425,34 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         auto preAction = 0;
         int enemyAction[2] = {0, 0};
         // ソートされた結果を出力
-        for (int t = 0; t < 2; ++t) {
-            if (!Player::isPlayerAlive(players[1])) {
-                break;
+        int order[4] = {i0, i1, i2, i3};
+
+        for (const int actor : order) {
+            if (!Player::isPlayerAlive(players[actor])) {
+                continue;
             }
-            if (!Player::isPlayerAlive(players[0])) {
-                break;
-            }
-            int basedamage = 0;
 
-            if ((t == 0 && !player0_has_initiative) || (t == 1 && player0_has_initiative)) {
-                const auto ProcessCount = (((counterJ & 1) ^ 1) + 1);
-                auto counter2 = 0;
-                while (counter2 != ProcessCount) {
-                    auto & counter = enemyAction[counter2];
-                    counter2++;
-                    //--------start_FUN_02158dfc-------
-                    counter = ProcessEnemyRandomAction2A(position);
-                    auto flag = false;
-                    auto flag2 = false;
-                    auto flag3 = false;
-                    do {
-                        if (preAction != 0 && enemyAction[0] == enemyAction[1]) {
-                            if (counter == SCEPTER_BALL) {
-                                if (flag) {
-                                    counter = MERA_ZOMA;
-                                }else {
-                                    counter = ATTACK_ENEMY;
-                                }
-                            } else if (counter == MERA_ZOMA) {
-                                counter = SCEPTER_BALL;
-                            } else if (counter == THIN_AIR) {
-                                if (flag3) {
-                                    counter = ATTACK_ENEMY_A6;
-                                }else {
-                                    counter = DISRUPTIVE_WAVE;
-                                }
-
-                            }
-                        }
-                        if (counter == ATTACK_ENEMY && (players[1].defaultATK * 2) <= players[0].def) {
-                            counter = SCEPTER_BALL;
-                            flag = true;
-                            continue;
-                        }
-                        if (counter == ATTACK_ENEMY_A6 && (players[1].defaultATK * 2) <= players[0].def) {
-                            counter = THIN_AIR;
-                            continue;
-                        }
-                        if (counter == MERA_ZOMA && (players[0].hasMagicMirror)) {
-                            if (flag) {
-                                if (flag2) {
-                                    counter = SCEPTER_BALL;
-                                    flag2 = true;
-                                }else {
-                                    counter = DISRUPTIVE_WAVE;
-                                }
-                            }else {
-                                if (flag3) {
-                                    counter = SCEPTER_BALL;
-                                }else{
-                                    counter = DISRUPTIVE_WAVE;
-                                }
-                            }
-                            continue;
-                        }
-                        const bool hasBUF = (players[0].hasMagicMirror || players[0].BuffLevel > 0 || players[0].AtkBuffLevel > 0 || players[0].InsulateLevel > 0 || players[0].TensionLevel > 0);
-                        if (counter == DISRUPTIVE_WAVE && !hasBUF) {
-                            if (flag2) {
-                                counter = THIN_AIR;
-                            }else {
-                                counter = MERA_ZOMA;
-                            }
-                            flag3 = true;
-                            continue;
-                        }
-
-                        break;
-                    } while (true);
-                    preAction = counter;
-
-                    if (counter == ATTACK_ENEMY_A6) {
-                        counter = ATTACK_ENEMY;
-                    }
-
-                    if (mode != -1 && mode != -2) {
-                        const int & need = eActions[exCounter1++];
-                        if (need == -1) {
-                            startTurn = counterJ - 1;
-                            return true;
-                        }
-                        if (need != counter) {
-                            return false;
-                        }
-                    }
-
-                    auto & c = counter;
-                    if (c == DISRUPTIVE_WAVE) {
-                        (*position) += 1;
-                    } else if (c == ATTACK_ENEMY || c == MERA_ZOMA || c == ATTACK_ENEMY_A6) {
-                        if (players[1].rage) {
-                            (*position)++;
-                        } else {
-                            (*position) += 2;
-                        }
-
-                    }else if (c == THIN_AIR) {
-                        (*position) += 3;
-                    }else if (c == SCEPTER_BALL) {
-                        (*position) += 5;
-                    }
-
-
-                    //--------end_FUN_02158dfc-------
-                    basedamage = callAttackFun(c, position, players, 1, 0, NowState);
-
-                    if (players[0].sleeping) {
-                        actionTable = SLEEPING;
-                    }
-
-                    if (mode == -1) {
-                        auto atk1 = -1;
-                        if (players[0].AtkBuffTurn > 0) {
-                            atk1 = players[0].AtkBuffTurn;
-                        } else if (players[0].AtkBuffLevel != 0) {
-                            atk1 = 0;
-                        }
-                        auto def1 = -1;
-                        if (players[0].BuffTurns > 0) {
-                            def1 = players[0].BuffTurns;
-                        } else if (players[0].BuffLevel != 0) {
-                            def1 = 0;
-                        }
-                        auto mmt1 = -1;
-                        if (players[0].MagicMirrorTurn > 0) {
-                            mmt1 = players[0].MagicMirrorTurn;
-                        } else if (players[0].hasMagicMirror) {
-                            mmt1 = 0;
-                        }
-                        BattleResult::add(result, c, basedamage, true, atk1,
-                                          def1, mmt1, counterJ - 1,
-                                          player0_has_initiative, ehp,
-                                          ahp, tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag);
-                    } else if (mode != -1 && mode != -2) {
-                        if (
-                            c == ATTACK_ENEMY ||
-                            c == SCEPTER_BALL ||
-                            c == MERA_ZOMA ||
-                            c == THIN_AIR
-                        ) {
-                            if (damages[exCounter] == -1) {
-                                startTurn = counterJ - 1;
-                                return true;
-                            }
-                            //                            int need = damages[exCounter++] - basedamage;
-                            //                            if (std::abs(need) == 0) {
-                            //                                return false;
-                            //                            }
-                            if (damages[exCounter++] != basedamage) {
-                                return false;
-                            }
-                        }
-                    }
-                    Player::reduceHp(players[0], basedamage);
-                    //--------start_FUN_021594bc-------
-                    if (Player::isPlayerAlive(players[0]) && Player::isPlayerAlive(players[1])) {
-                        (*position) += 1;
-                    } else {
+            switch (actor) {
+                case 0:
+                    {
+                        // Actor
                         break;
                     }
-
-                    if (players[1].rage) {
-                        players[1].rageTurns--;
-                        if (players[1].rageTurns <= 0) {
-                            players[1].rage = false;
-                        }
+                case 1:
+                case 3:
+                    {
+                        // tekkou1
+                        break;
                     }
-
-                    //--------end_FUN_021594bc-------
-                }
-            } else {
-                int32_t action = actionTable & 0xffff;
-                auto skipTurn = false;
-                if (action == SLEEPING && !player0_has_initiative && !players[0].sleeping) {
-                    skipTurn = true;
-                }
-                if (action == BattleEmulator::FLEE_ALLY) {
-                    skipTurn = true;
-                }
-                if (!skipTurn) {
-                    //--------start_FUN_02158dfc-------
-                    if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
-                        (*position) += 1;
-                    } else if (players[0].inactive) {
-                        players[0].inactive = false;
-                        action = INACTIVE_ALLY;
-                        players[0].defence = 1.0;
-                        (*position)++;
-                    }else if (players[0].paralysis) {
-                        action = PARALYSIS;
-                        //if (players[0].paralysisTurns != 0) {
-                        players[0].paralysisTurns--;
-                        //}
-                        if (players[0].paralysisTurns <= 0) {
-                            int paralysisTable[4] = {62, 75, 87, 100};
-                            auto probability1 = paralysisTable[std::abs(players[0].paralysisTurns)];
-                            auto probability2 = lcg::getPercent(position, 100);
-                            if (probability1 >= (probability2 + (probability1 == 75 ? 1 : 0))) {
-                                // 0.5 < 0.65
-                                players[0].paralysis = false;
-                                players[0].paralysisLevel = 0;
-                                action = CURE_PARALYSIS;
-                            }
-                        } else {
-                            (*position) += 1;
-                        }
-                    } else if (players[0].sleeping) {
-                        action = SLEEPING;
-
-                        players[0].sleepingTurn--;
-                        if (players[0].sleepingTurn <= 0) {
-                            constexpr int sleepTable[4] = {37, 62, 87, 100};
-                            auto probability1 = sleepTable[std::abs(players[0].sleepingTurn)];
-                            auto probability2 = lcg::getPercent(position, 100);
-                            if (probability1 >= probability2) {
-                                players[0].sleeping = false;
-                                action = CURE_SLEEPING;
-                            }
-                        } else {
-                            (*position)++;
-                        }
+                case 2:
+                    {
+                        // Boss
+                        break;
                     }
-
-
-                    //--------end_FUN_02158dfc-------
-                    basedamage = callAttackFun(action, position, players, 0, 1, NowState);
-                    if (mode == -1) {
-                        auto atk1 = -1;
-                        if (players[0].AtkBuffTurn > 0) {
-                            atk1 = players[0].AtkBuffTurn;
-                        } else if (players[0].AtkBuffLevel != 0) {
-                            atk1 = 0;
-                        }
-                        auto def1 = -1;
-                        if (players[0].BuffTurns > 0) {
-                            def1 = players[0].BuffTurns;
-                        } else if (players[0].BuffLevel != 0) {
-                            def1 = 0;
-                        }
-                        auto mmt1 = -1;
-                        if (players[0].MagicMirrorTurn > 0) {
-                            mmt1 = players[0].MagicMirrorTurn;
-                        } else if (players[0].hasMagicMirror) {
-                            mmt1 = 0;
-                        }
-                        BattleResult::add(result, action, basedamage, false, atk1,
-                                          def1, mmt1, counterJ - 1,
-                                          player0_has_initiative, ehp, ahp,
-                                          tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag);
-                    }
-                    if (action == HEAL || action == MEDICINAL_HERBS || action == MORE_HEAL || action == MIDHEAL ||
-                        action == FULLHEAL || action == SPECIAL_MEDICINE || action == GOSPEL_SONG) {
-                        Player::heal(players[0], basedamage);
-                    } else {
-                        Player::reduceHp(players[1], basedamage);
-
-                        if (mode != -1 && mode != -2) {
-                            if (action == MULTITHRUST || action == ATTACK_ALLY || action == MERCURIAL_THRUST) {
-                                if (damages[exCounter] == -1) {
-                                    startTurn = counterJ - 1;
-                                    return true;
-                                }
-                                //int need = ;
-                                if (damages[exCounter++] != basedamage) {
-                                    return false;
-                                }
-                            }
-                        }
-                    }
-                    //--------start_FUN_021594bc-------
-                    if (Player::isPlayerAlive(players[0]) && Player::isPlayerAlive(players[1])) {
-                        (*position) += 1;
-                        //TODO: 順序調べる
-                        players[0].MagicMirrorTurn--;
-                        if (players[0].hasMagicMirror && players[0].MagicMirrorTurn <= 0) {
-                            constexpr int probability[4] = {62, 75, 87, 100};
-                            auto probability1 = probability[std::abs(players[0].MagicMirrorTurn)];
-                            auto probability2 = lcg::getPercent(position, 100);
-                            if (probability1 >= (probability2 + (probability1 == 75 ? 1 : 0))) {
-                                // 0x0215a050 MMT
-                                players[0].hasMagicMirror = false;
-                            }
-                        }
-
-                        players[0].AtkBuffTurn--;
-                        if (players[0].AtkBuffLevel != 0 && players[0].AtkBuffTurn <= 0) {
-                            //0x0215a804 ATK
-                            constexpr int probability[4] = {62, 75, 87, 100};
-                            auto probability1 = probability[std::abs(players[0].AtkBuffTurn)];
-                            auto probability2 = lcg::getPercent(position, 100);
-                            if (probability1 >= (probability2 + (probability1 == 75 ? 1 : 0))) {
-                                players[0].AtkBuffLevel = 0;
-                                RecalculateBuff(players);
-                            }
-                        }
-                        players[0].BuffTurns--;
-                        if (players[0].BuffLevel != 0 && players[0].BuffTurns <= 0) {
-                            //0x0215a8a8 DEF
-                            constexpr int probability[4] = {62, 75, 87, 100};
-                            auto probability1 = probability[std::abs(players[0].BuffTurns)];
-                            auto probability2 = lcg::getPercent(position, 100);
-                            if (probability1 >= (probability2 + (probability1 == 75 ? 1 : 0))) {
-                                players[0].BuffLevel = 0;
-                                RecalculateBuff(players);
-                            }
-                        }
-                        players[0].InsulateTurns--;
-                        if (players[0].InsulateLevel != 0 && players[0].InsulateTurns <= 0) {
-                            //0x0215ac74 ins
-                            constexpr int probability[4] = {62, 75, 87, 100};
-                            auto probability1 = probability[std::abs(players[0].InsulateTurns)];
-                            auto probability2 = lcg::getPercent(position, 100);
-                            if (probability1 >= (probability2 + (probability1 == 75 ? 1 : 0))) {
-                                players[0].InsulateLevel = 0;
-                                RecalculateBuff(players);
-                            }
-                        }
-                    }
-                } else {
-                    if (mode == -1) {
-                        auto atk1 = -1;
-                        if (players[0].AtkBuffTurn > 0) {
-                            atk1 = players[0].AtkBuffTurn;
-                        } else if (players[0].AtkBuffLevel != 0) {
-                            atk1 = 0;
-                        }
-                        auto def1 = -1;
-                        if (players[0].BuffTurns > 0) {
-                            def1 = players[0].BuffTurns;
-                        } else if (players[0].BuffLevel != 0) {
-                            def1 = 0;
-                        }
-                        auto mmt1 = -1;
-                        if (players[0].MagicMirrorTurn > 0) {
-                            mmt1 = players[0].MagicMirrorTurn;
-                        } else if (players[0].hasMagicMirror) {
-                            mmt1 = 0;
-                        }
-                        BattleResult::add(result, action, 0, false, atk1,
-                                          def1, mmt1, counterJ - 1,
-                                          player0_has_initiative, ehp, ahp,
-                                          tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag);
-                    }
-                }
+                default:
+                    break;
             }
-            //--------end_FUN_021594bc-------
         }
-        if (Player::isPlayerAlive(players[0]) && Player::isPlayerAlive(players[1])) {
-            (*position) += 1;
-        }
-        camera::Main(position, actions, NowState, player0_has_initiative, TiggerSkyAttack);
-
-        if (!Player::isPlayerAlive(players[1])) {
-            return false;
-        }
-        if (!Player::isPlayerAlive(players[0])) {
-            return false;
-        }
-
-        //Player::heal(players[0], 25);
     }
     if (mode != -1 && mode != -2) {
         startTurn = RunCount - 2;
@@ -1933,6 +1627,29 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             baseDamage = 0;
             resetCombo(NowState);
             break;
+        case BattleEmulator::KABUFF:
+            (*position) += 2;
+            (*position)++; // 関係ない
+            (*position)++; // 会心判定
+            (*position)++; // 回避
+
+            baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[attacker].def);
+            if (baseDamage == 0) {
+                baseDamage = lcg::getPercent(position, 2); //0x021e81a0
+            }
+            if (baseDamage != 0) {
+                (*position)++; //不明 0x021e54fc
+            }
+
+            if (players[1].BuffLevel != 2) {
+                players[1].BuffLevel++;
+                players[1].BuffTurns = 7;
+                RecalculateBuff(players);
+            }
+
+            baseDamage = 0;
+            resetCombo(NowState);
+            break;
         case BattleEmulator::ATTACK_ENEMY:
         case BattleEmulator::SKY_ATTACK:
         case ATTACK_ENEMY_A6:
@@ -2356,13 +2073,14 @@ constexpr std::array<int, 6> ratios = {
     0x11  // 239 + 17 = 256
 };
 
+//鉄鉱まじん
 constexpr std::array<int, 6> ids = {
+    BattleEmulator::WHIPPING_BOY,
     BattleEmulator::ATTACK_ENEMY,
-    BattleEmulator::SCEPTER_BALL,
-    BattleEmulator::MERA_ZOMA,
-    BattleEmulator::DISRUPTIVE_WAVE,
-    BattleEmulator::THIN_AIR,
-    BattleEmulator::ATTACK_ENEMY_A6,
+    BattleEmulator::ATTACK_ENEMY,
+    BattleEmulator::HELM_SPLITTER,
+    BattleEmulator::KABUFF,//mp切れ 2回目以降 HELM_SPLITTER
+    BattleEmulator::DOUBLE_EDGED_SLASH,
 };
 
 static_assert(sum(ratios) == TABLE_MAX, "Ratio sum must be 256");
