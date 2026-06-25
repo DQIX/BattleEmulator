@@ -127,7 +127,7 @@ namespace {
     constexpr Player BasePlayers[2] = {
         // プレイヤー1
         {
-            93, 93, 106, 106, 86, 86, 62, 62, 41, 33, // 最初のメンバー
+            93, 93, 102, 102, 89, 89, 62, 62, 41, 33, // 最初のメンバー
             33, false, false, 0, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
@@ -168,7 +168,7 @@ namespace {
     constexpr Player BasePlayers[2] = {
         // プレイヤー1
         {
-            93, 93, 123, 123, 86, 86, 62, 62, 41, 33, // 最初のメンバー
+            93, 93, 119, 119, 89, 89, 62, 62, 41, 33, // 最初のメンバー
             33, false, false, 0, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
@@ -896,7 +896,7 @@ int main(int argc, char *argv[]) {
 
 #if defined(DEBUG3)
 
-    uint64_t seed = 0x81a66013;
+    uint64_t seed = 0x81a66014;
 
     int actions[350] = {BattleEmulator::ATTACK_ALLY, -1,};
     SearchRequest(BasePlayers, seed, actions, THREAD_COUNT);
