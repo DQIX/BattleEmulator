@@ -27,7 +27,7 @@ double EnhancedCostCalculator::calculateHCost(const Genome &genome, double enemy
     double hCost = 0.0;
 
     // Primary heuristic: enemy HP ratio (scaled down for better granularity)
-    hCost = (genome.EnemyPlayer.hp / enemyMaxHp) * 30.0;
+    hCost = (genome.EnemyPlayer.hp / enemyMaxHp) * 31.0;
     // Player HP consideration (more granular than original)
     double playerHpRatio = genome.AllyPlayer.hp / playerMaxHp;
     hCost += (1.0 - playerHpRatio) * 2.0;
