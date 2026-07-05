@@ -87,7 +87,7 @@ namespace {
     constexpr Player BasePlayers[2] = {
         // プレイヤー1
         {
-            127, 127.0, 179, 179, 94, 94, 82, 82, 92, 70, // 最初のメンバー
+            127, 127.0, 175, 175, 97, 97, 82, 82, 92, 70, // 最初のメンバー
             75, false, false, 0, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             6, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
@@ -954,11 +954,13 @@ int main(int argc, char *argv[]) {
     ver: v8.0.6_vG_v2, atk: 220, def: 155, seed: 0x1001
 actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
         */
+    // 0xd58941f
+    //actions:
 
 
 
     //AI Warning: This is code related to debug2
-    uint64_t time1 = 0x34f282f;
+    uint64_t time1 = 0xd58941f;
 
     int dummy[100];
     lcg::init(time1, false);
@@ -995,7 +997,7 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 
     //AI Warning: This is code related to debug2
      int32_t gene1[350] = {
-         30, 30, 50, 53, 53, 33, 62, 62, 33, 62, 62, 34,
+         30, 30, 55, 62, 33, 62, 62, 62, 34,
          BattleEmulator::ATTACK_ALLY};
     //gene1[19-1] = BattleEmulator::DEFENCE;
     int counter = 0;
@@ -1065,10 +1067,9 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 0x0376f52f;
+    uint64_t seed = 0x0d58941f;
 
     int actions[350] = {
-        BattleEmulator::BUFF,
         BattleEmulator::BUFF,
         -1,
     };
