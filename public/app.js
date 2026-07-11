@@ -1282,7 +1282,6 @@ function extractActionSuffix(text) {
 }
 
 function focusActionInputAtTop() {
-    window.scrollTo({top: 0, behavior: "smooth"});
     requestAnimationFrame(() => {
         if (!ui.actionInput) {
             return;
