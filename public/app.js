@@ -709,7 +709,7 @@ function computeRealSecondsScaled(parsed, preciseTimeUnits = null) {
 function computeSeedDriftText(seed, parsed, preciseTimeUnits = null) {
     const seedSecondsScaled = computeSeedSecondsScaled(seed);
     const realSecondsScaled = computeRealSecondsScaled(parsed, preciseTimeUnits);
-    const offsetScaled = BigInt(normalizeOffsetSeconds(state.offsetSeconds) * AUTO_TIMER_FRACTION_SCALE);
+    const offsetScaled = offsetSecondsToTimeUnits(state.offsetSeconds);
     const driftScaled = realSecondsScaled - seedSecondsScaled - offsetScaled;
     return formatScaledSeconds(driftScaled, BigInt(AUTO_TIMER_FRACTION_SCALE));
 }
@@ -739,11 +739,18 @@ function parseIntValue(el) {
 }
 
 function normalizeOffsetSeconds(value) {
-    const parsed = Number.parseInt(value, 10);
+    if (value === null || value === undefined || String(value).trim() === "") {
+        return DEFAULT_OFFSET_SECONDS;
+    }
+    const parsed = Number(value);
     if (!Number.isFinite(parsed) || parsed < 0) {
         return DEFAULT_OFFSET_SECONDS;
     }
-    return parsed;
+    return Math.round(parsed * AUTO_TIMER_FRACTION_SCALE) / AUTO_TIMER_FRACTION_SCALE;
+}
+
+function offsetSecondsToTimeUnits(value) {
+    return BigInt(Math.round(normalizeOffsetSeconds(value) * AUTO_TIMER_FRACTION_SCALE));
 }
 
 function normalizeSearchRangeSeconds(value) {
@@ -1309,7 +1316,7 @@ function computeSeedRange(hours, minutes, seconds, offsetSeconds, preciseTimeUni
     const totalTimeUnits = preciseTimeUnits === null
         ? BigInt(Math.floor((hours * 3600 + minutes * 60 + seconds) * AUTO_TIMER_FRACTION_SCALE))
         : preciseTimeUnits;
-    const offset = BigInt(Math.floor(normalizeOffsetSeconds(offsetSeconds) * AUTO_TIMER_FRACTION_SCALE));
+    const offset = offsetSecondsToTimeUnits(offsetSeconds);
     const range = BigInt(Math.floor(normalizeSearchRangeSeconds(state.searchRangeSeconds) * AUTO_TIMER_FRACTION_SCALE));
     const unitScale = BigInt(AUTO_TIMER_FRACTION_SCALE);
     const numerator1 = 2n * (totalTimeUnits - offset) - range;
@@ -1493,14 +1500,15 @@ function parseInput(text) {
     };
 }
 
-function shouldApplyAutoTimerCorrection(parsed, rawInput, nowPerf = performance.now()) {
+function shouldApplyAutoTimerCorrection(parsed, rawInput, preciseTimeUnits, nowPerf = performance.now()) {
     if (!parsed || !state.autoTimerLastUse) {
         return false;
     }
     if (nowPerf - state.autoTimerLastUse.perfNow > AUTO_TIMER_CORRECTION_LIMIT_MS) {
         return false;
     }
-    return true;
+    return rawInput.trim() === state.autoTimerLastUse.inputText.trim()
+        && preciseTimeUnits === state.autoTimerLastUse.inputTimeUnitsAtUse;
 }
 
 function applySearchResultAutoTimerCorrection(seed) {
@@ -1510,8 +1518,7 @@ function applySearchResultAutoTimerCorrection(seed) {
     }
 
     const seedTimeUnits = computeSeedTimeUnits(seed);
-    const periodSeconds = normalizeOffsetSeconds(lastUse.offsetSecondsAtUse);
-    const periodUnits = BigInt(periodSeconds * AUTO_TIMER_FRACTION_SCALE);
+    const periodUnits = offsetSecondsToTimeUnits(lastUse.offsetSecondsAtUse);
     const correctedTimeUnits = periodUnits > 0n
         ? seedTimeUnits
             + divideBigIntByPositiveRounded(lastUse.preciseTimeUnitsAtUse - seedTimeUnits, periodUnits) * periodUnits
@@ -1606,7 +1613,12 @@ async function runSearch() {
     restoreAutoTimerFractionForInput(input);
     const preciseTimeUnits = getPreciseSearchTimeUnits(parsed, input);
     const runStartedAtPerf = performance.now();
-    const shouldCorrectAutoTimer = shouldApplyAutoTimerCorrection(parsed, input, runStartedAtPerf);
+    const shouldCorrectAutoTimer = shouldApplyAutoTimerCorrection(
+        parsed,
+        input,
+        preciseTimeUnits,
+        runStartedAtPerf
+    );
 
     const {start, end} = computeSeedRange(
         parsed.hours,
@@ -1856,9 +1868,11 @@ function applyAutoTimerToInput() {
         inputText: ui.actionInput.value,
         timeText,
         fractionDigits: preciseTime.fraction,
+        inputTimeUnitsAtUse:
+            BigInt(preciseTime.wholeSeconds * AUTO_TIMER_FRACTION_SCALE + preciseTime.fraction),
         preciseTimeUnitsAtUse:
             BigInt(preciseTime.wholeSeconds * AUTO_TIMER_FRACTION_SCALE + preciseTime.fraction)
-            + BigInt(normalizeOffsetSeconds(state.offsetSeconds) * AUTO_TIMER_FRACTION_SCALE),
+            + offsetSecondsToTimeUnits(state.offsetSeconds),
         offsetSecondsAtUse: state.offsetSeconds
     };
     setAutoTimerFractionDigits(preciseTime.fraction, timeText);
