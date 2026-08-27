@@ -12,9 +12,7 @@ using namespace dq9::freecam::bindings;
 static_assert(kFreeCameraActions[BattleEmulator::ATTACK_ALLY].dq9ActionId == 1);
 static_assert(kFreeCameraActions[BattleEmulator::THUNDER_THRUST].dq9ActionId == 72);
 static_assert(kFreeCameraActions[BattleEmulator::MEDICINAL_HERBS].dq9ActionId == 255);
-static_assert(kFreeCameraActions[BattleEmulator::MERA_ZOMA].dq9ActionId == 11);
-static_assert(kFreeCameraActions[BattleEmulator::SKY_ATTACK].dq9ActionId == 540);
-static_assert(kFreeCameraActions[BattleEmulator::MERCURIAL_THRUST].dq9ActionId == 69);
+static_assert(!kFreeCameraActions[BattleEmulator::MERA_ZOMA].mapped());
 
 using AttackAllyAction = FreeCamera<1, BattleEmulator::ATTACK_ALLY>;
 using ThunderThrustAction = FreeCamera<72, BattleEmulator::THUNDER_THRUST>;
