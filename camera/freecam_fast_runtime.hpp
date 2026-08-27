@@ -73,9 +73,6 @@ static_assert(MagicIs(generated::kActionMetadataBytes, 'F', 'C', 'M', 'A'));
 static_assert(ReadU32(generated::kActionMetadataBytes, 4) == 1);
 static_assert(ReadU32(generated::kActionMetadataBytes, 8) == kActionCount);
 
-static_assert(generated::kTargetSideCode.size() == kActionCount);
-static_assert(generated::kTargetScopeCode.size() == kActionCount);
-
 static_assert(MagicIs(generated::kMembershipMetadataBytes, 'F', 'C', 'M', 'M'));
 static_assert(ReadU32(generated::kMembershipMetadataBytes, 4) == 1);
 static_assert(ReadU32(generated::kMembershipMetadataBytes, 8) == kActionCount);
@@ -241,24 +238,6 @@ struct MembershipCell {
     }
 };
 
-enum class TargetSide : std::uint8_t {
-    none_or_context = 0,
-    opponent = 1,
-    ally = 2,
-};
-
-enum class TargetScope : std::uint8_t {
-    none_or_context = 0,
-    self = 1,
-    single = 2,
-    all_on_side = 3,
-    group = 4,
-    single_formation = 5,
-    force_special = 6,
-    field_context = 7,
-    actor_specific = 8,
-};
-
 [[nodiscard]] constexpr MembershipCell DecodeMembershipCell(const std::uint64_t packed) noexcept {
     return {
         static_cast<std::uint32_t>(packed),
@@ -278,10 +257,6 @@ struct FreeCamera {
 
     static inline constexpr std::uint16_t dq9ActionId = Dq9ActionId;
     static inline constexpr int commonActionId = BattleEmulatorCommonId;
-    static inline constexpr TargetSide targetSide =
-        static_cast<TargetSide>(generated::kTargetSideCode[Dq9ActionId]);
-    static inline constexpr TargetScope targetScope =
-        static_cast<TargetScope>(generated::kTargetScopeCode[Dq9ActionId]);
     static inline constexpr bool actionHasBact = metadata::HasBact(Dq9ActionId);
     static inline constexpr std::uint32_t actionSelectorProjection =
         metadata::SelectorProjection(Dq9ActionId);

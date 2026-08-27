@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.28)
 project(newDirectory)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 
 if(MSVC)
     # ポリシーの設定
@@ -55,14 +55,6 @@ set(SOURCES
         SimpleParameterOptimizer.cpp
         SimpleParameterOptimizer.h
         LinearIdPool.h
-        camera/freecam-bact-table.hpp
-        camera/freecam_action_mapper.hpp
-        camera/freecam_fast_generated.hpp
-        camera/freecam_fast_runtime.hpp
-        camera/freecam_route.hpp
-        camera/freecam_runtime.hpp
-        camera/freecam_setup.hpp
-        camera/freecam_state.hpp
 )
 
 add_executable(newDirectory_gouketu ${SOURCES})
