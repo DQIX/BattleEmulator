@@ -1,6 +1,7 @@
 #include <array>
 #include <cstdint>
 
+#include <BattleEmulator.h>
 #include "freecam_action_mapper.hpp"
 
 namespace {
@@ -8,24 +9,32 @@ using namespace dq9::freecam;
 using namespace dq9::freecam::fast;
 using namespace dq9::freecam::bindings;
 
-static_assert(AttackAlly::dq9ActionId == 1);
-static_assert(AttackAlly::commonActionId == BattleEmulator::ATTACK_ALLY);
-static_assert(DragonSlash::dq9ActionId == 63);
-static_assert(MiracleSlash::dq9ActionId == 65);
-static_assert(ThunderThrust::dq9ActionId == 72);
-static_assert(MedicinalHerbs::dq9ActionId == 255);
-static_assert(MedicinalHerbs::commonActionId == BattleEmulator::MEDICINAL_HERBS);
+static_assert(kFreeCameraActions[BattleEmulator::ATTACK_ALLY].dq9ActionId == 1);
+static_assert(kFreeCameraActions[BattleEmulator::THUNDER_THRUST].dq9ActionId == 72);
+static_assert(kFreeCameraActions[BattleEmulator::MEDICINAL_HERBS].dq9ActionId == 255);
+static_assert(!kFreeCameraActions[BattleEmulator::MERA_ZOMA].mapped());
 
-static_assert(ThunderThrust::actionHasBact);
-static_assert(ThunderThrust::fallbackLookupActionId == 72);
-static_assert(MedicinalHerbs::actionHasBact);
-static_assert(ComputeSelectorSuppression(MedicinalHerbs::actionSelectorProjection));
-static_assert(sizeof(AttackAlly::actorMembershipPacked)
+using AttackAllyAction = FreeCamera<1, BattleEmulator::ATTACK_ALLY>;
+using ThunderThrustAction = FreeCamera<72, BattleEmulator::THUNDER_THRUST>;
+using MedicinalHerbsAction = FreeCamera<255, BattleEmulator::MEDICINAL_HERBS>;
+
+static_assert(AttackAllyAction::targetSide == TargetSide::opponent);
+static_assert(AttackAllyAction::targetScope == TargetScope::single_formation);
+static_assert(ThunderThrustAction::targetSide == TargetSide::opponent);
+static_assert(ThunderThrustAction::targetScope == TargetScope::single);
+static_assert(MedicinalHerbsAction::targetSide == TargetSide::ally);
+static_assert(MedicinalHerbsAction::targetScope == TargetScope::single);
+
+static_assert(ThunderThrustAction::actionHasBact);
+static_assert(ThunderThrustAction::fallbackLookupActionId == 72);
+static_assert(MedicinalHerbsAction::actionHasBact);
+static_assert(ComputeSelectorSuppression(MedicinalHerbsAction::actionSelectorProjection));
+static_assert(sizeof(AttackAllyAction::actorMembershipPacked)
     == metadata::kActorProfileCount * sizeof(std::uint64_t));
 
 constexpr std::uint32_t kMonster900Profile = ResolveMonsterProfile(900);
 static_assert(kMonster900Profile != kInvalidMembershipProfile);
-constexpr MembershipCell kMonster900Attack = AttackAlly::ActorMembership(kMonster900Profile);
+constexpr MembershipCell kMonster900Attack = AttackAllyAction::ActorMembership(kMonster900Profile);
 static_assert(kMonster900Attack.Present());
 static_assert(kMonster900Attack.selectorProjection == UINT32_C(0x000a0003));
 

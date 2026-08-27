@@ -1,0 +1,682 @@
+action_id_decimal,action_id_hex,action_name,action_name_status,source_table,target_side_code,target_side,target_side_ja,target_scope_code,target_scope,target_scope_ja,formation_class,formation_class_ja,is_formation_ignored,is_formation_used,is_all_attack,is_all_targets_on_side,is_group_attack,is_opponent_only,is_ally_only,is_self_only,repeat_mode_code,operation_type,resource_cost,target_handler_judgment1,target_handler_judgment2,runtime_validation,classification_confidence
+1,0x001,こうげき,actname_indexed,b,1,opponent,相手側,5,single_formation,隊列使用単体,opponent_single_formation_used,隊列使用,false,true,false,false,false,true,false,false,0,1,0,0,1,confirmed: runtime side=1 scope=5; formation-used normal attack; observed three times,confirmed
+2,0x002,こうげき,actname_indexed,b,1,opponent,相手側,5,single_formation,隊列使用単体,opponent_single_formation_used,隊列使用,false,true,false,false,false,true,false,false,0,1,0,0,1,not_observed,supported
+3,0x003,ぼうぎょ,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+6,0x006,移動,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+7,0x007,かんがえちゅう,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+9,0x009,メラ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,2,7,2,not_observed,supported
+10,0x00a,メラミ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,6,7,2,not_observed,supported
+11,0x00b,メラゾーマ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,18,7,2,not_observed,supported
+12,0x00c,ヒャド,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,3,7,2,not_observed,supported
+13,0x00d,ドルマ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,4,7,2,not_observed,supported
+14,0x00e,ドルクマ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,7,7,2,not_observed,supported
+15,0x00f,ドルモーア,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,20,7,2,not_observed,supported
+16,0x010,ヒャダルコ,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,8,8,3,not_observed,supported
+17,0x011,マヒャド,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,24,0,4,not_observed,supported
+18,0x012,バギ,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,3,8,3,not_observed,supported
+19,0x013,バギマ,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,8,8,3,not_observed,supported
+20,0x014,バギクロス,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,26,8,3,not_observed,supported
+21,0x015,イオ,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,5,0,4,not_observed,supported
+22,0x016,イオラ,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,10,0,4,not_observed,supported
+23,0x017,イオナズン,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,28,0,4,not_observed,supported
+24,0x018,ザキ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,17,5,7,2,not_observed,supported
+25,0x019,ザラキ,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,17,10,8,3,not_observed,supported
+26,0x01a,ザラキーマ,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,17,20,0,4,not_observed,supported
+27,0x01b,メガンテ,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,35,1,5,6,not_observed,supported
+28,0x01c,マダンテ,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,255,5,6,not_observed,supported
+30,0x01e,ホイミ,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,2,11,11,not_observed,supported
+31,0x01f,ベホイミ,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,4,11,11,not_observed,supported
+32,0x020,ベホイム,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,8,11,11,not_observed,supported
+33,0x021,ベホマ,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,24,11,11,not_observed,supported
+34,0x022,ベホマラー,actname_indexed,a,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,2,16,12,12,not_observed,supported
+35,0x023,キアリー,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,7,2,13,13,not_observed,supported
+36,0x024,キアリク,actname_indexed,b,2,ally,味方側,4,group,1グループ,ally_group,味方グループ,false,false,false,false,false,false,true,false,0,20,2,14,14,not_observed,supported
+37,0x025,ザメハ,actname_indexed,b,2,ally,味方側,4,group,1グループ,ally_group,味方グループ,false,false,false,false,false,false,true,false,0,9,2,15,15,not_observed,supported
+38,0x026,ザオラル,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,18,8,16,16,not_observed,supported
+39,0x027,ザオリク,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,18,15,16,16,not_observed,supported
+40,0x028,メガザル,actname_indexed,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,33,255,17,17,not_observed,supported
+41,0x029,スカラ,actname_indexed,b,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,4,3,18,19,not_observed,supported
+42,0x02a,スクルト,actname_indexed,b,2,ally,味方側,4,group,1グループ,ally_group,味方グループ,false,false,false,false,false,false,true,false,0,4,6,20,21,not_observed,supported
+43,0x02b,ルカニ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,4,4,22,23,not_observed,supported
+44,0x02c,ルカナン,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,4,8,24,25,not_observed,supported
+45,0x02d,ピオラ,actname_indexed,b,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,5,2,26,27,not_observed,supported
+46,0x02e,ピオリム,actname_indexed,b,2,ally,味方側,4,group,1グループ,ally_group,味方グループ,false,false,false,false,false,false,true,false,0,5,4,28,29,not_observed,supported
+47,0x02f,ボミエ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,5,3,30,31,not_observed,supported
+48,0x030,ボミオス,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,5,5,32,33,not_observed,supported
+49,0x031,バイキルト,actname_indexed,b,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,3,8,34,35,not_observed,supported
+50,0x032,ヘナトス,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,3,8,36,37,not_observed,supported
+51,0x033,メダパニ,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,21,5,38,39,not_observed,supported
+52,0x034,メダパニーマ,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,21,10,40,41,not_observed,supported
+53,0x035,ラリホー,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,8,3,42,43,not_observed,supported
+54,0x036,ラリホーマ,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,8,8,44,45,not_observed,supported
+55,0x037,マホカンタ,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,31,4,46,47,not_observed,supported
+56,0x038,マホバリア,actname_indexed,b,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,22,3,48,49,not_observed,supported
+57,0x039,マジックバリア,actname_indexed,b,2,ally,味方側,4,group,1グループ,ally_group,味方グループ,false,false,false,false,false,false,true,false,0,22,6,50,49,not_observed,supported
+58,0x03a,マホトーン,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,16,3,52,53,not_observed,supported
+59,0x03b,マヌーサ,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,19,5,54,55,not_observed,supported
+60,0x03c,バーハ,actname_indexed,b,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,23,4,56,57,not_observed,supported
+61,0x03d,フバーハ,actname_indexed,b,2,ally,味方側,4,group,1グループ,ally_group,味方グループ,false,false,false,false,false,false,true,false,0,23,8,58,59,not_observed,supported
+62,0x03e,ディバインスペル,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,22,4,60,60,not_observed,supported
+63,0x03f,ドラゴン[斬/ぎ]り,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+64,0x040,メタル[斬/ぎ]り,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+65,0x041,ミラクルソード,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,4,61,61,not_observed,supported
+66,0x042,はやぶさ[斬/ぎ]り,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,1,1,2,61,61,not_observed,supported
+67,0x043,ギガスラッシュ,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,15,62,62,not_observed,supported
+68,0x044,ギガブレイク,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,30,62,62,not_observed,supported
+69,0x045,しっぷうづき,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+70,0x046,けものづき,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+71,0x047,きゅうしょづき,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,3,61,61,not_observed,supported
+72,0x048,[一閃/いっせん]づき,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,8,61,61,not_observed,supported
+73,0x049,さみだれづき,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,3,1,4,0,0,not_observed,supported
+74,0x04a,ジゴスパーク,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,26,0,0,not_observed,supported
+75,0x04b,ポイズンダガー,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,2,63,63,not_observed,supported
+76,0x04c,キラーブーン,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+77,0x04d,タナトスハント,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,3,64,64,not_observed,supported
+78,0x04e,アサシンアタック,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,3,61,61,not_observed,supported
+79,0x04f,バンパイアエッジ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,4,61,61,not_observed,supported
+80,0x050,ヒュプノスハント,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,3,65,65,not_observed,supported
+81,0x051,まふうじのつえ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,16,3,154,154,not_observed,supported
+82,0x052,[悪魔/あくま]ばらい,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+83,0x053,しゅくふくのつえ,actname_indexed,b,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,2,66,66,not_observed,supported
+84,0x054,ふっかつのつえ,actname_indexed,b,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,18,8,16,16,not_observed,supported
+85,0x055,らせん[打/う]ち,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,3,67,67,not_observed,supported
+86,0x056,[愛/あい]のムチ,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,0,62,62,not_observed,supported
+87,0x057,ねむり[打/う]ち,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,3,42,42,not_observed,supported
+88,0x058,しばり[打/う]ち,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,3,68,68,not_observed,supported
+89,0x059,ヒールウィップ,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,5,62,62,not_observed,supported
+90,0x05a,[双/そう][竜/りゅう][打/う]ち,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,4,1,10,62,62,not_observed,supported
+91,0x05b,[地這/ちは]い[大蛇/だいじゃ],actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,16,62,62,not_observed,supported
+92,0x05c,[足/あし]ばらい,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,10,0,62,62,not_observed,supported
+93,0x05d,[黄泉送/よみおく]り,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+94,0x05e,なぎはらい,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,0,62,62,not_observed,supported
+95,0x05f,[氷結/ひょうけつ]らんげき,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,5,1,5,61,61,not_observed,supported
+96,0x060,[天地/てんち]のかまえ,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,8,0,0,not_observed,supported
+97,0x061,ウィングブロウ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,2,61,61,not_observed,supported
+98,0x062,[裂鋼拳/れっこうけん],actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+99,0x063,ネイルスクラッチ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,6,1,0,61,61,not_observed,supported
+100,0x064,タイガークロー,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,1,1,0,61,61,not_observed,supported
+101,0x065,ゴールドフィンガー,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,6,69,69,not_observed,supported
+102,0x066,ゴッドスマッシュ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,14,61,61,not_observed,supported
+103,0x067,[花/はな]ふぶき,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,19,2,54,54,not_observed,supported
+104,0x068,といきがえし,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,32,4,70,70,not_observed,supported
+105,0x069,[波紋演舞/はもんえんぶ],actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+106,0x06a,[風姿花伝/ふうしかでん],actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,36,3,76,76,not_observed,supported
+107,0x06b,おうぎのまい,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,3,1,8,61,61,not_observed,supported
+108,0x06c,ハッスルダンス,actname_indexed,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,2,0,71,71,not_observed,supported
+109,0x06d,かぶと[割/わ]り,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,72,72,not_observed,supported
+110,0x06e,たいぼく[斬/ざん],actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+111,0x06f,[蒼天魔斬/そうてんまざん],actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,2,61,61,not_observed,supported
+112,0x070,まじん[斬/ぎ]り,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,8,61,61,not_observed,supported
+113,0x071,オノむそう,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,0,62,62,not_observed,supported
+114,0x072,[森羅万象斬/しんらばんしょうざん],actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,16,61,61,not_observed,supported
+115,0x073,ハートブレイク,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,2,77,77,not_observed,supported
+116,0x074,ゴールドハンマー,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,2,61,61,not_observed,supported
+117,0x075,ラストバッター,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,3,61,61,not_observed,supported
+118,0x076,ドラムクラッシュ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+119,0x077,ランドインパクト,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,12,0,0,not_observed,supported
+120,0x078,ビッグバン,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,16,0,0,not_observed,supported
+121,0x079,クロスカッター,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,2,0,0,not_observed,supported
+122,0x07a,パワフルスロー,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,4,0,0,not_observed,supported
+123,0x07b,スライムブロウ,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+124,0x07c,シャインスコール,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,6,0,0,not_observed,supported
+125,0x07d,バーニングバード,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,7,1,4,61,61,not_observed,supported
+126,0x07e,メタルウィング,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,3,73,73,not_observed,supported
+127,0x07f,ギガスロー,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,16,61,61,not_observed,supported
+128,0x080,マジックアロー,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,3,74,74,not_observed,supported
+129,0x081,バードシュート,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+130,0x082,ニードルショット,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,1,61,61,not_observed,supported
+131,0x083,さみだれうち,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,5,1,4,0,0,not_observed,supported
+132,0x084,[天使/てんし]の[矢/や],actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+133,0x085,シャイニングボウ,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,18,0,0,not_observed,supported
+134,0x086,シールドアタック,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,4,61,61,not_observed,supported
+135,0x087,[大/だい]ぼうぎょ,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,3,0,0,not_observed,supported
+136,0x088,ビッグシールド,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,37,4,75,75,not_observed,supported
+137,0x089,ミラーシールド,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,31,4,46,46,not_observed,supported
+138,0x08a,うけながしのかまえ,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,12,78,78,not_observed,supported
+139,0x08b,まもりのたて,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,64,4,79,79,not_observed,supported
+140,0x08c,[石/いし]つぶて,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,0,62,62,not_observed,supported
+141,0x08d,かまいたち,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,0,62,62,not_observed,supported
+142,0x08e,せいけんづき,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,2,61,61,not_observed,supported
+143,0x08f,ばくれつけん,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,5,1,0,61,61,not_observed,supported
+144,0x090,[岩石/がんせき]おとし,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,8,0,0,not_observed,supported
+145,0x091,ミラクルムーン,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,16,0,0,not_observed,supported
+146,0x092,かばう,actname_indexed,b,2,ally,味方側,8,actor_specific,アクター固有,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,0,0,80,81,not_observed,supported
+147,0x093,くちぶえ,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,56,0,82,82,not_observed,supported
+148,0x094,[体当/たいあ]たり,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,5,6,not_observed,supported
+149,0x095,ロストアタック,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,3,83,83,not_observed,supported
+150,0x096,やいばくだき,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,4,84,84,not_observed,supported
+151,0x097,[聖/せい]なる[祈/いの]り,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,38,2,85,85,not_observed,supported
+152,0x098,[聖女/せいじょ]の[守/まも]り,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,39,3,86,86,not_observed,supported
+153,0x099,ゾンビガード,actname_indexed,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,40,4,87,87,not_observed,supported
+154,0x09a,ひかりのはどう,actname_indexed,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,41,10,88,88,not_observed,supported
+155,0x09b,ぶきみなひかり,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,22,6,89,89,not_observed,supported
+156,0x09c,[魔結界/まけっかい],actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,22,5,90,90,not_observed,supported
+157,0x09d,せいしんとういつ,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,78,3,91,92,not_observed,supported
+158,0x09e,[魔力/まりょく]かくせい,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,42,5,93,93,not_observed,supported
+159,0x09f,つきのはどう,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,3,8,94,95,not_observed,supported
+160,0x0a0,おたけび,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,10,0,0,0,not_observed,supported
+161,0x0a1,ためる,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,15,0,96,96,confirmed: runtime side=2 scope=1; self-target ためる; observed once,confirmed
+162,0x0a2,ふとうふくつ,actname_indexed,a,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,43,2,97,97,not_observed,supported
+163,0x0a3,しんとうめっきゃく,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,23,1,56,56,not_observed,supported
+164,0x0a4,めいそう,actname_indexed,a,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,2,3,98,98,not_observed,supported
+165,0x0a5,ぬすむ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,44,0,0,0,not_observed,supported
+166,0x0a6,みやぶる,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,45,0,0,0,not_observed,supported
+167,0x0a7,[火/ひ]ふき[芸/げい],actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,2,61,61,not_observed,supported
+168,0x0a8,おうえん,actname_indexed,b,2,ally,味方側,8,actor_specific,アクター固有,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,15,0,99,99,not_observed,supported
+169,0x0a9,ボケ,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,10,0,62,62,not_observed,supported
+171,0x0ab,ツッコミ,actname_indexed,b,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,9,2,100,100,not_observed,supported
+172,0x0ac,とうこん[討/う]ち,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,1,61,61,not_observed,supported
+173,0x0ad,すてみ,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,3,0,155,155,not_observed,supported
+174,0x0ae,[無心/むしん]こうげき,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,10,1,4,0,0,not_observed,supported
+175,0x0af,もろば[斬/ぎ]り,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,0,0,not_observed,supported
+176,0x0b0,テンションバーン,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,47,6,139,139,not_observed,supported
+177,0x0b1,ファイアフォース,actname_indexed,b,2,ally,味方側,6,force_special,フォース特殊,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,46,4,0,0,not_observed,supported
+178,0x0b2,アイスフォース,actname_indexed,b,2,ally,味方側,6,force_special,フォース特殊,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,46,4,0,0,not_observed,supported
+179,0x0b3,ストームフォース,actname_indexed,b,2,ally,味方側,6,force_special,フォース特殊,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,46,4,0,0,not_observed,supported
+180,0x0b4,ダークフォース,actname_indexed,b,2,ally,味方側,6,force_special,フォース特殊,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,46,4,0,0,not_observed,supported
+181,0x0b5,ライトフォース,actname_indexed,b,2,ally,味方側,6,force_special,フォース特殊,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,46,4,0,0,not_observed,supported
+182,0x0b6,におうだち,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,101,102,not_observed,supported
+183,0x0b7,ＨＰパサー,actname_indexed,b,2,ally,味方側,8,actor_specific,アクター固有,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,14,3,103,103,not_observed,supported
+184,0x0b8,ＭＰパサー,actname_indexed,b,2,ally,味方側,8,actor_specific,アクター固有,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,13,0,104,104,not_observed,supported
+185,0x0b9,みがわり,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,105,105,not_observed,supported
+187,0x0bb,グランドネビュラ,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,30,62,62,not_observed,supported
+188,0x0bc,いやしの[雨/あめ],actname_indexed,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,48,6,71,71,not_observed,supported
+189,0x0bd,いてつくはどう,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,49,10,0,106,not_observed,supported
+190,0x0be,しんぴのさとり,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,42,8,107,107,not_observed,supported
+191,0x0bf,スキャンダル,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,19,3,54,54,not_observed,supported
+192,0x0c0,メイクアップ,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,50,2,108,108,not_observed,supported
+194,0x0c2,スポットライト,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,51,6,109,109,not_observed,supported
+195,0x0c3,バックダンサー[呼/よ]び,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,15,0,0,not_observed,supported
+196,0x0c4,たたかいのうた,actname_indexed,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,3,16,156,156,not_observed,supported
+197,0x0c5,みのがす,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,52,0,110,110,not_observed,supported
+198,0x0c6,なだめる,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,53,2,83,83,not_observed,supported
+199,0x0c7,ステルス,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,54,3,98,98,not_observed,supported
+200,0x0c8,まもりのきり,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,55,5,76,76,not_observed,supported
+201,0x0c9,オオカミアタック,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,4,1,16,0,0,not_observed,supported
+202,0x0ca,ルーラ,actname_indexed,a,2,ally,味方側,7,field_context,フィールド・文脈依存,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,82,0,0,0,not_observed,supported
+205,0x0cd,リレミト,actname_indexed,a,2,ally,味方側,7,field_context,フィールド・文脈依存,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,84,3,0,0,not_observed,supported
+206,0x0ce,トラマナ,actname_indexed,a,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,85,2,0,0,not_observed,supported
+207,0x0cf,くちぶえ,actname_indexed,a,0,none_or_context,なし・文脈依存,0,none_or_context,対象なし・文脈依存,special_or_context,特殊・文脈依存,false,false,false,false,false,false,false,false,0,56,0,0,0,not_observed,supported
+208,0x0d0,かみのおつげ,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,86,0,0,0,not_observed,supported
+209,0x0d1,おはらい,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,87,2,0,0,not_observed,supported
+210,0x0d2,おとしあな,actname_indexed,a,0,none_or_context,なし・文脈依存,0,none_or_context,対象なし・文脈依存,special_or_context,特殊・文脈依存,false,false,false,false,false,false,false,false,0,88,0,0,0,not_observed,supported
+211,0x0d3,とうぞくのはな,actname_indexed,a,0,none_or_context,なし・文脈依存,0,none_or_context,対象なし・文脈依存,special_or_context,特殊・文脈依存,false,false,false,false,false,false,false,false,0,89,0,0,0,not_observed,supported
+212,0x0d4,みやぶる,actname_indexed,a,0,none_or_context,なし・文脈依存,0,none_or_context,対象なし・文脈依存,special_or_context,特殊・文脈依存,false,false,false,false,false,false,false,false,0,45,2,0,0,not_observed,supported
+213,0x0d5,おたからさがし,actname_indexed,a,0,none_or_context,なし・文脈依存,0,none_or_context,対象なし・文脈依存,special_or_context,特殊・文脈依存,false,false,false,false,false,false,false,false,0,90,2,0,0,not_observed,supported
+215,0x0d7,ダーマのさとり,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,91,3,0,0,not_observed,supported
+217,0x0d9,ステルス,actname_indexed,a,2,ally,味方側,7,field_context,フィールド・文脈依存,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,54,3,0,0,not_observed,supported
+219,0x0db,味方攻撃,unregistered,b,2,ally,味方側,8,actor_specific,アクター固有,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,1,0,0,0,not_observed,supported
+220,0x0dc,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+221,0x0dd,こんらんしている！,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+222,0x0de,結局体が,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+223,0x0df,こうげき,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,0,0,1,not_observed,supported
+224,0x0e0,こうげき,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,1,not_observed,supported
+225,0x0e1,にげる,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,112,112,not_observed,supported
+226,0x0e2,ひのいき,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,157,157,not_observed,supported
+227,0x0e3,かえんのいき,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,157,157,not_observed,supported
+228,0x0e4,あまいいき,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,8,0,158,113,not_observed,supported
+229,0x0e5,どくのいき,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,6,0,114,115,not_observed,supported
+230,0x0e6,ねむり攻撃,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+231,0x0e7,どく攻撃,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+232,0x0e8,テンション下げ攻撃,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,140,not_observed,supported
+233,0x0e9,鎌ブンブン,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,4,1,0,0,0,not_observed,supported
+234,0x0ea,[怪光線/かいこうせん],actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+235,0x0eb,とつげき,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+236,0x0ec,やくそう,actname_indexed,b,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,0,66,66,not_observed,supported
+237,0x0ed,からにとじこもる,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+238,0x0ee,くすぐる,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,10,0,77,77,not_observed,supported
+239,0x0ef,さそうおどり,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,10,0,77,77,not_observed,supported
+242,0x0f2,Call For Backup,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,11,0,116,116,not_observed,supported
+243,0x0f3,ふしぎなおどり,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,57,0,117,117,not_observed,supported
+244,0x0f4,Critical Attack,monster_ai_join,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,confirmed: runtime side=1 scope=2; formation-ignored Critical Attack; observed twice,confirmed
+245,0x0f5,Desperate Attack,monster_ai_join,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+246,0x0f6,メラ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,2,7,2,not_observed,supported
+247,0x0f7,ヒャド,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,3,7,2,not_observed,supported
+248,0x0f8,顔を洗う,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+249,0x0f9,いなずまづき,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+250,0x0fa,ぱふぱふ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,10,0,77,77,not_observed,supported
+251,0x0fb,魔女の眼差し,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+252,0x0fc,アイテム使用無効アイテム,actname_indexed,a,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+253,0x0fd,まどうしの[杖/つえ],actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+254,0x0fe,名称未登録,unregistered,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,0,62,62,not_observed,supported
+255,0x0ff,やくそう,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,0,66,66,not_observed,supported
+256,0x100,[上/じょう]やくそう,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,0,66,66,not_observed,supported
+257,0x101,どくけしそう,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,7,0,119,119,not_observed,supported
+258,0x102,まんげつそう,actname_indexed,b,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,20,0,120,120,not_observed,supported
+259,0x103,せいすい,actname_indexed,a,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,54,0,0,0,not_observed,supported
+260,0x104,せいすい,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+261,0x105,キメラのつばさ,actname_indexed,a,2,ally,味方側,7,field_context,フィールド・文脈依存,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,82,0,0,0,not_observed,supported
+262,0x106,[命/いのち]のきのみ,actname_indexed,a,2,ally,味方側,7,field_context,フィールド・文脈依存,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,29,0,0,0,not_observed,supported
+263,0x107,ふしぎなきのみ,actname_indexed,a,2,ally,味方側,7,field_context,フィールド・文脈依存,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,29,0,0,0,not_observed,supported
+264,0x108,はげしいほのお,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,157,157,not_observed,supported
+265,0x109,しゃくねつ,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,157,157,not_observed,supported
+266,0x10a,れんごくかえん,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,157,157,not_observed,supported
+267,0x10b,つめたいいき,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,157,157,not_observed,supported
+268,0x10c,こおりのいき,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,157,157,not_observed,supported
+269,0x10d,こごえるふぶき,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,157,157,not_observed,supported
+270,0x10e,かがやくいき,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,157,157,not_observed,supported
+271,0x10f,もうどくのきり,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,6,0,121,122,not_observed,supported
+272,0x110,やけつくいき,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,24,0,123,124,not_observed,supported
+273,0x111,マヒ攻撃,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+274,0x112,こんらん攻撃,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+275,0x113,もうどく攻撃,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+276,0x114,アイスジャベリン,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+277,0x115,岩投げ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+278,0x116,スカッドミサイル,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+279,0x117,かえん[斬/ぎ]り,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+280,0x118,マヒャド[斬/ぎ]り,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+281,0x119,吸血,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,141,not_observed,supported
+282,0x11a,きゅうしょ攻撃,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+283,0x11b,キャノン[砲/ほう],actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+284,0x11c,バードカッター,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+285,0x11d,いなずま,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+286,0x11e,いなずま,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+287,0x11f,じばく,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,125,125,not_observed,supported
+288,0x120,じばく,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,125,125,not_observed,supported
+289,0x121,地走り,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+290,0x122,じひびき,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+291,0x123,ビーム攻撃,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+292,0x124,さみだれぎり,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,5,1,0,0,0,not_observed,supported
+293,0x125,マデュライトビーム,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+294,0x126,おしつぶす,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+295,0x127,もうどく[弾/だん],actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+296,0x128,トゲミサイル,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+297,0x129,スライムシャワー,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+298,0x12a,メラストーム,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,8,1,0,0,0,not_observed,supported
+299,0x12b,氷おとし,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+300,0x12c,しんくうは,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+301,0x12d,ロケットランチャー,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+302,0x12e,矢嵐,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+303,0x12f,波動砲攻撃,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+304,0x130,ジゴスパーク,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,26,0,0,not_observed,supported
+305,0x131,ギガスラッシュ,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,15,0,0,not_observed,supported
+306,0x132,のしかかる,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+307,0x133,笑いながら攻撃,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+308,0x134,ボディアタック,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+309,0x135,ツメできりさく,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+310,0x136,ツメを振り回す,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+311,0x137,いきりたって攻撃,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+312,0x138,飛びかかる,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+313,0x139,弓矢うち,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+314,0x13a,はげしく斬りつける,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+315,0x13b,かみつく,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+316,0x13c,ふみつけ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+317,0x13d,はりたおす,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+318,0x13e,Ｗアタック,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+319,0x13f,せかいじゅのは,actname_indexed,b,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,18,0,16,16,not_observed,supported
+320,0x140,メガザルダンス,actname_indexed,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,33,255,17,17,not_observed,supported
+321,0x141,ふしぎなおどり,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,57,0,117,117,not_observed,supported
+322,0x142,ふしぎなおどり,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,57,0,117,117,not_observed,supported
+323,0x143,すなけむり,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,19,0,54,126,not_observed,supported
+324,0x144,ねんえき,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,5,0,30,127,not_observed,supported
+325,0x145,ねんまく[弾/だん],actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,5,0,32,128,not_observed,supported
+326,0x146,かすみがくれ,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,25,0,129,129,not_observed,supported
+327,0x147,すみ攻撃,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,19,0,130,130,not_observed,supported
+328,0x148,まぶしいひかり,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,19,0,54,126,not_observed,supported
+329,0x149,うけながし,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,78,78,not_observed,supported
+330,0x14a,Egg On x2,monster_ai_join,b,2,ally,味方側,8,actor_specific,アクター固有,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,15,0,99,99,not_observed,supported
+331,0x14b,名称未登録,monster_ai_join,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,10,0,77,77,not_observed,supported
+332,0x14c,名称未登録,monster_ai_join,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,10,0,62,62,not_observed,supported
+333,0x14d,Lob Rope,monster_ai_join,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,10,0,77,77,not_observed,supported
+334,0x14e,名称未登録,monster_ai_join,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+335,0x14f,名称未登録,monster_ai_join,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+336,0x150,Miss & Fall,monster_ai_join,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,0,0,0,0,not_observed,supported
+337,0x151,Tension 50,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,15,0,131,131,not_observed,supported
+338,0x152,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,15,0,96,96,not_observed,supported
+339,0x153,(46/256) [0F2] Call For Backup,monster_ai_join,b,2,ally,味方側,4,group,1グループ,ally_group,味方グループ,false,false,false,false,false,false,true,false,0,58,0,0,132,not_observed,supported
+342,0x156,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,60,0,136,136,not_observed,supported
+343,0x157,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,60,0,136,136,not_observed,supported
+344,0x158,Call For Backup (winkster),monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,116,116,not_observed,supported
+345,0x159,Call For Backup (badger mager),monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,116,116,not_observed,supported
+346,0x15a,Call For Backup (badja),monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,116,116,not_observed,supported
+347,0x15b,Call For Backup (healslime),monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,116,116,not_observed,supported
+348,0x15c,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,116,116,not_observed,supported
+349,0x15d,Call For Backup (cureslime),monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,116,116,not_observed,supported
+350,0x15e,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,116,116,not_observed,supported
+351,0x15f,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,116,116,not_observed,supported
+352,0x160,Call For Backup (live lava),monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,116,116,not_observed,supported
+353,0x161,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,116,116,not_observed,supported
+354,0x162,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,116,116,not_observed,supported
+356,0x164,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,116,116,not_observed,supported
+358,0x166,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,135,135,not_observed,supported
+359,0x167,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,10,135,135,not_observed,supported
+360,0x168,Can't Make Up Mind,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+361,0x169,(48/256) [133] (1),monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+362,0x16a,(58/256) [0E1] Flee,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,134,134,not_observed,supported
+363,0x16b,(42/256) [150] (1) Miss & Fall,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+364,0x16c,Fluff Around,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+365,0x16d,名称未登録,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+366,0x16e,Assess Situation,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+367,0x16f,名称未登録,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+368,0x170,名称未登録,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+369,0x171,名称未登録,unregistered,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+370,0x172,名称未登録,unregistered,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+371,0x173,さじんのヤリ,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,19,0,0,0,not_observed,supported
+372,0x174,名称未登録,unregistered,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,0,0,0,not_observed,supported
+373,0x175,名称未登録,unregistered,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,0,0,0,not_observed,supported
+374,0x176,ストロスの[杖/つえ],actname_indexed,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,20,0,0,0,not_observed,supported
+375,0x177,名称未登録,unregistered,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,0,0,0,not_observed,supported
+376,0x178,マグマの[杖/つえ],actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+377,0x179,名称未登録,unregistered,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,0,0,0,not_observed,supported
+378,0x17a,スーンスタッフ,actname_indexed,b,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,4,0,0,0,not_observed,supported
+379,0x17b,ウィザードスタッフ,actname_indexed,b,2,ally,味方側,4,group,1グループ,ally_group,味方グループ,false,false,false,false,false,false,true,false,0,4,0,0,0,not_observed,supported
+380,0x17c,まてきの[杖/つえ],actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,10,0,0,0,not_observed,supported
+381,0x17d,ガナンのおうしゃく,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,22,0,0,0,not_observed,supported
+382,0x17e,名称未登録,unregistered,b,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,23,0,0,0,not_observed,supported
+383,0x17f,ドラゴンの[杖/つえ],actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+384,0x180,名称未登録,unregistered,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,49,0,0,0,not_observed,supported
+385,0x181,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,55,0,0,0,not_observed,supported
+386,0x182,名称未登録,unregistered,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,0,0,not_observed,supported
+387,0x183,きりんのおうぎ,actname_indexed,b,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,0,0,0,not_observed,supported
+388,0x184,名称未登録,unregistered,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,0,0,0,not_observed,supported
+389,0x185,ケイロンの[弓/ゆみ],actname_indexed,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,2,0,0,0,not_observed,supported
+390,0x186,ほのおの[盾/たて],actname_indexed,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,61,0,0,0,not_observed,supported
+391,0x187,こおりの[盾/たて],actname_indexed,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,62,0,0,0,not_observed,supported
+392,0x188,ふうじんの[盾/たて],actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,32,0,0,0,not_observed,supported
+393,0x189,混乱麻痺,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,2,0,0,0,not_observed,supported
+394,0x18a,おやぶんの[盾/たて],actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,4,0,0,0,not_observed,supported
+395,0x18b,[大/おお]おやぶんの[盾/たて],actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,4,0,0,0,not_observed,supported
+396,0x18c,名称未登録,unregistered,b,2,ally,味方側,4,group,1グループ,ally_group,味方グループ,false,false,false,false,false,false,true,false,0,22,0,0,0,not_observed,supported
+397,0x18d,いのりのゆびわ,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,26,0,0,0,not_observed,supported
+398,0x18e,[特/とく]やくそう,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,0,0,0,not_observed,supported
+399,0x18f,いやしそう,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,0,0,0,not_observed,supported
+400,0x190,[上/じょう]どくけしそう,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,0,0,0,not_observed,supported
+401,0x191,[特/とく]どくけしそう,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,0,0,0,not_observed,supported
+402,0x192,きつけそう,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,0,0,0,not_observed,supported
+403,0x193,つきのめぐみ,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,0,0,0,not_observed,supported
+404,0x194,[天使/てんし]のすず,actname_indexed,b,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,27,0,0,0,not_observed,supported
+405,0x195,ばんのうぐすり,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,79,0,0,0,not_observed,supported
+406,0x196,[超/ちょう]ばんのうぐすり,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,80,0,0,0,not_observed,supported
+407,0x197,せかいじゅのは,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,18,0,0,0,not_observed,supported
+408,0x198,せかいじゅのしずく,actname_indexed,a,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,2,0,0,0,not_observed,supported
+409,0x199,まほうのせいすい,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,26,0,0,0,not_observed,supported
+410,0x19a,けんじゃのせいすい,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,26,0,0,0,not_observed,supported
+411,0x19b,エルフののみぐすり,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,26,0,0,0,not_observed,supported
+412,0x19c,おかしなくすり,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,21,0,0,0,not_observed,supported
+413,0x19d,どくがのこな,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,24,0,0,0,not_observed,supported
+414,0x19e,まだらくもいと,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,5,0,0,0,not_observed,supported
+415,0x19f,ばくだん[石/いし],actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+416,0x1a0,けんじゃの[石/いし],actname_indexed,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,2,0,0,0,not_observed,supported
+417,0x1a1,ミミックの[石/いし],actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,17,0,0,0,not_observed,supported
+418,0x1a2,ぜんめつの[石/いし],actname_indexed,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,17,0,0,0,not_observed,supported
+419,0x1a3,名称未登録,unregistered,a,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,92,0,0,0,not_observed,supported
+420,0x1a4,名称未登録,unregistered,a,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,81,0,0,0,not_observed,supported
+421,0x1a5,ちからのたね,actname_indexed,a,2,ally,味方側,7,field_context,フィールド・文脈依存,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,29,0,0,0,not_observed,supported
+422,0x1a6,きようさのたね,actname_indexed,a,2,ally,味方側,7,field_context,フィールド・文脈依存,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,29,0,0,0,not_observed,supported
+423,0x1a7,すばやさのたね,actname_indexed,a,2,ally,味方側,7,field_context,フィールド・文脈依存,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,29,0,0,0,not_observed,supported
+424,0x1a8,まもりのたね,actname_indexed,a,2,ally,味方側,7,field_context,フィールド・文脈依存,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,29,0,0,0,not_observed,supported
+425,0x1a9,まりょくのたね,actname_indexed,a,2,ally,味方側,7,field_context,フィールド・文脈依存,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,29,0,0,0,not_observed,supported
+426,0x1aa,しんこうのたね,actname_indexed,a,2,ally,味方側,7,field_context,フィールド・文脈依存,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,29,0,0,0,not_observed,supported
+427,0x1ab,スキルのたね,actname_indexed,a,2,ally,味方側,7,field_context,フィールド・文脈依存,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,29,0,0,0,not_observed,supported
+428,0x1ac,うつくしそう,actname_indexed,a,2,ally,味方側,7,field_context,フィールド・文脈依存,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,29,0,0,0,not_observed,supported
+445,0x1bd,ゆめみの[花/はな],actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,8,0,0,0,not_observed,supported
+446,0x1be,めざめの[花/はな],actname_indexed,b,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,9,0,0,0,not_observed,supported
+447,0x1bf,ハッピークラッカー,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,10,0,0,0,not_observed,supported
+448,0x1c0,おせちりょうり,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,0,0,0,not_observed,supported
+449,0x1c1,ふつうのチョコ,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,0,0,0,not_observed,supported
+450,0x1c2,ごうかなチョコ,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,0,0,0,not_observed,supported
+451,0x1c3,ふつうのクッキー,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,0,0,0,not_observed,supported
+452,0x1c4,ごうかなクッキー,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,0,0,0,not_observed,supported
+453,0x1c5,クリスマスケーキ,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,0,0,0,not_observed,supported
+454,0x1c6,バースデーケーキ,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,0,0,0,not_observed,supported
+455,0x1c7,メラミ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,6,7,2,not_observed,supported
+456,0x1c8,メラゾーマ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,18,7,2,not_observed,supported
+457,0x1c9,ドルマ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,4,7,2,not_observed,supported
+458,0x1ca,ドルクマ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,7,7,2,not_observed,supported
+459,0x1cb,ドルモーア,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,20,7,2,not_observed,supported
+460,0x1cc,ヒャダルコ,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,8,8,3,not_observed,supported
+461,0x1cd,マヒャド,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,24,0,4,not_observed,supported
+462,0x1ce,バギ,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,3,8,3,not_observed,supported
+463,0x1cf,バギマ,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,8,8,3,not_observed,supported
+464,0x1d0,バギクロス,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,26,8,3,not_observed,supported
+465,0x1d1,イオ,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,5,0,4,not_observed,supported
+466,0x1d2,イオラ,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,10,0,4,not_observed,supported
+467,0x1d3,イオナズン,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,28,0,4,not_observed,supported
+468,0x1d4,ベホマズン,actname_indexed,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,2,128,12,12,not_observed,supported
+469,0x1d5,マホトラ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,28,0,137,138,not_observed,supported
+470,0x1d6,Summon medislime,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,116,116,not_observed,supported
+472,0x1d8,名称未登録,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,160,160,not_observed,supported
+473,0x1d9,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,116,116,not_observed,supported
+474,0x1da,名称未登録,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,11,0,142,142,not_observed,supported
+476,0x1dc,やいばのぼうぎょ,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,66,0,0,0,not_observed,supported
+477,0x1dd,サインぜめ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,0,0,not_observed,supported
+479,0x1df,ゴールドシャワー,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+500,0x1f4,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,24,0,0,0,not_observed,supported
+501,0x1f5,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+502,0x1f6,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+503,0x1f7,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+504,0x1f8,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+505,0x1f9,[会心/かいしん][必中/ひっちゅう],actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,0,0,not_observed,supported
+506,0x1fa,ゴスペルソング,actname_indexed,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,67,0,0,0,not_observed,supported
+507,0x1fb,ミラクルゾーン,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,68,0,0,0,not_observed,supported
+508,0x1fc,[一喝/いっかつ],actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,10,0,0,0,not_observed,supported
+509,0x1fd,お[宝/たから]ハンター,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,69,0,0,0,not_observed,supported
+510,0x1fe,アクロバットスター,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,70,0,0,0,not_observed,supported
+511,0x1ff,テンションブースト,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,71,0,0,0,not_observed,supported
+512,0x200,ＥＸＰルーレット,actname_indexed,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,72,0,0,0,not_observed,supported
+513,0x201,パラディンガード,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,73,0,0,0,not_observed,supported
+514,0x202,[神/かみ]の[息吹/いぶき],actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,26,0,0,0,not_observed,supported
+516,0x204,[妖精/ようせい]たちのポルカ,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,74,0,0,0,not_observed,supported
+517,0x205,[覇王斬/はおうざん],actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,0,0,not_observed,supported
+522,0x20a,スペクタクルショー,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,75,0,0,0,not_observed,supported
+523,0x20b,テンションマスター,actname_indexed,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,71,0,0,0,not_observed,supported
+524,0x20c,スーパールーレット,actname_indexed,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,76,0,0,0,not_observed,supported
+525,0x20d,[精霊/せいれい]の[守/まも]り,actname_indexed,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,77,0,0,0,not_observed,supported
+527,0x20f,ダンスフィーバー,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,10,0,0,0,not_observed,supported
+530,0x212,[超/ちょう]ミラクルゾーン,actname_indexed,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,68,0,0,0,not_observed,supported
+533,0x215,やまびこのさとり,actname_indexed,b,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,63,10,143,143,not_observed,supported
+534,0x216,やみのブレス,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,157,157,not_observed,supported
+535,0x217,やみのブレス,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,157,157,not_observed,supported
+536,0x218,ひかりのブレス,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,157,157,not_observed,supported
+537,0x219,ひかりのブレス,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,157,157,not_observed,supported
+538,0x21a,いなずま[斬/ぎ]り,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+539,0x21b,おうふくビンタ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,1,1,0,61,61,not_observed,supported
+540,0x21c,急降下,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+541,0x21d,たたきつける,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+542,0x21e,ラッシュ,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,5,1,0,61,61,not_observed,supported
+543,0x21f,いなずま,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+544,0x220,魔女の眼差し２,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+545,0x221,回転攻撃,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+546,0x222,ガレキ落とし,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+547,0x223,ガレキ落とし２,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+548,0x224,つなみ,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+549,0x225,つなみ,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+550,0x226,鉄球ぶん回し,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,confirmed: runtime side=1 scope=3; all-opponent 鉄球ぶん回し; observed twice,confirmed
+551,0x227,鉄球ぶん回し２,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+552,0x228,おぞましいおたけび,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+553,0x229,フェザースコール,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+554,0x22a,[流星/りゅうせい],actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+555,0x22b,念じボール,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,4,1,0,0,0,not_observed,supported
+556,0x22c,[神々/かみがみ]の[怒/いか]り,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,5,1,0,0,0,not_observed,supported
+557,0x22d,わしづかみ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+558,0x22e,ＭＰ全回復,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,26,0,0,144,not_observed,supported
+559,0x22f,[暗黒/あんこく]のきり,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,3,0,145,145,not_observed,supported
+560,0x230,やみのはどう,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,4,0,146,146,not_observed,supported
+561,0x231,あやしいひかり,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,65,0,147,147,not_observed,supported
+562,0x232,せんこう[弾/だん],actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,19,0,54,54,not_observed,supported
+563,0x233,あやしいひとみ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,8,0,153,153,not_observed,supported
+564,0x234,若き血潮,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,3,0,148,148,not_observed,supported
+565,0x235,まばゆいせんこう,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+566,0x236,メダパニダンス,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,21,0,40,40,not_observed,supported
+567,0x237,テンション上げダンス,actname_indexed,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,15,0,149,149,not_observed,supported
+569,0x239,斬り上げ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,0,61,61,not_observed,supported
+570,0x23a,暴走攻撃２,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+571,0x23b,変顔,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,10,0,0,0,not_observed,supported
+572,0x23c,クモ糸縛り,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,10,0,77,77,not_observed,supported
+573,0x23d,[突風/とっぷう],actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,10,0,0,0,not_observed,supported
+574,0x23e,おぞましい鳴き声,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,10,0,0,0,not_observed,supported
+575,0x23f,[超/ちょう]おたけび,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,10,0,0,0,not_observed,supported
+577,0x241,不敵に笑っている,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+578,0x242,メラガイアー,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,45,7,2,not_observed,supported
+579,0x243,イオグランデ,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,56,0,4,not_observed,supported
+580,0x244,マヒャデドス,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,50,0,4,not_observed,supported
+581,0x245,バギムーチョ,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,50,0,3,not_observed,supported
+582,0x246,ドルマドン,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,45,7,2,not_observed,supported
+583,0x247,マダンテ,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,255,0,0,not_observed,supported
+587,0x24b,めいそう,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,2,5,0,98,not_observed,supported
+588,0x24c,しんくうは,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+589,0x24d,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,116,116,not_observed,supported
+590,0x24e,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,116,116,not_observed,supported
+591,0x24f,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,142,142,not_observed,supported
+592,0x250,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,142,142,not_observed,supported
+594,0x252,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,142,142,not_observed,supported
+595,0x253,Switch Dreadmaster A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+596,0x254,Switch Dreadmaster B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+597,0x255,Switch Godwyn 2A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+598,0x256,Switch Godwyn 2B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+599,0x257,Switch Godwyn 2C,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+600,0x258,Switch Barbarus A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+601,0x259,Switch Barbarus B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+602,0x25a,Switch Corvus 1A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+603,0x25b,Switch Corvus 1B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+604,0x25c,Switch Corvus 2A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+605,0x25d,Switch Corvus 2B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+606,0x25e,Switch Corvus 2C,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+607,0x25f,Switch Corvus 2D,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+608,0x260,Switch Corvus 2E,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+609,0x261,Switch T. Wrecks A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+610,0x262,Switch T. Wrecks B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+611,0x263,Switch T. Wrecks C,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+612,0x264,Switch Greygnarl 2A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+613,0x265,Switch Greygnarl 2B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+614,0x266,Switch Greygnarl 2C,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+615,0x267,Switch Malroth 2A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+616,0x268,Switch Malroth 2B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+617,0x269,Switch Malroth 3A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+618,0x26a,Switch Malroth 3B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+619,0x26b,Switch Baramos 2A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+620,0x26c,Switch Baramos 2B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+621,0x26d,Switch Baramos 3A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+622,0x26e,Switch Baramos 3B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+623,0x26f,Switch Zoma 2A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+624,0x270,Switch Zoma 2B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+625,0x271,Switch Zoma 3A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+626,0x272,Switch Zoma 3B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+627,0x273,Switch Psaro 1A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+628,0x274,Switch Psaro 1B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+629,0x275,Switch Psaro 2A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+630,0x276,Switch Psaro 2B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+631,0x277,Switch Psaro 2C,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+632,0x278,Switch Psaro 3A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+633,0x279,Switch Psaro 3B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+634,0x27a,Switch Psaro 3C,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+635,0x27b,Switch 01F9,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+636,0x27c,Switch 026D,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+637,0x27d,Switch 026E,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+638,0x27e,Switch 026F,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+639,0x27f,Switch 0270,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+640,0x280,Switch 0271,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+641,0x281,Switch 0272,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+642,0x282,Switch Nimzo A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+643,0x283,Switch Nimzo B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+644,0x284,Switch Nimzo C,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+645,0x285,Switch Nimzo D,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+646,0x286,Switch Nimzo E,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+647,0x287,Switch Nimzo F,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+648,0x288,Switch 01FB,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+649,0x289,Switch 0278,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+650,0x28a,Switch 0279,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+651,0x28b,Switch 027A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+652,0x28c,Switch 027B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+653,0x28d,Switch 027C,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+654,0x28e,Switch 027D,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+655,0x28f,Switch 01FC,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+656,0x290,Switch 027E,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+657,0x291,Switch 027F,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+658,0x292,Switch 0280,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+659,0x293,Switch 0281,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+660,0x294,Switch 0282,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+661,0x295,Switch 0283,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+662,0x296,Switch Orgodemir A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+663,0x297,Switch Orgodemir B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+664,0x298,Switch Orgodemir C,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+665,0x299,Switch Orgodemir D,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+666,0x29a,Switch Orgodemir E,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+667,0x29b,Switch Orgodemir F,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+668,0x29c,Switch 0200,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+669,0x29d,Switch 0289,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+670,0x29e,Switch 028A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+671,0x29f,Switch 028B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+672,0x2a0,Switch 028C,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+673,0x2a1,Switch 028D,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+674,0x2a2,Switch Rhapthorne 1A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+675,0x2a3,Switch Rhapthorne 1B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+676,0x2a4,Switch Rhapthorne 2A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+677,0x2a5,Switch Rhapthorne 2B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+678,0x2a6,Switch Rhapthorne 2C,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+679,0x2a7,Switch Rhapthorne 3A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+680,0x2a8,Switch Rhapthorne 3B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+681,0x2a9,Switch Rhapthorne 3C,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+682,0x2aa,ベホマ,actname_indexed,a,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,24,11,11,not_observed,supported
+779,0x30b,メラガイアー,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,45,7,2,not_observed,supported
+780,0x30c,マヒャデドス,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,50,0,4,not_observed,supported
+781,0x30d,ドルマドン,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,1,45,7,2,not_observed,supported
+782,0x30e,バギムーチョ,actname_indexed,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,50,0,3,not_observed,supported
+783,0x30f,イオグランデ,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,56,0,4,not_observed,supported
+784,0x310,ベホマズン,actname_indexed,a,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,2,128,12,12,not_observed,supported
+785,0x311,Switch 0156,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+786,0x312,Switch 02F8,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+787,0x313,Switch 0157,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+788,0x314,Switch 02F9,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+789,0x315,Switch Yore A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+790,0x316,Switch Yore B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+791,0x317,Switch Yore C,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+792,0x318,Switch Excalipurr A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+793,0x319,Switch Excalipurr B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+794,0x31a,(46/256) [0F2] Call For Backup,monster_ai_join,b,2,ally,味方側,4,group,1グループ,ally_group,味方グループ,false,false,false,false,false,false,true,false,0,58,0,0,150,not_observed,supported
+795,0x31b,Switch Nokturnus 1A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+796,0x31c,Switch Nokturnus 1B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+797,0x31d,Switch Nokturnus 2A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+798,0x31e,Switch Nokturnus 2B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+799,0x31f,Switch Nokturnus 2C,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+800,0x320,Switch Nokturnus 3A,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+801,0x321,Switch Nokturnus 3B,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+802,0x322,Switch Nokturnus 3C,monster_ai_join,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,34,0,0,0,not_observed,supported
+803,0x323,タップダンス,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,25,0,0,0,not_observed,supported
+804,0x324,キラージャグリング,actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,11,1,8,0,0,not_observed,supported
+900,0x384,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+901,0x385,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+902,0x386,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+903,0x387,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+904,0x388,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+905,0x389,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+906,0x38a,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+907,0x38b,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+908,0x38c,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,0,0,not_observed,supported
+909,0x38d,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,0,0,not_observed,supported
+910,0x38e,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,0,0,not_observed,supported
+911,0x38f,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,12,0,0,0,not_observed,supported
+912,0x390,メダパニ,actname_indexed,b,1,opponent,相手側,2,single,単体,opponent_single_formation_ignored,隊列無視,true,false,false,false,false,true,false,false,0,21,5,151,152,not_observed,supported
+913,0x391,きりんのおうぎ,actname_indexed,b,2,ally,味方側,2,single,単体,ally_single,味方単体,false,false,false,false,false,false,true,false,0,2,0,0,0,not_observed,supported
+914,0x392,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+915,0x393,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,24,0,0,0,not_observed,supported
+916,0x394,混乱仲間呼び失敗,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+917,0x395,にげる,actname_indexed,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,112,112,not_observed,supported
+918,0x396,逃げだす失敗,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+919,0x397,名称未登録,unregistered,b,1,opponent,相手側,4,group,1グループ,opponent_group,グループ攻撃,false,false,false,false,true,true,false,false,0,1,0,0,0,not_observed,supported
+920,0x398,マグマの[杖/つえ],actname_indexed,b,1,opponent,相手側,3,all_on_side,全体,opponent_all,全体攻撃,false,false,true,true,false,true,false,false,0,1,0,0,0,not_observed,supported
+921,0x399,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+922,0x39a,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+923,0x39b,おもいでのすず,actname_indexed,a,2,ally,味方側,7,field_context,フィールド・文脈依存,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,84,0,0,0,not_observed,supported
+924,0x39c,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+925,0x39d,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+926,0x39e,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+927,0x39f,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+928,0x3a0,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+929,0x3a1,ゲルニックかばう,actname_indexed,b,2,ally,味方側,8,actor_specific,アクター固有,special_or_context,特殊・文脈依存,false,false,false,false,false,false,true,false,0,0,0,159,159,not_observed,supported
+930,0x3a2,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+931,0x3a3,名称未登録,unregistered,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,0,0,0,0,not_observed,supported
+932,0x3a4,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+933,0x3a5,名称未登録,unregistered,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,0,0,0,0,not_observed,supported
+934,0x3a6,名称未登録,unregistered,b,2,ally,味方側,3,all_on_side,全体,ally_all,味方全体,false,false,false,true,false,false,true,false,0,0,0,0,0,not_observed,supported
+935,0x3a7,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+936,0x3a8,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+937,0x3a9,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+938,0x3aa,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+939,0x3ab,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+940,0x3ac,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+941,0x3ad,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+942,0x3ae,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+943,0x3af,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+944,0x3b0,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
+945,0x3b1,名称未登録,unregistered,b,2,ally,味方側,1,self,自分,self,自己,false,false,false,false,false,false,true,true,0,0,0,0,0,not_observed,supported
