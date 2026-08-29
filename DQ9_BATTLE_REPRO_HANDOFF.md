@@ -58,6 +58,7 @@
 - generic spell/type-D damageの重要アドレス: `FUN_021E8458` のtype-D加算経路では `0x021E88D4` から `getFloatRandRange(0x02075514)` を呼び、`0x021E88F0` は `FloatAdd` のcallそのもの。したがってtype-D実結果をruntime hookで読む位置はcall後の `0x021E88F4`。`battle_damage_trace.js` も `0x021E88F0 -> 0x021E88F4`（別経路 `0x021E8680 -> 0x021E8684`）へ修正済み。seed `0x1A` の `0x0013` バギマでは実結果float bits `0x41DAAA20`（約27.33307）で、最終int 27はC++ `FUN_021e8458_typeD()` と一致した。
 - type-D後の共通damage modifierは `FUN_021E7328`。generic damage本体 `FUN_021EBD9C` からのcall siteは `0x021ECF74`、返値の最終damage保存は `0x021ECF78`。`FUN_021E7328` は途中で整数truncateせずfloat倍率を積み、最後に `FloatToInt` する。属性倍率取得は `FUN_021582B8`。ユーザーが `Equipments::applyDamageReduction` 側の誤りを修正済みなので、今後はこの箇所を再度推測修正せず実機damageで再照合する。
 ## 現在の実装済み
+- seed `0x1A` turn4 で既存physical共通後段の `if (!defenseFlag) tmp *= players[defender].defence` が逆条件だと実測で確定。実ROMは `ぼうぎょ` 後のかぶと割り/通常攻撃にも防御倍率を掛け、turn4 の通常攻撃は raw 側から最終3damageになる。`defenseFlag` 条件を外し、行動不能状態でない限り `players[defender].defence` を常に適用するよう修正した。turn1のメダパニ成立時は既に `defence=1.0` へ戻すため、この修正後も通常攻撃5damageを維持する。
 - scheme1 fixed 6slot selector、limited used mask、lower→higher fallback、Geruniku acting-time selection。
 - `GERUNIKKU_MEDAPANI` は成立時のみ `confused=true/confusionTurns=3` に修正済み。混乱の自分手番では `FUN_02159ABC` 相当の解除RNG後、残存時に `FUN_02160DFC` 相当の `0x00DD/0x0393/0x00DE/0x0396` 4択をcommon IDへ変換する処理を実装済み。`0x0393` は専用flagを増やさず既存paralysis状態へ変換する方針。
 - generic physical damageで既に消費していた `0x02158AC4` の捨てRNGを、主人公が混乱中の場合のみ `RandInt(100) < 50` の実解除判定へ置換済み。追加の乱数消費は増やしていない。
