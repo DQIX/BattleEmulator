@@ -60,19 +60,14 @@ struct Equipment {
     }
 };
 
-
-//竜戦士のかぶと
-inline constexpr Equipment DragonWarriorGloves("Dragon warrior gloves", {
-                                          {Attribute::Fire, 5},
-                                          {Attribute::Darkness, 5}
-                                      });
-
 // 装備の初期化
-//ダークシールド
-// グローバル変数を inline 変数として定義
-inline constexpr Equipment DarkShield("Dark shield", {
+//まほうのたて
+inline constexpr Equipment magicShield("magic shield", {
                                           {Attribute::Fire, 5},
-                                          {Attribute::Ice, 5}
+                                          {Attribute::Ice, 5},
+                                          {Attribute::Wind, 5},
+                                          {Attribute::ThunderExplosion, 5},
+                                          {Attribute::Darkness, 5},
                                       });
 
 //げんまのよろい
@@ -95,13 +90,9 @@ inline constexpr Equipment EnchantedGloves("Enchanted gloves", {
 
 //竜戦士のブーツ
 inline constexpr Equipment DragonWarriorBoots("Dragon warrior boots", {
-                                                  {Attribute::Fire, 5},
-                                                  {Attribute::Darkness, 5}
-                                              });
-inline constexpr Equipment RedTights("RedTights", {
-                                                  {Attribute::Fire, 7},
-                                                  {Attribute::ThunderExplosion, 7}
-                                              });
+                                               {Attribute::Fire, 5},
+                                               {Attribute::Darkness, 5},
+                                           });
 
 /**
  * すべての装備品を格納する定数配列です。
