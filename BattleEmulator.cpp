@@ -193,6 +193,43 @@ inline EnemySelection selectGerunikuAction(int *position, Player players[4], uin
 }
 #endif
 
+namespace {
+[[nodiscard]] constexpr double HeroSpearLightningMultiplier(const int attacker, const int defender) noexcept {
+#if defined(gerunikku)
+    if (attacker != 0) return 1.0;
+    if (defender == 2) return 1.25; // ゲルニック将軍: Lightning 125
+    if (defender == 1 || defender == 3) return 0.5; // てっこうまじん: Lightning 050
+#else
+    (void)attacker;
+    (void)defender;
+#endif
+    return 1.0;
+}
+
+[[nodiscard]] constexpr bool TargetIsBeast(const int defender) noexcept {
+#if defined(gerunikku)
+    // ゲルニック将軍=Bird、てっこうまじん=Material。
+    (void)defender;
+    return false;
+#else
+    (void)defender;
+    return false;
+#endif
+}
+
+#if defined(gerunikku)
+[[nodiscard]] inline bool EnemyLosesActionToCharm(int *position) noexcept {
+    // ゲルニック/てっこうまじん: Charm 005 = 0.05 probability.
+    // RandInt(100), lr: 0x021588ec
+    if (lcg::getPercent(position, 100) >= 5) return false;
+    // 成立候補時のみ結果table {90,5,5} を選ぶ。
+    // この戦闘で実装対象の「みとれて動けない」は先頭90% branch。
+    // RandInt(100), lr: 0x02158964
+    return lcg::getPercent(position, 100) < 90;
+}
+#endif
+}
+
 #if defined(gerunikku)
 constexpr int Ally_Level = 48;
 constexpr double Ally_TensionTable[4] = {1.5, 2.5, 4.0, 6.0};
@@ -904,7 +941,15 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     {
 #if defined(gerunikku)
                         if (!plannedIronValid[actor]) break;
-                        (*position)++; // max: 100, lr: 0x021588ec
+                        if (EnemyLosesActionToCharm(position)) {
+                            const int basedamage = callAttackFun(INACTIVE_ENEMY, position, players, actor, 0, NowState);
+                            addResult(INACTIVE_ENEMY, basedamage, true);
+                            const int validation = validateEnemy(INACTIVE_ENEMY, basedamage);
+                            if (validation < 0) return false;
+                            if (validation > 0) return true;
+                            postEnemyAction(actor);
+                            break;
+                        }
                         (*position)++; // max: 100, lr: 0x02159b10
                         const EnemySelection selection = plannedIron[actor];
                         const int basedamage = callAttackFun(selection.action, position, players, actor,
@@ -925,7 +970,15 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 #if defined(gerunikku)
                         for (int bossActionIndex = 0; bossActionIndex < 2; ++bossActionIndex) {
                             if (!Player::isPlayerAlive(players[2]) || !Player::isPlayerAlive(players[0])) break;
-                            (*position)++; // max: 100, lr: 0x021588ec
+                            if (EnemyLosesActionToCharm(position)) {
+                                const int basedamage = callAttackFun(INACTIVE_ENEMY, position, players, 2, 0, NowState);
+                                addResult(INACTIVE_ENEMY, basedamage, true);
+                                const int validation = validateEnemy(INACTIVE_ENEMY, basedamage);
+                                if (validation < 0) return false;
+                                if (validation > 0) return true;
+                                postEnemyAction(2);
+                                continue;
+                            }
                             const EnemySelection selection = selectGerunikuAction(position, players, gerunikuUsedSlots);
                             (*position)++; // max: 100, lr: 0x02159b10
                             const int basedamage = callAttackFun(selection.action, position, players, 2,
@@ -1192,6 +1245,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             FUN_0207564c(position, players[attacker].atk, players[defender].def);
             if (lcg::getPercent(position, 2) == 0) {
                 tmp = OffensivePower * lcg::floatRand(position, 0.95, 1.05);
+                tmp *= HeroSpearLightningMultiplier(attacker, defender);//これほんまか？？？会心にダメージ倍率は乗るのか？？？適当につけただけだと思うぞ？？？
                 baseDamage = static_cast<int>(tmp);
             } else {
                 kaihi = true;
@@ -1554,7 +1608,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
 
                 //ここの小数点以下は引き継がれる
-                tmp = tmp * 1.0; //1.25倍は雷属性になってるから
+                tmp *= HeroSpearLightningMultiplier(attacker, defender);
                 baseDamage = static_cast<int>((tmp));
 
                 if (!kaihi) {
@@ -2387,6 +2441,17 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
                 baseDamage = static_cast<int>((tmp));
 
+                if (baseDamage != 0 && (Id & 0xffff) == BattleEmulator::HELM_SPLITTER) {
+                    // 実ROM順序: final damage -> 防御低下判定 -> 被ダメージ状態解除 -> 共通後処理。
+                    // attack record +0x32 == -1. この主人公buildでは combat+0x50 == 50。
+                    // RandInt(100), lr: 0x021e3e7c
+                    if (lcg::getPercent(position, 100) < 50 && players[defender].BuffLevel > -2) {
+                        --players[defender].BuffLevel;
+                        players[defender].BuffTurns = 7; // runtime +0x6f=6 と既存turn表現の対応。
+                        RecalculateBuff(players, defender);
+                    }
+                }
+
 
                 if (baseDamage != 0) {
                     // FUN_02158a08: damaging attack can cure confusion.
@@ -2411,16 +2476,6 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 if (baseDamage != 0 && players[0].sleeping) {
                     players[0].sleeping = false;
                     players[0].sleepingTurn = -1;
-                }
-
-                if (baseDamage != 0 && (Id & 0xffff) == BattleEmulator::HELM_SPLITTER) {
-                    // attack record +0x32 == -1. この主人公buildでは combat+0x50 == 50。
-                    // RandInt(100), lr: 0x021e3e7c
-                    if (lcg::getPercent(position, 100) < 50 && players[defender].BuffLevel > -2) {
-                        --players[defender].BuffLevel;
-                        players[defender].BuffTurns = 7; // runtime +0x6f=6 と既存turn表現の対応。
-                        RecalculateBuff(players, defender);
-                    }
                 }
 
                 process7A8(position, baseDamage, players, defender);
@@ -2506,12 +2561,13 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             break;
         case BattleEmulator::ATTACK_ALLY:
         case BattleEmulator::MERCURIAL_THRUST:
+        case BattleEmulator::BEAST_THRUST:
             (*position) += 2;
             (*position)++;
             //会心
             percent_tmp = lcg::getPercent(position, 0x2710);
             if (((Id & 0xffff) == BattleEmulator::ATTACK_ALLY && percent_tmp < 500) ||
-                ((Id & 0xffff) == BattleEmulator::MERCURIAL_THRUST && percent_tmp < 250)) {
+                ((Id & 0xffff) != BattleEmulator::ATTACK_ALLY && percent_tmp < 250)) {
                 kaisinn = true;
             }
 
@@ -2526,6 +2582,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 
             if ((Id & 0xffff) == BattleEmulator::MERCURIAL_THRUST) {
                 tmp = floor(baseDamage * 0.75);
+            } else if ((Id & 0xffff) == BattleEmulator::BEAST_THRUST && TargetIsBeast(defender)) {
+                // Selector 10: beast target only, trunc(1.5 * incoming). Selector RNGなし。
+                tmp = floor(baseDamage * 1.5);
             } else {
                 tmp = static_cast<double>(baseDamage);
             }
@@ -2554,7 +2613,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
             }
 
-            tmp *= 1.0; //雷属性
+            tmp *= HeroSpearLightningMultiplier(attacker, defender);
             baseDamage = static_cast<int>((tmp));
 
             if (!kaihi) {
