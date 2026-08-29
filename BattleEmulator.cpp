@@ -1279,12 +1279,14 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 baseDamage = 0;
             } else {
                 if (baseDamage != 0) {
-                    (*position)++; //目を覚ました
-                    (*position)++; //不明
+                    ProcessRage(position, baseDamage, players, defender);
+                    (*position)++; // damageによる状態回復, max: 100, lr: 0x02158ac4
+                    (*position)++; // action後状態判定, max: 100, lr: 0x021e54fc
 
-                    //怒り関連のやつ
-                    (*position)++; //0x021eb8c8
-                    (*position)++; //0x021eb8f0
+                    for (int rageActor = 1; rageActor < 4; ++rageActor) {
+                        (*position)++; // rage判定, max: 100, lr: 0x021eb8c8
+                        (void)lcg::intRangeRand(position, 2, 4); // max: 3, lr: 0x021eb8f0
+                    }
                 }
             }
             if (!players[attacker].specialCharge && lcg::getPercent(position, 100) < 1) {
