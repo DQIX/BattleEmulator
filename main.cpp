@@ -48,49 +48,6 @@ constexpr Player copiedPlayers[4] = {
 
 };
 
-#elif defined(hayate)
-const Player copiedPlayers[2] = {
-// プレイヤー1
-{
-	305, 300.0, 310, 310, 297, 297, 210, 222, 130, // 最初のメンバー
-	165, false, false, 0, false, 0, -1,
-	// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-	8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-	false, -1, 0, -1, 0, false, 1, 1, 1 , false
-}, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
-
-// プレイヤー2
-{
-	2790, 2790.0, 214, 214, 272, 272, 167, 0, 255, // 最初のメンバー
-	255, false, false, 0, false, 0, -1,
-	// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-	8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-	false, -1, 0, -1, 0, false, 0, 0, 0 ,false
-} // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
-};
-
-#elif defined(gilyumei)
-
-const Player copiedPlayers[2] = {
-	// プレイヤー1
-	{
-		305, 300.0, 310, 310, 313, 313, 170, 222, 130, // 最初のメンバー
-		165, false, false, 0, false, 0, -1,
-		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-		false, -1, 0, -1, 0, false, 1, 1, 1 , false
-	}, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
-
-	// プレイヤー2
-	{
-		2790, 2790.0, 214, 214, 272, 272, 167, 0, 255, // 最初のメンバー
-		255, false, false, 0, false, 0, -1,
-		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-		false, -1, 0, -1, 0, false, 0, 0, 0 ,false
-	} // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
-};
-
 #endif
 
 
@@ -113,14 +70,14 @@ std::string rtrim(const std::string& s);
 
 std::string trim(const std::string& s);
 
-bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream& ss);
+bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream& ss);
 
-uint64_t BruteForceRequest(const Player copiedPlayers2[2], int hours, int minutes, int seconds, int turns,
+uint64_t BruteForceRequest(const Player copiedPlayers2[4], int hours, int minutes, int seconds, int turns,
                            int eActions[350],
                            int aActions[350], int damages[350]);
 
 
-void mainLoop(const Player copiedPlayers2[2]);
+void mainLoop(const Player copiedPlayers2[4]);
 
 using namespace std;
 
@@ -349,7 +306,7 @@ void showHeader(){
 
 //int main(int argc, char *argv[]) {
 
-bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream &ss){
+bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream &ss){
 	int32_t gene[350] = {0};
 	auto turns = 0;
 	for(int i = 0; i < 349; ++i){
@@ -393,12 +350,17 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
     BattleResult resultA, resultB, resultC, resultD, resultF, resultG;
 
 	auto runMain = [&](const Genome& g, BattleResult& res) -> RunResult {
-		Player players[2] = {copiedPlayers2[0], copiedPlayers2[1]};
+		Player players[4] = {copiedPlayers2[0], copiedPlayers2[1], copiedPlayers2[2], copiedPlayers2[3]};
 		int position = 1;
 		uint64_t nowState = 0;
 		BattleEmulator::Main(&position, 100, g.actions, players, &res, seed, nullptr, nullptr, -1, &nowState);
+		#if defined(gerunikku)
+		bool win = players[2].hp <= 0;
+		return { win, players[2].hp, res.turn, res.position };
+		#else
 		bool win = players[1].hp <= 0;
 		return { win, players[1].hp, res.turn, res.position };
+		#endif
 	};
 
     auto rrA = runMain(genomeA, resultA);
@@ -479,7 +441,7 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 }
 
 // ブルートフォースリクエスト関数
-[[nodiscard]] uint64_t BruteForceRequest(const Player copiedPlayers2[2], int hours, int minutes, int seconds, int turns,
+[[nodiscard]] uint64_t BruteForceRequest(const Player copiedPlayers2[4], int hours, int minutes, int seconds, int turns,
                                          int eActions[350],
                                          int aActions[350], int damages[350]){
 	std::cout << "BruteForceRequest executed with time " << hours << ":" << minutes << ":" << seconds << std::endl;
@@ -533,7 +495,7 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 	int* position = new int(1);
 	auto* nowState = new uint64_t(0);
 	int maxElement = 350;
-	Player players[2];
+	Player players[4];
 	for(uint64_t seed = time1; seed < time2; ++seed){
 		//        if (seed % 1000000000 == 0) {
 		//            std::cout << seed << std::endl;
@@ -545,6 +507,8 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 		//std::memcpy(players, copiedPlayers, sizeof(players));
 		players[0] = copiedPlayers[0];
 		players[1] = copiedPlayers[1];
+		players[2] = copiedPlayers[2];
+		players[3] = copiedPlayers[3];
 
 
 		bool resultBool = BattleEmulator::Main(position, turns, gene, players,
@@ -577,7 +541,7 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 }
 
 
-void BruteForceMainLoop(const Player copiedPlayers[2], uint64_t start, uint64_t end, int gene[350],
+void BruteForceMainLoop(const Player copiedPlayers[4], uint64_t start, uint64_t end, int gene[350],
 						int damages[350], int eaction1[350]) {
 	int maxElement = 350;
 	for (uint64_t seed = start; seed < end; ++seed) {
@@ -585,7 +549,7 @@ void BruteForceMainLoop(const Player copiedPlayers[2], uint64_t start, uint64_t 
 		lcg::init(seed);
 		int position = 1;
 		uint64_t nowState = 0;
-		Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
+		Player players[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
 
 
 		bool resultBool = BattleEmulator::Main(&position, 100, gene, players,
@@ -614,7 +578,7 @@ void parseActions(const std::string& str, int actions[350]){
 
 
 // メインループ
-void mainLoop(const Player copiedPlayers[2]){
+void mainLoop(const Player copiedPlayers[4]){
 	int eActions[350] = {0};
 	int aActions[350] = {0};
 	int damages[350] = {0};
@@ -784,7 +748,7 @@ namespace {
         return true;
     }
 
-    std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed, int numThreads, bool dropbug) {
+    std::string buildDumpOutput(const Player copiedPlayers[4], uint64_t seed, int numThreads, bool dropbug) {
         lcg::init(seed, true);
 
         BattleEmulator::ResetTurnProcessed();
@@ -806,7 +770,7 @@ namespace {
 		    }
 
     		BattleResult res;
-    		Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
+    		Player players[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
     		lcg::init(seed);
     		int position = 1;
     		uint64_t nowState = 0;
@@ -874,11 +838,38 @@ EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed
 }
 #endif
 
-int main(){
+int main(int argc, char* argv[]){
 	showHeader();
 
 	//https://zenn.dev/reputeless/books/standard-cpp-for-competitive-programming/viewer/library-ios-iomanip#3.1-c-%E8%A8%80%E8%AA%9E%E3%81%AE%E5%85%A5%E5%87%BA%E5%8A%9B%E3%82%B9%E3%83%88%E3%83%AA%E3%83%BC%E3%83%A0%E3%81%A8%E3%81%AE%E5%90%8C%E6%9C%9F%E3%82%92%E7%84%A1%E5%8A%B9%E3%81%AB%E3%81%99%E3%82%8B
 	//std::cin.tie(0)->sync_with_stdio(0);
+
+#if defined(gerunikku)
+	if (argc >= 3 && std::string_view(argv[1]) == "--trace-turn") {
+		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
+		const int traceAction = argc >= 4 ? std::stoi(argv[3], nullptr, 0) : BattleEmulator::DEFENCE;
+		int32_t traceGene[350] = {};
+		traceGene[0] = traceAction;
+		traceGene[1] = -1;
+		Player tracePlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
+		BattleResult traceResult;
+		int tracePosition = 1;
+		uint64_t traceState = 0;
+		lcg::init(traceSeed);
+		BattleEmulator::Main(&tracePosition, 1, traceGene, tracePlayers, &traceResult,
+		                     traceSeed, nullptr, nullptr, -1, &traceState);
+		std::cout << "TRACE seed=0x" << std::hex << traceSeed << std::dec
+		          << " position=" << tracePosition
+		          << " hp=" << tracePlayers[0].hp << ',' << tracePlayers[1].hp << ','
+		          << tracePlayers[2].hp << ',' << tracePlayers[3].hp << '\n';
+		for (int i = 0; i < traceResult.position; ++i) {
+			std::cout << "TRACE action[" << i << "]=" << traceResult.actions[i]
+			          << " damage=" << traceResult.damages[i]
+			          << " enemy=" << traceResult.isEnemy[i] << '\n';
+		}
+		return 0;
+	}
+#endif
 
 #if defined(OPTIMIZE_MODE)
 	int actions1[350] = {};

@@ -12,6 +12,8 @@
 struct Genome {
     Player AllyPlayer;
     Player EnemyPlayer;
+    Player IronKnightA;
+    Player IronKnightB;
     uint64_t state;
     int turn;
     int position;

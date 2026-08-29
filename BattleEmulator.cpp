@@ -17,11 +17,181 @@
 #include "Equipment.h"
 
 
-thread_local int32_t actions[3];
+thread_local int32_t actions[8];
 thread_local int actionsPosition = 0;
-thread_local int preHP[3] = {0, 0, 0};
+thread_local int preHP[4] = {0, 0, 0, 0};
 thread_local bool player0_has_initiative = false;
 thread_local bool TiggerSkyAttack = false;
+
+#if defined(gerunikku)
+namespace {
+struct EnemySelection {
+    int action;
+    int target;
+    int slot;
+};
+
+constexpr int kIronActions[6] = {
+    BattleEmulator::WHIPPING_BOY,
+    BattleEmulator::ATTACK_ENEMY,
+    BattleEmulator::ATTACK_ENEMY,
+    BattleEmulator::HELM_SPLITTER,
+    BattleEmulator::KABUFF,
+    BattleEmulator::DOUBLE_EDGED_SLASH,
+};
+
+constexpr int kGerunikuActions[6] = {
+    BattleEmulator::GERUNIKKU_BAGIMA,
+    BattleEmulator::GERUNIKKU_MERAMI,
+    BattleEmulator::EERIE_LIGHT,
+    BattleEmulator::MAGIC_MIRROR,
+    BattleEmulator::GERUNIKKU_MEDAPANI,
+    BattleEmulator::GERUNIKKU_BAGIMA_STRONG,
+};
+
+constexpr uint8_t kFallbackOrder[6][6] = {
+    {0, 1, 2, 3, 4, 5},
+    {1, 0, 2, 3, 4, 5},
+    {2, 1, 0, 3, 4, 5},
+    {3, 2, 1, 0, 4, 5},
+    {4, 3, 2, 1, 0, 5},
+    {5, 4, 3, 2, 1, 0},
+};
+
+inline int selectScheme1Slot(int *position) {
+    // RandInt(256), lr: 0x0208aca8
+    const auto roll = static_cast<uint32_t>(lcg::getTop32(position)) >> 24;
+    if (roll < 68) return 0;
+    if (roll < 126) return 1;
+    if (roll < 174) return 2;
+    if (roll < 212) return 3;
+    if (roll < 239) return 4;
+    return 5;
+}
+
+inline bool resolveIronSlot(int slot, int *position, Player players[4], bool guardAlreadyPlanned,
+                            EnemySelection &selection) {
+    switch (slot) {
+        case 0: // ゲルニックかばう: handler 159
+            if (!Player::isPlayerAlive(players[2]) || players[2].guardedBy >= 0 || guardAlreadyPlanned) return false;
+            (*position)++; // max: 1, lr: 0x021ee074
+            selection = {BattleEmulator::WHIPPING_BOY, 2, slot};
+            return true;
+        case 1:
+        case 2: // 通常攻撃: formation-weighted single target
+            if (!Player::isPlayerAlive(players[0])) return false;
+            (*position)++; // max: 2, lr: 0x02156874
+            (*position)++; // range: 3..4, lr: 0x0216139c
+            (*position)++; // range: 6..8, lr: 0x021613b0
+            selection = {BattleEmulator::ATTACK_ENEMY, 0, slot};
+            return true;
+        case 3: // かぶと割り: DEF をさらに下げられる対象だけ
+            if (!Player::isPlayerAlive(players[0]) || players[0].BuffLevel <= -2) return false;
+            (*position)++; // max: 2, lr: 0x02156874
+            selection = {BattleEmulator::HELM_SPLITTER, 0, slot};
+            return true;
+        case 4: { // スクルト: handler 20, valid encounter group から1つ選ぶ
+            int targets[3];
+            int count = 0;
+            for (int actor = 1; actor < 4; ++actor) {
+                if (Player::isPlayerAlive(players[actor]) && players[actor].BuffLevel < 2) {
+                    targets[count++] = actor;
+                }
+            }
+            if (count == 0) return false;
+            const int target = targets[lcg::getPercent(position, count)]; // max: validGroupCount, lr: 0x021ef980
+            selection = {BattleEmulator::KABUFF, target, slot};
+            return true;
+        }
+        case 5: // もろば斬り
+            if (!Player::isPlayerAlive(players[0])) return false;
+            (*position)++; // max: 2, lr: 0x02156874
+            (*position)++; // range: 3..4, lr: 0x0216139c
+            (*position)++; // range: 6..8, lr: 0x021613b0
+            selection = {BattleEmulator::DOUBLE_EDGED_SLASH, 0, slot};
+            return true;
+        default:
+            return false;
+    }
+}
+
+inline EnemySelection selectIronAction(int *position, Player players[4], bool guardAlreadyPlanned) {
+    const int originalSlot = selectScheme1Slot(position);
+    EnemySelection selection{BattleEmulator::ATTACK_ENEMY, 0, -1};
+    for (int i = 0; i < 6; ++i) {
+        const int slot = kFallbackOrder[originalSlot][i];
+        if (resolveIronSlot(slot, position, players, guardAlreadyPlanned, selection)) {
+            return selection;
+        }
+    }
+    // isCanActionTaken が全滅した場合の action 2 fallback。現戦闘では通常攻撃相当。
+    (*position)++; // max: 2, lr: 0x02156874
+    (*position)++; // range: 3..4, lr: 0x0216139c
+    (*position)++; // range: 6..8, lr: 0x021613b0
+    return selection;
+}
+
+inline bool gerunikuHasMp(const Player &boss, int cost) {
+    return boss.mp == 255 || boss.mp >= cost;
+}
+
+inline bool resolveGerunikuSlot(int slot, int *position, Player players[4], EnemySelection &selection) {
+    const Player &boss = players[2];
+    switch (slot) {
+        case 0: // バギマ(弱), handler 3: 1人partyではマホカンタ中なら不可
+            if (!Player::isPlayerAlive(players[0]) || players[0].hasMagicMirror || !gerunikuHasMp(boss, 8)) return false;
+            selection = {BattleEmulator::GERUNIKKU_BAGIMA, 0, slot};
+            return true;
+        case 1: // メラミ, handler 2
+            if (!Player::isPlayerAlive(players[0]) || players[0].hasMagicMirror || !gerunikuHasMp(boss, 6)) return false;
+            (*position)++; // max: 2, lr: 0x02156874
+            selection = {BattleEmulator::GERUNIKKU_MERAMI, 0, slot};
+            return true;
+        case 2: // ぶきみなひかり, handler 89
+            if (!Player::isPlayerAlive(players[0]) || players[0].magicResistanceLevel <= -2 || !gerunikuHasMp(boss, 6)) return false;
+            (*position)++; // max: 2, lr: 0x02156874
+            selection = {BattleEmulator::EERIE_LIGHT, 0, slot};
+            return true;
+        case 3: // マホカンタ, handler 47
+            if (boss.hasMagicMirror || !gerunikuHasMp(boss, 4)) return false;
+            selection = {BattleEmulator::MAGIC_MIRROR, 2, slot};
+            return true;
+        case 4: // メダパニ, handler 152
+            if (!Player::isPlayerAlive(players[0]) || players[0].confused || players[0].hasMagicMirror || !gerunikuHasMp(boss, 5)) return false;
+            (*position)++; // max: 1, lr: 0x021ee074
+            selection = {BattleEmulator::GERUNIKKU_MEDAPANI, 0, slot};
+            return true;
+        case 5: // バギマ(強), handler 3
+            if (!Player::isPlayerAlive(players[0]) || players[0].hasMagicMirror || !gerunikuHasMp(boss, 8)) return false;
+            selection = {BattleEmulator::GERUNIKKU_BAGIMA_STRONG, 0, slot};
+            return true;
+        default:
+            return false;
+    }
+}
+
+inline EnemySelection selectGerunikuAction(int *position, Player players[4], uint8_t &usedSlots) {
+    const int originalSlot = selectScheme1Slot(position);
+    EnemySelection selection{BattleEmulator::ATTACK_ENEMY, 0, -1};
+    for (int i = 0; i < 6; ++i) {
+        const int slot = kFallbackOrder[originalSlot][i];
+        const uint8_t bit = static_cast<uint8_t>(1U << slot);
+        if ((usedSlots & bit) != 0) {
+            continue;
+        }
+        if (resolveGerunikuSlot(slot, position, players, selection)) {
+            usedSlots = static_cast<uint8_t>(usedSlots | bit);
+            return selection;
+        }
+    }
+    // Six slots unusable: movementPattern の action 2 fallback。
+    (*position)++; // max: 2, lr: 0x02156874
+    (*position)++; // range: 3..4, lr: 0x0216139c
+    (*position)++; // range: 6..8, lr: 0x021613b0
+    return selection;
+}
+}
+#endif
 
 #if defined(gerunikku)
 constexpr int Ally_Level = 48;
@@ -271,6 +441,22 @@ std::string BattleEmulator::getActionName(int actionId) {
             return "Thin Air";
         case SCEPTER_BALL:
             return "Scepter Ball";
+        case WHIPPING_BOY:
+            return "Whipping Boy";
+        case HELM_SPLITTER:
+            return "Helm Splitter";
+        case DOUBLE_EDGED_SLASH:
+            return "Double-edged Slash";
+        case GERUNIKKU_MERAMI:
+            return "Merami";
+        case GERUNIKKU_BAGIMA:
+            return "Bagima";
+        case EERIE_LIGHT:
+            return "Eerie Light";
+        case GERUNIKKU_MEDAPANI:
+            return "Medapani";
+        case GERUNIKKU_BAGIMA_STRONG:
+            return "Bagima (strong)";
         default:
             return "Unknown Action";
     }
@@ -331,7 +517,11 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             std::cout << "!!" << std::endl;
         }
 #endif
+        #if defined(gerunikku)
+        int ehp = players[2].hp;
+        #else
         int ehp = players[1].hp;
+        #endif
         int ahp = players[0].hp;
 
         players[0].defence = 1.0;
@@ -340,10 +530,18 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             action = -1;
         }
         actionsPosition = 0;
-        double speed0 = players[0].speed > 0 ? (players[0].speed * lcg::floatRand(position, 0.51, 1.0)) : -1.0;
-        double speed1 = players[1].speed > 0 ? (players[1].speed * lcg::floatRand(position, 0.51, 1.0)) : -1.0;
-        double speed2 = players[2].speed > 0 ? (players[2].speed * lcg::floatRand(position, 0.51, 1.0)) : -1.0;
-        double speed3 = players[3].speed > 0 ? (players[3].speed * lcg::floatRand(position, 0.51, 1.0)) : -1.0;
+        double speed0 = Player::isPlayerAlive(players[0]) && players[0].speed > 0
+            ? players[0].speed * lcg::floatRand(position, 0.51, 1.0) // float, lr: 0x0215efac
+            : -1.0;
+        double speed1 = Player::isPlayerAlive(players[1]) && players[1].speed > 0
+            ? players[1].speed * lcg::floatRand(position, 0.51, 1.0) // float, lr: 0x0215efac
+            : -1.0;
+        double speed2 = Player::isPlayerAlive(players[2]) && players[2].speed > 0
+            ? players[2].speed * lcg::floatRand(position, 0.51, 1.0) // float, lr: 0x0215efac
+            : -1.0;
+        double speed3 = Player::isPlayerAlive(players[3]) && players[3].speed > 0
+            ? players[3].speed * lcg::floatRand(position, 0.51, 1.0) // float, lr: 0x0215efac
+            : -1.0;
 
         auto swap_if = [](double& a, double& b, int& ia, int& ib) {
             if (a < b) {
@@ -360,36 +558,39 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         swap_if(speed1, speed3, i1, i3);
         swap_if(speed1, speed2, i1, i2);
 
-        (*position)++;//0x02160d64
+        int order[4] = {i0, i1, i2, i3};
+        player0_has_initiative = order[0] == 0;
 
-        auto ini = false;
-        int TekkouAction[2] = {0};
-        if (speed1 > speed3) {
-            ini = true;
-        }
+#if defined(gerunikku)
+        // Encounter-group relation used by ゲルニックかばう is reset at turn start.
+        // Planning and active guarding are intentionally separate: target selection can
+        // suppress a second planned guard before the first guard action has executed.
+        players[2].guardedBy = -1;
+        EnemySelection plannedIron[4]{};
+        bool plannedIronValid[4] = {false, false, false, false};
+        bool guardAlreadyPlanned = false;
 
-        auto preaction = -1;
-        for (int & c : TekkouAction) {
-            c = ProcessEnemyRandomAction2A(position);
-            if (preaction != -1 && TekkouAction[0] == TekkouAction[1]) {
-                if (c == WHIPPING_BOY) {
-                    c = ATTACK_ENEMY;
-                }
+        // FUN_0215edbc creates turn records in randomized-speed order. Judgment-1
+        // Iron actions are selected here; judgment-2 Geruniku actions are selected
+        // only when each action record executes. FUN_02160cfc is called after the
+        // first record of every enemy actor. Geruniku profile index 2 returns a fixed
+        // extra-action count of 1; Iron profile index 0 returns 0. RandInt(2) is still
+        // consumed in both cases.
+        for (const int actor : order) {
+            if (!Player::isPlayerAlive(players[actor]) || actor == 0) continue;
+            if (actor == 1 || actor == 3) {
+                plannedIron[actor] = selectIronAction(position, players, guardAlreadyPlanned);
+                plannedIronValid[actor] = true;
+                if (plannedIron[actor].action == WHIPPING_BOY) guardAlreadyPlanned = true;
             }
-            if (c == ATTACK_ENEMY) {
-                (*position)++; //0x02160d64
-            }
-            if (c == WHIPPING_BOY) {
-                (*position)++;//0x02156874
-                (*position)+= 2;//0x0216139c && 0x021613b0
-            }
-            (*position)++;//0x02160d64
-            preaction = c;
+            (*position)++; // max: 2, lr: 0x02160d64
         }
+        uint8_t gerunikuUsedSlots = 0;
+#endif
 
         int32_t actionTable = -1;
 
-        if (Gene[genePosition] == 0 || Gene[genePosition] == -1) {
+        if (genePosition != -1 && (Gene[genePosition] == 0 || Gene[genePosition] == -1)) {
             genePosition = -1;
             //throw std::invalid_argument("GenePosition is invalid");
         }
@@ -423,9 +624,97 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         }
 
         auto preAction = 0;
-        int enemyAction[2] = {0, 0};
-        // ソートされた結果を出力
-        int order[4] = {i0, i1, i2, i3};
+
+        auto anyEnemyAlive = [&]() noexcept {
+            return Player::isPlayerAlive(players[1]) || Player::isPlayerAlive(players[2]) ||
+                   Player::isPlayerAlive(players[3]);
+        };
+
+        auto primaryHeroTarget = [&]() noexcept {
+            if (Player::isPlayerAlive(players[2])) return 2;
+            if (Player::isPlayerAlive(players[1])) return 1;
+            if (Player::isPlayerAlive(players[3])) return 3;
+            return -1;
+        };
+
+        auto isHealingAction = [](const int action) noexcept {
+            return action == HEAL || action == MEDICINAL_HERBS || action == MORE_HEAL ||
+                   action == MIDHEAL || action == FULLHEAL || action == SPECIAL_MEDICINE ||
+                   action == GOSPEL_SONG;
+        };
+
+        auto isGuardableHeroAction = [](const int action) noexcept {
+            switch (action) {
+                case ATTACK_ALLY:
+                case MERCURIAL_THRUST:
+                case THUNDER_THRUST:
+                case DRAGON_SLASH:
+                case MIRACLE_SLASH:
+                case FLAME_SLASH:
+                case KACRACKLE_SLASH:
+                case HATCHET_MAN:
+                case UPWARD_SLICE:
+                    return true;
+                default:
+                    return false;
+            }
+        };
+
+        auto addResult = [&](const int action, const int damage, const bool isEnemy) {
+            if (mode != -1) return;
+            int atkTurn = players[0].AtkBuffTurn > 0 ? players[0].AtkBuffTurn
+                : (players[0].AtkBuffLevel != 0 ? 0 : -1);
+            int buffTurn = players[0].BuffTurns > 0 ? players[0].BuffTurns
+                : (players[0].BuffLevel != 0 ? 0 : -1);
+            int mirrorTurn = players[0].MagicMirrorTurn > 0 ? players[0].MagicMirrorTurn
+                : (players[0].hasMagicMirror ? 0 : -1);
+            BattleResult::add(result, action, damage, isEnemy, atkTurn, buffTurn, mirrorTurn,
+                              counterJ - 1, player0_has_initiative, ehp, ahp, tmpState,
+                              players[0].specialChargeTurn, players[0].mp, defenseFlag);
+        };
+
+        auto enemyDamageIsTracked = [](const int action) noexcept {
+            switch (action) {
+                case ATTACK_ENEMY:
+                case HELM_SPLITTER:
+                case DOUBLE_EDGED_SLASH:
+                case GERUNIKKU_MERAMI:
+                case GERUNIKKU_BAGIMA:
+                case GERUNIKKU_BAGIMA_STRONG:
+                    return true;
+                default:
+                    return false;
+            }
+        };
+
+        // return: -1=mismatch, 0=continue, 1=request matched through sentinel.
+        auto validateEnemy = [&](const int action, const int damage) noexcept {
+            if (mode == -1 || mode == -2) return 0;
+            const int need = eActions[exCounter1++];
+            if (need == -1) {
+                startTurn = counterJ - 1;
+                return 1;
+            }
+            if (need != action) return -1;
+            if (enemyDamageIsTracked(action)) {
+                if (damages[exCounter] == -1) {
+                    startTurn = counterJ - 1;
+                    return 1;
+                }
+                if (damages[exCounter++] != damage) return -1;
+            }
+            return 0;
+        };
+
+        auto postEnemyAction = [&](const int actor) {
+            if (Player::isPlayerAlive(players[0]) && anyEnemyAlive()) {
+                (*position)++; // max: 100, lr: 0x02159d40
+            }
+            if (players[actor].rage) {
+                --players[actor].rageTurns;
+                if (players[actor].rageTurns <= 0) players[actor].rage = false;
+            }
+        };
 
         for (const int actor : order) {
             if (!Player::isPlayerAlive(players[actor])) {
@@ -435,24 +724,184 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             switch (actor) {
                 case 0:
                     {
-                        // Actor
+                        int action = actionTable & 0xffff;
+                        bool skipTurn = false;
+                        if (action == SLEEPING && !player0_has_initiative && !players[0].sleeping) {
+                            skipTurn = true;
+                        }
+                        if (action == FLEE_ALLY) skipTurn = true;
+
+                        if (!skipTurn) {
+                            // FUN_02158dfc player pre-action path.
+                            if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
+                                (*position)++; // max: 100, lr: 0x02159b10
+                            } else if (players[0].inactive) {
+                                players[0].inactive = false;
+                                action = INACTIVE_ALLY;
+                                players[0].defence = 1.0;
+                                (*position)++; // max: 100, lr: 0x02159b10
+                            } else if (players[0].paralysis) {
+                                action = PARALYSIS;
+                                --players[0].paralysisTurns;
+                                if (players[0].paralysisTurns <= 0) {
+                                    constexpr int paralysisTable[4] = {62, 75, 87, 100};
+                                    const auto probability1 = paralysisTable[std::abs(players[0].paralysisTurns)];
+                                    const auto probability2 = lcg::getPercent(position, 100); // lr: 0x02159b10
+                                    if (probability1 >= probability2 + (probability1 == 75 ? 1 : 0)) {
+                                        players[0].paralysis = false;
+                                        players[0].paralysisLevel = 0;
+                                        action = CURE_PARALYSIS;
+                                    }
+                                } else {
+                                    (*position)++; // max: 100, lr: 0x02159b10
+                                }
+                            } else if (players[0].sleeping) {
+                                action = SLEEPING;
+                                --players[0].sleepingTurn;
+                                if (players[0].sleepingTurn <= 0) {
+                                    constexpr int sleepTable[4] = {37, 62, 87, 100};
+                                    const auto probability1 = sleepTable[std::abs(players[0].sleepingTurn)];
+                                    const auto probability2 = lcg::getPercent(position, 100); // lr: 0x02159b10
+                                    if (probability1 >= probability2) {
+                                        players[0].sleeping = false;
+                                        action = CURE_SLEEPING;
+                                    }
+                                } else {
+                                    (*position)++; // max: 100, lr: 0x02159b10
+                                }
+                            }
+
+                            int target = primaryHeroTarget();
+                            if (target < 0) return false;
+                            if (target == 2 && isGuardableHeroAction(action) && players[2].guardedBy >= 0 &&
+                                Player::isPlayerAlive(players[players[2].guardedBy])) {
+                                target = players[2].guardedBy;
+                            }
+
+                            const int basedamage = callAttackFun(action, position, players, 0, target, NowState);
+                            addResult(action, basedamage, false);
+                            if (isHealingAction(action)) {
+                                Player::heal(players[0], basedamage);
+                            } else if (target >= 1 && target <= 3) {
+                                Player::reduceHp(players[target], basedamage);
+                                if (mode != -1 && mode != -2 &&
+                                    (action == MULTITHRUST || action == ATTACK_ALLY || action == MERCURIAL_THRUST)) {
+                                    if (damages[exCounter] == -1) {
+                                        startTurn = counterJ - 1;
+                                        return true;
+                                    }
+                                    if (damages[exCounter++] != basedamage) return false;
+                                }
+                            }
+
+                            // FUN_021594bc player post-action path. Preserve the existing
+                            // buff-duration logic; only the enemy-alive predicate is widened
+                            // from the old one-enemy build to all three encounter actors.
+                            if (Player::isPlayerAlive(players[0]) && anyEnemyAlive()) {
+                                (*position)++; // max: 100, lr: 0x02159d40
+
+                                --players[0].MagicMirrorTurn;
+                                if (players[0].hasMagicMirror && players[0].MagicMirrorTurn <= 0) {
+                                    constexpr int probability[4] = {62, 75, 87, 100};
+                                    const int probability1 = probability[std::abs(players[0].MagicMirrorTurn)];
+                                    const int probability2 = lcg::getPercent(position, 100); // lr: 0x0215a050
+                                    if (probability1 >= probability2 + (probability1 == 75 ? 1 : 0)) {
+                                        players[0].hasMagicMirror = false;
+                                    }
+                                }
+
+                                --players[0].AtkBuffTurn;
+                                if (players[0].AtkBuffLevel != 0 && players[0].AtkBuffTurn <= 0) {
+                                    constexpr int probability[4] = {62, 75, 87, 100};
+                                    const int probability1 = probability[std::abs(players[0].AtkBuffTurn)];
+                                    const int probability2 = lcg::getPercent(position, 100); // lr: 0x0215a804
+                                    if (probability1 >= probability2 + (probability1 == 75 ? 1 : 0)) {
+                                        players[0].AtkBuffLevel = 0;
+                                        RecalculateBuff(players, 0);
+                                    }
+                                }
+
+                                --players[0].BuffTurns;
+                                if (players[0].BuffLevel != 0 && players[0].BuffTurns <= 0) {
+                                    constexpr int probability[4] = {62, 75, 87, 100};
+                                    const int probability1 = probability[std::abs(players[0].BuffTurns)];
+                                    const int probability2 = lcg::getPercent(position, 100); // lr: 0x0215a8a8
+                                    if (probability1 >= probability2 + (probability1 == 75 ? 1 : 0)) {
+                                        players[0].BuffLevel = 0;
+                                        RecalculateBuff(players, 0);
+                                    }
+                                }
+
+                                --players[0].InsulateTurns;
+                                if (players[0].InsulateLevel != 0 && players[0].InsulateTurns <= 0) {
+                                    constexpr int probability[4] = {62, 75, 87, 100};
+                                    const int probability1 = probability[std::abs(players[0].InsulateTurns)];
+                                    const int probability2 = lcg::getPercent(position, 100); // lr: 0x0215ac74
+                                    if (probability1 >= probability2 + (probability1 == 75 ? 1 : 0)) {
+                                        players[0].InsulateLevel = 0;
+                                    }
+                                }
+                            }
+                        } else {
+                            addResult(action, 0, false);
+                        }
                         break;
                     }
                 case 1:
                 case 3:
                     {
-                        // tekkou1
+#if defined(gerunikku)
+                        if (!plannedIronValid[actor]) break;
+                        (*position)++; // max: 100, lr: 0x021588ec
+                        (*position)++; // max: 100, lr: 0x02159b10
+                        const EnemySelection selection = plannedIron[actor];
+                        const int basedamage = callAttackFun(selection.action, position, players, actor,
+                                                             selection.target, NowState);
+                        addResult(selection.action, basedamage, true);
+                        if (basedamage > 0 && selection.target >= 0 && selection.target < 4) {
+                            Player::reduceHp(players[selection.target], basedamage);
+                        }
+                        const int validation = validateEnemy(selection.action, basedamage);
+                        if (validation < 0) return false;
+                        if (validation > 0) return true;
+                        postEnemyAction(actor);
+#endif
                         break;
                     }
                 case 2:
                     {
-                        // Boss
+#if defined(gerunikku)
+                        for (int bossActionIndex = 0; bossActionIndex < 2; ++bossActionIndex) {
+                            if (!Player::isPlayerAlive(players[2]) || !Player::isPlayerAlive(players[0])) break;
+                            (*position)++; // max: 100, lr: 0x021588ec
+                            const EnemySelection selection = selectGerunikuAction(position, players, gerunikuUsedSlots);
+                            (*position)++; // max: 100, lr: 0x02159b10
+                            const int basedamage = callAttackFun(selection.action, position, players, 2,
+                                                                 selection.target, NowState);
+                            addResult(selection.action, basedamage, true);
+                            if (basedamage > 0 && selection.target >= 0 && selection.target < 4) {
+                                Player::reduceHp(players[selection.target], basedamage);
+                            }
+                            const int validation = validateEnemy(selection.action, basedamage);
+                            if (validation < 0) return false;
+                            if (validation > 0) return true;
+                            postEnemyAction(2);
+                        }
+#endif
                         break;
                     }
                 default:
                     break;
             }
+
+            if (!Player::isPlayerAlive(players[0])) return false;
+            if (!anyEnemyAlive()) return false;
         }
+
+        if (Player::isPlayerAlive(players[0]) && anyEnemyAlive()) {
+            (*position)++; // max: 100, lr: 0x0215962c
+        }
+        camera::Main(position, actions, NowState, player0_has_initiative, TiggerSkyAttack);
     }
     if (mode != -1 && mode != -2) {
         startTurn = RunCount - 2;
@@ -478,7 +927,7 @@ constexpr double Enemy_TensionTable[4] = {1.3, 2.0, 3.0, 4.5}; //一部の敵は
 
 int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, int attacker, int defender,
                                   uint64_t *NowState) {
-    for (int j = 0; j < 2; ++j) {
+    for (int j = 0; j < 4; ++j) {
         preHP[j] = players[j].hp;
     }
     actions[actionsPosition++] = Id;
@@ -537,7 +986,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             if (players[0].InsulateLevel != 2) {
                 players[0].InsulateLevel++;
                 players[0].InsulateTurns = 6;
-                RecalculateBuff(players);
+                RecalculateBuff(players, attacker);
             }
 
             baseDamage = 0;
@@ -585,7 +1034,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             if(players[0].BuffLevel < 0){
                 players[0].BuffLevel = 0;
                 players[0].BuffTurns = -1;
-                RecalculateBuff(players);
+                RecalculateBuff(players, 0);
             }
             break;
         case SPECIAL_MEDICINE:
@@ -881,7 +1330,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             players[0].InsulateTurns = -1;
 
 
-            RecalculateBuff(players);
+            RecalculateBuff(players, defender);
             baseDamage = 0;
             resetCombo(NowState);
             break;
@@ -894,7 +1343,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             }
             (*position)++; //回避
 
-            baseDamage = FUN_021e8458_typeD(position, 10, CalculateMidHealBase(players));
+            baseDamage = FUN_021e8458_typeD(position, 10, CalculateMidHealBase(players, attacker));
             if (kaisinn) {
                 tmp1 *= lcg::floatRand(position, 1.5, 2.0); //TODO
             } else {
@@ -1053,7 +1502,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 baseDamage = static_cast<int>((tmp));
 
                 if (!kaihi) {
-                    ProcessRage(position, baseDamage, players);
+                    ProcessRage(position, baseDamage, players, defender);
                     (*position)++; //目を覚ました
                     (*position)++; //不明 0x021e54fc
                 } else {
@@ -1101,7 +1550,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 tmp = processCombo(Id & 0xffff, tmp, NowState);
                 baseDamage = static_cast<int>((tmp));
                 (*position)++; //不明 0x021e54fc
-                ProcessRage(position, baseDamage, players);
+                ProcessRage(position, baseDamage, players, defender);
             } else {
                 if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
                     if (lcg::getPercent(position, 100) < shieldGuardP) {
@@ -1238,7 +1687,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 players[0].BuffTurns = 7;
             }
 
-            RecalculateBuff(players);
+            RecalculateBuff(players, attacker);
             resetCombo(NowState);
             baseDamage = 0;
             break;
@@ -1251,7 +1700,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             }
             (*position)++; //回避
 
-            baseDamage = FUN_021e8458_typeD(position, 20, CalculateMoreHealBase(players));
+            baseDamage = FUN_021e8458_typeD(position, 20, CalculateMoreHealBase(players, attacker));
             if (kaisinn) {
                 tmp1 = baseDamage * lcg::floatRand(position, 1.5, 2.0); //TODO
             } else {
@@ -1302,7 +1751,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             resetCombo(NowState);
             break;
         case BattleEmulator::MAGIC_MIRROR:
-            players[attacker].mp -= 4;
+            if (players[attacker].mp != 255) {
+                players[attacker].mp = std::max(0, players[attacker].mp - 4);
+            }
             (*position) += 5;
             baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[attacker].def);
             if (baseDamage == 0) {
@@ -1311,15 +1762,15 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             if (baseDamage != 0) {
                 (*position)++; //不明 0x021e54fc
             }
-            if (!players[0].specialCharge) {
+            if (attacker == 0 && !players[0].specialCharge) {
                 (*position)++; //0x021ed7a8
                 if (lcg::getPercent(position, 100) < 1) {
                     players[attacker].specialCharge = true;
                     players[attacker].specialChargeTurn = SpecialChargeTurns;
                 }
             }
-            players[0].hasMagicMirror = true;
-            players[0].MagicMirrorTurn = 6;
+            players[attacker].hasMagicMirror = true;
+            players[attacker].MagicMirrorTurn = 6;
             resetCombo(NowState);
             baseDamage = 0;
             break;
@@ -1412,7 +1863,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             if (players[0].BuffLevel != 2) {
                 players[0].BuffLevel++;
                 players[0].BuffTurns = 7;
-                RecalculateBuff(players);
+                RecalculateBuff(players, attacker);
             }
 
             baseDamage = 0;
@@ -1628,6 +2079,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             resetCombo(NowState);
             break;
         case BattleEmulator::KABUFF:
+            if (players[attacker].mp != 255) {
+                players[attacker].mp = std::max(0, players[attacker].mp - 6);
+            }
             (*position) += 2;
             (*position)++; // 関係ない
             (*position)++; // 会心判定
@@ -1641,18 +2095,117 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 (*position)++; //不明 0x021e54fc
             }
 
-            if (players[1].BuffLevel != 2) {
-                players[1].BuffLevel++;
-                players[1].BuffTurns = 7;
-                RecalculateBuff(players);
+            if (Player::isPlayerAlive(players[defender]) && players[defender].BuffLevel < 2) {
+                players[defender].BuffLevel++;
+                players[defender].BuffTurns = 7;
+                RecalculateBuff(players, defender);
             }
 
             baseDamage = 0;
             resetCombo(NowState);
             break;
+        case BattleEmulator::WHIPPING_BOY:
+            (*position) += 5;
+            baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[defender].def);
+            if (baseDamage == 0) {
+                baseDamage = lcg::getPercent(position, 2);
+            }
+            if (baseDamage != 0) {
+                (*position)++;
+            }
+            players[defender].guardedBy = attacker;
+            baseDamage = 0;
+            resetCombo(NowState);
+            break;
+        case BattleEmulator::EERIE_LIGHT:
+            if (players[attacker].mp != 255) {
+                players[attacker].mp = std::max(0, players[attacker].mp - 6);
+            }
+            (*position) += 5;
+            baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[defender].def);
+            if (baseDamage == 0) {
+                baseDamage = lcg::getPercent(position, 2);
+            }
+            if (baseDamage != 0) {
+                (*position)++;
+            }
+            process7A8(position, baseDamage, players, defender);
+            if (players[defender].magicResistanceLevel > -2) {
+                --players[defender].magicResistanceLevel;
+            }
+            baseDamage = 0;
+            resetCombo(NowState);
+            break;
+        case BattleEmulator::GERUNIKKU_MEDAPANI:
+            if (players[attacker].mp != 255) {
+                players[attacker].mp = std::max(0, players[attacker].mp - 5);
+            }
+            (*position) += 2;
+            (*position)++; // 0x021ec6f8
+            (*position)++; // 0x02158584
+            (void)lcg::getPercent(position, 100); // 0x02157f58/status route
+            (*position)++; // 0x021ed7a8
+            players[defender].confused = true;
+            players[defender].confusionTurns = 3;
+            baseDamage = 0;
+            resetCombo(NowState);
+            break;
+        case BattleEmulator::GERUNIKKU_MERAMI:
+            (*position) += 2;
+            (*position)++; // 0x021ec6f8
+            (*position)++; // 0x02158584
+            if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
+                if (lcg::getPercent(position, 100) < shieldGuardP) {
+                    tate = true;
+                }
+            }
+            (*position)++; // 0x02157f58
+            baseDamage = FUN_021e8458_typeD(position, 10, 62);
+            tmp = Equipments::applyDamageReduction(baseDamage, Attribute::Fire);
+            tmp *= 1.0 - 0.25 * players[defender].magicResistanceLevel;
+            if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
+                tmp *= players[defender].defence;
+            }
+            baseDamage = tate ? 0 : static_cast<int>(tmp);
+            if (!tate) {
+                (*position)++; // 0x021e54fc
+            }
+            process7A8(position, baseDamage, players, defender);
+            break;
+        case BattleEmulator::GERUNIKKU_BAGIMA:
+            (*position) += 2;
+            (*position)++; // 0x02158584
+            (*position)++; // 0x021ec6f8
+            (*position)++; // 0x02157f58
+            baseDamage = FUN_021e8458_typeD(position, 15, 29);
+            tmp = Equipments::applyDamageReduction(baseDamage, Attribute::Wind);
+            tmp *= 1.0 - 0.25 * players[defender].magicResistanceLevel;
+            if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
+                tmp *= players[defender].defence;
+            }
+            baseDamage = static_cast<int>(tmp);
+            (*position)++; // 0x021e54fc
+            process7A8(position, baseDamage, players, defender);
+            break;
+        case BattleEmulator::GERUNIKKU_BAGIMA_STRONG:
+            (*position) += 2;
+            (*position)++; // 0x021ec6f8
+            (*position)++; // 0x02157f58
+            baseDamage = FUN_021e8458_typeD(position, 21, 44);
+            tmp = Equipments::applyDamageReduction(baseDamage, Attribute::Wind);
+            tmp *= 1.0 - 0.25 * players[defender].magicResistanceLevel;
+            if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
+                tmp *= players[defender].defence;
+            }
+            baseDamage = static_cast<int>(tmp);
+            (*position)++; // 0x021e54fc
+            process7A8(position, baseDamage, players, defender);
+            break;
         case BattleEmulator::ATTACK_ENEMY:
         case BattleEmulator::SKY_ATTACK:
         case ATTACK_ENEMY_A6:
+        case BattleEmulator::HELM_SPLITTER:
+        case BattleEmulator::DOUBLE_EDGED_SLASH:
             (*position) += 2;
             (*position)++; // アクロバットスターとか
 
@@ -1690,6 +2243,10 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             } else {
                 tmp = static_cast<double>(baseDamage);
                 if ((Id & 0xffff) == BattleEmulator::SKY_ATTACK) {
+                    tmp = floor(tmp * 1.5);
+                }
+                if ((Id & 0xffff) == BattleEmulator::DOUBLE_EDGED_SLASH) {
+                    // Selector 36: trunc(1.5 * incoming), selector-side RNGなし。
                     tmp = floor(tmp * 1.5);
                 }
 
@@ -1755,7 +2312,22 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     players[0].sleepingTurn = -1;
                 }
 
+                if (baseDamage != 0 && (Id & 0xffff) == BattleEmulator::HELM_SPLITTER) {
+                    // attack record +0x32 == -1. この主人公buildでは combat+0x50 == 50。
+                    // RandInt(100), lr: 0x021e3e7c
+                    if (lcg::getPercent(position, 100) < 50 && players[defender].BuffLevel > -2) {
+                        --players[defender].BuffLevel;
+                        players[defender].BuffTurns = 7; // runtime +0x6f=6 と既存turn表現の対応。
+                        RecalculateBuff(players, defender);
+                    }
+                }
+
                 process7A8(position, baseDamage, players, defender);
+
+                if (baseDamage != 0 && (Id & 0xffff) == BattleEmulator::DOUBLE_EDGED_SLASH) {
+                    // 0x00AF: final damage の25%を切り捨てて使用者へ反動。追加RNGなし。
+                    Player::reduceHp(players[attacker], baseDamage / 4);
+                }
             }
 
             players[attacker].TensionLevel = 0;
@@ -1885,7 +2457,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             baseDamage = static_cast<int>((tmp));
 
             if (!kaihi) {
-                ProcessRage(position, baseDamage, players);
+                ProcessRage(position, baseDamage, players, defender);
                 (*position)++; //目を覚ました
                 (*position)++; //不明
             } else {
@@ -2009,7 +2581,7 @@ int BattleEmulator::FUN_0207564c(int *position, int atk, int def) {
 
 #endif
 
-void BattleEmulator::process7A8(int *position, int baseDamage, Player players[2], int defender) {
+void BattleEmulator::process7A8(int *position, int baseDamage, Player players[4], int defender) {
     if (players[defender].paralysis || players[defender].sleeping || players[defender].specialCharge || players[defender].inactive || players[defender].hp <= baseDamage) {
         return;
     }
@@ -2116,47 +2688,47 @@ int BattleEmulator::FUN_0208aecc(int* position, uint64_t* nowState)
     return output;
 }
 
-int BattleEmulator::CalculateMoreHealBase(const Player *players) {
+int BattleEmulator::CalculateMoreHealBase(const Player players[4], int actor) {
     //ベホイミ
-    double tmp1 = (players[0].HealPower - 200) * 0.5194;
+    double tmp1 = (players[actor].HealPower - 200) * 0.5194;
     auto tmp2 = static_cast<int>((tmp1));
     return 185 + tmp2;
 }
 
-int BattleEmulator::CalculateMidHealBase(const Player *players) {
+int BattleEmulator::CalculateMidHealBase(const Player players[4], int actor) {
     //ｂ
-    double tmp1 = (players[0].HealPower - 100) * 0.2392;
+    double tmp1 = (players[actor].HealPower - 100) * 0.2392;
     auto tmp2 = static_cast<int>((tmp1));
     return 85 + tmp2;
 }
 
-void BattleEmulator::RecalculateBuff(Player *players) {
+void BattleEmulator::RecalculateBuff(Player players[4], int actor) {
     // 定数の倍率を格納した配列
     const double ATKMultipliers[] = {0.5, 0.75, 1.0, 1.25, 1.5};
     const double DEFMultipliers[] = {0.25, 0.5, 1.0, 1.5, 2.0};
 
     // BuffLevel に +2 して配列インデックスに変換
-    int index = players[0].BuffLevel + 2;
+    int index = players[actor].BuffLevel + 2;
 
     // インデックスが範囲外でないかチェック（-2 <= BuffLevel <= 2 の範囲であることを確認）
     if (index >= 0 && index < 5) {
-        players[0].def = static_cast<int>((players[0].defaultDEF * DEFMultipliers[index]));
+        players[actor].def = static_cast<int>((players[actor].defaultDEF * DEFMultipliers[index]));
     }
 
-    int index1 = players[0].AtkBuffLevel + 2;
-    if (index >= 0 && index < 5) {
-        players[0].atk = static_cast<int>((players[0].defaultATK * ATKMultipliers[index1]));
+    int index1 = players[actor].AtkBuffLevel + 2;
+    if (index1 >= 0 && index1 < 5) {
+        players[actor].atk = static_cast<int>((players[actor].defaultATK * ATKMultipliers[index1]));
     }
 }
 
-void BattleEmulator::ProcessRage(int *position, int baseDamage, Player players[2]) {
+void BattleEmulator::ProcessRage(int *position, int baseDamage, Player players[4], int defender) {
     // if (kaisinn) {
     //     return;
     // }
 
-    int hp_before = preHP[1];
-    int hp_after  = preHP[1] - baseDamage;
-    int maxHp     = players[1].maxHp;
+    int hp_before = preHP[defender];
+    int hp_after  = preHP[defender] - baseDamage;
+    int maxHp     = players[defender].maxHp;
 
     if (hp_after < 0) {
         hp_after = 0;
@@ -2166,10 +2738,10 @@ void BattleEmulator::ProcessRage(int *position, int baseDamage, Player players[2
     //        if (percent >= 0.5) {
     if (hp_after * 2 < maxHp) {
         if (hp_before * 2 >= maxHp) {
-            if (!players[1].rage) {
+            if (!players[defender].rage) {
                 (*position)++;
-                players[1].rage = true;
-                players[1].rageTurns = lcg::intRangeRand(position, 2, 4);
+                players[defender].rage = true;
+                players[defender].rageTurns = lcg::intRangeRand(position, 2, 4);
             } else {
                 (*position)++;
             }
@@ -2178,7 +2750,7 @@ void BattleEmulator::ProcessRage(int *position, int baseDamage, Player players[2
             //     if (percent >= 0.25) {
             if (hp_after * 4 < maxHp){
                 if (hp_before * 4 >= maxHp){
-                    if (!players[1].rage) {
+                    if (!players[defender].rage) {
                         (*position)++;
                         (*position)++;
                     } else {

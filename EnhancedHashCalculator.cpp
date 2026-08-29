@@ -23,6 +23,12 @@ uint64_t EnhancedHashCalculator::computeStateHash(const Genome &genome) {
     hash = mixHash(hash, static_cast<uint64_t>(genome.AllyPlayer.hp) << 32);
     hash = mixHash(hash, static_cast<uint64_t>(genome.EnemyPlayer.hp) << 16);
     hash = mixHash(hash, static_cast<uint64_t>(genome.AllyPlayer.mp) << 8);
+    hash = mixHash(hash, static_cast<uint64_t>(genome.IronKnightA.hp));
+    hash = mixHash(hash, static_cast<uint64_t>(genome.IronKnightA.mp) << 8);
+    hash = mixHash(hash, static_cast<uint64_t>(genome.IronKnightA.BuffLevel + 2) << 16);
+    hash = mixHash(hash, static_cast<uint64_t>(genome.IronKnightB.hp));
+    hash = mixHash(hash, static_cast<uint64_t>(genome.IronKnightB.mp) << 8);
+    hash = mixHash(hash, static_cast<uint64_t>(genome.IronKnightB.BuffLevel + 2) << 16);
     
     // Turn and position information
     hash = mixHash(hash, static_cast<uint64_t>(genome.turn));

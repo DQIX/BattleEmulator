@@ -167,7 +167,7 @@ double SimpleParameterOptimizer::getActionCost(int action) {
 // measuredTurns/outMs は best（最小 fitness）だった時の値を返す
 static uint64_t evaluateGenome(
     GAGenome &g,
-    const Player players[2],
+    const Player players[4],
     const std::array<uint64_t, GA_EVAL_SEEDS> &evalSeeds,
     const int actions[350],
     int turnsLimit,
@@ -250,7 +250,7 @@ static void dumpGenome(const GAGenome &g, uint64_t bestTurn) {
     std::cout << "\n};\n" << std::endl;
 }
 
-OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t seed,
+OptimResult SimpleParameterOptimizer::optimize(const Player players[4], uint64_t seed,
                                                const int actions[350], int maxTests, int turns)
 {
     initActionCostsIfNeeded();
@@ -591,14 +591,14 @@ OptimResult SimpleParameterOptimizer::optimize(const Player players[2], uint64_t
 
 // --- testParameters の定義 ---
 int SimpleParameterOptimizer::testParameters(
-    const Player players[2],
+    const Player players[4],
     uint64_t seed,
     const int actions[350],
     int turns)
 {
     applyActionCostsToCostParams();
 
-    Player copiedPlayers[2] = { players[0], players[1] };
+    Player copiedPlayers[4] = { players[0], players[1], players[2], players[3] };
 
     int gene[350];
     for (int i = 0; i < 350; ++i) {
@@ -617,7 +617,7 @@ int SimpleParameterOptimizer::testParameters(
 
 // --- evaluateGenomeRange: EvalResult::fitness は uint64_t に準拠 ---
 std::vector<EvalResult> SimpleParameterOptimizer::evaluateGenomeRange(std::vector<GAGenome> *population,
-    const std::vector<int> *pendingIndices, int start, int end, const Player players[2],
+    const std::vector<int> *pendingIndices, int start, int end, const Player players[4],
     const std::array<uint64_t, GA_EVAL_SEEDS> &evalSeeds, const int actions[350], int turnsLimit,
     uint64_t seedForThread) {
 
@@ -664,7 +664,7 @@ static std::array<uint64_t, GA_EVAL_SEEDS> makeEvalSeedsDeterministic(uint64_t b
 }
 
 StabilityChunkResult SimpleParameterOptimizer::stabilityCheckRange(const GAGenome *bestGenomeCopy, int baselineTurn,
-    int beginIdx, int endIdx, uint64_t baseSeed, const Player players[2], const int actions[350], int turnsLimit) {
+    int beginIdx, int endIdx, uint64_t baseSeed, const Player players[4], const int actions[350], int turnsLimit) {
     StabilityChunkResult out{};
     auto turns = 0;
 

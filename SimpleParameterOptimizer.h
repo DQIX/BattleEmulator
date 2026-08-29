@@ -81,13 +81,13 @@ class SimpleParameterOptimizer {
 
     public:
     // メイン最適化実行（シンプルなランダムサーチ）
-    static OptimResult optimize(const Player players[2], uint64_t seed,
+    static OptimResult optimize(const Player players[4], uint64_t seed,
                                const int actions[350], int maxTests = 50, int turns = 0);
 
     static double getActionCost(int action);
 
     // パラメータセットをテスト
-    static int testParameters(const Player players[2],
+    static int testParameters(const Player players[4],
                              uint64_t seed, const int actions[350], int turns);
 private:
     static std::vector<EvalResult> evaluateGenomeRange(
@@ -95,7 +95,7 @@ private:
         const std::vector<int> *pendingIndices,
         int start,
         int end,
-        const Player players[2],
+        const Player players[4],
         const std::array<uint64_t, GA_EVAL_SEEDS> &evalSeeds,
         const int actions[350],
         int turnsLimit,
@@ -108,7 +108,7 @@ private:
         int beginIdx,
         int endIdx,
         uint64_t baseSeed,
-        const Player players[2],
+        const Player players[4],
         const int actions[350],
         int turnsLimit
     );

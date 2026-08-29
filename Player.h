@@ -46,6 +46,10 @@ struct Player {
     int InsulateTurns = -1;
     bool inactive = false;
     int rageTurns = -1;
+    int magicResistanceLevel = 0;
+    bool confused = false;
+    int confusionTurns = -1;
+    int guardedBy = -1;
 
     // 他のメンバー変数やメンバー関数を追加する可能性があります
 

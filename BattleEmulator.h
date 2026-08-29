@@ -117,6 +117,11 @@ public:
 	static constexpr int WHIPPING_BOY = 180;//かばう
 	static constexpr int HELM_SPLITTER = 181;//かぶとわり
 	static constexpr int DOUBLE_EDGED_SLASH = 182;//もろば斬り
+	static constexpr int GERUNIKKU_MERAMI = 183;
+	static constexpr int GERUNIKKU_BAGIMA = 184;
+	static constexpr int EERIE_LIGHT = 185;
+	static constexpr int GERUNIKKU_MEDAPANI = 186;
+	static constexpr int GERUNIKKU_BAGIMA_STRONG = 187;
 
     static bool
     Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
@@ -139,13 +144,13 @@ public:
 private:
     static int ProcessMagicBurst(int *position);
 
-    static void ProcessRage(int *position, int baseDamage, Player players[2]);
+    static void ProcessRage(int *position, int baseDamage, Player players[4], int defender);
 
-    static void RecalculateBuff(Player players[2]);
+    static void RecalculateBuff(Player players[4], int actor);
 
-    static int CalculateMoreHealBase(const Player players[2]);
+    static int CalculateMoreHealBase(const Player players[4], int actor);
 
-    static int CalculateMidHealBase(const Player players[2]);
+    static int CalculateMidHealBase(const Player players[4], int actor);
 
     static int FUN_0208aecc(int *position, uint64_t *NowState);
 
@@ -166,7 +171,7 @@ private:
     static int ProcessEnemyRandomAction2A(int *position);
 
 
-    static void process7A8(int *position, int baseDamage, Player players[2], int defender);
+    static void process7A8(int *position, int baseDamage, Player players[4], int defender);
 };
 
 

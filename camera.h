@@ -9,12 +9,11 @@
 #include <cstdint>
 
 class camera {
-
 public:
-    static void Main(int *position, const int32_t *actions, uint64_t * NowState, bool preemptive, bool bakuti);
+    static void Main(int *position, const int32_t *actions, uint64_t *NowState, bool preemptive, bool bakuti);
 
 private:
-    static void onFreeCameraMove(int *position, int action, int param5, uint64_t * NowState);
+    static void onFreeCameraMove(int *position, int action, int param5, uint64_t *NowState);
 };
 
 

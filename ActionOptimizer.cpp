@@ -150,14 +150,20 @@ uint32_t ActionOptimizer::getNodesUsed(){
 }
 
 // Flexible A* Algorithm Implementation
-Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int turns, int maxGenerations,
+Genome ActionOptimizer::RunAlgorithm(const Player players[4], uint64_t seed, int turns, int maxGenerations,
                                      int actions[350], int seedOffset){
 	lcg::init(seed, true);
 	Node_Used = 0;
 	//std::mt19937 rng(seed + seedOffset);
 
 	// Cache enemy max HP (immutable value)
+	#if defined(gerunikku)
+	constexpr int primaryEnemyIndex = 2;
+	const auto enemyMaxHp = static_cast<double>(players[2].maxHp);
+	#else
+	constexpr int primaryEnemyIndex = 1;
 	const auto enemyMaxHp = static_cast<double>(players[1].maxHp);
+	#endif
 	const auto playerMaxHp = static_cast<double>(players[0].maxHp);
 	//const auto playerMaxMP = static_cast<double>(players[0].maxMp);
 
@@ -167,7 +173,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 	EnhancedHeapQueue openSet{};
 	std::unordered_set<uint64_t> closedSet;
 
-	Player CopedPlayers[2] = {players[0], players[1]};
+	Player CopedPlayers[4] = {players[0], players[1], players[2], players[3]};
 	int position = 1;
 	uint64_t nowState = 0;
 
@@ -178,7 +184,14 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
 	// Initialize starting node
 	Genome initialGenome = {};
-	initialGenome.EnemyPlayer = CopedPlayers[1];
+	initialGenome.EnemyPlayer = CopedPlayers[primaryEnemyIndex];
+	#if defined(gerunikku)
+	initialGenome.IronKnightA = CopedPlayers[1];
+	initialGenome.IronKnightB = CopedPlayers[3];
+	#else
+	initialGenome.IronKnightA = {};
+	initialGenome.IronKnightB = {};
+	#endif
 	initialGenome.AllyPlayer = CopedPlayers[0];
 	initialGenome.EActions[0] = -1;
 	initialGenome.EActions[1] = -1;
@@ -224,7 +237,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 	auto percent = 0.0;
 	auto percenttmp = 0.0;
 
-	Player CopedPlayers3[2];
+	Player CopedPlayers3[4];
 
 	for(int i = 0; i < 1; ++i){
 		if(!solutionFound){
@@ -286,7 +299,15 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
 				// Copy for battle emulator execution
 				CopedPlayers3[0] = currentGenome.AllyPlayer;
+				#if defined(gerunikku)
+				CopedPlayers3[1] = currentGenome.IronKnightA;
+				CopedPlayers3[2] = currentGenome.EnemyPlayer;
+				CopedPlayers3[3] = currentGenome.IronKnightB;
+				#else
 				CopedPlayers3[1] = currentGenome.EnemyPlayer;
+				CopedPlayers3[2] = {};
+				CopedPlayers3[3] = {};
+				#endif
 				position = currentGenome.position;
 				nowState = currentGenome.state;
 
@@ -302,7 +323,15 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 					newGenome.turn = currentGenome.turn + 1;
 					newGenome.processed = currentGenome.turn;
 					newGenome.AllyPlayer = CopedPlayers3[0];
+					#if defined(gerunikku)
+					newGenome.IronKnightA = CopedPlayers3[1];
+					newGenome.EnemyPlayer = CopedPlayers3[2];
+					newGenome.IronKnightB = CopedPlayers3[3];
+					#else
 					newGenome.EnemyPlayer = CopedPlayers3[1];
+					newGenome.IronKnightA = {};
+					newGenome.IronKnightB = {};
+					#endif
 
 					// Calculate enhanced state hash
 					uint64_t newStateHash = EnhancedHashCalculator::computeStateHash(newGenome);
@@ -376,7 +405,15 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
 				// Copy for battle emulator execution
 				CopedPlayers3[0] = currentGenome.AllyPlayer;
+				#if defined(gerunikku)
+				CopedPlayers3[1] = currentGenome.IronKnightA;
+				CopedPlayers3[2] = currentGenome.EnemyPlayer;
+				CopedPlayers3[3] = currentGenome.IronKnightB;
+				#else
 				CopedPlayers3[1] = currentGenome.EnemyPlayer;
+				CopedPlayers3[2] = {};
+				CopedPlayers3[3] = {};
+				#endif
 				position = currentGenome.position;
 				nowState = currentGenome.state;
 
@@ -392,7 +429,15 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 					newGenome.turn = currentGenome.turn + 1;
 					newGenome.processed = currentGenome.turn;
 					newGenome.AllyPlayer = CopedPlayers3[0];
+					#if defined(gerunikku)
+					newGenome.IronKnightA = CopedPlayers3[1];
+					newGenome.EnemyPlayer = CopedPlayers3[2];
+					newGenome.IronKnightB = CopedPlayers3[3];
+					#else
 					newGenome.EnemyPlayer = CopedPlayers3[1];
+					newGenome.IronKnightA = {};
+					newGenome.IronKnightB = {};
+					#endif
 
 					// Calculate enhanced state hash
 					uint64_t newStateHash = EnhancedHashCalculator::computeStateHash(newGenome);
@@ -448,7 +493,7 @@ void ActionOptimizer::updateCompromiseScore(Genome& genome){
 	// Enemy action penalty processing (unchanged)
 }
 
-std::pair<int, Genome> ActionOptimizer::RunAlgorithmAsync(const Player players[2], uint64_t seed, int turns,
+std::pair<int, Genome> ActionOptimizer::RunAlgorithmAsync(const Player players[4], uint64_t seed, int turns,
                                                           int maxGenerations, int actions[350], int numThreads,
                                                           bool dropbug){
 	(void)numThreads;
