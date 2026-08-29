@@ -13,6 +13,23 @@
 - C-tableに表示されるLRアドレスは「この乱数消費が何か」を後から再照合するための識別子として扱う。新しく実装する乱数消費には、判明している `max` と `lr: 0x........` をコードコメントへ残す。
 - RNG返値を使わず消費だけ必要な箇所で `lcg::getPercent()` / `floatRand()` 等を呼ばない。消費数と分岐が確定している場合は `(*position)++` を使う。複数消費も、LRが別なら `(*position)+=N` へ潰さず1個ずつLRコメントを付ける。
 - 逆に、AI weighted roll、target group index、成功率、damage幅など返値そのものが後続分岐/値へ必要なRNGは、対応するLCG helperを使って実ROMと同じ演算を行う。「高速化」のために結果を近似しない。
+- 実機とC++の差を見つけたら、後続ターンまでまとめて直そうとしない。最後に一致した地点と最初に不一致になった地点を固定し、その間にある最初のRNG、最初のstate write、最初のdamage差のどれか1つへ調査範囲を縮める。
+- action本体のRNGと、action終了後に走るpresentation/freecam RNGを混同しない。action本体が一致していてturn-end positionだけずれる場合は、まずcamera/presentation経路を疑う。逆にdamageや状態が先にずれている場合はcameraを触らずaction本体を直す。
+- 実ROM側で観測できた値を、推測した意味へすぐ昇格させない。actor ID、状態field、camera counter等は意味が未確定ならraw値として記録し、複数の独立した観測で意味が確定してからコード上の名前・仕様へ反映する。
+- 実測で否定された仮説を残したまま別補正を重ねない。仮説由来の差分は最小単位で置き換え、現在の実測だけで説明できる状態を維持する。
+## 実機ハーネス運用
+- ハーネス再起動後は既存laneが消えていることがある。最初にlane一覧を確認し、無ければ既知のState/Saveから新しいlaneを1本だけ作る。解析中に同目的のlaneを無闇に増やさない。
+- State読込直後を再現起点として使う場合はbaselineを保存し、各試行は `baseline restore -> pause -> seed注入 -> trace clear -> command入力 -> resume` の順でfresh状態から始める。前試行の戦闘状態やtraceを次の試行へ持ち越さない。
+- persistent scriptは通常の登録経路を優先する。`Ctable_jp.js`、battle command、damage trace、turn audit等は登録後に公開MCP名まで確認し、scriptが「起動したように見える」だけで解析を始めない。
+- `Ctable_jp.js` は乱数列の正本、battle damage traceはaction境界とdamage内訳の補助、turn auditはHP/MP等の状態確認、battle command MCPは入力自動化として役割を分ける。補助probeに偽entryが混ざっても、それをC-tableの正しい乱数列より優先しない。
+- command入力後にハーネスが元のpaused状態へ戻しただけなら、同じ入力を二重送信しない。UI状態を確認して、既にqueue済みならresumeだけでターンを流す。
+- 定型操作をmicro macroへまとめられる場合も、macroは複数の通常MCP呼び出しを束ねるだけと考える。各stepの意味・待機・失敗地点を追える粒度を保ち、戦闘ロジックの観測そのものをmacro内部へ隠さない。
+## RNG位置の比較規則
+- `setSeedFromInitial(initialSeed, position=0)` を使った試行では、実機C-tableのcandidate positionは「既に消費した個数」として読む。C++側の `position` が「次に読むindex」を表す場合、同一地点でも表示上1差になる。まず表現規約を揃えてからoff-by-oneと判定する。
+- 各ターンは可能なら「action本体終了」と「presentation/freecam終了」の2地点でpositionを取る。action本体終了地点が一致し、その後だけ差が増えるならcamera/presentation問題として切り離せる。
+- C-tableのLR列は順序が重要である。同じ最終positionでも途中LR順が違えば未再現とみなす。特に成功/失敗branchでは、失敗時に省略されるRNGと成功時だけ追加されるRNGを別々のseedで確認する。
+- 乱数差が `+N` だからといって固定で `position += N` を足さない。実ROMログから、そのN個がどのLR、どのactor、どのaction、どのbranchに属するかを確認してから対応するロジックへ置く。
+- `readSeed` は演出途中でも呼べるため、取得時刻によってcamera RNGがまだ終わっていないことがある。turn-end比較はbattle UIが次のtop状態へ戻ったこと、または目的の終端イベントを確認してから採る。
 ## 解析の順序
 1. 対象action IDを確定する。common IDとDQ9内部IDを混同しない。
 2. `selector-battleemulator-spec.json` でselector固有演算、追加RNG、side effectを確認する。
@@ -24,6 +41,14 @@
 8. CLionの対象targetでビルドし、同seedの実機と `action + damage + RNG position` を比較する。
 9. 不一致が出た最初のRNG呼び出しまたは最初のダメージ演算へ戻り、その局所だけを解析する。
 10. 実行時C++側の値/クラッシュ/制御順が静的読解だけで断定できない場合は `battle_harness\SKILL.md` のCLion debugger手順を使う。native backendでlogpoint eventが取れない場合は停止breakpoint + stack/frame/evaluateを使い、修正前に具体的な値を1つ以上取得する。
+11. C++と実機でaction列が同じなのにdamageだけ違う場合は、damage式そのものだけでなく、その直前に参照するATK/DEF/buff/defence/stateが既にずれていないか確認する。後段のdamage値から原因を逆算して状態差を見落とさない。
+12. C++と実機でaction本体終了positionが同じなのにturn-endだけずれる場合は、C-tableのfreecam enterとcamera系LRをactorごとに列挙し、欠けているpresentation経路を特定する。
+## CLionデバッグ運用
+- run configurationを実行しただけで必ず再ビルドされたとは限らない。出力に埋め込まれたBuild date/time等が変わっていない場合、修正が効かなかったと判断せず、まず古いbinaryを起動していないか切り分ける。
+- 静的コード上は正しく見えるのに実行結果が違う場合、O0 Debug targetで最初の不一致地点へbreakpointを置き、`position`、action ID、attacker/defender、HP/MP、ATK/DEF、buff段階、状態flag、中間damageをframe/evaluateで直接読む。
+- breakpoint条件は「対象actionかつ既知のposition以降」のように狭くし、同じ共通damage関数を多数のactionが通る場合でも目的の1回だけ止める。
+- debuggerで得たC++側の値と、同seed・同actionのC-table/damage trace実測を並べて比較する。最終damageが違う場合でも、raw damage、参照ATK/DEF、状態倍率、後段補正のどこから差が始まったかを順に分解する。
+- debuggerで観測した値が仮説を否定したら、その仮説を維持しない。「実機の閾値が違うはず」等を続けず、C++側が別RNG位置を読んだ、先行state writeがあった、古いbinaryだった等の候補へ切り替える。
 ## ゲルニック戦のactor構成
 - `players[0]`: 主人公。
 - `players[1]`: 鉄甲魔人 C0。
@@ -55,7 +80,13 @@
 - `camera/freecam_fast_runtime.hpp` と生成済みのコンパイル時metadataを使い、任意actionに必要なmembership/routeだけをcompile-timeで焼き込む。ホットループでROMファイルを読む、巨大runtime lookupを走査する、既知技表を線形探索する実装は禁止。
 - 今回の重点は通常攻撃、ザキ（対象: 鉄甲魔人）、一閃づき、けものづき等、実戦でfreecam候補になるaction。common IDとDQ9 action IDのbindingはcompile-time固定にする。
 - C-tableでfreecam由来の乱数LRを区別し、action本体のdamage/target RNGと混ぜない。cameraの消費がある技/ない技を同seedで比較して追尾する。
+- compile-time bindingが存在することと、実戦runtimeからその判定が実際に呼ばれていることは別である。`freecam_action_mapper.hpp` にbinding/assertがあるだけで完了扱いにせず、`BattleEmulator` 本体から生成済みmetadataの判定へ到達する経路まで確認する。
+- camera差を手書きの「このactionなら+N消費」で埋めない。同じactionでもactor membership、fallback membership、BACT、selector suppression、route、行動順でfreecam可否や消費内容が変わり得るため、生成済みmetadataが持つ判定を利用する。
+- freecam enterが複数actorで発生するターンは、actorごとに入口と続くLR列を区切って記録する。最終差分だけを見て、複数actorの消費を1つのactionへ誤帰属しない。
+- action本体終了後から次top UIまでに現れる `0x0216FE40`、`0x0216FE68`、`0x0216FFF8`、`0x0216F0E4` 等のcamera/presentation系LRは、本体damage traceとは別系列として監査する。
 ## 完了条件
 - 同一seedで、少なくとも複数ターンについて実ROMとactor順、敵AI action、主人公action、各damage、各action後HP/MP/主要状態、ターン終了時RNG positionが一致する。
 - 既知actionだけをハードコードして未解析actionを黙って通常攻撃扱いしない。未解析経路へ到達した場合は照合失敗として検出できる状態にする。
 - ハンドオフには、実装済み、実機照合済み、未照合、未解析を明確に分けて残す。
+- 「Nターン通った」は最終positionだけではなく、途中各ターンの最初の不一致が無いことを確認して初めて成立する。長い連続試験で最後だけ比較せず、序盤からcheckpointを置く。
+- 変更後は、以前一致していたseed/ターンを再試験して回帰が無いことを確認する。新しい技やcamera対応を追加して既存の一致区間を壊した場合は完了扱いにしない。
