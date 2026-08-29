@@ -94,9 +94,13 @@ void printHeader(std::stringstream& ss){
 		<< std::setw(18) << "aAct"
 		<< std::setw(18) << "eAct1"
 		<< std::setw(18) << "eAct2"
+		<< std::setw(18) << "eAct3"
+		<< std::setw(18) << "eAct4"
 		<< std::setw(6) << "aD"
 		<< std::setw(6) << "eD1"
 		<< std::setw(6) << "eD2"
+		<< std::setw(6) << "eD3"
+		<< std::setw(6) << "eD4"
 		<< std::setw(6) << "ahp"
 		<< std::setw(6) << "ehp"
 		<< std::setw(6) << "amp"
@@ -109,7 +113,7 @@ void printHeader(std::stringstream& ss){
 		//<< std::setw(6) << "MMT"
 		<< std::setw(6) << "Tab"
 		<< std::setw(6) << "Sct" << "\n";
-	ss << std::string(140, '-') << "\n"; // 区切り線を出力
+	ss << std::string(188, '-') << "\n"; // 区切り線を出力
 }
 
 std::string dumpTable(const BattleResult& result,const int32_t gene[350], int PastTurns);
@@ -118,9 +122,9 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 	stringstream ss6;
 	printHeader(ss6);
 	int currentTurn = -1;
-	int eDamage[2] = {-1, -1}, aDamage = -1;
+	int eDamage[4] = {-1, -1, -1, -1}, aDamage = -1;
 	bool initiative_tmp = false;
-	std::string eAction[2], aAction, sp, tmpState, ATKTurn1, DEFTurn1, magicMirrorTurn1, specialChargeTurn1, amp1, ahp2,
+	std::string eAction[4], aAction, sp, tmpState, ATKTurn1, DEFTurn1, magicMirrorTurn1, specialChargeTurn1, amp1, ahp2,
 	            ehp2, amp2;
 	auto counter = 0;
 	// データのループ
@@ -161,9 +165,13 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 						<< std::setw(18) << aAction
 						<< std::setw(18) << eAction[0]
 						<< std::setw(18) << eAction[1]
+						<< std::setw(18) << eAction[2]
+						<< std::setw(18) << eAction[3]
 						<< std::setw(6) << aDamage
 						<< std::setw(6) << eDamage[0]
 						<< std::setw(6) << eDamage[1]
+						<< std::setw(6) << eDamage[2]
+						<< std::setw(6) << eDamage[3]
 						<< std::setw(6) << ahp2
 						<< std::setw(6) << ehp2
 						<< std::setw(6) << amp2
@@ -182,9 +190,13 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 			currentTurn = turn;
 			eAction[0] = "";
 			eAction[1] = "";
+			eAction[2] = "";
+			eAction[3] = "";
 			aAction = "";
 			eDamage[0] = 0;
 			eDamage[1] = 0;
+			eDamage[2] = 0;
+			eDamage[3] = 0;
 			aDamage = 0;
 			sp = "";
 			initiative_tmp = false;
@@ -225,7 +237,8 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 			initiative_tmp = initiative;
 			sp = specialAction;
 
-			if(eAction[0] != "magic Burst" && eAction[1] != "magic Burst"){
+			if(eAction[0] != "magic Burst" && eAction[1] != "magic Burst" &&
+			   eAction[2] != "magic Burst" && eAction[3] != "magic Burst"){
 				if(!initiative && action == BattleEmulator::TURN_SKIPPED || action == BattleEmulator::PARALYSIS ||
 					action == BattleEmulator::SLEEPING){
 					sp = "---------------";
@@ -248,9 +261,13 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 			<< std::setw(18) << aAction
 			<< std::setw(18) << eAction[0]
 			<< std::setw(18) << eAction[1]
+			<< std::setw(18) << eAction[2]
+			<< std::setw(18) << eAction[3]
 			<< std::setw(6) << aDamage
 			<< std::setw(6) << eDamage[0]
 			<< std::setw(6) << eDamage[1]
+			<< std::setw(6) << eDamage[2]
+			<< std::setw(6) << eDamage[3]
 			<< std::setw(6) << ahp2
 			<< std::setw(6) << ehp2
 			<< std::setw(6) << amp2
@@ -845,12 +862,31 @@ int main(int argc, char* argv[]){
 	//std::cin.tie(0)->sync_with_stdio(0);
 
 #if defined(gerunikku)
+	auto makeDebugGene = [](int32_t (&gene)[350], const int turns, const int action) {
+		const int boundedTurns = std::clamp(turns, 1, 349);
+		for (int i = 0; i < boundedTurns; ++i) gene[i] = action;
+		gene[boundedTurns] = -1;
+	};
+
+	auto printTrace = [](const uint64_t traceSeed, const int tracePosition,
+	                     const Player (&tracePlayers)[4], const BattleResult& traceResult) {
+		std::cout << "TRACE seed=0x" << std::hex << traceSeed << std::dec
+		          << " position=" << tracePosition
+		          << " hp=" << tracePlayers[0].hp << ',' << tracePlayers[1].hp << ','
+		          << tracePlayers[2].hp << ',' << tracePlayers[3].hp << '\n';
+		for (int i = 0; i < traceResult.position; ++i) {
+			std::cout << "TRACE record[" << i << "] turn=" << traceResult.turns[i]
+			          << " action=" << traceResult.actions[i]
+			          << " damage=" << traceResult.damages[i]
+			          << " enemy=" << traceResult.isEnemy[i] << '\n';
+		}
+	};
+
 	if (argc >= 3 && std::string_view(argv[1]) == "--trace-turn") {
 		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
 		const int traceAction = argc >= 4 ? std::stoi(argv[3], nullptr, 0) : BattleEmulator::DEFENCE;
 		int32_t traceGene[350] = {};
-		traceGene[0] = traceAction;
-		traceGene[1] = -1;
+		makeDebugGene(traceGene, 1, traceAction);
 		Player tracePlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
 		BattleResult traceResult;
 		int tracePosition = 1;
@@ -858,15 +894,94 @@ int main(int argc, char* argv[]){
 		lcg::init(traceSeed);
 		BattleEmulator::Main(&tracePosition, 1, traceGene, tracePlayers, &traceResult,
 		                     traceSeed, nullptr, nullptr, -1, &traceState);
-		std::cout << "TRACE seed=0x" << std::hex << traceSeed << std::dec
-		          << " position=" << tracePosition
-		          << " hp=" << tracePlayers[0].hp << ',' << tracePlayers[1].hp << ','
-		          << tracePlayers[2].hp << ',' << tracePlayers[3].hp << '\n';
-		for (int i = 0; i < traceResult.position; ++i) {
-			std::cout << "TRACE action[" << i << "]=" << traceResult.actions[i]
-			          << " damage=" << traceResult.damages[i]
-			          << " enemy=" << traceResult.isEnemy[i] << '\n';
+		printTrace(traceSeed, tracePosition, tracePlayers, traceResult);
+		return 0;
+	}
+
+	if (argc >= 3 && std::string_view(argv[1]) == "--trace-battle") {
+		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
+		const int traceTurns = argc >= 4 ? std::stoi(argv[3], nullptr, 0) : 10;
+		const int traceAction = argc >= 5 ? std::stoi(argv[4], nullptr, 0) : BattleEmulator::DEFENCE;
+		if (traceTurns < 1 || traceTurns > 349) throw std::invalid_argument("trace turns must be 1..349");
+		int32_t traceGene[350] = {};
+		makeDebugGene(traceGene, traceTurns, traceAction);
+		Player tracePlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
+		BattleResult traceResult;
+		int tracePosition = 1;
+		uint64_t traceState = 0;
+		lcg::init(traceSeed);
+		BattleEmulator::Main(&tracePosition, traceTurns, traceGene, tracePlayers, &traceResult,
+		                     traceSeed, nullptr, nullptr, -1, &traceState);
+		printTrace(traceSeed, tracePosition, tracePlayers, traceResult);
+		return 0;
+	}
+
+	if (argc >= 3 && std::string_view(argv[1]) == "--find-enemy-action") {
+		const int wantedAction = std::stoi(argv[2], nullptr, 0);
+		const uint64_t startSeed = argc >= 4 ? std::stoull(argv[3], nullptr, 0) : 1;
+		const uint64_t count = argc >= 5 ? std::stoull(argv[4], nullptr, 0) : 1000000;
+		const int searchTurns = argc >= 6 ? std::stoi(argv[5], nullptr, 0) : 1;
+		if (searchTurns < 1 || searchTurns > 349) throw std::invalid_argument("search turns must be 1..349");
+		int32_t searchGene[350] = {};
+		makeDebugGene(searchGene, searchTurns, BattleEmulator::DEFENCE);
+
+		for (uint64_t offset = 0; offset < count; ++offset) {
+			const uint64_t seed = startSeed + offset;
+			if (seed == 0) continue;
+			Player searchPlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
+			BattleResult searchResult;
+			int searchPosition = 1;
+			uint64_t searchState = 0;
+			lcg::init(seed);
+			BattleEmulator::Main(&searchPosition, searchTurns, searchGene, searchPlayers, &searchResult,
+			                     seed, nullptr, nullptr, -1, &searchState);
+			for (int record = 0; record < searchResult.position; ++record) {
+				if (searchResult.isEnemy[record] && searchResult.actions[record] == wantedAction) {
+					std::cout << "FOUND action=" << wantedAction
+					          << " seed=0x" << std::hex << seed << std::dec
+					          << " turn=" << searchResult.turns[record]
+					          << " record=" << record
+					          << " position=" << searchPosition << '\n';
+					printTrace(seed, searchPosition, searchPlayers, searchResult);
+					return 0;
+				}
+			}
 		}
+
+		std::cout << "NOT_FOUND action=" << wantedAction
+		          << " startSeed=0x" << std::hex << startSeed << std::dec
+		          << " count=" << count << " turns=" << searchTurns << '\n';
+		return 0;
+	}
+
+	if (argc >= 2 && std::string_view(argv[1]) == "--find-confusion-seed") {
+		const uint64_t startSeed = argc >= 3 ? std::stoull(argv[2], nullptr, 0) : 1;
+		const uint64_t count = argc >= 4 ? std::stoull(argv[3], nullptr, 0) : 1000000;
+		const int searchTurns = argc >= 5 ? std::stoi(argv[4], nullptr, 0) : 1;
+		if (searchTurns < 1 || searchTurns > 349) throw std::invalid_argument("search turns must be 1..349");
+		int32_t searchGene[350] = {};
+		makeDebugGene(searchGene, searchTurns, BattleEmulator::DEFENCE);
+
+		for (uint64_t offset = 0; offset < count; ++offset) {
+			const uint64_t seed = startSeed + offset;
+			if (seed == 0) continue;
+			Player searchPlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
+			BattleResult searchResult;
+			int searchPosition = 1;
+			uint64_t searchState = 0;
+			lcg::init(seed);
+			BattleEmulator::Main(&searchPosition, searchTurns, searchGene, searchPlayers, &searchResult,
+			                     seed, nullptr, nullptr, -1, &searchState);
+			if (searchPlayers[0].confused) {
+				std::cout << "FOUND_CONFUSION seed=0x" << std::hex << seed << std::dec
+				          << " turns=" << searchTurns << " position=" << searchPosition << '\n';
+				printTrace(seed, searchPosition, searchPlayers, searchResult);
+				return 0;
+			}
+		}
+
+		std::cout << "NOT_FOUND_CONFUSION startSeed=0x" << std::hex << startSeed << std::dec
+		          << " count=" << count << " turns=" << searchTurns << '\n';
 		return 0;
 	}
 #endif

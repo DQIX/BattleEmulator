@@ -342,6 +342,18 @@ std::string BattleEmulator::getActionName(int actionId) {
             return "Paralysis";
         case BattleEmulator::CURE_PARALYSIS:
             return "Cure Paralysis";
+        case BattleEmulator::CONFUSION_PARTY_ATTACK:
+            return "Confusion Party Attack";
+        case BattleEmulator::CONFUSION_CANT_DECIDE:
+            return "Confused - Can't Decide";
+        case BattleEmulator::CONFUSION_TO_PARALYSIS:
+            return "Confused - Paralysis";
+        case BattleEmulator::CONFUSION_FAILED_ATTACK:
+            return "Confused - Failed Attack";
+        case BattleEmulator::CONFUSION_FAILED_FLEE:
+            return "Confused - Failed Flee";
+        case BattleEmulator::CURE_CONFUSION:
+            return "Cure Confusion";
         case BattleEmulator::ULTRA_HIGH_SPEED_COMBO:
             return "High-Speed Combo";
         case BattleEmulator::SKY_ATTACK:
@@ -733,7 +745,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
                         if (!skipTurn) {
                             // FUN_02158dfc player pre-action path.
-                            if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
+                            if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive && !players[0].confused) {
                                 (*position)++; // max: 100, lr: 0x02159b10
                             } else if (players[0].inactive) {
                                 players[0].inactive = false;
@@ -769,6 +781,37 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                                 } else {
                                     (*position)++; // max: 100, lr: 0x02159b10
                                 }
+                            } else if (players[0].confused) {
+                                const int recoveryRoll = lcg::getPercent(position, 100); // lr: 0x02159b10
+                                if (players[0].confusionTurns < 0) {
+                                    // FUN_02159abc uses DAT_02159c58 = {1.0, .875, .75, .625}
+                                    // with a strict tableValue > RandInt(100)/100 comparison.
+                                    constexpr int recoveryTable[4] = {100, 87, 75, 62};
+                                    const int recoveryIndex = std::clamp(-players[0].confusionTurns - 1, 0, 3);
+                                    const int probability1 = recoveryTable[recoveryIndex];
+                                    if (probability1 >= recoveryRoll + (probability1 == 75 ? 1 : 0)) {
+                                        players[0].confused = false;
+                                        players[0].confusionTurns = -1;
+                                        action = CURE_CONFUSION;
+                                    } else {
+                                        ++players[0].confusionTurns;
+                                    }
+                                }
+
+                                if (players[0].confused) {
+                                    players[0].defence = 1.0;
+                                    defenseFlag = false;
+                                    // FUN_02160dfc first does RandInt(2), lr: 0x02160e14.
+                                    // With this one-person party FUN_0216017c(..., 4) < 2, so
+                                    // the result is discarded and the four-entry table is forced.
+                                    (*position)++; // max: 2, lr: 0x02160e14
+                                    switch (lcg::getPercent(position, 4)) { // lr: 0x02160f10
+                                        case 0: action = CONFUSION_CANT_DECIDE; break;   // DQ9 0x00DD
+                                        case 1: action = CONFUSION_TO_PARALYSIS; break; // DQ9 0x0393
+                                        case 2: action = CONFUSION_FAILED_ATTACK; break;// DQ9 0x00DE
+                                        default: action = CONFUSION_FAILED_FLEE; break;  // DQ9 0x0396
+                                    }
+                                }
                             }
 
                             int target = primaryHeroTarget();
@@ -792,6 +835,15 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                                     }
                                     if (damages[exCounter++] != basedamage) return false;
                                 }
+                            }
+
+                            // FUN_021594bc -> FUN_0215b174 at 0x0215957c.
+                            // Medapani sets combat+0x5e=3. The primary confusion counter
+                            // is decremented after each action; when it expires, the game
+                            // starts the four-step recovery table at combat+0x81=4.
+                            if (players[0].confused && players[0].confusionTurns > 0) {
+                                --players[0].confusionTurns;
+                                if (players[0].confusionTurns == 0) players[0].confusionTurns = -4;
                             }
 
                             // FUN_021594bc player post-action path. Preserve the existing
@@ -961,7 +1013,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             break;
         case BattleEmulator::INSULATE:
             players[0].mp -= 4;
-            (*position) += 2;
+            (*position)++; // randIntRange(3,4), lr: 0x0216139c
+            (*position)++; // randIntRange(6,8), lr: 0x021613b0
             (*position)++; // 関係ない
             (*position)++; // 会心判定
             (*position)++; // 回避
@@ -993,7 +1046,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             resetCombo(NowState);
             break;
         case PSYCHE_UP_ALLY:
-            (*position) += 2;
+            (*position)++; // randIntRange(3,4), lr: 0x0216139c
+            (*position)++; // randIntRange(6,8), lr: 0x021613b0
             (*position)++; // 0x021ec6f8
             (*position)++; // 0x02158584 会心
             (*position)++; // 0x02157f58 偽回避
@@ -1017,7 +1071,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             resetCombo(NowState);
             break;
         case GOSPEL_SONG:
-            (*position) += 2;
+            (*position)++; // randIntRange(3,4), lr: 0x0216139c
+            (*position)++; // randIntRange(6,8), lr: 0x021613b0
             (*position)++; //0x02158584 会心
             (*position)++; //0x021ec6f8 不明
             (*position)++; //0x02157f58 ニセ回避
@@ -1039,7 +1094,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             break;
         case SPECIAL_MEDICINE:
             players[attacker].SpecialMedicineCount--;
-            (*position) += 2;
+            (*position)++; // randIntRange(3,4), lr: 0x0216139c
+            (*position)++; // randIntRange(6,8), lr: 0x021613b0
             (*position)++; //0x021ec6f8 不明
             (*position)++; //0x02158584 会心
             (*position)++; //0x02157f58 ニセ回避
@@ -2143,10 +2199,37 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position) += 2;
             (*position)++; // 0x021ec6f8
             (*position)++; // 0x02158584
-            (void)lcg::getPercent(position, 100); // 0x02157f58/status route
-            (*position)++; // 0x021ed7a8
-            players[defender].confused = true;
-            players[defender].confusionTurns = 3;
+            // Base success 25.0 * this player's confusion resistance multiplier 0.75,
+            // rounded by +0.5 then truncation in FUN_021581f8 => 19.
+            // RandInt(100), lr: 0x02157f58.
+            if (lcg::getPercent(position, 100) < 19) {
+                players[defender].confused = true;
+                players[defender].confusionTurns = 3;
+                // Successful status application enters the zero-damage result path.
+                (*position)++; // max: 2, lr: 0x021e81a0
+                (*position)++; // max: 100, lr: 0x021e54fc
+            } else {
+                (*position)++; // max: 100, lr: 0x021ed7a8
+            }
+            baseDamage = 0;
+            resetCombo(NowState);
+            break;
+        case BattleEmulator::CONFUSION_CANT_DECIDE:
+        case BattleEmulator::CONFUSION_FAILED_ATTACK:
+        case BattleEmulator::CONFUSION_FAILED_FLEE:
+        case BattleEmulator::CURE_CONFUSION:
+            baseDamage = 0;
+            resetCombo(NowState);
+            break;
+        case BattleEmulator::CONFUSION_TO_PARALYSIS:
+            // DQ9 action 0x0393, operation type 24.
+            // 0x021ffda8 -> FUN_021de52c -> FUN_02088b68.
+            // FUN_02088b68 sets the primary status countdown to 3 at 0x02088bc0.
+            players[attacker].confused = false;
+            players[attacker].confusionTurns = -1;
+            players[attacker].paralysis = true;
+            players[attacker].paralysisTurns = 3;
+            players[attacker].paralysisLevel = 0;
             baseDamage = 0;
             resetCombo(NowState);
             break;
@@ -2298,8 +2381,18 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 
 
                 if (baseDamage != 0) {
-                    (*position)++; //目を覚ました
-                    (*position)++; //不明
+                    // FUN_02158a08: damaging attack can cure confusion.
+                    // For a player target FUN_02075b04(1)=0.5 and DAT_02158b20=100.0,
+                    // so RandInt(100) < 50 clears status bit 0x20 via FUN_02088cf8.
+                    if (defender == 0 && players[defender].confused) {
+                        if (lcg::getPercent(position, 100) < 50) { // lr: 0x02158ac4
+                            players[defender].confused = false;
+                            players[defender].confusionTurns = -1;
+                        }
+                    } else {
+                        (*position)++; // max: 100, lr: 0x02158ac4
+                    }
+                    (*position)++; // max: 100, lr: 0x021e54fc
                 } else {
                     if (Id == SKY_ATTACK) {
                         TiggerSkyAttack = true;

@@ -122,6 +122,13 @@ public:
 	static constexpr int EERIE_LIGHT = 185;
 	static constexpr int GERUNIKKU_MEDAPANI = 186;
 	static constexpr int GERUNIKKU_BAGIMA_STRONG = 187;
+	// FUN_02160dfc confusion actions. Keep DQ9 internal IDs out of the hot loop.
+	static constexpr int CONFUSION_PARTY_ATTACK = 188;   // DQ9 0x00DB
+	static constexpr int CONFUSION_CANT_DECIDE = 189;    // DQ9 0x00DD
+	static constexpr int CONFUSION_TO_PARALYSIS = 190;   // DQ9 0x0393
+	static constexpr int CONFUSION_FAILED_ATTACK = 191;  // DQ9 0x00DE
+	static constexpr int CONFUSION_FAILED_FLEE = 192;    // DQ9 0x0396
+	static constexpr int CURE_CONFUSION = 193;           // DQ9 0x03AA
 
     static bool
     Main(int *position, int RunCount, const int32_t Gene[350], Player *players,

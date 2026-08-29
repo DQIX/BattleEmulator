@@ -10,6 +10,9 @@
 - 技固有selectorは `C:\Users\owner\Documents\tunnelworkspace\dq9-skill-catalog\reports\selector-battleemulator-spec.json` を最初に確認する。既にデコンパイル済みなら再発見作業をしない。
 - AI選択は `Restricted-behavior\analysis\CURRENT_HANDOFF.md` の `movementPattern` / `isCanActionTaken` 再構成を基準にする。6slot weighted roll、選択slotから下方向→上方向のfallback、limited-slot、judgmentによる選択時期を維持する。
 - 実機照合は `Ctable_jp.js` を主な乱数順序の基準にする。補助probeは対応付け確認に使ってよいが、overlay再配置等で偽entryが混ざり得るprobe単独を仕様根拠にしない。
+- C-tableに表示されるLRアドレスは「この乱数消費が何か」を後から再照合するための識別子として扱う。新しく実装する乱数消費には、判明している `max` と `lr: 0x........` をコードコメントへ残す。
+- RNG返値を使わず消費だけ必要な箇所で `lcg::getPercent()` / `floatRand()` 等を呼ばない。消費数と分岐が確定している場合は `(*position)++` を使う。複数消費も、LRが別なら `(*position)+=N` へ潰さず1個ずつLRコメントを付ける。
+- 逆に、AI weighted roll、target group index、成功率、damage幅など返値そのものが後続分岐/値へ必要なRNGは、対応するLCG helperを使って実ROMと同じ演算を行う。「高速化」のために結果を近似しない。
 ## 解析の順序
 1. 対象action IDを確定する。common IDとDQ9内部IDを混同しない。
 2. `selector-battleemulator-spec.json` でselector固有演算、追加RNG、side effectを確認する。
@@ -20,6 +23,7 @@
 7. 確定した部分を即実装する。
 8. CLionの対象targetでビルドし、同seedの実機と `action + damage + RNG position` を比較する。
 9. 不一致が出た最初のRNG呼び出しまたは最初のダメージ演算へ戻り、その局所だけを解析する。
+10. 実行時C++側の値/クラッシュ/制御順が静的読解だけで断定できない場合は `battle_harness\SKILL.md` のCLion debugger手順を使う。native backendでlogpoint eventが取れない場合は停止breakpoint + stack/frame/evaluateを使い、修正前に具体的な値を1つ以上取得する。
 ## ゲルニック戦のactor構成
 - `players[0]`: 主人公。
 - `players[1]`: 鉄甲魔人 C0。
@@ -45,6 +49,12 @@
 - `callAttackFun()` と関連helperは同じ4体配列を直接受け、`attacker` / `defender` indexで対象actorを参照する。旧1対1実装の `players[1]` hard-codeは、意味が「現在の敵/対象」である箇所から逐次index参照へ置換する。
 - 鉄甲魔人2体のHP/MP/防御段階/死亡状態は別々に保持する。同speciesでもencounter groupが別であり、limited-slot stateも別である。
 - A*の状態hashにも鉄甲魔人2体の戦闘状態を含める。同じ主人公/ゲルニックHPでも鉄甲魔人状態が異なる枝を同一状態として潰してはいけない。
+- debug/整形用コードも4actor化による1ターン最大敵行動数を前提にする。`BattleResult` のrecord容量だけを増やして表示側の固定バッファを旧2行動のまま残さない。
+## Free cameraの解析と実装
+- freecamも最終RNG位置に影響するため「見た目だけ」として省略しない。ただしカメラシステム全体をruntimeで再現しない。
+- `camera/freecam_fast_runtime.hpp` と生成済みのコンパイル時metadataを使い、任意actionに必要なmembership/routeだけをcompile-timeで焼き込む。ホットループでROMファイルを読む、巨大runtime lookupを走査する、既知技表を線形探索する実装は禁止。
+- 今回の重点は通常攻撃、ザキ（対象: 鉄甲魔人）、一閃づき、けものづき等、実戦でfreecam候補になるaction。common IDとDQ9 action IDのbindingはcompile-time固定にする。
+- C-tableでfreecam由来の乱数LRを区別し、action本体のdamage/target RNGと混ぜない。cameraの消費がある技/ない技を同seedで比較して追尾する。
 ## 完了条件
 - 同一seedで、少なくとも複数ターンについて実ROMとactor順、敵AI action、主人公action、各damage、各action後HP/MP/主要状態、ターン終了時RNG positionが一致する。
 - 既知actionだけをハードコードして未解析actionを黙って通常攻撃扱いしない。未解析経路へ到達した場合は照合失敗として検出できる状態にする。
