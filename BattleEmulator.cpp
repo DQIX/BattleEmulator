@@ -18,6 +18,8 @@
 
 
 thread_local int32_t actions[8];
+thread_local int actionActors[8];
+thread_local int actionTargets[8];
 thread_local int actionsPosition = 0;
 thread_local int preHP[4] = {0, 0, 0, 0};
 thread_local bool player0_has_initiative = false;
@@ -589,6 +591,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         for (int32_t &action: actions) {
             action = -1;
         }
+        for (int &actor : actionActors) actor = -1;
+        for (int &target : actionTargets) target = -1;
         actionsPosition = 0;
         double speed0 = Player::isPlayerAlive(players[0]) && players[0].speed > 0
             ? players[0].speed * lcg::floatRand(position, 0.51, 1.0) // float, lr: 0x0215efac
@@ -623,8 +627,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
 #if defined(gerunikku)
         // Encounter-group relation used by ゲルニックかばう is reset at turn start.
-        // Planning and active guarding are intentionally separate: target selection can
-        // suppress a second planned guard before the first guard action has executed.
+        // The selected guard affects target construction immediately, even when the
+        // Iron's 03A1 action record executes after the hero action this turn.
         players[2].guardedBy = -1;
         EnemySelection plannedIron[4]{};
         bool plannedIronValid[4] = {false, false, false, false};
@@ -641,7 +645,10 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             if (actor == 1 || actor == 3) {
                 plannedIron[actor] = selectIronAction(position, players, guardAlreadyPlanned);
                 plannedIronValid[actor] = true;
-                if (plannedIron[actor].action == WHIPPING_BOY) guardAlreadyPlanned = true;
+                if (plannedIron[actor].action == WHIPPING_BOY) {
+                    guardAlreadyPlanned = true;
+                    players[2].guardedBy = actor;
+                }
             }
             (*position)++; // max: 2, lr: 0x02160d64
         }
@@ -708,6 +715,10 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 case ATTACK_ALLY:
                 case MERCURIAL_THRUST:
                 case THUNDER_THRUST:
+                case BEAST_THRUST:
+                case VITAL_POINT_THRUST:
+                case ZAKI:
+                case ZARAKI:
                 case DRAGON_SLASH:
                 case MIRACLE_SLASH:
                 case FLAME_SLASH:
@@ -1017,7 +1028,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         if (Player::isPlayerAlive(players[0]) && anyEnemyAlive()) {
             (*position)++; // max: 100, lr: 0x0215962c
         }
-        camera::Main(position, actions, NowState, player0_has_initiative, TiggerSkyAttack);
+        camera::Main(position, actions, actionActors, actionTargets, actionsPosition,
+                     NowState, player0_has_initiative, TiggerSkyAttack);
     }
     if (mode != -1 && mode != -2) {
         startTurn = RunCount - 2;
@@ -1046,7 +1058,10 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
     for (int j = 0; j < 4; ++j) {
         preHP[j] = players[j].hp;
     }
-    actions[actionsPosition++] = Id;
+    actions[actionsPosition] = Id;
+    actionActors[actionsPosition] = attacker;
+    actionTargets[actionsPosition] = defender;
+    ++actionsPosition;
     int baseDamage = 0;
     double tmp, tmp1 = 0;
     bool kaisinn = false;
@@ -1291,6 +1306,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position)++; // RandIntRange(3,4), lr: 0x0216139c
             (*position)++; // RandIntRange(6,8), lr: 0x021613b0
             (*position)++; // max:100, lr: 0x021ec6f8
+            if (attacker == 0 && defender != 2 && players[2].guardedBy == defender) {
+                (*position)++; // planned 03A1 target redirect, max:1, lr: 0x021ea6bc
+            }
             (*position)++; // critical RandInt(10000), threshold 100, lr: 0x02158584
 
             if (TargetDeathResistancePercent(defender) > 0

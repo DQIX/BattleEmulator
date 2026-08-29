@@ -2,7 +2,11 @@
 // Created by Owner on 2024/02/06.
 //
 
+#include <algorithm>
+#include <array>
 #include <cassert>
+#include <cstddef>
+#include <span>
 
 #include "camera.h"
 #include "BattleEmulator.h"
@@ -11,73 +15,121 @@
 
 namespace {
 
-enum class CameraRule {
-    none,
-    free_camera,
-    free_camera_with_tracking_fallback,
-};
+using dq9::freecam::fast::BattleActorRef;
+using dq9::freecam::fast::BattleActorSide;
 
-[[nodiscard]] constexpr CameraRule RuleForAction(const int action) noexcept {
-    switch (action) {
-        case BattleEmulator::ATTACK_ENEMY:
-        case BattleEmulator::ATTACK_ALLY:
-        case BattleEmulator::BEAST_THRUST:
-        case BattleEmulator::VITAL_POINT_THRUST:
-        case BattleEmulator::THUNDER_THRUST:
-        case BattleEmulator::SKY_ATTACK:
-        case BattleEmulator::MERA_ZOMA:
-            return CameraRule::free_camera;
-        case BattleEmulator::MERCURIAL_THRUST:
-            return CameraRule::free_camera_with_tracking_fallback;
-        default:
-            return CameraRule::none;
-    }
+[[nodiscard]] constexpr BattleActorRef ActorRefForBattleIndex(const int actor) noexcept {
+    return actor == 0
+        ? BattleActorRef{BattleActorSide::ally, 0}
+        : BattleActorRef{BattleActorSide::enemy, static_cast<std::uint8_t>(actor - 1)};
 }
 
-inline void AssertCameraMapping(const int action) noexcept {
-    const auto* binding = dq9::freecam::bindings::Find(action);
-    assert(binding != nullptr && binding->mapped());
-    (void)binding;
+[[nodiscard]] constexpr std::uint16_t ActorIdForBattleIndex(const int actor) noexcept {
+    return actor >= 0 && actor < 4
+        ? dq9::freecam::fast::Dq9ActorId(ActorRefForBattleIndex(actor))
+        : dq9::freecam::fast::kInvalidBattleActor;
 }
 
-[[nodiscard]] bool FreeCameraBuilt(const uint64_t* NowState) noexcept {
-    return (((*NowState) >> 8) & UINT64_C(0xf)) == 0;
+inline void ResetFreeCameraCounter(uint64_t* NowState) noexcept {
+    (*NowState) &= ~UINT64_C(0xf00);
 }
+
+#if defined(gerunikku)
+inline void EnsureGerunikuMembershipProfiles() noexcept {
+    using namespace dq9::freecam::fast;
+    auto& state = ThreadContext();
+    if (state.presentationActorCount != 0) return;
+
+    (void)SetPresentationActor(0, {.actorId = ActorIdForBattleIndex(0)});
+    (void)SetPresentationActor(1, {.actorId = ActorIdForBattleIndex(1)});
+    (void)SetPresentationActor(2, {.actorId = ActorIdForBattleIndex(2)});
+    (void)SetPresentationActor(3, {.actorId = ActorIdForBattleIndex(3)});
+    (void)SetPlayerMembershipProfile(0, 2, 0);
+    (void)SetMonsterMembershipProfile(1, 0x0118);
+    (void)SetMonsterMembershipProfile(2, 0x013a);
+    (void)SetMonsterMembershipProfile(3, 0x0118);
+}
+#endif
 
 } // namespace
 
-void camera::Main(int *position, const int32_t actions[5], uint64_t * NowState, bool preemptive1, bool bakuti) {
-    (void)preemptive1;
+void camera::Main(int *position, const int32_t *actions, const int *actors, const int *targets,
+                  const int actionCount, uint64_t *NowState, bool preemptive, bool bakuti) {
+    (void)preemptive;
+    (void)bakuti;
 
-    bool preemptive = true;
-    auto moture = false;
-    for (int i = 0; i < 5; ++i) {
-        const int32_t after = actions[i];
-        if (after < 0) break;
+    using namespace dq9::freecam;
+    using namespace dq9::freecam::fast;
 
-        //守備力が高すぎる場合(ダメージ0)true、盾ガードは偽
-        if (bakuti && after == BattleEmulator::SKY_ATTACK) {
-            moture = true;
+    const int boundedActionCount = std::clamp(actionCount, 0, 8);
+    bool hasFreeCameraCandidate = false;
+    for (int i = 0; i < boundedActionCount; ++i) {
+        if (bindings::MayTrigger(actions[i])) {
+            hasFreeCameraCandidate = true;
+            break;
         }
-        if (moture && after == BattleEmulator::MERA_ZOMA) {
-            AssertCameraMapping(after);
-            onFreeCameraMove(position, after, 1, NowState);
+    }
+    if (!hasFreeCameraCandidate) return;
+
+    auto& runtime = ThreadContext();
+    if (!runtime.battleActive) ResetBattle();
+#if defined(gerunikku)
+    EnsureGerunikuMembershipProfiles();
+#endif
+
+    std::array<BattleActorRef, 8> turnOrder{};
+    for (int i = 0; i < boundedActionCount; ++i) {
+        turnOrder[static_cast<std::size_t>(i)] = ActorRefForBattleIndex(actors[i]);
+    }
+    if (!BeginTurn(std::span<const BattleActorRef>(turnOrder.data(),
+                                                   static_cast<std::size_t>(boundedActionCount)))) {
+        return;
+    }
+
+    for (int i = 0; i < boundedActionCount; ++i) {
+        const int action = actions[i];
+        const auto* binding = bindings::Find(action);
+        const std::uint16_t actorId = ActorIdForBattleIndex(actors[i]);
+        const std::uint16_t targetId = ActorIdForBattleIndex(targets[i]);
+
+        if (binding == nullptr || !binding->mapped()) {
+            runtime.previousActionIndex = i;
+            runtime.hasPreviousAction = false;
+            runtime.targetRecord02161720ActorId = kInvalidBattleActor;
             continue;
         }
 
-        const CameraRule rule = RuleForAction(after);
-        if (rule != CameraRule::none) {
-            AssertCameraMapping(after);
-            onFreeCameraMove(position, after, preemptive ? 1 : 0, NowState);
+        if (!binding->mayTriggerFreeCamera) {
+            const bool committed = binding->commit(i, boundedActionCount, actorId, targetId);
+            assert(committed);
+            (void)committed;
+            continue;
+        }
 
-            if (rule == CameraRule::free_camera_with_tracking_fallback
-                && !FreeCameraBuilt(NowState)) {
-                (*position)++; // free camera不成立時の追尾カメラ TDOD1: これほんまか？追尾カメラとフリーカメラは同時に発生しないか？要検討
-            }
+        SetTargetRecord02161720ActorId(targetId);
+
+        // Presentation coordinates/routes are not invented here. Until the fixed
+        // Geruniku encounter positions are wired from ROM evidence, route planning
+        // may remain unavailable; that must not synthesize tracking-camera RNG.
+        (void)PlanCurrentActionRoutes(i);
+
+        const TriggerDecision decision = binding->decide({
+            .actorId = actorId,
+            .targetId = targetId,
+            .turnActionIndex = static_cast<std::uint16_t>(i),
+            .currentActorId = actorId,
+            .targetPresentationSlot = 0xff,
+            .actorAndTargetHaveGeometry = false,
+        });
+        if (decision.resetOnly) {
+            ResetFreeCameraCounter(NowState);
+        } else if (decision.callFreeCamera) {
+            onFreeCameraMove(position, action, decision.param5 ? 1 : 0, NowState);
         }
-        if (after != BattleEmulator::ATTACK_ALLY) {//味方の攻撃→上空だとフリーカメラが特異点の挙動する
-            preemptive = false;
-        }
+
+        const bool committed = binding->commit(i, boundedActionCount, actorId, targetId);
+        assert(committed);
+        (void)committed;
     }
 }
 
