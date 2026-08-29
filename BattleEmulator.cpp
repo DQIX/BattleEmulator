@@ -217,6 +217,17 @@ namespace {
 #endif
 }
 
+[[nodiscard]] constexpr int TargetDeathResistancePercent(const int defender) noexcept {
+#if defined(gerunikku)
+    // てっこうまじん: Death 050 / ゲルニック将軍: Death 000.
+    if (defender == 1 || defender == 3) return 50;
+    if (defender == 2) return 0;
+#else
+    (void)defender;
+#endif
+    return 0;
+}
+
 #if defined(gerunikku)
 [[nodiscard]] inline bool EnemyLosesActionToCharm(int *position) noexcept {
     // ゲルニック/てっこうまじん: Charm 005 = 0.05 probability.
@@ -1042,6 +1053,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
     bool hasKaisinn = false;
     bool kaihi = false;
     bool tate = false;
+    bool vitalPointInstantDeath = false;
     int OffensivePower = players[attacker].defaultATK;
     int percent_tmp;
     auto totalDamage = 0;
@@ -1232,6 +1244,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             resetCombo(NowState);
             break;
         case THUNDER_THRUST:
+            players[attacker].mp -= 8;
             (*position) += 2;
             (*position)++; //不明 0x021ec6f8
             (*position)++; //会心
@@ -1245,7 +1258,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             FUN_0207564c(position, players[attacker].atk, players[defender].def);
             if (lcg::getPercent(position, 2) == 0) {
                 tmp = OffensivePower * lcg::floatRand(position, 0.95, 1.05);
-                tmp *= HeroSpearLightningMultiplier(attacker, defender);//これほんまか？？？会心にダメージ倍率は乗るのか？？？適当につけただけだと思うぞ？？？
+                // Selector 45 returns the battle offensive stat directly; weapon-element
+                // resistance is not applied to this direct-damage result.
                 baseDamage = static_cast<int>(tmp);
             } else {
                 kaihi = true;
@@ -1269,6 +1283,48 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             if (!players[attacker].specialCharge && lcg::getPercent(position, 100) < 1) {
                 players[attacker].specialCharge = true;
                 players[attacker].specialChargeTurn = SpecialChargeTurns;
+            }
+            resetCombo(NowState);
+            break;
+        case BattleEmulator::ZAKI:
+            players[attacker].mp -= 5;
+            (*position)++; // RandIntRange(3,4), lr: 0x0216139c
+            (*position)++; // RandIntRange(6,8), lr: 0x021613b0
+            (*position)++; // max:100, lr: 0x021ec6f8
+            (*position)++; // critical RandInt(10000), threshold 100, lr: 0x02158584
+
+            if (TargetDeathResistancePercent(defender) > 0
+                && lcg::getPercent(position, 100) < 30) { // lr: 0x02157f58
+                // 成功時だけgeneric physical baseを通す。内部damage値であり、
+                // 武器Lightning倍率は掛からない。
+                baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
+                (*position)++; // max:100, lr: 0x021e54fc
+                (*position)++; // max:100, lr: 0x021edaf4
+                // 内部damageとは別の死亡side effect。
+                players[defender].hp = 0;
+            } else {
+                baseDamage = 0;
+                (*position)++; // max:100, lr: 0x021edaf4
+            }
+            resetCombo(NowState);
+            break;
+        case BattleEmulator::ZARAKI:
+            players[attacker].mp -= 10;
+            (*position)++; // RandIntRange(3,4), lr: 0x0216139c
+            (*position)++; // RandIntRange(6,8), lr: 0x021613b0
+            (*position)++; // critical RandInt(10000), threshold 100, lr: 0x02158584
+            (*position)++; // max:100, lr: 0x021ec6f8
+
+            // Base status value 57 with Death 050 becomes round(28.5)=29.
+            if (TargetDeathResistancePercent(defender) > 0
+                && lcg::getPercent(position, 100) < 29) { // lr: 0x02157f58
+                baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
+                (*position)++; // max:100, lr: 0x021e54fc
+                (*position)++; // max:100, lr: 0x021edaf4
+                players[defender].hp = 0;
+            } else {
+                baseDamage = 0;
+                (*position)++; // max:100, lr: 0x021edaf4
             }
             resetCombo(NowState);
             break;
@@ -2562,12 +2618,18 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
         case BattleEmulator::ATTACK_ALLY:
         case BattleEmulator::MERCURIAL_THRUST:
         case BattleEmulator::BEAST_THRUST:
+        case BattleEmulator::VITAL_POINT_THRUST:
+            if ((Id & 0xffff) == BattleEmulator::VITAL_POINT_THRUST) {
+                players[attacker].mp -= 3;
+            }
             (*position) += 2;
             (*position)++;
             //会心
             percent_tmp = lcg::getPercent(position, 0x2710);
             if (((Id & 0xffff) == BattleEmulator::ATTACK_ALLY && percent_tmp < 500) ||
-                ((Id & 0xffff) != BattleEmulator::ATTACK_ALLY && percent_tmp < 250)) {
+                (((Id & 0xffff) == BattleEmulator::MERCURIAL_THRUST ||
+                  (Id & 0xffff) == BattleEmulator::BEAST_THRUST) && percent_tmp < 250) ||
+                ((Id & 0xffff) == BattleEmulator::VITAL_POINT_THRUST && percent_tmp < 125)) {
                 kaisinn = true;
             }
 
@@ -2585,6 +2647,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             } else if ((Id & 0xffff) == BattleEmulator::BEAST_THRUST && TargetIsBeast(defender)) {
                 // Selector 10: beast target only, trunc(1.5 * incoming). Selector RNGなし。
                 tmp = floor(baseDamage * 1.5);
+            } else if ((Id & 0xffff) == BattleEmulator::VITAL_POINT_THRUST) {
+                // Selector 11: trunc(0.5 * incoming). Selector側の追加RNGなし。
+                tmp = floor(baseDamage * 0.5);
             } else {
                 tmp = static_cast<double>(baseDamage);
             }
@@ -2616,6 +2681,17 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             tmp *= HeroSpearLightningMultiplier(attacker, defender);
             baseDamage = static_cast<int>((tmp));
 
+            vitalPointInstantDeath = false;
+            if ((Id & 0xffff) == BattleEmulator::VITAL_POINT_THRUST) {
+                const int deathResistance = TargetDeathResistancePercent(defender);
+                if (deathResistance > 0) {
+                    // FUN_021e4e9c: 12.5 * (Death / 100), strict roll < threshold.
+                    // てっこうまじん Death 050 => 6.25, integer roll 0..6 succeeds.
+                    // RandInt(100), lr: 0x021e4f04.
+                    vitalPointInstantDeath = lcg::getPercent(position, 100) < 7;
+                }
+            }
+
             if (!kaihi) {
                 ProcessRage(position, baseDamage, players, defender);
                 (*position)++; //目を覚ました
@@ -2636,6 +2712,11 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     players[attacker].specialCharge = true;
                     players[attacker].specialChargeTurn = SpecialChargeTurns;
                 }
+            }
+            if (vitalPointInstantDeath) {
+                // 実機では物理damage表示/後続RNGを通常どおり処理した後、対象HPが0になる。
+                // caller側の reduceHp(baseDamage) より前に死亡状態を反映する。
+                players[defender].hp = 0;
             }
             resetCombo(NowState);
             break;

@@ -72,7 +72,7 @@ void camera::Main(int *position, const int32_t actions[5], uint64_t * NowState, 
 
             if (rule == CameraRule::free_camera_with_tracking_fallback
                 && !FreeCameraBuilt(NowState)) {
-                (*position)++; // free camera不成立時の追尾カメラ
+                (*position)++; // free camera不成立時の追尾カメラ TDOD1: これほんまか？追尾カメラとフリーカメラは同時に発生しないか？要検討
             }
         }
         if (after != BattleEmulator::ATTACK_ALLY) {//味方の攻撃→上空だとフリーカメラが特異点の挙動する
