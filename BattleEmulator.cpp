@@ -2177,17 +2177,21 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             if (players[attacker].mp != 255) {
                 players[attacker].mp = std::max(0, players[attacker].mp - 6);
             }
-            (*position) += 5;
-            baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[defender].def);
-            if (baseDamage == 0) {
-                baseDamage = lcg::getPercent(position, 2);
-            }
-            if (baseDamage != 0) {
-                (*position)++;
-            }
-            process7A8(position, baseDamage, players, defender);
-            if (players[defender].magicResistanceLevel > -2) {
-                --players[defender].magicResistanceLevel;
+            (*position)++; // RandIntRange(3,4), lr: 0x0216139c
+            (*position)++; // RandIntRange(6,8), lr: 0x021613b0
+            (*position)++; // max: 100, lr: 0x021ec6f8
+            (*position)++; // max: 10000, lr: 0x02158584
+            // seed 0x1A turn 3 failure path: threshold=50, roll=87.
+            // Eerie Light is a status operation; it does not run physical damage.
+            if (lcg::getPercent(position, 100) < 50) { // lr: 0x02157f58
+                if (players[defender].magicResistanceLevel > -2) {
+                    --players[defender].magicResistanceLevel;
+                }
+                (*position)++; // max: 2, lr: 0x021e81a0
+                (*position)++; // max: 100, lr: 0x021e54fc
+                (*position)++; // max: 100, lr: 0x021ed7a8
+            } else {
+                (*position)++; // max: 100, lr: 0x021ed7a8
             }
             baseDamage = 0;
             resetCombo(NowState);
@@ -2196,7 +2200,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             if (players[attacker].mp != 255) {
                 players[attacker].mp = std::max(0, players[attacker].mp - 5);
             }
-            (*position) += 2;
+            (*position)++; // RandIntRange(3,4), lr: 0x0216139c
+            (*position)++; // RandIntRange(6,8), lr: 0x021613b0
             (*position)++; // 0x021ec6f8
             (*position)++; // 0x02158584
             // Base success 25.0 * this player's confusion resistance multiplier 0.75,
@@ -2205,6 +2210,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             if (lcg::getPercent(position, 100) < 19) {
                 players[defender].confused = true;
                 players[defender].confusionTurns = 3;
+                // メダパニ成立時は、そのターンに選択済みの「ぼうぎょ」を解除する。
+                // seed 0x1A 実測: 後続の通常攻撃は raw physical damage 5 のまま通る。
+                players[defender].defence = 1.0;
                 // Successful status application enters the zero-damage result path.
                 (*position)++; // max: 2, lr: 0x021e81a0
                 (*position)++; // max: 100, lr: 0x021e54fc

@@ -105,6 +105,10 @@ public:
 	static const int HATCHET_MAN = 66;// 魔人切り
 	static const int UPWARD_SLICE = 67;// 切り上げ
 	static const int MULTISLASH = 68;// さみだれ斬り
+	static constexpr int BEAST_THRUST = 69; // けものづき / DQ9 0x0046
+	static constexpr int VITAL_POINT_THRUST = 70; // きゅうしょづき / DQ9 0x0047
+	static constexpr int ZAKI = 71; // ザキ / DQ9 0x0018
+	static constexpr int ZARAKI = 72; // ザラキ / DQ9 0x0019
 
 	static constexpr int ATTACK_ENEMY_A3 = 160;
 	static constexpr int KASWOOSH = 161;

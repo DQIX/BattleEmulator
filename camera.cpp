@@ -2,36 +2,82 @@
 // Created by Owner on 2024/02/06.
 //
 
+#include <cassert>
+
 #include "camera.h"
 #include "BattleEmulator.h"
 #include "lcg.h"
+#include "camera/freecam_action_mapper.hpp"
+
+namespace {
+
+enum class CameraRule {
+    none,
+    free_camera,
+    free_camera_with_tracking_fallback,
+};
+
+[[nodiscard]] constexpr CameraRule RuleForAction(const int action) noexcept {
+    switch (action) {
+        case BattleEmulator::ATTACK_ENEMY:
+        case BattleEmulator::ATTACK_ALLY:
+        case BattleEmulator::BEAST_THRUST:
+        case BattleEmulator::VITAL_POINT_THRUST:
+        case BattleEmulator::THUNDER_THRUST:
+        case BattleEmulator::SKY_ATTACK:
+        case BattleEmulator::MERA_ZOMA:
+            return CameraRule::free_camera;
+        case BattleEmulator::MERCURIAL_THRUST:
+            return CameraRule::free_camera_with_tracking_fallback;
+        default:
+            return CameraRule::none;
+    }
+}
+
+inline void AssertCameraMapping(const int action) noexcept {
+    const auto* binding = dq9::freecam::bindings::Find(action);
+    assert(binding != nullptr && binding->mapped());
+    (void)binding;
+}
+
+[[nodiscard]] bool FreeCameraBuilt(const uint64_t* NowState) noexcept {
+    return (((*NowState) >> 8) & UINT64_C(0xf)) == 0;
+}
+
+} // namespace
 
 void camera::Main(int *position, const int32_t actions[5], uint64_t * NowState, bool preemptive1, bool bakuti) {
+    (void)preemptive1;
+
     bool preemptive = true;
-    uint64_t before = -1;
     auto moture = false;
-    for (int i = 0; i < 3; ++i) {
-        int32_t after = actions[i];
-        //一部の特異点の挙動について対策する
+    for (int i = 0; i < 5; ++i) {
+        const int32_t after = actions[i];
+        if (after < 0) break;
 
         //守備力が高すぎる場合(ダメージ0)true、盾ガードは偽
         if (bakuti && after == BattleEmulator::SKY_ATTACK) {
             moture = true;
         }
         if (moture && after == BattleEmulator::MERA_ZOMA) {
+            AssertCameraMapping(after);
             onFreeCameraMove(position, after, 1, NowState);
             continue;
         }
-        if (after == BattleEmulator::ATTACK_ALLY||after == BattleEmulator::SKY_ATTACK||after == BattleEmulator::MERA_ZOMA) {
+
+        const CameraRule rule = RuleForAction(after);
+        if (rule != CameraRule::none) {
+            AssertCameraMapping(after);
             onFreeCameraMove(position, after, preemptive ? 1 : 0, NowState);
-        }
-        if(after == BattleEmulator::MERCURIAL_THRUST||after == BattleEmulator::FLAME_SLASH||after == BattleEmulator::KACRACKLE_SLASH || after == BattleEmulator::HATCHET_MAN || after == BattleEmulator::UPWARD_SLICE) {
-            (*position)++;//追尾カメラ
+
+            if (rule == CameraRule::free_camera_with_tracking_fallback
+                && !FreeCameraBuilt(NowState)) {
+                (*position)++; // free camera不成立時の追尾カメラ
+            }
         }
         if (after != BattleEmulator::ATTACK_ALLY) {//味方の攻撃→上空だとフリーカメラが特異点の挙動する
             preemptive = false;
         }
-        before = after;
     }
 }
 
@@ -48,6 +94,9 @@ void camera::onFreeCameraMove(int *position, const int action, const int param5,
             if (ret == 0 || counter == 5) {
                 counter = 0;
                 (*position) += 1;
+                if (action == BattleEmulator::ATTACK_ALLY){
+                    (*position)+=2;
+                }
             } else {
                 counter++;
             }
@@ -56,14 +105,17 @@ void camera::onFreeCameraMove(int *position, const int action, const int param5,
             if (counter == 0) {
                 (*position)++;//引数5が1なら強制的に実行
                 counter = 0;
-                // if (action == BattleEmulator::ATTACK_ALLY){
-                //     (*position)+=2;
-                // }
+                if (action == BattleEmulator::ATTACK_ALLY){
+                    (*position)+=2;
+                }
                 break;
             }
             (*position)++;
             counter = 0;
             (*position)++;
+            if (action == BattleEmulator::ATTACK_ALLY){
+                (*position)+=2;
+            }
 
         }
     } while (false);

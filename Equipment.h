@@ -105,8 +105,8 @@ inline constexpr Equipment DragonWarriorBoots("Dragon warrior boots", {
  */
 
 
-inline constexpr std::array<Equipment, 5> allEquipments = {
-    DarkShield, EtherealArmour, EnchantedGloves, DragonWarriorBoots, RedTights
+inline constexpr std::array<Equipment, 4> allEquipments = {
+    magicShield, EtherealArmour, EnchantedGloves, DragonWarriorBoots
 };
 
 
