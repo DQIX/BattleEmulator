@@ -18,8 +18,6 @@
 
 
 thread_local int32_t actions[8];
-thread_local int actionActors[8];
-thread_local int actionTargets[8];
 thread_local int actionsPosition = 0;
 thread_local int preHP[4] = {0, 0, 0, 0};
 thread_local bool player0_has_initiative = false;
@@ -591,8 +589,6 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         for (int32_t &action: actions) {
             action = -1;
         }
-        for (int &actor : actionActors) actor = -1;
-        for (int &target : actionTargets) target = -1;
         actionsPosition = 0;
         double speed0 = Player::isPlayerAlive(players[0]) && players[0].speed > 0
             ? players[0].speed * lcg::floatRand(position, 0.51, 1.0) // float, lr: 0x0215efac
@@ -1028,8 +1024,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         if (Player::isPlayerAlive(players[0]) && anyEnemyAlive()) {
             (*position)++; // max: 100, lr: 0x0215962c
         }
-        camera::Main(position, actions, actionActors, actionTargets, actionsPosition,
-                     NowState, player0_has_initiative, TiggerSkyAttack);
+        camera::Main(position, actions, NowState, player0_has_initiative, TiggerSkyAttack);
     }
     if (mode != -1 && mode != -2) {
         startTurn = RunCount - 2;
@@ -1058,10 +1053,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
     for (int j = 0; j < 4; ++j) {
         preHP[j] = players[j].hp;
     }
-    actions[actionsPosition] = Id;
-    actionActors[actionsPosition] = attacker;
-    actionTargets[actionsPosition] = defender;
-    ++actionsPosition;
+    actions[actionsPosition++] = Id;
     int baseDamage = 0;
     double tmp, tmp1 = 0;
     bool kaisinn = false;
