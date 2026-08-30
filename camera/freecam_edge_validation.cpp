@@ -282,6 +282,68 @@ bool ValidateMappedMetadata() {
     return mapped >= 10;
 }
 
+bool ValidateRosterField4Compatibility() {
+    ResetBattle();
+    constexpr std::array<BattleActorRef, 12> roster{
+        BattleActorRef{BattleActorSide::ally, 0},
+        BattleActorRef{BattleActorSide::ally, 1},
+        BattleActorRef{BattleActorSide::ally, 2},
+        BattleActorRef{BattleActorSide::ally, 3},
+        BattleActorRef{BattleActorSide::enemy, 0},
+        BattleActorRef{BattleActorSide::enemy, 1},
+        BattleActorRef{BattleActorSide::enemy, 2},
+        BattleActorRef{BattleActorSide::enemy, 3},
+        BattleActorRef{BattleActorSide::enemy, 4},
+        BattleActorRef{BattleActorSide::enemy, 5},
+        BattleActorRef{BattleActorSide::enemy, 6},
+        BattleActorRef{BattleActorSide::enemy, 7},
+    };
+    constexpr std::array<std::uint8_t, 12> nodes{0, 8, 72, 80, 4, 36, 44, 76, 20, 24, 56, 60};
+    for (std::size_t index = 0; index < roster.size(); ++index) {
+        if (!SetPresentationActor(index, ActorState(Dq9ActorId(roster[index]), nodes[index]))) return false;
+    }
+    if (!BeginTurn(roster)) return false;
+
+    if (!ApplyKnownRosterField4PostActionCompatibility(1)) return false;
+    constexpr std::array<std::size_t, 8> type1Nonzero{0, 1, 2, 5, 6, 7, 8, 9};
+    for (std::size_t index = 0; index < roster.size(); ++index) {
+        bool expectedNonzero = false;
+        for (const std::size_t candidate : type1Nonzero) expectedNonzero |= candidate == index;
+        if (RosterField4IsZero(index) == expectedNonzero) return false;
+    }
+
+    if (!ApplyKnownRosterField4PostActionCompatibility(17)) return false;
+    constexpr std::array<std::size_t, 8> type17Nonzero{0, 1, 4, 5, 6, 7, 8, 9};
+    for (std::size_t index = 0; index < roster.size(); ++index) {
+        bool expectedNonzero = false;
+        for (const std::size_t candidate : type17Nonzero) expectedNonzero |= candidate == index;
+        if (RosterField4IsZero(index) == expectedNonzero) return false;
+    }
+
+    if (ApplyKnownRosterField4PostActionCompatibility(0) || HasRosterField4Compatibility()) return false;
+
+    std::array<PresentationActorState, 3> actors{
+        ActorState(0, 40),
+        ActorState(0x00c0, 21),
+        ActorState(0x00c1, 30),
+    };
+    actors[2].auxiliaryNode = 31;
+    auto occupancy = BuildPresentationOccupancy(std::span<const PresentationActorState>(actors.data(), actors.size()));
+    std::array<bool, 3> compatibility{};
+    constexpr std::array<std::uint8_t, 1> conflictNodes{31};
+    InvalidatePresentationConflicts(
+        conflictNodes,
+        occupancy,
+        actors[0].actorId,
+        actors[1].actorId,
+        actors,
+        compatibility
+    );
+    return compatibility[2]
+        && actors[2].conflictInvalidated
+        && actors[2].auxiliaryNode == kInvalidPresentationNode;
+}
+
 } // namespace
 
 int main() {
@@ -305,11 +367,15 @@ int main() {
         std::cerr << "FAIL consecutive-attack-reset\n";
         return 5;
     }
+    if (!ValidateRosterField4Compatibility()) {
+        std::cerr << "FAIL roster-field4-compatibility\n";
+        return 6;
+    }
 
     const SweepStats stats = SweepTwoActorRoutes();
     if (stats.goalCases == 0 || stats.zakiSuppressed == 0 || stats.zakiTriggered == 0 || stats.maxRoute == 0) {
         std::cerr << "FAIL route-sweep-empty-branch\n";
-        return 6;
+        return 7;
     }
     std::cout << "ROUTE_SWEEP goalCases=" << stats.goalCases
               << " moving=" << stats.movingCases

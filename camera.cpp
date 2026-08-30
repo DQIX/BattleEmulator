@@ -55,6 +55,64 @@ inline void AssertCameraMapping(const int action) noexcept {
     return (((*NowState) >> 8) & UINT64_C(0xf)) == 0;
 }
 
+[[nodiscard]] bool SetupCurrentAndFuturePresentationGoals(
+    const int actionIndex,
+    const int actionCount,
+    const int32_t* actions,
+    const BattleActorRef* actors,
+    const BattleActorRef* targets,
+    const dq9::freecam::bindings::ActionBinding& currentBinding,
+    const std::uint16_t currentActorId,
+    const std::uint16_t currentTargetId
+) noexcept {
+    using namespace dq9::freecam::fast;
+    if (!BeginPresentationGoalSetup()) return false;
+
+    const std::array<std::uint16_t, 1> currentActionActorIds{currentActorId};
+    std::array<bool, dq9::freecam::detail::kMaxPresentationActors> visited{};
+    for (int futureIndex = actionIndex; futureIndex < actionCount; ++futureIndex) {
+        if (actions[futureIndex] < 0 || !actors[futureIndex].valid()) continue;
+        const std::uint16_t actorId = Dq9ActorId(actors[futureIndex]);
+        const std::size_t actorSlot = FindPresentationActorIndex(actorId);
+        if (actorSlot >= visited.size() || visited[actorSlot]) continue;
+        // overlay_d_25:021E0AA0 marks the suffix actor visited before the
+        // movement-eligibility test, so later actions by the same actor do not
+        // get a second chance in this setup pass.
+        visited[actorSlot] = true;
+        if (!IsActorPresentationMovementEligible(actorSlot, currentTargetId)) continue;
+
+        if (futureIndex == actionIndex) {
+            if (!AssignActorPresentationGoal(
+                    actorId,
+                    currentTargetId,
+                    std::span<const std::uint16_t>(currentActionActorIds.data(), currentActionActorIds.size()),
+                    currentBinding.attackFormationMode)) return false;
+            continue;
+        }
+
+        // The entry value is compiler-stack residue. If its producer has not
+        // been reproduced for this action path yet, do not invent a fallback
+        // rule: retain the current-only behavior for that future participant.
+        if (!HasRosterField4Compatibility()) continue;
+        if (!RosterField4IsZero(actorSlot)) {
+            if (!AssignActorFallbackPresentationGoal(actorId)) return false;
+            continue;
+        }
+        if (!targets[futureIndex].valid()) continue;
+        const std::uint16_t primaryTargetId = Dq9ActorId(targets[futureIndex]);
+        const std::uint16_t resolvedTargetId = ResolveActorPresentationTarget(actorSlot, primaryTargetId);
+        if (resolvedTargetId == kInvalidBattleActor) continue;
+        // Live 021E0D34..021E0D5C passes the current action record to
+        // 021E1FD8 even when the actor/target came from a future action.
+        if (!AssignActorPresentationGoal(
+                actorId,
+                resolvedTargetId,
+                std::span<const std::uint16_t>(currentActionActorIds.data(), currentActionActorIds.size()),
+                currentBinding.attackFormationMode)) return false;
+    }
+    return PlanCurrentActionRoutes(actionIndex);
+}
+
 } // namespace
 
 #if defined(gerunikku)
@@ -143,15 +201,15 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
             && actors[i].valid() && targets[i].valid()) {
             runtimeActorId = Dq9ActorId(actors[i]);
             runtimeTargetId = Dq9ActorId(targets[i]);
-            const std::array<std::uint16_t, 1> actionActorIds{runtimeActorId};
-            if (BeginPresentationGoalSetup()
-                && AssignActorPresentationGoal(
+            if (SetupCurrentAndFuturePresentationGoals(
+                    i,
+                    actionCount,
+                    actions,
+                    actors,
+                    targets,
+                    *binding,
                     runtimeActorId,
-                    runtimeTargetId,
-                    std::span<const std::uint16_t>(actionActorIds.data(), actionActorIds.size()),
-                    binding->attackFormationMode
-                )
-                && PlanCurrentActionRoutes(i)) {
+                    runtimeTargetId)) {
                 const std::size_t targetSlot = FindPresentationActorIndex(runtimeTargetId);
                 runtimeDecision = binding->decide({
                     .actorId = runtimeActorId,
@@ -246,6 +304,7 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                 (void)binding->commit(i, actionCount, runtimeActorId, runtimeTargetId);
             }
             (void)CompleteActionPresentation(runtimeActorId, i);
+            (void)ApplyKnownRosterField4PostActionCompatibility(binding->presentationType);
             if (after != BattleEmulator::ATTACK_ALLY) preemptive = false;
 #if defined(gerunikku)
             finalizeDebugEvent();
@@ -267,6 +326,7 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
         if (hasRuntimeDecision && binding != nullptr) {
             (void)binding->commit(i, actionCount, runtimeActorId, runtimeTargetId);
             (void)CompleteActionPresentation(runtimeActorId, i);
+            (void)ApplyKnownRosterField4PostActionCompatibility(binding->presentationType);
         }
 #if defined(gerunikku)
         finalizeDebugEvent();

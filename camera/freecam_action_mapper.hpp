@@ -19,6 +19,7 @@ struct ActionBinding {
     fast::TargetSide targetSide{fast::TargetSide::none_or_context};
     fast::TargetScope targetScope{fast::TargetScope::none_or_context};
     std::uint8_t attackFormationMode{};
+    std::uint8_t presentationType{};
     DecideFunction decide{};
     CommitFunction commit{};
 
@@ -35,6 +36,7 @@ template <std::uint16_t Dq9ActionId, int CommonActionId>
         Action::targetSide,
         Action::targetScope,
         Action::attackFormationMode,
+        Action::presentationType,
         +[](const fast::ActionRuntimeInput input) noexcept {
             return fast::Decide<Action>(input);
         },

@@ -69,12 +69,14 @@ static_assert(MagicIs(generated::kCameraMetadataBytes, 'F', 'C', 'M', '1'));
 static_assert(ReadU32(generated::kCameraMetadataBytes, 4) == 1);
 static_assert(ReadU32(generated::kCameraMetadataBytes, 8) == kActionCount);
 
-static_assert(generated::kActionMetadataBytes.size() == 3088);
+static_assert(generated::kActionMetadataBytes.size() == 4116);
 static_assert(MagicIs(generated::kActionMetadataBytes, 'F', 'C', 'M', 'A'));
-static_assert(ReadU32(generated::kActionMetadataBytes, 4) == 2);
+static_assert(ReadU32(generated::kActionMetadataBytes, 4) == 3);
 static_assert(ReadU32(generated::kActionMetadataBytes, 8) == kActionCount);
 inline constexpr std::size_t kFormationModeOffset = ReadU32(generated::kActionMetadataBytes, 12);
-static_assert(kFormationModeOffset == 16 + kActionCount * 2);
+inline constexpr std::size_t kPresentationTypeOffset = ReadU32(generated::kActionMetadataBytes, 16);
+static_assert(kFormationModeOffset == 20 + kActionCount * 2);
+static_assert(kPresentationTypeOffset == kFormationModeOffset + kActionCount);
 
 static_assert(generated::kTargetSideCode.size() == kActionCount);
 static_assert(generated::kTargetScopeCode.size() == kActionCount);
@@ -133,13 +135,18 @@ struct ActorProfileMapEntry {
     if (actionId >= kActionCount) return kInvalidActionId;
     return ReadU16(
         generated::kActionMetadataBytes,
-        16 + static_cast<std::size_t>(actionId) * 2
+        20 + static_cast<std::size_t>(actionId) * 2
     );
 }
 
 [[nodiscard]] consteval std::uint8_t AttackFormationMode(const std::uint16_t actionId) {
     if (actionId >= kActionCount) return 0;
     return generated::kActionMetadataBytes[kFormationModeOffset + actionId];
+}
+
+[[nodiscard]] consteval std::uint8_t PresentationType(const std::uint16_t actionId) {
+    if (actionId >= kActionCount) return 0;
+    return generated::kActionMetadataBytes[kPresentationTypeOffset + actionId];
 }
 
 [[nodiscard]] constexpr std::uint8_t MonsterOccupancyExpansionDepth(
@@ -293,6 +300,8 @@ struct FreeCamera {
         metadata::FallbackLookupActionId(Dq9ActionId);
     static inline constexpr std::uint8_t attackFormationMode =
         metadata::AttackFormationMode(Dq9ActionId);
+    static inline constexpr std::uint8_t presentationType =
+        metadata::PresentationType(Dq9ActionId);
     static inline constexpr std::uint64_t fallbackMembershipPacked =
         fallbackLookupActionId == metadata::kInvalidActionId
             ? UINT64_C(0)
@@ -428,6 +437,11 @@ struct RuntimeState {
     std::array<NearestNodeCache, detail::kMaxPresentationActors> nearestNodeCache{};
     std::uint8_t presentationActorCount{};
     std::array<std::uint16_t, detail::kMaxPresentationActions> turnActionActors{};
+    // overlay_d_25:021E1958 leaves roster row+4 uninitialized. 021E08BC later
+    // consumes only its zero/nonzero state. Keep that compiler-stack artifact
+    // explicit instead of inventing an actor/action semantic for it.
+    std::array<bool, detail::kMaxPresentationActors> rosterField4Nonzero{};
+    bool rosterField4CompatibilityValid{};
     detail::PresentationOccupancyMap presentationOccupancy{};
     bool presentationGoalSetupActive{};
     detail::PresentationTurnRoutes currentRoutes{};
@@ -450,6 +464,7 @@ inline void ResetBattle() noexcept {
     gRuntimeState.battleActive = true;
     gRuntimeState.turnActionActors.fill(detail::kInvalidPresentationActor);
     gRuntimeState.presentationMembershipProfiles.fill(kInvalidMembershipProfile);
+    gRuntimeState.rosterField4Nonzero.fill(false);
 }
 
 [[nodiscard]] inline bool BeginTurn(const std::span<const BattleActorRef> actionOrder) noexcept {
@@ -465,12 +480,79 @@ inline void ResetBattle() noexcept {
     state.currentTurnValid = true;
     state.turnActionActors.fill(detail::kInvalidPresentationActor);
     state.targetRecord02161720ActorId = kInvalidBattleActor;
+    state.rosterField4CompatibilityValid = false;
     state.presentationGoalSetupActive = false;
     InvalidateCurrentRoutes(state);
     for (std::size_t index = 0; index < actionOrder.size(); ++index) {
         state.turnActionActors[index] = Dq9ActorId(actionOrder[index]);
     }
     return true;
+}
+
+inline void InvalidateRosterField4Compatibility() noexcept {
+    ThreadContext().rosterField4CompatibilityValid = false;
+}
+
+[[nodiscard]] inline bool SetRosterField4Compatibility(
+    const std::span<const bool> nonzero
+) noexcept {
+    auto& state = ThreadContext();
+    if (nonzero.size() != state.presentationActorCount) return false;
+    state.rosterField4Nonzero.fill(false);
+    for (std::size_t index = 0; index < nonzero.size(); ++index) {
+        state.rosterField4Nonzero[index] = nonzero[index];
+    }
+    state.rosterField4CompatibilityValid = true;
+    return true;
+}
+
+[[nodiscard]] inline bool HasRosterField4Compatibility() noexcept {
+    return ThreadContext().rosterField4CompatibilityValid;
+}
+
+[[nodiscard]] inline bool RosterField4IsZero(const std::size_t index) noexcept {
+    const auto& state = ThreadContext();
+    return state.rosterField4CompatibilityValid
+        && index < state.presentationActorCount
+        && !state.rosterField4Nonzero[index];
+}
+
+[[nodiscard]] inline bool SetRosterField4SlotNonzero(
+    const std::size_t index,
+    const bool nonzero
+) noexcept {
+    auto& state = ThreadContext();
+    if (!state.rosterField4CompatibilityValid || index >= state.presentationActorCount) return false;
+    state.rosterField4Nonzero[index] = nonzero;
+    return true;
+}
+
+[[nodiscard]] inline bool ApplyKnownRosterField4PostActionCompatibility(
+    const std::uint8_t presentationType
+) noexcept {
+    auto& state = ThreadContext();
+    std::array<bool, detail::kMaxPresentationActors> pattern{};
+    switch (presentationType) {
+        case 1:
+            // Live seed-8 evidence after both Bagima and Merami. These are
+            // physical work-row slots, not actor identities.
+            for (const std::size_t index : {0u, 1u, 2u, 5u, 6u, 7u, 8u, 9u}) {
+                if (index < pattern.size()) pattern[index] = true;
+            }
+            break;
+        case 17:
+            // Live seed-8 evidence after Zaki.
+            for (const std::size_t index : {0u, 1u, 4u, 5u, 6u, 7u, 8u, 9u}) {
+                if (index < pattern.size()) pattern[index] = true;
+            }
+            break;
+        default:
+            InvalidateRosterField4Compatibility();
+            return false;
+    }
+    return SetRosterField4Compatibility(
+        std::span<const bool>(pattern.data(), state.presentationActorCount)
+    );
 }
 
 [[nodiscard]] inline bool SetPresentationActor(
@@ -677,7 +759,10 @@ inline void ResetBattle() noexcept {
         state.presentationOccupancy,
         actionActorIds,
         attackFormationMode,
-        mode
+        mode,
+        state.rosterField4CompatibilityValid
+            ? std::span<bool>(state.rosterField4Nonzero.data(), state.presentationActorCount)
+            : std::span<bool>{}
     );
     if (!decision.valid) return false;
     if (decision.goalChanged) InvalidateCurrentRoutes(state);

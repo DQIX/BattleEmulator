@@ -379,17 +379,24 @@ constexpr void InvalidatePresentationConflicts(
     PresentationOccupancyMap& occupancy,
     const std::uint16_t excludedActorId,
     const std::uint16_t excludedTargetId,
-    const std::span<PresentationActorState> actors
+    const std::span<PresentationActorState> actors,
+    const std::span<bool> rosterField4Nonzero = {}
 ) noexcept {
     for (const std::uint8_t node : nodes) {
         if (node >= occupancy.size()) continue;
         occupancy[node] = 0xff;
-        for (PresentationActorState& actor : actors) {
+        for (std::size_t actorIndex = 0; actorIndex < actors.size(); ++actorIndex) {
+            PresentationActorState& actor = actors[actorIndex];
             if (actor.actorId == excludedActorId || actor.actorId == excludedTargetId) continue;
             const std::uint8_t occupied = actor.auxiliaryNode != kInvalidPresentationNode
                 ? actor.auxiliaryNode
                 : actor.startNode;
             if (occupied == node) {
+                // Exact side effect of overlay_d_25:021E2904 at 021E29B0:
+                // the shared roster work row gets +4 = 1 for a conflicting
+                // non-current/non-target actor. The row starts as stale stack
+                // data, but from this point onward it is deliberate work state.
+                if (actorIndex < rosterField4Nonzero.size()) rosterField4Nonzero[actorIndex] = true;
                 actor.conflictInvalidated = true;
                 actor.auxiliaryNode = kInvalidPresentationNode;
             }
@@ -489,7 +496,8 @@ constexpr void InvalidateGoalNeighborConflicts(
     const PresentationOccupancyMap& targetArea,
     const std::uint8_t maximumLayer,
     const std::size_t currentActorIndex,
-    const std::span<PresentationActorState> actors
+    const std::span<PresentationActorState> actors,
+    const std::span<bool> rosterField4Nonzero = {}
 ) noexcept {
     std::array<std::uint8_t, 6> conflictNodes{};
     std::size_t count = 0;
@@ -508,7 +516,8 @@ constexpr void InvalidateGoalNeighborConflicts(
         occupancy,
         currentActorId,
         kInvalidPresentationActor,
-        actors
+        actors,
+        rosterField4Nonzero
     );
 }
 
@@ -522,7 +531,8 @@ constexpr void InvalidateGoalNeighborConflicts(
     PresentationOccupancyMap& occupancy,
     const std::span<const std::uint16_t> actionActorIds,
     const std::uint8_t attackFormationMode,
-    const PresentationNodeSearchMode searchMode = PresentationNodeSearchMode::optimized
+    const PresentationNodeSearchMode searchMode = PresentationNodeSearchMode::optimized,
+    const std::span<bool> rosterField4Nonzero = {}
 ) noexcept {
     if (actorIndex >= actors.size() || targetIndex >= actors.size()) return {};
     PresentationActorState& actor = actors[actorIndex];
@@ -557,7 +567,8 @@ constexpr void InvalidateGoalNeighborConflicts(
             occupancy,
             actor.actorId,
             target.actorId,
-            actors
+            actors,
+            rosterField4Nonzero
         );
     }
 
@@ -624,7 +635,8 @@ constexpr void InvalidateGoalNeighborConflicts(
                 targetArea,
                 maximumLayer,
                 actorIndex,
-                actors
+                actors,
+                rosterField4Nonzero
             );
         }
         actor.targetNode = target.goalNode;
@@ -687,7 +699,8 @@ constexpr void InvalidateGoalNeighborConflicts(
             targetArea,
             maximumLayer,
             actorIndex,
-            actors
+            actors,
+            rosterField4Nonzero
         );
     }
     actor.cachedTargetId = static_cast<std::uint8_t>(target.actorId);
