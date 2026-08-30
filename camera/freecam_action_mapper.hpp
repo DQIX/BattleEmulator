@@ -74,6 +74,7 @@ inline constexpr auto kFreeCameraActions = [] {
     // route patches in camera.cpp.
     actions[BattleEmulator::GERUNIKKU_MERAMI] = Bind<10, BattleEmulator::GERUNIKKU_MERAMI>();
     actions[BattleEmulator::GERUNIKKU_BAGIMA] = Bind<19, BattleEmulator::GERUNIKKU_BAGIMA>();
+    actions[BattleEmulator::WHIPPING_BOY] = Bind<109, BattleEmulator::WHIPPING_BOY>();
     actions[BattleEmulator::MEDICINAL_HERBS] = Bind<255, BattleEmulator::MEDICINAL_HERBS>();
     return actions;
 }();
@@ -93,6 +94,7 @@ static_assert(kFreeCameraActions[BattleEmulator::ZAKI].dq9ActionId == 24);
 static_assert(kFreeCameraActions[BattleEmulator::ZARAKI].dq9ActionId == 25);
 static_assert(kFreeCameraActions[BattleEmulator::GERUNIKKU_MERAMI].dq9ActionId == 10);
 static_assert(kFreeCameraActions[BattleEmulator::GERUNIKKU_BAGIMA].dq9ActionId == 19);
+static_assert(kFreeCameraActions[BattleEmulator::WHIPPING_BOY].dq9ActionId == 109);
 static_assert(kFreeCameraActions[BattleEmulator::MEDICINAL_HERBS].dq9ActionId == 255);
 static_assert(kFreeCameraActions[BattleEmulator::MERA_ZOMA].dq9ActionId == 11);
 static_assert(kFreeCameraActions[BattleEmulator::SKY_ATTACK].dq9ActionId == 540);
