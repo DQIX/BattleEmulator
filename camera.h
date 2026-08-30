@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <array>
 #include "camera/freecam_actor.hpp"
 
 enum class CameraMembershipKind : std::uint8_t {
@@ -32,6 +33,7 @@ struct CameraPresentationActor {
 
 #if defined(gerunikku)
 struct CameraDebugEvent {
+    static constexpr std::size_t kMaxPresentationActors = 12;
     int turnSerial{};
     int actionIndex{};
     int commonActionId{};
@@ -47,6 +49,9 @@ struct CameraDebugEvent {
     bool runtimeResetOnly{};
     bool manualRuleWouldCall{};
     bool productionCalledFreeCamera{};
+    std::uint8_t presentationActorCount{};
+    std::array<std::uint8_t, kMaxPresentationActors> startNodesBefore{};
+    std::array<std::uint8_t, kMaxPresentationActors> startNodesAfter{};
 };
 #endif
 

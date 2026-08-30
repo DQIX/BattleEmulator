@@ -887,11 +887,12 @@ int main(int argc, char* argv[]){
 		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
 		const int traceAction = argc >= 4 ? std::stoi(argv[3], nullptr, 0) : BattleEmulator::DEFENCE;
 		const int traceTarget = argc >= 5 ? std::stoi(argv[4], nullptr, 0) : -1;
+		const int currentSeedPosition = argc >= 6 ? std::stoi(argv[5], nullptr, 0) : 0;
 		int32_t traceGene[350] = {};
 		makeDebugGene(traceGene, 1, traceAction);
 		Player tracePlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
 		BattleResult traceResult;
-		int tracePosition = 1;
+		int tracePosition = currentSeedPosition + 1;
 		uint64_t traceState = 0;
 		lcg::init(traceSeed);
 		BattleEmulator::Main(&tracePosition, 1, traceGene, tracePlayers, &traceResult,
@@ -905,12 +906,13 @@ int main(int argc, char* argv[]){
 		const int traceTurns = argc >= 4 ? std::stoi(argv[3], nullptr, 0) : 10;
 		const int traceAction = argc >= 5 ? std::stoi(argv[4], nullptr, 0) : BattleEmulator::DEFENCE;
 		const int traceTarget = argc >= 6 ? std::stoi(argv[5], nullptr, 0) : -1;
+		const int currentSeedPosition = argc >= 7 ? std::stoi(argv[6], nullptr, 0) : 0;
 		if (traceTurns < 1 || traceTurns > 349) throw std::invalid_argument("trace turns must be 1..349");
 		int32_t traceGene[350] = {};
 		makeDebugGene(traceGene, traceTurns, traceAction);
 		Player tracePlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
 		BattleResult traceResult;
-		int tracePosition = 1;
+		int tracePosition = currentSeedPosition + 1;
 		uint64_t traceState = 0;
 		lcg::init(traceSeed);
 		BattleEmulator::Main(&tracePosition, traceTurns, traceGene, tracePlayers, &traceResult,
@@ -925,10 +927,11 @@ int main(int argc, char* argv[]){
 		const int traceTurns = std::stoi(argv[4], nullptr, 0);
 		const uint64_t startSeed = std::stoull(argv[5], nullptr, 0);
 		const uint64_t count = std::stoull(argv[6], nullptr, 0);
+		const int currentSeedPosition = argc >= 8 ? std::stoi(argv[7], nullptr, 0) : 1;
 		if (traceTurns < 1 || traceTurns > 349) throw std::invalid_argument("scan turns must be 1..349");
 		int32_t traceGene[350] = {};
 		makeDebugGene(traceGene, traceTurns, traceAction);
-		std::array<int, 9> categoryCounts{};
+		std::array<int, 10> categoryCounts{};
 		auto emitCandidate = [&](const char* category, const int categoryIndex, const uint64_t seed,
 		                         const CameraDebugEvent& event) {
 			if (categoryCounts[categoryIndex] >= 12) return;
@@ -947,7 +950,18 @@ int main(int argc, char* argv[]){
 			          << " param5=" << event.runtimeParam5
 			          << " reset=" << event.runtimeResetOnly
 			          << " manual=" << event.manualRuleWouldCall
-			          << " production=" << event.productionCalledFreeCamera << '\n';
+			          << " production=" << event.productionCalledFreeCamera
+			          << " nodesBefore=";
+			for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
+				if (actorIndex != 0) std::cout << ',';
+				std::cout << static_cast<unsigned>(event.startNodesBefore[actorIndex]);
+			}
+			std::cout << " nodesAfter=";
+			for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
+				if (actorIndex != 0) std::cout << ',';
+				std::cout << static_cast<unsigned>(event.startNodesAfter[actorIndex]);
+			}
+			std::cout << '\n';
 		};
 
 		camera::SetDebugCapture(true);
@@ -956,7 +970,7 @@ int main(int argc, char* argv[]){
 			if (seed == 0) continue;
 			Player tracePlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
 			BattleResult traceResult;
-			int tracePosition = 1;
+			int tracePosition = currentSeedPosition + 1;
 			uint64_t traceState = 0;
 			lcg::init(seed);
 			camera::ClearDebugEvents();
@@ -990,6 +1004,9 @@ int main(int argc, char* argv[]){
 				if (event.maxRouteCount > 4) emitCandidate("route-over-4", 5, seed, event);
 				if (event.triggerSource == 1) emitCandidate("actor-membership", 6, seed, event);
 				if (event.triggerSource == 3) emitCandidate("fallback-membership", 7, seed, event);
+				if (event.mapped && event.runtimeDecisionAvailable) {
+					emitCandidate("mapped-presentation", 9, seed, event);
+				}
 				if (attackAction) {
 					previousAttackEvent = event;
 					havePreviousAttackEvent = true;
@@ -997,7 +1014,9 @@ int main(int argc, char* argv[]){
 			}
 		}
 		camera::SetDebugCapture(false);
-		std::cout << "CAMERA_SCAN_DONE seeds=" << count;
+		std::cout << "CAMERA_SCAN_DONE seeds=" << count
+		          << " currentSeedPosition=" << currentSeedPosition
+		          << " firstConsumedPosition=" << (currentSeedPosition + 1);
 		for (std::size_t i = 0; i < categoryCounts.size(); ++i) std::cout << " c" << i << '=' << categoryCounts[i];
 		std::cout << '\n';
 		return 0;

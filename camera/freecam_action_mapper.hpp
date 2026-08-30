@@ -53,7 +53,7 @@ template <std::uint16_t Dq9ActionId, int CommonActionId>
 }
 
 inline constexpr auto kFreeCameraActions = [] {
-    std::array<ActionBinding, BattleEmulator::ZARAKI + 1> actions{};
+    std::array<ActionBinding, BattleEmulator::CURE_CONFUSION + 1> actions{};
 
     actions[BattleEmulator::ATTACK_ENEMY] = Bind<1, BattleEmulator::ATTACK_ENEMY>();
     actions[BattleEmulator::ATTACK_ALLY] = Bind<1, BattleEmulator::ATTACK_ALLY>();
@@ -65,12 +65,21 @@ inline constexpr auto kFreeCameraActions = [] {
     actions[BattleEmulator::VITAL_POINT_THRUST] = Bind<71, BattleEmulator::VITAL_POINT_THRUST>();
     actions[BattleEmulator::ZAKI] = Bind<24, BattleEmulator::ZAKI>();
     actions[BattleEmulator::ZARAKI] = Bind<25, BattleEmulator::ZARAKI>();
+    // Live battle_damage_trace evidence in the Geruniku encounter:
+    // common GERUNIKKU_MERAMI executes DQ9 action 0x000A and
+    // common GERUNIKKU_BAGIMA executes DQ9 action 0x0013.  These bindings are
+    // required even when the fixed metadata ultimately suppresses free camera,
+    // because their presentation routes mutate the state consumed by later
+    // actions (notably Zaki).  Do not replace this with encounter-specific
+    // route patches in camera.cpp.
+    actions[BattleEmulator::GERUNIKKU_MERAMI] = Bind<10, BattleEmulator::GERUNIKKU_MERAMI>();
+    actions[BattleEmulator::GERUNIKKU_BAGIMA] = Bind<19, BattleEmulator::GERUNIKKU_BAGIMA>();
     actions[BattleEmulator::MEDICINAL_HERBS] = Bind<255, BattleEmulator::MEDICINAL_HERBS>();
     return actions;
 }();
 
 [[nodiscard]] constexpr const ActionBinding* Find(const int commonActionId) noexcept {
-    return commonActionId >= 0 && commonActionId <= BattleEmulator::ZARAKI
+    return commonActionId >= 0 && commonActionId < static_cast<int>(kFreeCameraActions.size())
         ? &kFreeCameraActions[static_cast<std::size_t>(commonActionId)]
         : nullptr;
 }
@@ -82,6 +91,8 @@ static_assert(kFreeCameraActions[BattleEmulator::BEAST_THRUST].dq9ActionId == 70
 static_assert(kFreeCameraActions[BattleEmulator::VITAL_POINT_THRUST].dq9ActionId == 71);
 static_assert(kFreeCameraActions[BattleEmulator::ZAKI].dq9ActionId == 24);
 static_assert(kFreeCameraActions[BattleEmulator::ZARAKI].dq9ActionId == 25);
+static_assert(kFreeCameraActions[BattleEmulator::GERUNIKKU_MERAMI].dq9ActionId == 10);
+static_assert(kFreeCameraActions[BattleEmulator::GERUNIKKU_BAGIMA].dq9ActionId == 19);
 static_assert(kFreeCameraActions[BattleEmulator::MEDICINAL_HERBS].dq9ActionId == 255);
 static_assert(kFreeCameraActions[BattleEmulator::MERA_ZOMA].dq9ActionId == 11);
 static_assert(kFreeCameraActions[BattleEmulator::SKY_ATTACK].dq9ActionId == 540);

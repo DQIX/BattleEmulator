@@ -164,6 +164,7 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
 
         const CameraRule rule = RuleForAction(after);
 #if defined(gerunikku)
+        std::size_t debugEventIndex = gCameraDebugEvents.size();
         if (gCameraDebugCapture && gCameraDebugEventCount < gCameraDebugEvents.size()) {
             std::uint8_t actorRouteCount = 0;
             std::uint8_t maxRouteCount = 0;
@@ -182,7 +183,9 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
             const bool productionWouldCall = after == BattleEmulator::ZAKI
                 ? hasRuntimeDecision && runtimeDecision.callFreeCamera
                 : manualWouldCall;
-            gCameraDebugEvents[gCameraDebugEventCount++] = {
+            debugEventIndex = gCameraDebugEventCount;
+            auto& debugEvent = gCameraDebugEvents[gCameraDebugEventCount++];
+            debugEvent = {
                 .turnSerial = debugTurnSerial,
                 .actionIndex = i,
                 .commonActionId = after,
@@ -199,7 +202,24 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                 .manualRuleWouldCall = manualWouldCall,
                 .productionCalledFreeCamera = productionWouldCall,
             };
+            const auto& state = ThreadContext();
+            debugEvent.presentationActorCount = state.presentationActorCount;
+            for (std::size_t actorIndex = 0;
+                 actorIndex < state.presentationActorCount && actorIndex < debugEvent.startNodesBefore.size();
+                 ++actorIndex) {
+                debugEvent.startNodesBefore[actorIndex] = state.presentationActors[actorIndex].startNode;
+            }
         }
+        auto finalizeDebugEvent = [&]() noexcept {
+            if (debugEventIndex >= gCameraDebugEventCount) return;
+            auto& debugEvent = gCameraDebugEvents[debugEventIndex];
+            const auto& state = ThreadContext();
+            for (std::size_t actorIndex = 0;
+                 actorIndex < state.presentationActorCount && actorIndex < debugEvent.startNodesAfter.size();
+                 ++actorIndex) {
+                debugEvent.startNodesAfter[actorIndex] = state.presentationActors[actorIndex].startNode;
+            }
+        };
 #endif
 
         //守備力が高すぎる場合(ダメージ0)true、盾ガードは偽
@@ -209,6 +229,9 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
         if (moture && after == BattleEmulator::MERA_ZOMA) {
             AssertCameraMapping(after);
             onFreeCameraMove(position, after, 1, NowState);
+#if defined(gerunikku)
+            finalizeDebugEvent();
+#endif
             continue;
         }
 
@@ -222,6 +245,9 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
             }
             (void)CompleteActionPresentation(runtimeActorId, i);
             if (after != BattleEmulator::ATTACK_ALLY) preemptive = false;
+#if defined(gerunikku)
+            finalizeDebugEvent();
+#endif
             continue;
         }
         if (rule != CameraRule::none) {
@@ -240,6 +266,9 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
             (void)binding->commit(i, actionCount, runtimeActorId, runtimeTargetId);
             (void)CompleteActionPresentation(runtimeActorId, i);
         }
+#if defined(gerunikku)
+        finalizeDebugEvent();
+#endif
     }
 }
 

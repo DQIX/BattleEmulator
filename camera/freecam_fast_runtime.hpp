@@ -703,15 +703,47 @@ inline void SetTargetRecord02161720ActorId(const std::uint16_t actorId) noexcept
     return true;
 }
 
+// PlanPresentationRoutes returns coordinated routes for every presentation
+// participant, not just the actor whose battle action is currently executing.
+// The ROM likewise writes/moves non-acting participants during formation
+// changes.  Commit the whole planned formation atomically; invalidating after
+// the first actor would discard the remaining routes.
+[[nodiscard]] inline bool CommitAllCurrentRouteEnds() noexcept {
+    auto& state = ThreadContext();
+    if (!state.currentRoutes.valid) return false;
+
+    bool changed = false;
+    for (std::size_t routeIndex = 0; routeIndex < state.currentRoutes.actorCount; ++routeIndex) {
+        const auto& route = state.currentRoutes.actors[routeIndex];
+        if (route.actorId == detail::kInvalidPresentationActor || route.count == 0) continue;
+        const std::size_t actorIndex = FindPresentationActorIndex(route.actorId);
+        if (actorIndex >= state.presentationActorCount) return false;
+        const std::uint8_t node = route.nodes[route.count - 1];
+        if (node >= detail::kPresentationNodePositions.size()) return false;
+        const auto position = detail::kPresentationNodePositions[node];
+        if (!position.valid) return false;
+
+        auto& actor = state.presentationActors[actorIndex];
+        actor.startNode = node;
+        actor.goalNode = node;
+        actor.worldX = position.x;
+        actor.worldZ = position.z;
+        state.nearestNodeCache[actorIndex] = {};
+        changed = true;
+    }
+    if (changed) InvalidateCurrentRoutes(state);
+    return true;
+}
+
 [[nodiscard]] inline bool CompleteActionPresentation(
     const std::uint16_t actorId,
     const int actionIndex
 ) noexcept {
-    if (!CommitCurrentRouteEnd(actorId)) return false;
+    if (!CommitAllCurrentRouteEnds()) return false;
     if (!BeginPresentationGoalSetup()) return false;
     if (!AssignActorFallbackPresentationGoal(actorId)) return false;
     if (!PlanCurrentActionRoutes(actionIndex)) return false;
-    return CommitCurrentRouteEnd(actorId);
+    return CommitAllCurrentRouteEnds();
 }
 
 template <typename Action>
