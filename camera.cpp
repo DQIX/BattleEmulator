@@ -24,9 +24,9 @@ enum class CameraRule {
         case BattleEmulator::BEAST_THRUST:
         case BattleEmulator::VITAL_POINT_THRUST:
         case BattleEmulator::THUNDER_THRUST:
+        case BattleEmulator::ZAKI:
         case BattleEmulator::SKY_ATTACK:
         case BattleEmulator::MERA_ZOMA:
-        case BattleEmulator::GERUNIKKU_MERAMI:
             return CameraRule::free_camera;
         case BattleEmulator::MERCURIAL_THRUST:
             return CameraRule::free_camera_with_tracking_fallback;

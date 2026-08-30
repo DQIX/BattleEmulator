@@ -1061,6 +1061,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
     bool kaihi = false;
     bool tate = false;
     bool vitalPointInstantDeath = false;
+    bool thunderSelectorFailed = false;
     int OffensivePower = players[attacker].defaultATK;
     int percent_tmp;
     auto totalDamage = 0;
@@ -1270,11 +1271,12 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 baseDamage = static_cast<int>(tmp);
             } else {
                 kaihi = true;
+                thunderSelectorFailed = true;
             }
 
             if (kaihi) {
-                if (!players[0].paralysis && !players[0].sleeping && !players[0].specialCharge && !players[0].inactive) {
-                    (*position)++; //0x021ed7a8
+                if (!thunderSelectorFailed) {
+                    process7A8(position, baseDamage, players, defender);
                 }
                 baseDamage = 0;
             } else {
@@ -2265,7 +2267,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position)++; // 会心判定
             (*position)++; // 回避
 
-            baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[attacker].def);
+            baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[defender].def);
             if (baseDamage == 0) {
                 baseDamage = lcg::getPercent(position, 2); //0x021e81a0
             }
@@ -2635,7 +2637,11 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 players[attacker].mp -= 3;
             }
             (*position) += 2;
-            (*position)++;
+            (*position)++; // max:100, lr: 0x021ec6f8
+            if ((Id & 0xffff) == BattleEmulator::MERCURIAL_THRUST
+                && attacker == 0 && defender != 2 && players[2].guardedBy == defender) {
+                (*position)++; // planned 03A1 target redirect, max:1, lr: 0x021ea6bc
+            }
             //会心
             percent_tmp = lcg::getPercent(position, 0x2710);
             if (((Id & 0xffff) == BattleEmulator::ATTACK_ALLY && percent_tmp < 500) ||

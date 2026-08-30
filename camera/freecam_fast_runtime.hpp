@@ -293,16 +293,6 @@ struct FreeCamera {
             : metadata::FallbackMembershipPacked(fallbackLookupActionId);
     static inline constexpr auto actorMembershipPacked =
         metadata::BuildActorMembershipColumn<Dq9ActionId>();
-    static inline constexpr bool hasAnyActorMembership = [] consteval {
-        for (const std::uint64_t packed : actorMembershipPacked) {
-            if (DecodeMembershipCell(packed).Present()) return true;
-        }
-        return false;
-    }();
-    static inline constexpr bool mayTriggerFreeCamera =
-        actionHasBact
-        || DecodeMembershipCell(fallbackMembershipPacked).Present()
-        || hasAnyActorMembership;
 
     [[nodiscard]] static constexpr MembershipCell ActorMembership(
         const std::uint32_t profileIndex
