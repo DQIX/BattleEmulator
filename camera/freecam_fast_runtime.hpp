@@ -637,6 +637,24 @@ inline void ResetBattle() noexcept {
     return true;
 }
 
+[[nodiscard]] inline std::uint16_t ResolveActorPresentationTarget(
+    const std::size_t index,
+    const std::uint16_t primaryTargetId
+) noexcept {
+    const auto& state = ThreadContext();
+    if (index >= state.presentationActorCount) return kInvalidBattleActor;
+    return detail::ResolvePresentationTarget(state.presentationActors[index], primaryTargetId);
+}
+
+[[nodiscard]] inline bool IsActorPresentationMovementEligible(
+    const std::size_t index,
+    const std::uint16_t targetActorId
+) noexcept {
+    const auto& state = ThreadContext();
+    return index < state.presentationActorCount
+        && detail::IsPresentationMovementEligible(state.presentationActors[index], targetActorId);
+}
+
 [[nodiscard]] inline bool AssignActorPresentationGoal(
     const std::uint16_t actorId,
     const std::uint16_t targetId,
