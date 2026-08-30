@@ -83,6 +83,13 @@ static_assert(MagicIs(generated::kMembershipMetadataBytes, 'F', 'C', 'M', 'M'));
 static_assert(ReadU32(generated::kMembershipMetadataBytes, 4) == 1);
 static_assert(ReadU32(generated::kMembershipMetadataBytes, 8) == kActionCount);
 
+static_assert(generated::kMonsterPresentationMetadataBytes.size() == 20 + 1024);
+static_assert(MagicIs(generated::kMonsterPresentationMetadataBytes, 'F', 'C', 'M', 'P'));
+static_assert(ReadU32(generated::kMonsterPresentationMetadataBytes, 4) == 1);
+inline constexpr std::size_t kMonsterPresentationCapacity =
+    ReadU32(generated::kMonsterPresentationMetadataBytes, 8);
+static_assert(kMonsterPresentationCapacity == 1024);
+
 inline constexpr std::size_t kActorProfileCount =
     ReadU32(generated::kMembershipMetadataBytes, 12);
 inline constexpr std::size_t kPlayerProfileCount =
@@ -133,6 +140,13 @@ struct ActorProfileMapEntry {
 [[nodiscard]] consteval std::uint8_t AttackFormationMode(const std::uint16_t actionId) {
     if (actionId >= kActionCount) return 0;
     return generated::kActionMetadataBytes[kFormationModeOffset + actionId];
+}
+
+[[nodiscard]] constexpr std::uint8_t MonsterOccupancyExpansionDepth(
+    const std::uint16_t monsterId
+) {
+    if (monsterId >= kMonsterPresentationCapacity) return UINT8_C(0xff);
+    return generated::kMonsterPresentationMetadataBytes[20 + monsterId];
 }
 
 [[nodiscard]] consteval std::uint64_t ActorMembershipPacked(
@@ -527,6 +541,24 @@ inline void ResetBattle() noexcept {
     const std::uint32_t profile = ResolveMonsterProfile(monsterId);
     if (profile == kInvalidMembershipProfile) return false;
     state.presentationMembershipProfiles[actorIndex] = profile;
+    return true;
+}
+
+[[nodiscard]] inline bool SetMonsterPresentationMetadata(
+    const std::size_t actorIndex,
+    const std::uint16_t monsterId
+) noexcept {
+    auto& state = ThreadContext();
+    if (actorIndex >= state.presentationActorCount) return false;
+    constexpr std::uint8_t invalidDepth = UINT8_C(0xff);
+    const std::uint8_t depth = metadata::MonsterOccupancyExpansionDepth(monsterId);
+    if (depth == invalidDepth) return false;
+    auto& actor = state.presentationActors[actorIndex];
+    if (actor.occupancyExpansionDepth != depth) {
+        actor.occupancyExpansionDepth = depth;
+        state.presentationGoalSetupActive = false;
+        InvalidateCurrentRoutes(state);
+    }
     return true;
 }
 

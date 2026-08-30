@@ -43,11 +43,11 @@ bool InitializeCameraBattle() noexcept {
     const CameraPresentationActor roster[] = {
         {BattleActorRef{BattleActorSide::ally, 0}, 10641, 12868, 18432, 0x00000002, 0, true},
         {BattleActorRef{BattleActorSide::enemy, 0}, -5320, 0, -9216, 0x00000000, 0, true,
-            CameraMembershipKind::monster, 0x00c1, 0},
+            CameraMembershipKind::monster, 0x00c1, 0, 0x0118},
         {BattleActorRef{BattleActorSide::enemy, 1}, 10641, 0, -18432, 0x00000080, 0, true,
-            CameraMembershipKind::monster, 0x013a, 0},
+            CameraMembershipKind::monster, 0x013a, 0, 0x013a},
         {BattleActorRef{BattleActorSide::enemy, 2}, 26604, 0, -9216, 0x00000000, 0, true,
-            CameraMembershipKind::monster, 0x00c1, 0},
+            CameraMembershipKind::monster, 0x00c1, 0, 0x0118},
     };
     return camera::ResetBattle(roster, sizeof(roster) / sizeof(roster[0]));
 }

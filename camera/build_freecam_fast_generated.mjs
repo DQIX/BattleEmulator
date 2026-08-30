@@ -16,6 +16,7 @@ const inputs = [
   ["kCameraMetadataBytes", "freecam-camera-metadata.bin"],
   ["kActionMetadataBytes", "freecam-action-metadata.bin"],
   ["kMembershipMetadataBytes", "freecam-membership-metadata.bin"],
+  ["kMonsterPresentationMetadataBytes", "freecam-monster-presentation-metadata.bin"],
 ];
 
 function formatBytes(bytes) {

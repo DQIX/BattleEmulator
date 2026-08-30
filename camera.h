@@ -29,6 +29,7 @@ struct CameraPresentationActor {
     CameraMembershipKind membershipKind{CameraMembershipKind::none};
     std::uint16_t membershipKeyA{};
     std::uint16_t membershipKeyB{};
+    std::uint16_t battleMonsterId{0xffff};
 };
 
 #if defined(gerunikku)

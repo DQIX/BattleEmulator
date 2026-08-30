@@ -102,6 +102,8 @@ bool camera::ResetBattle(const CameraPresentationActor *actors, const std::size_
                 break;
             case CameraMembershipKind::monster:
                 if (!SetMonsterMembershipProfile(index, source.membershipKeyA)) return false;
+                if (source.battleMonsterId != 0xffff
+                    && !SetMonsterPresentationMetadata(index, source.battleMonsterId)) return false;
                 break;
             case CameraMembershipKind::special:
                 if (!SetSpecialActorMembershipProfile(index, source.membershipKeyA)) return false;
