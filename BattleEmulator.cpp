@@ -1304,7 +1304,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             baseDamage = 0;
             resetCombo(NowState);
             break;
-        case THUNDER_THRUST:
+        case THUNDER_THRUST: {
             players[attacker].mp -= 8;
             (*position) += 2;
             (*position)++; //不明 0x021ec6f8
@@ -1317,15 +1317,14 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position)++; //0x02157f58 ニセ回避
             FUN_0207564c(position, players[attacker].atk, players[defender].def);
             const int thunderSelectorRoll = lcg::getPercent(position, 2); // lr: 0x021d9f48
-            if (!kaihi) {
-                if (thunderSelectorRoll == 0) {
-                    tmp = OffensivePower * lcg::floatRand(position, 0.95, 1.05);
-                    // Selector 45 returns the battle offensive stat directly; weapon-element
-                    // resistance is not applied to this direct-damage result.
-                    baseDamage = static_cast<int>(tmp);
-                } else {
-                    kaihi = true;
-                }
+            const bool thunderSelectorSucceeded = thunderSelectorRoll == 0;
+            if (thunderSelectorSucceeded) {
+                tmp = OffensivePower * lcg::floatRand(position, 0.95, 1.05);
+                // Selector 45's success-side float RNG is consumed even when the hit was
+                // already blocked. Weapon-element resistance is not applied to this direct result.
+                baseDamage = static_cast<int>(tmp);
+            } else {
+                kaihi = true;
             }
 
             if (kaihi) {
@@ -1335,11 +1334,15 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     ProcessRage(position, baseDamage, players, defender);
                     (*position)++; // damageによる状態回復, max: 100, lr: 0x02158ac4
                     (*position)++; // action後状態判定, max: 100, lr: 0x021e54fc
-
-                    for (int rageActor = 1; rageActor < 4; ++rageActor) {
-                        (*position)++; // rage判定, max: 100, lr: 0x021eb8c8
-                        (void)lcg::intRangeRand(position, 2, 4); // max: 3, lr: 0x021eb8f0
-                    }
+                }
+            }
+            if (thunderSelectorSucceeded) {
+                // Selector success performs these three actor checks even when Block/Evade
+                // forced the final damage to zero. Measured Block+success seed 0x43 consumes
+                // exactly these six RNG calls while skipping 0x02158ac4/0x021e54fc.
+                for (int rageActor = 1; rageActor < 4; ++rageActor) {
+                    (*position)++; // rage判定, max: 100, lr: 0x021eb8c8
+                    (void)lcg::intRangeRand(position, 2, 4); // max: 3, lr: 0x021eb8f0
                 }
             }
             if (!players[attacker].specialCharge && lcg::getPercent(position, 100) < 1) {
@@ -1348,7 +1351,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             }
             resetCombo(NowState);
             break;
-        case BattleEmulator::ZAKI:
+        }
+        case BattleEmulator::ZAKI: {
             players[attacker].mp -= 5;
             (*position)++; // RandIntRange(3,4), lr: 0x0216139c
             (*position)++; // RandIntRange(6,8), lr: 0x021613b0
@@ -1358,8 +1362,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             }
             (*position)++; // critical RandInt(10000), threshold 100, lr: 0x02158584
 
-            if (TargetDeathResistancePercent(defender) > 0
-                && lcg::getPercent(position, 100) < 30) { // lr: 0x02157f58
+            const int zakiDeathResistance = TargetDeathResistancePercent(defender);
+            const int zakiDeathRoll = lcg::getPercent(position, 100); // lr: 0x02157f58; Death 0でも消費
+            if (zakiDeathResistance > 0 && zakiDeathRoll < 30) {
                 // 成功時だけgeneric physical baseを通す。内部damage値であり、
                 // 武器Lightning倍率は掛からない。
                 baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
@@ -1373,16 +1378,21 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             }
             resetCombo(NowState);
             break;
-        case BattleEmulator::ZARAKI:
+        }
+        case BattleEmulator::ZARAKI: {
             players[attacker].mp -= 10;
             (*position)++; // RandIntRange(3,4), lr: 0x0216139c
             (*position)++; // RandIntRange(6,8), lr: 0x021613b0
             (*position)++; // critical RandInt(10000), threshold 100, lr: 0x02158584
             (*position)++; // max:100, lr: 0x021ec6f8
+            if (targetWasGuardRedirect) {
+                (*position)++; // planned 03A1 target redirect, max:1, lr: 0x021ea6bc
+            }
 
             // Base status value 57 with Death 050 becomes round(28.5)=29.
-            if (TargetDeathResistancePercent(defender) > 0
-                && lcg::getPercent(position, 100) < 29) { // lr: 0x02157f58
+            const int zarakiDeathResistance = TargetDeathResistancePercent(defender);
+            const int zarakiDeathRoll = lcg::getPercent(position, 100); // lr: 0x02157f58; Death 0でも消費
+            if (zarakiDeathResistance > 0 && zarakiDeathRoll < 29) {
                 baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
                 (*position)++; // max:100, lr: 0x021e54fc
                 (*position)++; // max:100, lr: 0x021edaf4
@@ -1393,6 +1403,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             }
             resetCombo(NowState);
             break;
+        }
         case RESTORE_MP:
             (*position) += 2;
             (*position)++; //不明　0x021ec6f8
