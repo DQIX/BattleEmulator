@@ -9,6 +9,7 @@
 #include "camera.h"
 #include "BattleEmulator.h"
 #include "lcg.h"
+#include "camera/dq9_action_mapper.hpp"
 #include "camera/freecam_action_mapper.hpp"
 
 namespace {
@@ -61,7 +62,7 @@ inline void AssertCameraMapping(const int action) noexcept {
     const int32_t* actions,
     const BattleActorRef* actors,
     const BattleActorRef* targets,
-    const dq9::freecam::bindings::ActionBinding& currentBinding,
+    const dq9::freecam::actions::ActionMetadata& currentAction,
     const std::uint16_t currentActorId,
     const std::uint16_t currentTargetId
 ) noexcept {
@@ -86,7 +87,7 @@ inline void AssertCameraMapping(const int action) noexcept {
                     actorId,
                     currentTargetId,
                     std::span<const std::uint16_t>(currentActionActorIds.data(), currentActionActorIds.size()),
-                    currentBinding.attackFormationMode)) return false;
+                    currentAction.attackFormationMode)) return false;
             continue;
         }
 
@@ -108,7 +109,7 @@ inline void AssertCameraMapping(const int action) noexcept {
                 actorId,
                 resolvedTargetId,
                 std::span<const std::uint16_t>(currentActionActorIds.data(), currentActionActorIds.size()),
-                currentBinding.attackFormationMode)) return false;
+                currentAction.attackFormationMode)) return false;
     }
     return PlanCurrentActionRoutes(actionIndex);
 }
@@ -192,12 +193,15 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
         const int32_t after = actions[i];
         if (after < 0) break;
 
+        const auto* actionMetadata = dq9::freecam::actions::Find(after);
         const auto* binding = dq9::freecam::bindings::Find(after);
+        const bool hasActionMetadata = actionMetadata != nullptr && actionMetadata->mapped();
         TriggerDecision runtimeDecision{};
         bool hasRuntimeDecision = false;
+        bool hasPresentationSetup = false;
         std::uint16_t runtimeActorId = kInvalidBattleActor;
         std::uint16_t runtimeTargetId = kInvalidBattleActor;
-        if (runtimeReady && binding != nullptr && binding->mapped()
+        if (runtimeReady && hasActionMetadata
             && actors[i].valid() && targets[i].valid()) {
             runtimeActorId = Dq9ActorId(actors[i]);
             runtimeTargetId = Dq9ActorId(targets[i]);
@@ -207,18 +211,21 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                     actions,
                     actors,
                     targets,
-                    *binding,
+                    *actionMetadata,
                     runtimeActorId,
                     runtimeTargetId)) {
-                const std::size_t targetSlot = FindPresentationActorIndex(runtimeTargetId);
-                runtimeDecision = binding->decide({
-                    .actorId = runtimeActorId,
-                    .targetId = runtimeTargetId,
-                    .turnActionIndex = static_cast<std::uint16_t>(i),
-                    .currentActorId = runtimeActorId,
-                    .targetPresentationSlot = targetSlot < 0xff ? static_cast<std::uint8_t>(targetSlot) : std::uint8_t{0xff},
-                });
-                hasRuntimeDecision = true;
+                hasPresentationSetup = true;
+                if (binding != nullptr && binding->mapped()) {
+                    const std::size_t targetSlot = FindPresentationActorIndex(runtimeTargetId);
+                    runtimeDecision = binding->decide({
+                        .actorId = runtimeActorId,
+                        .targetId = runtimeTargetId,
+                        .turnActionIndex = static_cast<std::uint16_t>(i),
+                        .currentActorId = runtimeActorId,
+                        .targetPresentationSlot = targetSlot < 0xff ? static_cast<std::uint8_t>(targetSlot) : std::uint8_t{0xff},
+                    });
+                    hasRuntimeDecision = true;
+                }
             }
         }
 
@@ -300,11 +307,20 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                 AssertCameraMapping(after);
                 onFreeCameraMove(position, after, runtimeDecision.param5 ? 1 : 0, NowState);
             }
-            if (binding != nullptr) {
-                (void)binding->commit(i, actionCount, runtimeActorId, runtimeTargetId);
+            if (hasPresentationSetup && actionMetadata != nullptr) {
+                (void)CommitActionProgressRaw(
+                    i,
+                    actionCount,
+                    after,
+                    actionMetadata->dq9ActionId,
+                    runtimeActorId,
+                    runtimeTargetId
+                );
             }
             (void)CompleteActionPresentation(runtimeActorId, i);
-            (void)ApplyKnownRosterField4PostActionCompatibility(binding->presentationType);
+            if (actionMetadata != nullptr) {
+                (void)ApplyKnownRosterField4PostActionCompatibility(actionMetadata->presentationType);
+            }
             if (after != BattleEmulator::ATTACK_ALLY) preemptive = false;
 #if defined(gerunikku)
             finalizeDebugEvent();
@@ -323,10 +339,17 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
         if (after != BattleEmulator::ATTACK_ALLY) {//味方の攻撃→上空だとフリーカメラが特異点の挙動する
             preemptive = false;
         }
-        if (hasRuntimeDecision && binding != nullptr) {
-            (void)binding->commit(i, actionCount, runtimeActorId, runtimeTargetId);
+        if (hasPresentationSetup && actionMetadata != nullptr) {
+            (void)CommitActionProgressRaw(
+                i,
+                actionCount,
+                after,
+                actionMetadata->dq9ActionId,
+                runtimeActorId,
+                runtimeTargetId
+            );
             (void)CompleteActionPresentation(runtimeActorId, i);
-            (void)ApplyKnownRosterField4PostActionCompatibility(binding->presentationType);
+            (void)ApplyKnownRosterField4PostActionCompatibility(actionMetadata->presentationType);
         }
 #if defined(gerunikku)
         finalizeDebugEvent();

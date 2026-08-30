@@ -10,6 +10,9 @@
 - BattleEmulator player slotから `0xC0 + index` をcamera.cppで生成しない。camera境界では `BattleActorRef` を受け、`Dq9ActorId()`を使用する。
 - `actor==0 ? ally : enemy` のようにBattleEmulator固有slot意味をcamera側へ漏らさない。
 - generated ROM metadataはcompile-timeで使う。hot loopでROM/巨大binを開かない。既知actionのcommon-ID→DQ9-IDは`freecam_action_mapper.hpp`のcompile-time bindingを使い、線形探索tableを作らない。
+- `freecam_action_mapper.hpp`は**free-camera trigger pipelineへ入り得るaction専用**。presentation stateを再現したい、future actorのtargetを知りたい、内部action IDを保持したい、という理由で非freecam actionを登録してはいけない。`Bind<>`はROM mining済みBACT / actor membership / fallback membershipの全てが空ならcompile-time errorにする。
+- DQ9 action ID・target分類・`operation_type`等は`camera/dq9-action-target-classification.csv`が既存のデータマイニング台帳。`build_freecam_fast_generated.mjs`がtarget side/scope、repeat mode、operation type、resource cost、target-handler judgment等を1024-entry constexpr tableとして`freecam_fast_generated.hpp`へ焼く。mapperの第一template引数をseed sweepで再発見しない。CSVで既に解決済みのIDを再調査するのは車輪の再開発。
+- freecam mapperのbuild gateも生成時に前計算する。`build_freecam_fast_generated.mjs`がBACT + 617 actor membership + fallback membershipを全1024 actionについて一度だけ集約して`kHasAnyMinedFreeCameraTriggerSource`を生成し、C++ `Bind<>`はそのO(1) constexpr値で静的triggerless actionを拒否する。巨大membership表をbindingごとにconsteval総走査しない。
 - 画像が必要なら `C:\Users\owner\Documents\desmume_webassembly_harness\harness\screenshots` をisolationへ追加して画像ツールで読む。許可root外だったことを理由にUI確認を諦めない。
 ## 主要ソース
 - `camera.cpp`, `camera.h`: BattleEmulatorとのadapterと既存RNG消費。
@@ -30,7 +33,7 @@
 - `record+0x04 & 0xFFF`: DQ9 action ID。
 - `(u32(record+0x18) >> 5) & 0x7F`: presentation type。0x0Cならfallback lookup actionは0x0158、それ以外は自身。
 - `(u32(record+0x18) >> 12) & 0xF`: **attackFormationMode raw nibble**。target scopeやCSV分類から推測しない。
-`build_freecam_action_metadata.mjs`はFCMA v2として、1024件のfallback lookup u16と1024件のformation mode u8を出力する。現在の確認値:
+`build_freecam_action_metadata.mjs`は現在FCMA v3として、1024件のfallback lookup u16、1024件のformation mode u8、1024件のpresentation type u8を出力する。presentation typeはaction名・武器種・target scopeから推測せず、必ずROM recordから採掘する。現在の確認値:
 - DQ9 0x001 通常攻撃: formationMode 0。
 - DQ9 0x018 ザキ: formationMode 2。
 - DQ9 0x019 ザラキ: formationMode 2。
@@ -41,6 +44,53 @@
 生成例:
 `node build_freecam_action_metadata.mjs "C:\Users\owner\Documents\tunnelworkspace\dq9_new2.nds"`
 出力を `BattleEmulator/camera/freecam-action-metadata.bin` へ直接生成し、その後 `BattleEmulator/camera/build_freecam_fast_generated.mjs` を実行して `freecam_fast_generated.hpp` を再生成する。中間binを手で編集しない。
+
+## Roster row+4 compatibility / compiler-stack state
+`overlay_d_25:021E1958`が作る12-byte roster rowは`+0 actorId / +1 presentationClass / +8 actor pointer`だけを書き、`+4`は初期化しない。`021E08BC`はこの`+4`についてraw 32-bit値ではなく`==0 / !=0`だけを利用する。
+
+重要: これは最後まで単なるgarbageではない。setup入口値は以前のpresentation/action pathが残したcompiler-stack residueだが、setup中は`021E2904`がconflict actorのrowへ明示的に`+4 = 1`を書く。live overlayで`021E29AC MOV R0,#1`→`021E29B0 STR R0,[R1,#4]`を確認済み。したがって実装は「post-action initial residue state」と「setup中のmutable work state」を分けず、同じzero/nonzero compatibility stateとして逐次更新する。
+
+seed8で12 physical slotを直接実測した既知post-action shape:
+- presentation type 1（Bagima/Meramiで一致）: nonzero `{0,1,2,5,6,7,8,9}`、zero `{3,4,10,11}`。
+- presentation type 17（Zaki後）: nonzero `{0,1,4,5,6,7,8,9}`、zero `{2,3,10,11}`。
+
+これらをactor ID、monster ID、action順の意味論へ置換しない。未知presentation typeのshapeは推測せず、C++総当たりで候補seed/actionを発見し、DeSmuME実測で12-slot shapeを採取してからproductionへ追加する。
+
+### 未知pathの総当たり手順
+未知compatibility producerを1 actionずつ人手で探し続けない。BattleEmulator側へ探索専用C++ modeを持たせ、ROM固定metadataを全actionについて列挙し、seed rangeを高速走査する。
+
+探索modeの役割は次の通り。
+1. ROM mining済み`presentationType / formationMode / selector projection / membership`を使い、指定条件に一致するaction/seed候補を大量列挙する。
+2. 同じpresentation typeだけでなく、異なるtype・selector・route branchを含む代表候補を返す。
+3. 候補をDeSmuME harnessへ投入し、実ROMのaction order、presentation type、12-slot row+4 mask、freecam有無、RNG positionを実測する。
+4. 同じpresentation typeで複数action/seedが同一shapeになることを確認してから、そのtypeをproduction compatibility tableへ昇格する。
+5. type内でshapeが分岐するならpresentation type単独分類を捨て、ROM/実測で判明した追加固定metadataまたはbranch条件を採掘する。action IDやseed番号で分岐してはいけない。
+
+総当たり結果そのものをproductionデータとして信用しない。C++探索は候補発見器であり、productionへ入れてよいデータ源はROM miningまたはDeSmuME実測だけである。
+
+実装済み探索CLI:
+`gerunikku --scan-action-seeds <startSeed> <count> [turns] [perAction] [heroAction] [heroTarget] [wantedPresentationType] [currentSeedPosition]`
+
+2026-08-30の20,000-seed sweep（hero=Zaki、target=C0）では、既存BattleEmulator AIが実際に生成できる全主要enemy actionについて代表seedを自動収集できた。未mapped actionの最初の観測候補:
+- common 187 Bagima(strong): seed `0x1`。
+- common 185 Eerie Light: seed `0x2`。
+- common 31 Magic Mirror: seed `0x2`。
+- common 181 Helm Splitter: seed `0x2`。
+- common 186 Medapani: seed `0x5`。
+- common 173 Kabuff: seed `0x6`。
+- common 21 inactive/skip系: seed `0x6`。
+- common 182 Double-edged Slash: seed `0x15`。
+
+この一覧はmappingではなく**実ROM測定候補**。各common actionのDQ9 action ID / presentation type / 12-slot maskをseed固定ROM probeで採取して初めてproductionへ昇格する。
+
+昇格済みの実例:
+- common 187 `GERUNIKKU_BAGIMA_STRONG`: C++ sweep seed `0x1`を実ROMへ投入するとaction recordはDQ9 `463`。そのaction後の次setup入口12-slotはtype1既知shape `{0,1,2,5,6,7,8,9}=nonzero`と完全一致した。さらに`build_freecam_action_metadata.mjs ROM 463`でROM固定値`presentationType=1 / attackFormationMode=2 / fallbackLookupActionId=463`を確認。よって`Bind<463,...>`へproduction昇格済み。
+- `build_freecam_action_metadata.mjs`は任意action IDを追加引数で受け、既存ROM parsing経路からそのIDのmetadataを出力できる。未知mapping確認のために別extractor/tableを作らない。
+- seed `0x2`ではC++候補列の先頭2 enemy actionが実ROMと一致したため、common185 Eerie Light→DQ9 `155`、common31 Magic Mirror→DQ9 `55`をaction recordで確定。ROM miningで155=`presentationType 22 / formation1`、55=`presentationType 31 / formation2`。mapperへ昇格済み。ただしtype22/type31のpost-action 12-slot residueは未実測なのでcompatibility producer tableにはまだ入れない。
+- common21は`INACTIVE_ENEMY`。200k sweepの`bestRecord=0 / bestSeed=0x1b2`をfresh ROMへ投入すると先頭enemy actionはDQ9 `503 (0x01F7)`。以前眠り/麻痺skipで観測した内部503と一致し、ROM miningも`presentationType=0 / formationMode=0 / fallback=503`。`INACTIVE_ENEMY -> Bind<503>`へproduction昇格済み。type0のfull 12-slot post-action residueはまだ未確定なのでproducer tableには追加しない。
+- common186 `GERUNIKKU_MEDAPANI`: `bestRecord=0 / bestSeed=0x55`で先頭enemy action=DQ9 `912 (0x390)`をfresh ROMで確認。ROM miningは`presentationType=21 / formationMode=2 / fallback=912`。`GERUNIKKU_MEDAPANI -> Bind<912>`へ昇格済み。type21 residueは未実測。
+- common21は`INACTIVE_ENEMY`。200k sweepの`bestRecord=0 / bestSeed=0x1b2`を実ROMへ投入すると先頭enemy actionはDQ9 `503 (0x01F7)`。これは以前眠り/麻痺skipで観測した内部503と一致し、ROM miningも`presentationType=0 / formationMode=0 / fallback=503`。`INACTIVE_ENEMY -> Bind<503>`へproduction昇格済み。type0のfull 12-slot post-action residueはまだ未確定なのでproducer tableには追加しない。
+- 同じseedの3番目以降はC++とROM action列が分岐した。したがってseed候補の品質は「対象actionが何record目に現れるか」を重視する。`--scan-action-seeds`は各common actionについて最小`bestRecord`と`bestSeed`を集計し、最も短いprefixで実ROM検証できる候補を返す。
 ## managed actor ID
 DQ9 managed battle actor ID:
 - ally index i → 0x00+i。
@@ -118,6 +168,22 @@ ZAKI route `[59,50]` の終点50を次turn startとして単純採用しては�
 10. action progressをcommit。
 11. action routeとfallback routeをpresentation stateへcommitして次action/次turnへ引き継ぐ。
 全actionを一度にruntimeへ置換せず、既存手動Ruleで検証済みのactionは回帰試験しながら接続する。ZAKIはroute suppressionが必須なのでruntime判定を優先する。
+
+`021E08BC`のcurrent/future suffix loopについてlive overlayで確認済みの規則:
+- current action indexからturn末尾まで走査する。
+- actorはsuffix内の最初のactionで一度だけ処理し、movement eligibilityより前にvisited扱いになる。
+- current actorはcurrent targetを使う。
+- future actorでrow+4 nonzeroなら`021E2664` fallback。
+- future actorでrow+4 zeroならそのfuture action recordから`021E2818`でtargetを解決する。
+- future actorのgoal計算`021E1FD8`へ渡すattack/action contextはfuture actionではなく**current action record**。したがってformation modeもcurrent actionのROM値を共有する。
+
+## Selector/UI拡張のXY問題を避ける
+技固有selectorを実ROMで観測するためにセーブデータやbattle MCPを拡張してよいが、UI操作支援をBattleEmulator本体実装へ混ぜない。
+- `lv99.dst`は観測fixtureであり、そこで覚えている技を網羅的にBattleEmulatorへ実装しない。
+- battle MCPの1人→最大4人対応は、必要な観測を成立させる最小の一般化なら行ってよい。
+- `さくせん > そうびがえ > ... > 武器選択`も、対象技を実測するために必要になった場合だけharness側へ一般操作として追加する。
+- 「技が要求する武器種を返すAPI」を先に作らない。ROM selector解明に本当に必要と判明してから、既存ROM dataから採掘する。
+- セレクタ調査の目的はcamera/RNG branchの解決であり、技カタログや装備システムの再実装ではない。
 ## 追尾camera
 `free_camera_with_tracking_fallback`は以前のAIが実機検証した既存挙動を保護する。freecam不成立時に追尾が発生する可能性があるからといって、全actionをtrackingへ変更しない。逆に「freecamがなかったから常にtracking」とも決めない。actionごとに実機で検証する。
 候補0のactionでは重いcamera処理を通さない設計を維持する。ROM bin/compile-time metadataでBACT/membership候補0をcheapに判定し、既知switch/ifをhot pathで使ってよい。

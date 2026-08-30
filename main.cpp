@@ -2,6 +2,7 @@
 #include <cstring>
 #include <cmath>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <fstream>
 #include <vector>
@@ -9,6 +10,7 @@
 #include "lcg.h"
 #include "BattleEmulator.h"
 #include "camera.h"
+#include "camera/freecam_action_mapper.hpp"
 #include "debug.h"
 #include "ActionOptimizer.h"
 #include "EnhancedCostCalculator.h"
@@ -1019,6 +1021,120 @@ int main(int argc, char* argv[]){
 		          << " firstConsumedPosition=" << (currentSeedPosition + 1);
 		for (std::size_t i = 0; i < categoryCounts.size(); ++i) std::cout << " c" << i << '=' << categoryCounts[i];
 		std::cout << '\n';
+		return 0;
+	}
+
+	if (argc >= 4 && std::string_view(argv[1]) == "--scan-action-seeds") {
+		const uint64_t startSeed = std::stoull(argv[2], nullptr, 0);
+		const uint64_t count = std::stoull(argv[3], nullptr, 0);
+		const int searchTurns = argc >= 5 ? std::stoi(argv[4], nullptr, 0) : 1;
+		const int perAction = argc >= 6 ? std::stoi(argv[5], nullptr, 0) : 4;
+		const int heroAction = argc >= 7 ? std::stoi(argv[6], nullptr, 0) : BattleEmulator::DEFENCE;
+		const int heroTarget = argc >= 8 ? std::stoi(argv[7], nullptr, 0) : -1;
+		const int wantedPresentationType = argc >= 9 ? std::stoi(argv[8], nullptr, 0) : -1;
+		const int currentSeedPosition = argc >= 10 ? std::stoi(argv[9], nullptr, 0) : 0;
+		const int wantedCommonAction = argc >= 11 ? std::stoi(argv[10], nullptr, 0) : -1;
+		const int maxRecord = argc >= 12 ? std::stoi(argv[11], nullptr, 0) : std::numeric_limits<int>::max();
+		if (searchTurns < 1 || searchTurns > 349) throw std::invalid_argument("scan-action-seeds turns must be 1..349");
+		if (perAction < 1) throw std::invalid_argument("scan-action-seeds perAction must be >= 1");
+
+		using dq9::freecam::bindings::Find;
+		using namespace dq9::freecam::fast;
+		if (wantedPresentationType >= 0) {
+			std::cout << "ROM_PRESENTATION_TYPE type=" << wantedPresentationType << '\n';
+			for (std::uint16_t actionId = 0; actionId < metadata::kActionCount; ++actionId) {
+				if (metadata::PresentationType(actionId) != wantedPresentationType) continue;
+				std::cout << "ROM_ACTION dq9=" << actionId
+				          << " formation=" << static_cast<unsigned>(metadata::AttackFormationMode(actionId))
+				          << " selector=0x" << std::hex << metadata::SelectorProjection(actionId) << std::dec
+				          << " fallback=" << metadata::FallbackLookupActionId(actionId)
+				          << " bact=" << metadata::HasBact(actionId) << '\n';
+			}
+		}
+
+		constexpr std::size_t kCommonActionCapacity = BattleEmulator::CURE_CONFUSION + 1;
+		std::array<std::uint64_t, kCommonActionCapacity> occurrenceCounts{};
+		std::array<int, kCommonActionCapacity> emittedCounts{};
+		std::array<int, kCommonActionCapacity> bestRecord{};
+		std::array<std::uint64_t, kCommonActionCapacity> bestSeed{};
+		bestRecord.fill(std::numeric_limits<int>::max());
+		int32_t searchGene[350] = {};
+		makeDebugGene(searchGene, searchTurns, heroAction);
+
+		for (uint64_t offset = 0; offset < count; ++offset) {
+			const uint64_t seed = startSeed + offset;
+			if (seed == 0) continue;
+			Player searchPlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
+			BattleResult searchResult;
+			int searchPosition = currentSeedPosition + 1;
+			uint64_t searchState = 0;
+			lcg::init(seed);
+			BattleEmulator::Main(&searchPosition, searchTurns, searchGene, searchPlayers, &searchResult,
+			                     seed, nullptr, nullptr, -1, &searchState, heroTarget);
+
+			for (int record = 0; record < searchResult.position; ++record) {
+				if (!searchResult.isEnemy[record]) continue;
+				const int commonAction = searchResult.actions[record];
+				if (commonAction < 0 || commonAction >= static_cast<int>(kCommonActionCapacity)) continue;
+				if (wantedCommonAction >= 0 && commonAction != wantedCommonAction) continue;
+				if (record > maxRecord) continue;
+				const auto* binding = Find(commonAction);
+				const bool mapped = binding != nullptr && binding->mapped();
+				if (wantedPresentationType >= 0
+				    && (!mapped || binding->presentationType != wantedPresentationType)) continue;
+				++occurrenceCounts[static_cast<std::size_t>(commonAction)];
+				if (record < bestRecord[static_cast<std::size_t>(commonAction)]) {
+					bestRecord[static_cast<std::size_t>(commonAction)] = record;
+					bestSeed[static_cast<std::size_t>(commonAction)] = seed;
+				}
+				if (emittedCounts[static_cast<std::size_t>(commonAction)] >= perAction) continue;
+				++emittedCounts[static_cast<std::size_t>(commonAction)];
+				std::cout << "ACTION_SEED common=" << commonAction
+				          << " name=\"" << BattleEmulator::getActionName(commonAction) << "\""
+				          << " seed=0x" << std::hex << seed << std::dec
+				          << " turn=" << searchResult.turns[record]
+				          << " record=" << record
+				          << " finalPosition=" << searchPosition;
+				if (mapped) {
+					std::cout << " dq9=" << binding->dq9ActionId
+					          << " type=" << static_cast<unsigned>(binding->presentationType)
+					          << " formation=" << static_cast<unsigned>(binding->attackFormationMode)
+					          << " selector=0x" << std::hex
+					          << metadata::SelectorProjection(binding->dq9ActionId) << std::dec;
+				} else {
+					std::cout << " dq9=unmapped type=unknown";
+				}
+				std::cout << '\n';
+			}
+		}
+
+		std::cout << "ACTION_SEED_SCAN_DONE startSeed=0x" << std::hex << startSeed << std::dec
+		          << " seeds=" << count
+		          << " turns=" << searchTurns
+		          << " heroAction=" << heroAction
+		          << " heroTarget=" << heroTarget
+		          << " wantedType=" << wantedPresentationType
+		          << " wantedCommon=" << wantedCommonAction
+		          << " maxRecord=" << maxRecord
+		          << " currentSeedPosition=" << currentSeedPosition << '\n';
+		for (std::size_t commonAction = 0; commonAction < occurrenceCounts.size(); ++commonAction) {
+			if (occurrenceCounts[commonAction] == 0) continue;
+			const auto* binding = Find(static_cast<int>(commonAction));
+			const bool mapped = binding != nullptr && binding->mapped();
+			std::cout << "ACTION_SUMMARY common=" << commonAction
+			          << " name=\"" << BattleEmulator::getActionName(static_cast<int>(commonAction)) << "\""
+			          << " occurrences=" << occurrenceCounts[commonAction]
+			          << " emitted=" << emittedCounts[commonAction]
+			          << " bestRecord=" << bestRecord[commonAction]
+			          << " bestSeed=0x" << std::hex << bestSeed[commonAction] << std::dec;
+			if (mapped) {
+				std::cout << " dq9=" << binding->dq9ActionId
+				          << " type=" << static_cast<unsigned>(binding->presentationType);
+			} else {
+				std::cout << " dq9=unmapped type=unknown";
+			}
+			std::cout << '\n';
+		}
 		return 0;
 	}
 

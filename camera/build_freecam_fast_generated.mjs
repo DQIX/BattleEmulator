@@ -1,8 +1,10 @@
 // Generate the unmanaged compile-time data used by freecam_fast_runtime.hpp.
-// Verified metadata binaries are copied byte-for-byte. Target classification is
-// copied from dq9-action-target-classification.csv into fixed 1024-entry byte
-// tables. No BattleEmulator common-ID mapping or free-camera decision logic
-// lives in this generator.
+// Verified metadata binaries are copied byte-for-byte. Already-mined fixed
+// action data from dq9-action-target-classification.csv is copied into fixed
+// 1024-entry constexpr tables. The expensive "does any ROM-mined free-camera
+// trigger source exist for this DQ9 action?" reduction is also performed here,
+// once, from BACT + all actor memberships + fallback memberships.
+// No BattleEmulator common-ID mapping lives in this generator.
 //
 // Usage:
 //   node build_freecam_fast_generated.mjs
@@ -28,18 +30,32 @@ function formatBytes(bytes) {
   return lines.join(",\n");
 }
 
-function parseTargetClassification(csv) {
+function parseActionClassification(csv) {
   const lines = csv.trimEnd().split(/\r?\n/);
   const header = lines[0].split(",");
   const actionIndex = header.indexOf("action_id_decimal");
   const sideIndex = header.indexOf("target_side_code");
   const scopeIndex = header.indexOf("target_scope_code");
-  if (actionIndex < 0 || sideIndex < 0 || scopeIndex < 0) {
+  const repeatModeIndex = header.indexOf("repeat_mode_code");
+  const operationTypeIndex = header.indexOf("operation_type");
+  const resourceCostIndex = header.indexOf("resource_cost");
+  const judgment1Index = header.indexOf("target_handler_judgment1");
+  const judgment2Index = header.indexOf("target_handler_judgment2");
+  if ([
+    actionIndex, sideIndex, scopeIndex, repeatModeIndex, operationTypeIndex,
+    resourceCostIndex, judgment1Index, judgment2Index,
+  ].some((index) => index < 0)) {
     throw new Error("dq9-action-target-classification.csv is missing required columns");
   }
 
+  const present = new Uint8Array(actionCount);
   const targetSide = new Uint8Array(actionCount);
   const targetScope = new Uint8Array(actionCount);
+  const repeatMode = new Uint8Array(actionCount);
+  const operationType = new Uint8Array(actionCount);
+  const resourceCost = new Uint8Array(actionCount);
+  const targetHandlerJudgment1 = new Uint16Array(actionCount);
+  const targetHandlerJudgment2 = new Uint16Array(actionCount);
   let mappedRows = 0;
 
   for (let lineIndex = 1; lineIndex < lines.length; ++lineIndex) {
@@ -48,6 +64,11 @@ function parseTargetClassification(csv) {
     const actionId = Number(fields[actionIndex]);
     const side = Number(fields[sideIndex]);
     const scope = Number(fields[scopeIndex]);
+    const repeat = Number(fields[repeatModeIndex]);
+    const operation = Number(fields[operationTypeIndex]);
+    const cost = Number(fields[resourceCostIndex]);
+    const judgment1 = Number(fields[judgment1Index]);
+    const judgment2 = Number(fields[judgment2Index]);
     if (!Number.isInteger(actionId) || actionId < 0 || actionId >= actionCount) {
       throw new Error(`invalid action_id_decimal at CSV line ${lineIndex + 1}`);
     }
@@ -57,12 +78,116 @@ function parseTargetClassification(csv) {
     if (!Number.isInteger(scope) || scope < 0 || scope > 255) {
       throw new Error(`invalid target_scope_code at CSV line ${lineIndex + 1}`);
     }
+    for (const [name, value, max] of [
+      ["repeat_mode_code", repeat, 255],
+      ["operation_type", operation, 255],
+      ["resource_cost", cost, 255],
+      ["target_handler_judgment1", judgment1, 0xffff],
+      ["target_handler_judgment2", judgment2, 0xffff],
+    ]) {
+      if (!Number.isInteger(value) || value < 0 || value > max) {
+        throw new Error(`invalid ${name} at CSV line ${lineIndex + 1}`);
+      }
+    }
+    present[actionId] = 1;
     targetSide[actionId] = side;
     targetScope[actionId] = scope;
+    repeatMode[actionId] = repeat;
+    operationType[actionId] = operation;
+    resourceCost[actionId] = cost;
+    targetHandlerJudgment1[actionId] = judgment1;
+    targetHandlerJudgment2[actionId] = judgment2;
     ++mappedRows;
   }
 
-  return { targetSide, targetScope, mappedRows };
+  return {
+    present,
+    targetSide,
+    targetScope,
+    repeatMode,
+    operationType,
+    resourceCost,
+    targetHandlerJudgment1,
+    targetHandlerJudgment2,
+    mappedRows,
+  };
+}
+
+function parseSimpleCsv(csv) {
+  const lines = csv.trimEnd().split(/\r?\n/);
+  const header = lines[0].split(",");
+  return lines.slice(1).filter(Boolean).map((line) => {
+    const fields = line.split(",");
+    return Object.fromEntries(header.map((name, index) => [name, fields[index] ?? ""]));
+  });
+}
+
+function parseFreeCameraBehavior(csv) {
+  const behavior = new Uint8Array(actionCount);
+  let rows = 0;
+  for (const row of parseSimpleCsv(csv)) {
+    const actionId = Number(row.action_id_decimal);
+    if (!Number.isInteger(actionId) || actionId < 0 || actionId >= actionCount) {
+      throw new Error("freecam-action-trigger-table.csv contains invalid action_id_decimal");
+    }
+    let code = 0;
+    switch (row.camera_cpp_behavior) {
+      case "free_camera_candidate": code = 1; break;
+      case "tracking_camera_one_rng": code = 2; break;
+      case "no_free_camera_control": code = 3; break;
+      case "state_dependent": code = 4; break;
+      default: code = 0; break;
+    }
+    behavior[actionId] = code;
+    ++rows;
+  }
+  return { behavior, rows };
+}
+
+function formatU16(values) {
+  const lines = [];
+  const perLine = 24;
+  for (let offset = 0; offset < values.length; offset += perLine) {
+    lines.push(`    ${[...values.subarray(offset, offset + perLine)].join(", ")}`);
+  }
+  return lines.join(",\n");
+}
+
+function buildHasAnyMinedFreeCameraTriggerSource(cameraMetadata, actionMetadata, membershipMetadata) {
+  const result = new Uint8Array(actionCount);
+  const actorProfileCount = membershipMetadata.readUInt32LE(12);
+  const headerSize = 32;
+  const actorCellsBytes = actorProfileCount * actionCount * 8;
+  const fallbackCellsOffset = headerSize + actorCellsBytes;
+
+  const hasBact = (actionId) =>
+    ((cameraMetadata[16 + (actionId >> 3)] >> (actionId & 7)) & 1) !== 0;
+  const fallbackLookupActionId = (actionId) =>
+    actionMetadata.readUInt16LE(20 + actionId * 2);
+  const membershipPresentAt = (offset) => membershipMetadata.readUInt16LE(offset + 4) !== 0;
+
+  for (let actionId = 0; actionId < actionCount; ++actionId) {
+    if (hasBact(actionId)) {
+      result[actionId] = 1;
+      continue;
+    }
+    let present = false;
+    for (let profile = 0; profile < actorProfileCount; ++profile) {
+      const cell = profile * actionCount + actionId;
+      if (membershipPresentAt(headerSize + cell * 8)) {
+        present = true;
+        break;
+      }
+    }
+    if (!present) {
+      const fallbackId = fallbackLookupActionId(actionId);
+      if (fallbackId !== 0xffff && fallbackId < actionCount) {
+        present = membershipPresentAt(fallbackCellsOffset + fallbackId * 8);
+      }
+    }
+    result[actionId] = present ? 1 : 0;
+  }
+  return result;
 }
 
 const chunks = [
@@ -76,8 +201,10 @@ const chunks = [
 ];
 
 const summary = {};
+const inputBytes = new Map();
 for (const [name, file] of inputs) {
   const bytes = await readFile(path.join(root, file));
+  inputBytes.set(file, bytes);
   summary[file] = bytes.length;
   chunks.push(`inline constexpr std::array<std::uint8_t, ${bytes.length}> ${name} = {`);
   chunks.push(formatBytes(bytes));
@@ -86,12 +213,65 @@ for (const [name, file] of inputs) {
 
 const targetCsvName = "dq9-action-target-classification.csv";
 const targetCsv = await readFile(path.join(root, targetCsvName), "utf8");
-const { targetSide, targetScope, mappedRows } = parseTargetClassification(targetCsv);
+const classification = parseActionClassification(targetCsv);
+const {
+  present,
+  targetSide,
+  targetScope,
+  repeatMode,
+  operationType,
+  resourceCost,
+  targetHandlerJudgment1,
+  targetHandlerJudgment2,
+  mappedRows,
+} = classification;
+const hasAnyMinedFreeCameraTriggerSource = buildHasAnyMinedFreeCameraTriggerSource(
+  inputBytes.get("freecam-camera-metadata.bin"),
+  inputBytes.get("freecam-action-metadata.bin"),
+  inputBytes.get("freecam-membership-metadata.bin"),
+);
+const triggerTablePath = path.resolve(root, "..", "..", "freecam-action-trigger-table.csv");
+const triggerTableCsv = await readFile(triggerTablePath, "utf8");
+const { behavior: cameraBehavior, rows: triggerRows } = parseFreeCameraBehavior(triggerTableCsv);
+const freeCameraMapperAllowed = new Uint8Array(actionCount);
+for (let actionId = 0; actionId < actionCount; ++actionId) {
+  const behavior = cameraBehavior[actionId];
+  const behaviorCanUseFreeCamera = behavior === 1 || behavior === 4;
+  freeCameraMapperAllowed[actionId] =
+    behaviorCanUseFreeCamera && hasAnyMinedFreeCameraTriggerSource[actionId] !== 0 ? 1 : 0;
+}
+chunks.push(`inline constexpr std::array<std::uint8_t, ${actionCount}> kActionClassificationPresent = {`);
+chunks.push(formatBytes(present));
+chunks.push("};", "");
 chunks.push(`inline constexpr std::array<std::uint8_t, ${actionCount}> kTargetSideCode = {`);
 chunks.push(formatBytes(targetSide));
 chunks.push("};", "");
 chunks.push(`inline constexpr std::array<std::uint8_t, ${actionCount}> kTargetScopeCode = {`);
 chunks.push(formatBytes(targetScope));
+chunks.push("};", "");
+chunks.push(`inline constexpr std::array<std::uint8_t, ${actionCount}> kRepeatModeCode = {`);
+chunks.push(formatBytes(repeatMode));
+chunks.push("};", "");
+chunks.push(`inline constexpr std::array<std::uint8_t, ${actionCount}> kOperationTypeCode = {`);
+chunks.push(formatBytes(operationType));
+chunks.push("};", "");
+chunks.push(`inline constexpr std::array<std::uint8_t, ${actionCount}> kResourceCost = {`);
+chunks.push(formatBytes(resourceCost));
+chunks.push("};", "");
+chunks.push(`inline constexpr std::array<std::uint16_t, ${actionCount}> kTargetHandlerJudgment1 = {`);
+chunks.push(formatU16(targetHandlerJudgment1));
+chunks.push("};", "");
+chunks.push(`inline constexpr std::array<std::uint16_t, ${actionCount}> kTargetHandlerJudgment2 = {`);
+chunks.push(formatU16(targetHandlerJudgment2));
+chunks.push("};", "");
+chunks.push(`inline constexpr std::array<std::uint8_t, ${actionCount}> kHasAnyMinedFreeCameraTriggerSource = {`);
+chunks.push(formatBytes(hasAnyMinedFreeCameraTriggerSource));
+chunks.push("};", "");
+chunks.push(`inline constexpr std::array<std::uint8_t, ${actionCount}> kCameraBehaviorCode = {`);
+chunks.push(formatBytes(cameraBehavior));
+chunks.push("};", "");
+chunks.push(`inline constexpr std::array<std::uint8_t, ${actionCount}> kFreeCameraMapperAllowed = {`);
+chunks.push(formatBytes(freeCameraMapperAllowed));
 chunks.push("};", "");
 chunks.push("} // namespace dq9::freecam::generated", "");
 
@@ -102,5 +282,8 @@ console.log(JSON.stringify({
   output: outputPath,
   sourceBytes: Buffer.byteLength(output),
   inputs: summary,
-  targetClassification: { file: targetCsvName, mappedRows, actionCount },
+  actionClassification: { file: targetCsvName, mappedRows, actionCount },
+  triggerTable: { file: triggerTablePath, rows: triggerRows },
+  minedFreeCameraTriggerCandidates: hasAnyMinedFreeCameraTriggerSource.reduce((sum, value) => sum + value, 0),
+  freeCameraMapperAllowed: freeCameraMapperAllowed.reduce((sum, value) => sum + value, 0),
 }, null, 2));

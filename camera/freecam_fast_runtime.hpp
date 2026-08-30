@@ -80,6 +80,15 @@ static_assert(kPresentationTypeOffset == kFormationModeOffset + kActionCount);
 
 static_assert(generated::kTargetSideCode.size() == kActionCount);
 static_assert(generated::kTargetScopeCode.size() == kActionCount);
+static_assert(generated::kActionClassificationPresent.size() == kActionCount);
+static_assert(generated::kRepeatModeCode.size() == kActionCount);
+static_assert(generated::kOperationTypeCode.size() == kActionCount);
+static_assert(generated::kResourceCost.size() == kActionCount);
+static_assert(generated::kTargetHandlerJudgment1.size() == kActionCount);
+static_assert(generated::kTargetHandlerJudgment2.size() == kActionCount);
+static_assert(generated::kHasAnyMinedFreeCameraTriggerSource.size() == kActionCount);
+static_assert(generated::kCameraBehaviorCode.size() == kActionCount);
+static_assert(generated::kFreeCameraMapperAllowed.size() == kActionCount);
 
 static_assert(MagicIs(generated::kMembershipMetadataBytes, 'F', 'C', 'M', 'M'));
 static_assert(ReadU32(generated::kMembershipMetadataBytes, 4) == 1);
@@ -117,13 +126,13 @@ struct ActorProfileMapEntry {
     std::uint32_t profileIndex{kInvalidProfileIndex};
 };
 
-[[nodiscard]] consteval bool HasBact(const std::uint16_t actionId) {
+[[nodiscard]] constexpr bool HasBact(const std::uint16_t actionId) {
     if (actionId >= kActionCount) return false;
     const std::size_t offset = 16 + (actionId >> 3);
     return ((generated::kCameraMetadataBytes[offset] >> (actionId & 7)) & 1U) != 0;
 }
 
-[[nodiscard]] consteval std::uint32_t SelectorProjection(const std::uint16_t actionId) {
+[[nodiscard]] constexpr std::uint32_t SelectorProjection(const std::uint16_t actionId) {
     if (actionId >= kActionCount) return 0;
     return ReadU32(
         generated::kCameraMetadataBytes,
@@ -131,7 +140,7 @@ struct ActorProfileMapEntry {
     );
 }
 
-[[nodiscard]] consteval std::uint16_t FallbackLookupActionId(const std::uint16_t actionId) {
+[[nodiscard]] constexpr std::uint16_t FallbackLookupActionId(const std::uint16_t actionId) {
     if (actionId >= kActionCount) return kInvalidActionId;
     return ReadU16(
         generated::kActionMetadataBytes,
@@ -139,14 +148,38 @@ struct ActorProfileMapEntry {
     );
 }
 
-[[nodiscard]] consteval std::uint8_t AttackFormationMode(const std::uint16_t actionId) {
+[[nodiscard]] constexpr std::uint8_t AttackFormationMode(const std::uint16_t actionId) {
     if (actionId >= kActionCount) return 0;
     return generated::kActionMetadataBytes[kFormationModeOffset + actionId];
 }
 
-[[nodiscard]] consteval std::uint8_t PresentationType(const std::uint16_t actionId) {
+[[nodiscard]] constexpr std::uint8_t PresentationType(const std::uint16_t actionId) {
     if (actionId >= kActionCount) return 0;
     return generated::kActionMetadataBytes[kPresentationTypeOffset + actionId];
+}
+
+[[nodiscard]] constexpr bool HasActionClassification(const std::uint16_t actionId) {
+    return actionId < kActionCount && generated::kActionClassificationPresent[actionId] != 0;
+}
+
+[[nodiscard]] constexpr std::uint8_t OperationType(const std::uint16_t actionId) {
+    return actionId < kActionCount ? generated::kOperationTypeCode[actionId] : 0;
+}
+
+[[nodiscard]] constexpr std::uint8_t RepeatMode(const std::uint16_t actionId) {
+    return actionId < kActionCount ? generated::kRepeatModeCode[actionId] : 0;
+}
+
+[[nodiscard]] constexpr std::uint8_t ResourceCost(const std::uint16_t actionId) {
+    return actionId < kActionCount ? generated::kResourceCost[actionId] : 0;
+}
+
+[[nodiscard]] constexpr std::uint16_t TargetHandlerJudgment1(const std::uint16_t actionId) {
+    return actionId < kActionCount ? generated::kTargetHandlerJudgment1[actionId] : 0;
+}
+
+[[nodiscard]] constexpr std::uint16_t TargetHandlerJudgment2(const std::uint16_t actionId) {
+    return actionId < kActionCount ? generated::kTargetHandlerJudgment2[actionId] : 0;
 }
 
 [[nodiscard]] constexpr std::uint8_t MonsterOccupancyExpansionDepth(
@@ -175,6 +208,23 @@ struct ActorProfileMapEntry {
         headerSize + actorCellsBytes + static_cast<std::size_t>(actionId) * 8
     );
 }
+
+template <std::uint16_t ActionId>
+[[nodiscard]] consteval bool HasAnyMinedFreeCameraTriggerSource() {
+    static_assert(ActionId < kActionCount);
+    return generated::kHasAnyMinedFreeCameraTriggerSource[ActionId] != 0;
+}
+
+template <std::uint16_t ActionId>
+[[nodiscard]] consteval bool IsFreeCameraMapperAllowed() {
+    static_assert(ActionId < kActionCount);
+    return generated::kFreeCameraMapperAllowed[ActionId] != 0;
+}
+
+static_assert(!HasAnyMinedFreeCameraTriggerSource<503>());
+static_assert(!HasAnyMinedFreeCameraTriggerSource<929>());
+static_assert(!IsFreeCameraMapperAllowed<503>());
+static_assert(!IsFreeCameraMapperAllowed<929>());
 
 template <std::uint16_t ActionId>
 [[nodiscard]] consteval auto BuildActorMembershipColumn() {
@@ -947,10 +997,11 @@ template <typename Action>
     };
 }
 
-template <typename Action>
-[[nodiscard]] inline bool CommitActionProgress(
+[[nodiscard]] inline bool CommitActionProgressRaw(
     const int actionIndex,
     const int turnActionCount,
+    const int commonActionId,
+    const std::uint16_t dq9ActionId,
     const std::uint16_t actorId,
     const std::uint16_t targetId
 ) noexcept {
@@ -965,11 +1016,28 @@ template <typename Action>
         return false;
     }
     state.hasPreviousAction = true;
-    state.previousCommonActionId = Action::commonActionId;
+    state.previousCommonActionId = commonActionId;
     state.previousActionIndex = actionIndex;
-    state.previousAction = {Action::dq9ActionId, actorId, targetId};
+    state.previousAction = {dq9ActionId, actorId, targetId};
     state.targetRecord02161720ActorId = kInvalidBattleActor;
     return true;
+}
+
+template <typename Action>
+[[nodiscard]] inline bool CommitActionProgress(
+    const int actionIndex,
+    const int turnActionCount,
+    const std::uint16_t actorId,
+    const std::uint16_t targetId
+) noexcept {
+    return CommitActionProgressRaw(
+        actionIndex,
+        turnActionCount,
+        Action::commonActionId,
+        Action::dq9ActionId,
+        actorId,
+        targetId
+    );
 }
 
 static_assert(Dq9ActorId({BattleActorSide::ally, 0}) == 0x0000);

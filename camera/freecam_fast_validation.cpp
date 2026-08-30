@@ -1,7 +1,7 @@
 #include <array>
 #include <cstdint>
 
-#include <BattleEmulator.h>
+#include "../BattleEmulator.h"
 #include "freecam_action_mapper.hpp"
 
 namespace {

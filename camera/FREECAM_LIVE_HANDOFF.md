@@ -1,10 +1,13 @@
 # Free-camera live handoff
-Updated: 2026-08-30 18:26 JST
+Updated: 2026-08-30 19:15 JST
 
 ## Working rule
 - Confirmed ROM behavior is reflected into `BattleEmulator/camera` immediately; do not wait for the whole investigation to finish.
 - Do not encode encounter-, seed-, monster-, actor-slot-, or action-order-specific fixes.
 - ROM fixed data must be mined through existing scripts under `C:\Users\owner\Documents\tunnelworkspace\BattleArrow`; extend/reuse them when additional data is needed.
+- `freecam_action_mapper.hpp` is freecam-only. Non-freecam/presentation-only actions must never be added there. `Bind<>` now has a compile-time guard derived from mined BACT + all actor-membership + fallback-membership data and rejects statically triggerless DQ9 actions.
+- Existing DQ9 action IDs/target/operation data come from `camera/dq9-action-target-classification.csv`; `build_freecam_fast_generated.mjs` now bakes the required fixed columns into constexpr arrays. Do not rediscover those IDs with seed sweeps.
+- The freecam-only mapper gate is precomputed by the same generator from ROM-mined BACT + all 617 actor memberships + fallback memberships into `kHasAnyMinedFreeCameraTriggerSource[1024]`; `Bind<>` now performs only O(1) constexpr lookup. DQ9 503 and 929 are compile-time asserted triggerless.
 - DeSmuME harness is the execution oracle. Ghidra is a reference for stable/static code; live overlay disassembly is authoritative for swapped overlay addresses.
 
 ## Confirmed and already reflected
@@ -36,6 +39,7 @@ Updated: 2026-08-30 18:26 JST
 - `camera.cpp` now performs the confirmed `021E08BC` current/future suffix scan for mapped actions: suffix actors are de-duplicated before eligibility, current actor uses current target, future nonzero `row+4` uses fallback, future zero resolves that future action's primary target through `ResolveActorPresentationTarget`.
 - Live `021E0D34..021E0D5C` confirmed that future actor goal assignment still uses the **current action record**; production therefore shares the current action's ROM `attackFormationMode`/current-action actor list rather than using the future action's formation mode.
 - Known post-action initial-residue producers are currently implemented only for presentation types 1 and 17. Unknown types invalidate compatibility instead of being guessed. This is sufficient to exercise the seed-8 Bagima/Merami/Zaki sequence while additional type paths are mined.
+- `main.cpp --scan-action-seeds` is the generic candidate finder for the unresolved producer paths. It sweeps a seed range, records representative seeds for every enemy common action that actually occurs, and prints confirmed ROM metadata for mapped actions. With a presentation-type filter it also enumerates every DQ9 action ID in the ROM carrying that type before running the seed sweep. Unmapped common actions remain explicitly `dq9=unmapped`; they are candidates for DeSmuME measurement rather than guessed mappings.
 
 ## Build/validator state
 - 2026-08-30 18:44 JST: CLion CMake target `freecam_edge_validation` builds and exits 0 after the FCMA v3/runtime/setup-work-state changes: `PASS freecam-edge-validation` (`goalCases=23408`, `moving=19536`, `zakiSuppressed=3872`, `zakiTriggered=19536`).
@@ -43,6 +47,27 @@ Updated: 2026-08-30 18:26 JST
 - The first `gerunikku`/`erugi1_gilyumei` build attempt exposed a production-wiring omission: `camera.cpp` called `ApplyKnownRosterField4PostActionCompatibility` but the helper had not actually landed in `freecam_fast_runtime.hpp`. The helper is now present; rebuild immediately follows this update.
 - 2026-08-30 18:49 JST: CLion `gerunikku` Run configuration reached process launch (`fullOutputPath` issued), confirming the production `camera.cpp` translation unit now builds after the helper fix.
 - `freecam_edge_validation` now contains explicit regression coverage for the observed 12-slot type-1/type-17 initial masks, unknown-type invalidation, and the exact `021E2904` conflict side effect (`row+4` compatibility slot becomes nonzero while the actor auxiliary node is invalidated).
+- 2026-08-30 19:14 JST: the expanded `ValidateRosterField4Compatibility` regression was actually rebuilt/run in CLion and exits 0: `PASS freecam-edge-validation`.
+
+## C++ brute-force discovery mode
+- `main.cpp` now provides `--scan-action-seeds`; it reuses `BattleEmulator::Main`, the existing enemy AI, and generated ROM metadata. No duplicate action table was added.
+- Metadata accessors (`HasBact`, `SelectorProjection`, `FallbackLookupActionId`, `AttackFormationMode`, `PresentationType`) are now `constexpr` rather than `consteval`, preserving compile-time use while allowing the discovery mode to enumerate all 1024 ROM actions at runtime.
+- First real sweep: seeds `1..20000`, one turn, hero Zaki to C0, current seed position 1. Representative unmapped candidates found automatically:
+  - Bagima(strong) common187: seed 0x1
+  - Eerie Light common185: seed 0x2
+  - Magic Mirror common31: seed 0x2
+  - Helm Splitter common181: seed 0x2
+  - Medapani common186: seed 0x5
+  - Kabuff common173 and common21 inactive/skip path: seed 0x6
+  - Double-edged Slash common182: seed 0x15
+- The same sweep also re-confirmed mapped actions from production metadata: Attack common1→DQ9 1/type1, Whipping Boy common180→DQ9109/type1, Merami common183→DQ910/type1, Bagima common184→DQ919/type1.
+- These brute-force results are candidate seeds only. Unknown common→DQ9 mapping and compatibility shapes remain forbidden from production until DeSmuME measurement or ROM mining confirms them.
+- First candidate promoted: seed 0x1 common187 Bagima(strong) was measured in the ROM as DQ9 action 463. Its next-setup 12-slot residue is exactly the known type-1 mask, and ROM `actdata` mining independently returns type1 / formation2 / fallback463. `GERUNIKKU_BAGIMA_STRONG` is now bound to DQ9 463 in `freecam_action_mapper.hpp`.
+- Seed 0x2 live ROM records confirmed the first two C++ enemy candidates before the model diverges later in the turn: common185 Eerie Light -> DQ9 155 (ROM type22/formation1), common31 Magic Mirror -> DQ9 55 (ROM type31/formation2). Both bindings are now production. Their residue producer types remain unknown and are deliberately not added to `ApplyKnownRosterField4PostActionCompatibility` yet.
+- common21 `INACTIVE_ENEMY`: record-0 seed 0x1b2 -> fresh live ROM DQ9 503; ROM mining type0/formation0/fallback503. Mapper binding is production; type0 full residue is still unknown.
+- common186 `GERUNIKKU_MEDAPANI`: record-0 seed 0x55 -> fresh live ROM DQ9 912; ROM mining type21/formation2/fallback912. Mapper binding is production; type21 residue remains unknown.
+- 200k sweep gave common21 `INACTIVE_ENEMY` a record-0 candidate at seed 0x1b2. Fresh ROM measurement confirmed the first enemy action is DQ9 503; ROM mining confirms type0/formation0/fallback503. The mapper now binds `INACTIVE_ENEMY -> 503`. Full type0 12-slot residue is still intentionally unimplemented.
+- The brute-force mode now records `bestRecord/bestSeed` per common action. Use the smallest record-index candidate for ROM verification, because later records can diverge after an earlier RNG/model mismatch even when the candidate action itself exists elsewhere.
 
 ## Compiler-stack compatibility fact
 - Roster `row+4` is not metadata. `021E1958` writes only row `+0/+1/+8`; `+4` is stale stack content.
@@ -57,10 +82,11 @@ Updated: 2026-08-30 18:26 JST
 - Live caller continuation contains action/post-presentation calls through the `021DBAxx..021DBDxx` range; this caller/callee stack reuse produces the compatibility mask consumed by the next setup.
 
 ## Immediate implementation task
-1. Wire generic all-actor presentation scan into production `camera.cpp`, using current/future action data and existing movement-eligibility/target-resolution APIs.
-2. Keep the unresolved `row+4` decision behind a dedicated compatibility-state predicate; do not hardcode seed8 observations.
-3. Mine any fixed per-action data only with existing BattleArrow scripts, then generate/consume it in the fast runtime.
-4. Run CLion validators and real-ROM seed8 comparison after each production change.
+1. Add a C++ brute-force discovery mode that enumerates seed/action candidates using only already-mined ROM metadata; use it as a candidate finder for unknown compatibility producer paths.
+2. For every unknown presentation type/path, execute representative candidates in DeSmuME and record the full 12-slot row+4 shape. Only ROM mining or emulator measurements may become production data.
+3. If a presentation type is not internally uniform, mine the additional ROM-fixed branch input instead of adding action-ID/seed special cases.
+4. Port the confirmed `021E0D84..021E0F30` previous-action loop and keep validating seed8 after each production change.
+5. `lv99.dst` is available only as an observation fixture if selector coverage requires skills not present in the current state. Do not implement its entire skill inventory; battle-MCP multi-player/equipment support is only justified when required to reach a specific unresolved branch.
 
 ## Validation remaining
 - seed8 false-positive final correction
