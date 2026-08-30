@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <span>
 
+#include "freecam_actor.hpp"
 #include "freecam_fast_generated.hpp"
 #include "freecam_route.hpp"
 #include "freecam_setup.hpp"
@@ -68,10 +69,12 @@ static_assert(MagicIs(generated::kCameraMetadataBytes, 'F', 'C', 'M', '1'));
 static_assert(ReadU32(generated::kCameraMetadataBytes, 4) == 1);
 static_assert(ReadU32(generated::kCameraMetadataBytes, 8) == kActionCount);
 
-static_assert(generated::kActionMetadataBytes.size() == 2064);
+static_assert(generated::kActionMetadataBytes.size() == 3088);
 static_assert(MagicIs(generated::kActionMetadataBytes, 'F', 'C', 'M', 'A'));
-static_assert(ReadU32(generated::kActionMetadataBytes, 4) == 1);
+static_assert(ReadU32(generated::kActionMetadataBytes, 4) == 2);
 static_assert(ReadU32(generated::kActionMetadataBytes, 8) == kActionCount);
+inline constexpr std::size_t kFormationModeOffset = ReadU32(generated::kActionMetadataBytes, 12);
+static_assert(kFormationModeOffset == 16 + kActionCount * 2);
 
 static_assert(generated::kTargetSideCode.size() == kActionCount);
 static_assert(generated::kTargetScopeCode.size() == kActionCount);
@@ -125,6 +128,11 @@ struct ActorProfileMapEntry {
         generated::kActionMetadataBytes,
         16 + static_cast<std::size_t>(actionId) * 2
     );
+}
+
+[[nodiscard]] consteval std::uint8_t AttackFormationMode(const std::uint16_t actionId) {
+    if (actionId >= kActionCount) return 0;
+    return generated::kActionMetadataBytes[kFormationModeOffset + actionId];
 }
 
 [[nodiscard]] consteval std::uint64_t ActorMembershipPacked(
@@ -212,25 +220,7 @@ inline constexpr auto kSpecialProfiles = BuildSpecialProfiles();
 
 } // namespace metadata
 
-inline constexpr std::uint16_t kInvalidBattleActor = UINT16_C(0xffff);
 inline constexpr std::uint32_t kInvalidMembershipProfile = metadata::kInvalidProfileIndex;
-
-enum class BattleActorSide : std::uint8_t {
-    ally,
-    enemy,
-};
-
-struct BattleActorRef {
-    BattleActorSide side{};
-    std::uint8_t index{};
-};
-
-[[nodiscard]] constexpr std::uint16_t Dq9ActorId(const BattleActorRef actor) noexcept {
-    return static_cast<std::uint16_t>(
-        actor.index
-        + (actor.side == BattleActorSide::enemy ? UINT16_C(0x00c0) : UINT16_C(0))
-    );
-}
 
 struct MembershipCell {
     std::uint32_t selectorProjection{};
@@ -287,6 +277,8 @@ struct FreeCamera {
         metadata::SelectorProjection(Dq9ActionId);
     static inline constexpr std::uint16_t fallbackLookupActionId =
         metadata::FallbackLookupActionId(Dq9ActionId);
+    static inline constexpr std::uint8_t attackFormationMode =
+        metadata::AttackFormationMode(Dq9ActionId);
     static inline constexpr std::uint64_t fallbackMembershipPacked =
         fallbackLookupActionId == metadata::kInvalidActionId
             ? UINT64_C(0)
@@ -689,6 +681,37 @@ inline void SetTargetRecord02161720ActorId(const std::uint16_t actorId) noexcept
     const std::uint16_t actorId
 ) noexcept {
     return detail::FindPresentationRoute(ThreadContext().currentRoutes, actorId);
+}
+
+[[nodiscard]] inline bool CommitCurrentRouteEnd(const std::uint16_t actorId) noexcept {
+    auto& state = ThreadContext();
+    const std::size_t actorIndex = FindPresentationActorIndex(actorId);
+    if (actorIndex >= state.presentationActorCount) return false;
+    const detail::PresentationActorRoute* route = FindCurrentRoute(actorId);
+    if (route == nullptr || route->count == 0) return true;
+    const std::uint8_t node = route->nodes[route->count - 1];
+    if (node >= detail::kPresentationNodePositions.size()) return false;
+    const auto position = detail::kPresentationNodePositions[node];
+    if (!position.valid) return false;
+    auto& actor = state.presentationActors[actorIndex];
+    actor.startNode = node;
+    actor.goalNode = node;
+    actor.worldX = position.x;
+    actor.worldZ = position.z;
+    state.nearestNodeCache[actorIndex] = {};
+    InvalidateCurrentRoutes(state);
+    return true;
+}
+
+[[nodiscard]] inline bool CompleteActionPresentation(
+    const std::uint16_t actorId,
+    const int actionIndex
+) noexcept {
+    if (!CommitCurrentRouteEnd(actorId)) return false;
+    if (!BeginPresentationGoalSetup()) return false;
+    if (!AssignActorFallbackPresentationGoal(actorId)) return false;
+    if (!PlanCurrentActionRoutes(actionIndex)) return false;
+    return CommitCurrentRouteEnd(actorId);
 }
 
 template <typename Action>

@@ -19,6 +19,11 @@ static_assert(kFreeCameraActions[BattleEmulator::MERCURIAL_THRUST].dq9ActionId =
 using AttackAllyAction = FreeCamera<1, BattleEmulator::ATTACK_ALLY>;
 using ThunderThrustAction = FreeCamera<72, BattleEmulator::THUNDER_THRUST>;
 using MedicinalHerbsAction = FreeCamera<255, BattleEmulator::MEDICINAL_HERBS>;
+using ZakiAction = FreeCamera<24, BattleEmulator::ZAKI>;
+using ZarakiAction = FreeCamera<25, BattleEmulator::ZARAKI>;
+using MercurialThrustAction = FreeCamera<69, BattleEmulator::MERCURIAL_THRUST>;
+using BeastThrustAction = FreeCamera<70, BattleEmulator::BEAST_THRUST>;
+using VitalPointThrustAction = FreeCamera<71, BattleEmulator::VITAL_POINT_THRUST>;
 
 static_assert(AttackAllyAction::targetSide == TargetSide::opponent);
 static_assert(AttackAllyAction::targetScope == TargetScope::single_formation);
@@ -26,6 +31,12 @@ static_assert(ThunderThrustAction::targetSide == TargetSide::opponent);
 static_assert(ThunderThrustAction::targetScope == TargetScope::single);
 static_assert(MedicinalHerbsAction::targetSide == TargetSide::ally);
 static_assert(MedicinalHerbsAction::targetScope == TargetScope::single);
+static_assert(ZakiAction::attackFormationMode == 2);
+static_assert(ZarakiAction::attackFormationMode == 2);
+static_assert(MercurialThrustAction::attackFormationMode == 1);
+static_assert(BeastThrustAction::attackFormationMode == 1);
+static_assert(VitalPointThrustAction::attackFormationMode == 1);
+static_assert(ThunderThrustAction::attackFormationMode == 1);
 
 static_assert(ThunderThrustAction::actionHasBact);
 static_assert(ThunderThrustAction::fallbackLookupActionId == 72);

@@ -18,6 +18,9 @@
 
 
 thread_local int32_t actions[8];
+thread_local dq9::freecam::fast::BattleActorRef actionActors[8];
+thread_local dq9::freecam::fast::BattleActorRef actionTargets[8];
+thread_local dq9::freecam::fast::BattleActorRef battleActorRefs[4];
 thread_local int actionsPosition = 0;
 thread_local int preHP[4] = {0, 0, 0, 0};
 thread_local bool player0_has_initiative = false;
@@ -25,6 +28,30 @@ thread_local bool TiggerSkyAttack = false;
 
 #if defined(gerunikku)
 namespace {
+void InitializeBattleActorRefs() noexcept {
+    using dq9::freecam::fast::BattleActorRef;
+    using dq9::freecam::fast::BattleActorSide;
+    battleActorRefs[0] = BattleActorRef{BattleActorSide::ally, 0};
+    battleActorRefs[1] = BattleActorRef{BattleActorSide::enemy, 0};
+    battleActorRefs[2] = BattleActorRef{BattleActorSide::enemy, 1};
+    battleActorRefs[3] = BattleActorRef{BattleActorSide::enemy, 2};
+}
+
+bool InitializeCameraBattle() noexcept {
+    using dq9::freecam::fast::BattleActorRef;
+    using dq9::freecam::fast::BattleActorSide;
+    const CameraPresentationActor roster[] = {
+        {BattleActorRef{BattleActorSide::ally, 0}, 10641, 12868, 18432, 0x00000002, 0, true},
+        {BattleActorRef{BattleActorSide::enemy, 0}, -5320, 0, -9216, 0x00000000, 0, true,
+            CameraMembershipKind::monster, 0x00c1, 0},
+        {BattleActorRef{BattleActorSide::enemy, 1}, 10641, 0, -18432, 0x00000080, 0, true,
+            CameraMembershipKind::monster, 0x013a, 0},
+        {BattleActorRef{BattleActorSide::enemy, 2}, 26604, 0, -9216, 0x00000000, 0, true,
+            CameraMembershipKind::monster, 0x00c1, 0},
+    };
+    return camera::ResetBattle(roster, sizeof(roster) / sizeof(roster[0]));
+}
+
 struct EnemySelection {
     int action;
     int target;
@@ -572,6 +599,10 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                           uint64_t seed, const int eActions[350], const int damages[350], int mode,
                           uint64_t *NowState, const int heroTargetOverride) {
     resetCombo(NowState);
+#if defined(gerunikku)
+    InitializeBattleActorRefs();
+    if (!InitializeCameraBattle()) return false;
+#endif
     player0_has_initiative = false;
     TiggerSkyAttack = false;
     actionsPosition = 0;
@@ -634,6 +665,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         for (int32_t &action: actions) {
             action = -1;
         }
+        for (auto &actor : actionActors) actor = {};
+        for (auto &target : actionTargets) target = {};
         actionsPosition = 0;
         double speed0 = Player::isPlayerAlive(players[0]) && players[0].speed > 0
             ? players[0].speed * lcg::floatRand(position, 0.51, 1.0) // float, lr: 0x0215efac
@@ -1077,7 +1110,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         if (Player::isPlayerAlive(players[0]) && anyEnemyAlive()) {
             (*position)++; // max: 100, lr: 0x0215962c
         }
-        camera::Main(position, actions, NowState, player0_has_initiative, TiggerSkyAttack);
+        camera::Main(position, actions, actionActors, actionTargets, actionsPosition,
+                     NowState, player0_has_initiative, TiggerSkyAttack);
     }
     if (mode != -1 && mode != -2) {
         startTurn = RunCount - 2;
@@ -1106,7 +1140,10 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
     for (int j = 0; j < 4; ++j) {
         preHP[j] = players[j].hp;
     }
-    actions[actionsPosition++] = Id;
+    actions[actionsPosition] = Id;
+    actionActors[actionsPosition] = attacker >= 0 && attacker < 4 ? battleActorRefs[attacker] : dq9::freecam::fast::BattleActorRef{};
+    actionTargets[actionsPosition] = defender >= 0 && defender < 4 ? battleActorRefs[defender] : dq9::freecam::fast::BattleActorRef{};
+    ++actionsPosition;
     int baseDamage = 0;
     double tmp, tmp1 = 0;
     bool kaisinn = false;
