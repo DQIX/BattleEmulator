@@ -137,7 +137,8 @@ public:
     static bool
     Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
          BattleResult* result, uint64_t seed, const int eActions[350], const int damages[350], int mode,
-         uint64_t *NowState, int heroTargetOverride = -1, bool traceBoundaries = false);
+         uint64_t *NowState, int heroTargetOverride = -1, bool traceBoundaries = false,
+         int heroActionOverride = -1, bool initializeCameraBattle = true);
 
     static std::string getActionName(int actionId);
 

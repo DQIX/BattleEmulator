@@ -1,0 +1,58 @@
+# BattleEmulator 探索器再設計メモ 2026-08-30
+## 目的
+ゲルニック将軍戦を含む BattleEmulator の探索で、人間が実ROM上で実行可能な最短討伐手順を高速に求める。10秒級は性能目標であって探索の打ち切り秒数・正当性条件ではない。MSVC profiler等でhot pathを実測し、正確な探索器を後から最適化する。探索結果だけ良く見えて実ROMでは死ぬ、乱数位置がずれる、必要な枝を探索器自身が捨てる、といった近似は不可。BattleEmulator の戦闘再現精度が先に必要で、GA再学習は環境精度が確定するまで実行しない。
+## 本番ゲルニック経路の要件
+敵配置は actor 1=てっこうまじんA、actor 2=ゲルニック将軍、actor 3=てっこうまじんB。鉄甲魔人2体にはザキまたはザラキを狙う。ただしザキが成功しないターンを「ザキ専用フェーズ」として固定してはいけない。失敗する乱数窓ではミラーシールド、スカラ、ためる等を進めて乱数位置と戦闘状態を同時に整える可能性がある。本戦の主要形はミラーシールド→スカラ(必要なら再使用)→ためる×3→さみだれづき→必要回数さみだれづき。これらは同一探索木内でインターリーブ可能でなければならない。
+## 確定している探索器の問題
+`RequiredAllyHpOnVictory = 200` は最短討伐という目的と無関係だったため削除済み。旧 ACTION_TABLE はゲーム上の不可能条件ではなく探索ヒューリスティクスで枝を消していた。回復をHP70%未満だけに制限、ミラー残りターン制限、すてみ再使用禁止、ためるを敵HPや成功結果で制限、スカラ段階制限、さみだれづきにAtkBuffLevel>=2を要求、バーハ残りターン制限等は最短経路を欠落させ得るため撤去方向。スカラのMPコストは3、さみだれづきは4であり、旧探索器の10MP要求は誤りだった。ザキは5MP、ザラキは10MP。現 ActionOptimizer の ACTION_TABLE にはザキ/ザラキがなく、さらに探索遷移にtarget情報がないため、鉄甲魔人A/Bへ個別に即死呪文を撃つ経路を表現できない。
+## targetについて
+BattleEmulator::Main はすでに1ターン単位の `heroTargetOverride` を受け取る。したがって戦闘本体の再設計は不要で、探索遷移を action だけでなく action+target として持たせればよい。ザラキはDQ9上 `targetKind=group` だが、この戦闘の配置は `てっこうまじん / ゲルニック / てっこうまじん` で3者が別グループのため、実用上1回のザラキで対象になるのは1体。現C++の単一defender処理を「ザラキだから複数対象バグ」とは扱わない。
+## 状態圧縮について
+「同一未来状態なら過去の行動列は不要」という原理自体は採用可能。ただしHP、MP、敵HP、敵状態、RNG position、NowState、ミラー、スカラ、テンション等の組合せが完全一致する確率は低く、完全一致transpositionだけを高速化の主役と見積もってはいけない。特に敵HPや敵状態は敵AI・怒り・乱数消費を変えるため近似統合禁止。ミラー、スカラ等も解除乱数を含むため近似統合禁止。
+味方HP/MPは、ゲーム本体で未来のRNG消費や敵AIを変えないことが保証できる範囲なら、同一のRNG影響状態に対して高HP/高MPが低HP/低MPを支配するPareto dominanceの候補になる。ただしこれはまだ探索器へ実装していない。単純にHP/MPをhashから外すことは禁止。MP=不足で技がグレーアウトするためaction可否は必ず資源量を見る。フェーズ内で到達可能な最大MPを使った安全な足切りは候補。
+## ProcessRageについて
+BattleEmulator.cpp の旧一般化では `ProcessRage` が defender=0 の主人公にも適用され、味方HPの50%/25%境界で乱数を消費し得た。これはこの戦闘モデルでは敵側だけを経由する処理であるため、defender==0ならreturnする修正を反映済み。これは「味方HP差が乱数を変える」という誤った一般化を取り除くための修正。
+## アルゴリズム案の扱い
+学習済みGA重みをそのまま最短保証の根拠にはしない。新しいヒューリスティクスを雑に作って枝を切る案も採用しない。巨大な仮想探索木を先に作って後段でBattleEmulatorを1ターンずつ進める二層式は、WebAssembly 2GB制限とメモリ確保コストのためオーバーエンジニアリングとして却下。
+現時点の有力候補は、1ノード展開ごとにBattleEmulatorを1ターン進める反復深化DFS(IDDFS)。ただし「最大深さぶんの完全state配列を常駐させる」設計は採らない。総当たりでseedと既知prefixが確定した後、探索は実戦上おおむね3〜5ターン目から始まる。root stateとseedは固定なので、探索木が保持する本質的情報はroot以降のaction+target列であり、枝の実状態はrootからそのpathを再生すれば復元できる。remaining depthも概ね3〜5程度であるため、まずはroot + 少数の交換state buffer + action/target pathでベンチする。IDDFSは深さ1,2,...の順に完全探索すれば最短ターンを保証し、ヒューリスティクスで探索空間を捨てない。性能は時間制限で枝を切らず、MSVC profilerで実測してhot pathを最適化する。
+候補action集合を「ザキ/ザラキ、ミラー、スカラ、ためる、さみだれ、回復」だけに固定してはいけない。最短討伐では、ザキ成功乱数やさみだれの有利乱数へ合わせるため、勝利準備と同時に乱数消費数の異なる合法行動を挟むことで総ターンが短くなる場合がある。探索器はscenario profileからaction+target候補を受け取り、乱数調整用途を含む実用command集合を明示できる設計にする。FLEEのように実行時点で勝利経路そのものを終了させるcommandや、MP不足・死亡済みtarget等ゲーム上選択不能なcommandだけを安全に除外する。ゲルニックはMirror Shield成立後の敵側脅威が大幅に小さくなるため、その戦闘固有profileで候補集合を整理する局所最適化は許容するが、一般BattleEmulator探索APIへ埋め込まない。
+## 探索用BattleEmulator API案
+現行 `BattleEmulator::Main` は絶対turnから `Gene[counterJ-1]` を読むため、探索nodeごとに350手配列を保持・コピーする構造を事実上強制している。またゲルニックbuildでは `Main` 呼び出し冒頭で毎回 `InitializeCameraBattle()` を実行し、camera runtimeをbattle初期状態へresetする。長期探索ではこれでは不正確である。探索専用APIは `state + action/target -> next state` の1ターン遷移に分離する必要がある。
+探索stateには `Player[4]`、RNG `position`、`NowState` に加えて、production free-cameraが実際に使用する `dq9::freecam::fast::RuntimeState` 全体を含める。`RuntimeState` は `presentationActors`、nearest-node cache、occupancy、turn routes、previous action等をターン間で保持しており、`CompleteActionPresentation()` によるactor位置commitも次ターンのfree-camera判定とRNG消費へ影響し得るため、部分的に省略してはいけない。旧 `FreeCameraThreadContext` はvalidation側で、production探索で保持すべき正本は `fast::gRuntimeState`。
+APIの概念形は `BuildSearchRoot(seed, initialPlayers, knownPrefixCommands) -> SearchState` と `Step(SearchState in, SearchCommand command, SearchState out)`。`SearchCommand` は最低限 `action` と `target` を持つ。`BuildSearchRoot` はbattle/cameraを1回だけ初期化し、総当たりで既知になったprefixを順に実行して探索rootを作る。`Step` はcamera battleをresetせず、入力stateのcamera runtimeをrestoreして1ターンだけ進め、出力stateへcamera runtimeをcaptureする。ターン内scratchであるaction order、preHP、initiative等は各Step内で再構築されるためnode stateへ含めない。
+`IsHeroCommandSelectable(state, command)` もBattleEmulator側のゲーム仕様APIとして持つ。MP不足、死亡済みtarget、所持数0のitem等、実ROMでcommand自体が選択不能/gray-outになる条件だけをここで判定する。探索器独自のHP閾値、buff残りターン、攻撃バフ段階等を入れてはいけない。実行caseと探索conditionにMPコストを二重記述した結果、旧探索器でスカラ3MP/さみだれ4MPに対して10MP要求する事故が起きたため、command cost/selectabilityは単一の正本へ寄せる。
+LCGは探索開始時に `lcg::init(seed, true)` で固定seedの乱数列をキャッシュでき、その後の乱数値は `position` で決まる。このモードでは枝復元時にLCG内部の逐次位置をnodeごとにsnapshotする必要はなく、stateのRNG要素はpositionで足りる。
+現 `Main` の再開規約では `NowState` のturn bitsから `startPos` を復元し、`RunCount=1` なら現在stateの次の1ターンだけを実行できる。したがって既存Main全体を分解する必要はなく、最小変更は「Gene絶対indexを使わず現在1ターンのactionを直接渡す `heroActionOverride`」と「camera runtimeをresetせずrestore/captureする探索state引数」を追加すること。その上に `Step(src, SearchCommand{action,target}, dst)` を薄く作る。既存呼び出しは新引数未指定なら従来どおりcameraをbattle初期化しGeneを読むため、総当たり・trace・通常CLIへの影響を避けられる。
+## DFSのstate復元とallocation
+探索木のnodeごとに完全stateをmallocしてはいけない。現 `Genome` は `actions[350]` だけで1400 bytesあり、`LinearIdPool<Genome,50000>` は行動列部分だけでも初期約70MBを確保する。さらにPlayer、heap vector、unordered_set等が加わり、残り数ターンの探索として過大。新DFSではnode pool、350手履歴コピー、A* open-setを削除候補とする。
+root以降のpathは固定長の小さな `SearchCommand path[]` で保持する。完全stateはrootと作業用の少数bufferだけを持ち、backtrack後に必要な親stateはrootからpathを再生して復元する。単純な2交換bufferだけで深い再帰を続けると祖先stateを上書きするため、「2bufferを祖先保存に使う」のではなく「rootからのreplay用current/next交換buffer」として使う。remaining depthが3〜5程度なら、まずこの再生コストとBattleEmulator Step速度を実測する。深さごとの完全state常駐やcheckpoint階層化は、実測でreplayがボトルネックになった場合だけ検討する。
+探索workspaceは可能ならsearch worker内の固定/static領域に `root/current/next + path + result path` を1組だけ置き、探索中malloc/reallocを0にする。reentrant化や同一worker内並列化が必要になるまではnodeごとの所有権管理を導入しない。frontendは1 worker内でsearchを同期実行しており、search終了直後にworker自体をterminateするため、この所有形で問題ない。
+## ゲルニック用IDDFSの規模見積り
+branch数を9と固定した以前の見積りは楽観的すぎるため撤回する。乱数調整用commandを含めれば実効branch数はscenario profile次第で増える。総当たりで既知prefixが3〜5ターン得られ、全体がおよそ8ターン級ならremaining depth自体は概ね3〜5なので、A*の50,000 Genome poolよりpath-only IDDFSがメモリ面で有利という判断は維持するが、速度は実際のprofileのbranch数とBattleEmulator::Stepの実測値から評価する。探索時間による枝打ち・timeoutによる近似解採用は禁止。
+完全state hashやHP/MP Pareto dominanceは初版の必須機能にしない。完全一致率が低い上、state index自体が追加メモリと複雑性を生むため、まずpath-only IDDFSの実測を優先する。MPによる枝生成はゲーム上のgray-out条件として厳密に扱い、将来必要ならremaining turns内の最大到達MPを使った証明可能なfeasibility pruneだけ追加候補とする。
+## trace/debug APIへの波及
+現 `--trace-sequence` は各stepで `Main(..., RunCount=1, ...)` を個別に呼んでいるため、ゲルニックbuildでは各step冒頭にcamera battleがresetされる。戦闘本体checkpointの比較には使えても、camera込みの長期state検証器としては不正確。新 `Step` API完成後は `--trace-sequence` も同じStepへ載せ替え、探索とdebug traceでcamera state保持規約を一本化する。最終探索解の検証もrootからsolution pathをStepで再生し、必要な `BattleResult` / boundary traceを取る。
+さらに、旧 `--trace-sequence` にはcamera resetとは独立した重大なバグがあった。各stepごとに `makeDebugGene(traceGene, 1, action)` で `Gene[0]` だけを埋めていた一方、`BattleEmulator::Main` は `NowState` に保存された絶対turnから `genePosition = counterJ - 1` を計算して `Gene[genePosition]` を読む。そのため2step目以降は指定したactionが `Gene[1]`, `Gene[2]` ... に存在せず、`ATTACK_ALLY` へfallbackし得た。つまり旧trace-sequenceは「表示上はstepごとのactionを受け取っているが、実際のBattleEmulatorは2step目以降そのactionを実行していない」可能性があった。
+このため `BattleEmulator::Main` に探索/trace専用の `heroActionOverride` を追加し、値が正なら `Gene[counterJ-1]` より優先してその1ターンの主人公actionとして使う方針を採用した。同時に `initializeCameraBattle` 引数を追加し、最初のstepだけbattle cameraを初期化し、2step目以降は既存camera runtimeを継続できるようにする。既存呼び出しではdefault引数により従来動作を維持する。`--trace-sequence` は `Gene=nullptr`, `heroActionOverride=action` を使用し、初回のみ `initializeCameraBattle=true`、以降falseへ切り替える形へ修正中。
+camera側には `camera::RuntimeSnapshot = dq9::freecam::fast::RuntimeState`、`CaptureRuntimeState()`、`RestoreRuntimeState()` を追加する。これは今後DFSでroot/current/nextを交換するとき、thread_local `fast::gRuntimeState` を明示的にsnapshot/restoreするためのAPIである。debug capture用thread_local (`gCameraDebugEvents` 等) は観測専用で未来の戦闘結果へ影響しないためSearchStateには含めない。
+## 乱数調整actionとscenario profile
+「ゲルニックならザキ/ザラキ(A/B)、ミラー、スカラ、ためる、さみだれ、回復の最大9枝程度」という以前の見積りは撤回する。最短討伐では、勝利に直接必要なbuffと同時にRNG positionを望ましい窓へ送る必要がある。乱数消費数の異なる合法actionを途中へ挟むことで、ザキ成功・敵行動・ためる成功・さみだれヒット/会心等が良化し、結果として総ターンが短くなる場合がある。そのため「直接勝利へ寄与しないから」という理由でactionを落としてはいけない。
+一方、ゲルニック戦はMirror Shield成立後に敵側の危険度が非常に低くなるため、この戦闘だけのscenario profileで候補command集合を整理する局所最適化には合理性がある。ただしそれは一般BattleEmulatorのゲーム仕様APIではなく、検索シナリオ側の明示的profileとして持つ。profileは `SearchCommand{action,target}` の固定配列/constexpr span等で渡し、探索器本体はprofileの内容を知らない。乱数調整目的のactionを追加・削除してprofileを性能比較できるようにする。
+安全に除外できるのは、MP不足・アイテム0・死亡済みtargetなど実ROMで選択不能なcommand、またはFLEEのように実行時点で今回の「敵を倒して勝利」というgoalへ到達不能になるcommandだけ。HP70%未満のみ回復許可、buffが残っている間は再使用禁止、ためる失敗枝を削除、といった探索都合の枝刈りは行わない。
+## IDDFSを採る場合の正しさと性能方針
+IDDFSは「候補actionを狭くすれば速いから」ではなく、最短ターンを深さ順に完全探索でき、巨大open-set/node poolを不要にできるため候補にしている。branch数はscenario profile次第であり、固定9枝の性能見積りは使用しない。探索時間によるtimeout枝打ちも行わない。まず正確に完走する実装を作り、性能問題はMSVCの手動Performance Profilerでhot pathを測ってから最適化する。10秒級は最終的な実用性能目標であって、探索器が「10秒経過したので残り枝を捨てる」根拠にはしない。
+最適化候補は、BattleEmulator::Stepのinline化/分岐削減、SearchCommand列の固定長化、再生時の不要BattleResult生成抑止、camera RuntimeState copy cost、LCGアクセス、Playerコピー、scenario command生成、その他profilerが実際に示したhot path。プロファイル前にヒューリスティクスや近似pruneを追加して性能をごまかさない。
+## root replay方式の前提
+総当たりフェーズでseedと既知action prefixが確定し、そのprefixを1回BattleEmulatorへ通した状態が探索rootになる。実運用では探索開始は概ね3〜5ターン目からで、残り数ターンを探索する。root seed、root RNG position、root Player[4]、root NowState、root camera RuntimeStateは固定。
+探索木が持つのはroot以降の小さな `SearchCommand{action,target}` pathだけとする案が有力。親stateへ戻る必要があるときはroot snapshotからpathの必要prefixを `Step` で再生する。ここで使う2交換bufferは祖先state保存用ではなく、`current -> next` のreplay作業用。これならnodeごとのmalloc/free、350手Geneコピー、50,000 Genome poolを避けられる。
+残り深さが短いためreplayは十分有力だが、実測でBattleEmulator::Step再生が支配的ならcheckpoint方式等を後から検討する。最初からdepth分の巨大state配列や複雑なundo logを作らない。
+## camera runtimeが探索stateに必須な理由
+production cameraは `dq9::freecam::fast::RuntimeState gRuntimeState` をthread_localで保持している。ここにはbattle-wideな `presentationActors` のstartNode/world座標、membership、nearest-node cache、occupancy、previous action、retryCounter、current routes等がある。`CompleteActionPresentation()` はaction終了時のpresentation位置をcommitし、次ターンのroute長、movement、free-camera triggerとそれに伴うRNG消費へ影響し得る。したがって探索branchを切り替える際、Player/RNG/NowStateだけrestoreしてcamera runtimeを放置またはResetBattleすると別の未来になる。
+現 `ActionOptimizer` が各node展開ごとに `BattleEmulator::Main(...RunCount=1...)` を呼ぶ方式では、`Main` 冒頭の `InitializeCameraBattle()` が毎回 `camera::ResetBattle()` -> `fast::ResetBattle()` を通していたため、探索の各ターンでcamera battle-wide stateを初期配置へ戻していた。これは探索アルゴリズムの性能以前の正確性バグ。新Step経路ではbattle開始/root構築時のみ初期化し、branch replay時はroot/parentのcamera snapshotをrestoreして継続する。
+## WebAssembly/frontendのmemory ownership
+`BattleEmulator/webassembly/build.sh` は `ALLOW_MEMORY_GROWTH=1` だが `_malloc` / `_free` をJSへexportしていない。現在の `wasm_search_dump` は新規所有メモリを返さず、C++側static `std::string wasmLastDump` の `c_str()` を返す。`battle_harness/public/worker.js` はそのborrowed pointerを `UTF8ToString()` で即JS文字列へコピーしており、frontend側freeは不要かつ存在しない。
+総当たりworkerのうちseedが一意に見つかったworkerをそのままsearchへ使うため、総当たりと探索は同一WASM instanceのlinear memoryを共有する。ただし `app.js` はsearch完了直後にそのworkerをterminateし、finallyでも全workerをterminateする。したがって探索中にlinear memoryのhigh-water markが増えてもrun終了時にはworkerごと破棄される。新探索stateをJSへポインタとして所有させる設計は不要。探索state/workspaceはWASM/C++内部所有にし、JSへ返すのは最終action/target列とdumpだけにする。
+## BattleEmulator精度との順序
+探索器の性能評価より先に、8ターン級の実ROM連続経路でBattleEmulatorの各ターンを検証する。ROM側Ctableの境界 `start/end FUN_02158dfc`, `start/end FUN_021ebd9c_ct`, `start/end FUN_021594bc` と、C++のtrace boundaryを各ターン照合する。initial seedは位置検出を一意にするため原則14bit以下。戦闘本体のcheckpoint比較とfree-camera個別デバッグは分離してよいが、探索nodeの状態としてはcamera runtimeを必ず保持しなければならない。
+## battle_command_mcpの注意
+`confirmOption` は対象選択へ正常遷移した場合を例外にせず `targetRequired:true` で返す修正済み。`confirmEnemyTarget` も修正済みで、`{id:"enemy:0"}` 等のaliasを受け、A押下後にtarget画面を離れたことを短時間確認したらデフォルトでは `accepted:true, waitedForNextMenu:false` で返し、ROMをrunningのまま解放する。長いターン完了待ちは `waitForNextMenu:true` の明示時だけ。実機回帰では返却後もframeが進み、主人公action traceとCtable positionまで進行することを確認済み。修正前のザラキ試行は証拠として破棄する。

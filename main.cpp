@@ -930,6 +930,7 @@ int main(int argc, char* argv[]){
 		int tracePosition = currentSeedPosition + 1;
 		uint64_t traceState = 0;
 		lcg::init(traceSeed);
+		bool initializeCameraBattle = true;
 
 		for (int step = 0; step < argc - 4; ++step) {
 			const std::string_view token(argv[step + 4]);
@@ -938,16 +939,16 @@ int main(int argc, char* argv[]){
 			const int target = separator == std::string_view::npos
 				? -1
 				: std::stoi(std::string(token.substr(separator + 1)), nullptr, 0);
-			int32_t traceGene[350] = {};
-			makeDebugGene(traceGene, 1, action);
 			BattleResult traceResult;
 
 			std::cout << "TRACE sequence-step=" << step
 			          << " action=" << action
 			          << " target=" << target
 			          << " startPosition=" << tracePosition << '\n';
-			BattleEmulator::Main(&tracePosition, 1, traceGene, tracePlayers, &traceResult,
-			                     traceSeed, nullptr, nullptr, -1, &traceState, target, true);
+			BattleEmulator::Main(&tracePosition, 1, nullptr, tracePlayers, &traceResult,
+			                     traceSeed, nullptr, nullptr, -1, &traceState, target, true,
+			                     action, initializeCameraBattle);
+			initializeCameraBattle = false;
 			std::cout << "TRACE sequence-state step=" << step
 			          << " position=" << tracePosition
 			          << " hp=" << tracePlayers[0].hp << ',' << tracePlayers[1].hp << ','

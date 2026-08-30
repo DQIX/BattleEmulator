@@ -46,7 +46,7 @@ constexpr bool validateActionTable(const ActionEntry (&table)[N]){
 constexpr ActionEntry ACTION_TABLE[] = {
 	{
 		BattleEmulator::MIDHEAL, [](const Genome& g){
-			return (g.AllyPlayer.hp / g.AllyPlayer.maxHp) < 0.7 && g.AllyPlayer.mp >= 4;
+			return g.AllyPlayer.mp >= 4;
 		},
 		[](const Genome&, const Genome&){ return true; }
 	},
@@ -58,7 +58,7 @@ constexpr ActionEntry ACTION_TABLE[] = {
 	},
 	{
 		BattleEmulator::MAGIC_MIRROR, [](const Genome& g){
-			return g.AllyPlayer.mp >= 4 && g.AllyPlayer.MagicMirrorTurn <= 2;
+			return g.AllyPlayer.mp >= 4;
 		},
 		[](const Genome&, const Genome&){ return true; }
 	},
@@ -92,16 +92,12 @@ constexpr ActionEntry ACTION_TABLE[] = {
 	},
 	{
 		BattleEmulator::DOUBLE_UP,
-		[](const Genome& g){
-			return g.AllyPlayer.AtkBuffLevel == 0;
-		},
+		[](const Genome&){ return true; },
 		[](const Genome&, const Genome&){ return true; }
 	},
 	{
 		BattleEmulator::PSYCHE_UP_ALLY,
-		[](const Genome& g){
-			return g.EnemyPlayer.hp > 180 && g.AllyPlayer.TensionLevel <= 3;
-		},
+		[](const Genome&){ return true; },
 		[](const Genome& before, const Genome& after){
 			return after.AllyPlayer.TensionLevel > before.AllyPlayer.TensionLevel;
 		}
@@ -110,12 +106,12 @@ constexpr ActionEntry ACTION_TABLE[] = {
 	},
 	{
 		BattleEmulator::BUFF,
-		[](const Genome& g){ return g.AllyPlayer.mp >= 10 && g.AllyPlayer.BuffLevel <= 1; },
+		[](const Genome& g){ return g.AllyPlayer.mp >= 3; },
 		[](const Genome&, const Genome&){ return true; }
 	},
 	{
 		BattleEmulator::MULTITHRUST,
-		[](const Genome& g){ return g.AllyPlayer.mp >= 10 && g.AllyPlayer.AtkBuffLevel >= 2; },
+		[](const Genome& g){ return g.AllyPlayer.mp >= 4; },
 		[](const Genome&, const Genome&){ return true; }
 	},
 	{
@@ -130,9 +126,7 @@ constexpr ActionEntry ACTION_TABLE[] = {
 	},
 	{
 		BattleEmulator::INSULATE,
-		[](const Genome& g){
-			return g.AllyPlayer.InsulateLevel <= 1 && g.AllyPlayer.InsulateTurns <= 2 && g.AllyPlayer.mp >= 4;
-		},
+		[](const Genome& g){ return g.AllyPlayer.mp >= 4; },
 		[](const Genome& b, const Genome& a){ return true; }
 	},
 };
@@ -365,13 +359,10 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[4], uint64_t seed, int
 				continue;
 			}
 
-			constexpr int RequiredAllyHpOnVictory = 200;
 			if(currentGenome.EnemyPlayer.hp <= 0){
-				if(currentGenome.AllyPlayer.hp >= RequiredAllyHpOnVictory){
-					if(!solutionFound || currentGenome.turn < bestSolution.turn){
-						bestSolution = currentGenome;
-						solutionFound = true;
-					}
+				if(!solutionFound || currentGenome.turn < bestSolution.turn){
+					bestSolution = currentGenome;
+					solutionFound = true;
 				}
 				continue;
 			}
@@ -456,10 +447,6 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[4], uint64_t seed, int
 					newNode.allyHP = newGenome.AllyPlayer.hp;
 					newNode.enemyHP = newGenome.EnemyPlayer.hp;
 					newNode.nodeId = Pool.alloc(newGenome);
-
-					if(!entry.isEffective(currentGenome, newGenome)){
-						continue;
-					}
 
 					// Add to open set
 					openSet.push(newNode);

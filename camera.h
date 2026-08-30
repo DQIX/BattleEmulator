@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <array>
 #include "camera/freecam_actor.hpp"
+#include "camera/freecam_fast_runtime.hpp"
 
 enum class CameraMembershipKind : std::uint8_t {
     none,
@@ -58,7 +59,11 @@ struct CameraDebugEvent {
 
 class camera {
 public:
+    using RuntimeSnapshot = dq9::freecam::fast::RuntimeState;
+
     static bool ResetBattle(const CameraPresentationActor *actors, std::size_t actorCount);
+    static RuntimeSnapshot CaptureRuntimeState() noexcept;
+    static void RestoreRuntimeState(const RuntimeSnapshot& state) noexcept;
     static void Main(int *position, const int32_t *actions,
                      const dq9::freecam::fast::BattleActorRef *actors,
                      const dq9::freecam::fast::BattleActorRef *targets,

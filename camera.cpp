@@ -174,6 +174,14 @@ bool camera::ResetBattle(const CameraPresentationActor *actors, const std::size_
     return true;
 }
 
+camera::RuntimeSnapshot camera::CaptureRuntimeState() noexcept {
+    return dq9::freecam::fast::ThreadContext();
+}
+
+void camera::RestoreRuntimeState(const RuntimeSnapshot& state) noexcept {
+    dq9::freecam::fast::ThreadContext() = state;
+}
+
 void camera::Main(int *position, const int32_t *actions, const BattleActorRef *actors, const BattleActorRef *targets,
                   const int actionCount, uint64_t *NowState, bool preemptive1, bool bakuti) {
     (void)preemptive1;

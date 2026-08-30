@@ -603,11 +603,12 @@ std::string BattleEmulator::getActionName(int actionId) {
 bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
                          BattleResult* result,
                           uint64_t seed, const int eActions[350], const int damages[350], int mode,
-                          uint64_t *NowState, const int heroTargetOverride, const bool traceBoundaries) {
+                          uint64_t *NowState, const int heroTargetOverride, const bool traceBoundaries,
+                          const int heroActionOverride, const bool initializeCameraBattle) {
     resetCombo(NowState);
 #if defined(gerunikku)
     InitializeBattleActorRefs();
-    if (!InitializeCameraBattle()) return false;
+    if (initializeCameraBattle && !InitializeCameraBattle()) return false;
 #endif
     player0_has_initiative = false;
     TiggerSkyAttack = false;
@@ -737,18 +738,22 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
         int32_t actionTable = -1;
 
-        if (genePosition != -1 && (Gene[genePosition] == 0 || Gene[genePosition] == -1)) {
-            genePosition = -1;
-            //throw std::invalid_argument("GenePosition is invalid");
-        }
-        if (genePosition != -1 && Gene[genePosition] != 0 && Gene[genePosition] != -1) {
-            actionTable = Gene[genePosition];
-            if (actionTable == TURN_SKIPPED || actionTable == SLEEPING || actionTable == CURE_SLEEPING || actionTable ==
-                CURE_PARALYSIS || actionTable == PARALYSIS) {
-                actionTable = ATTACK_ALLY;
-                }
+        if (heroActionOverride > 0) {
+            actionTable = heroActionOverride;
         } else {
-            actionTable = ATTACK_ALLY;
+            if (genePosition != -1 && (Gene[genePosition] == 0 || Gene[genePosition] == -1)) {
+                genePosition = -1;
+                //throw std::invalid_argument("GenePosition is invalid");
+            }
+            if (genePosition != -1 && Gene[genePosition] != 0 && Gene[genePosition] != -1) {
+                actionTable = Gene[genePosition];
+                if (actionTable == TURN_SKIPPED || actionTable == SLEEPING || actionTable == CURE_SLEEPING || actionTable ==
+                    CURE_PARALYSIS || actionTable == PARALYSIS) {
+                    actionTable = ATTACK_ALLY;
+                    }
+            } else {
+                actionTable = ATTACK_ALLY;
+            }
         }
 
 
@@ -3126,6 +3131,13 @@ void BattleEmulator::RecalculateBuff(Player players[4], int actor) {
 }
 
 void BattleEmulator::ProcessRage(int *position, int baseDamage, Player players[4], int defender) {
+    // Rage transition belongs to enemy actors in this battle model.  The old
+    // generic defender implementation incorrectly allowed enemy attacks on the
+    // hero (actor 0) to consume rage RNG at the 50% / 25% HP thresholds.
+    if (defender == 0) {
+        return;
+    }
+
     // if (kaisinn) {
     //     return;
     // }
