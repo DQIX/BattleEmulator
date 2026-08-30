@@ -30,6 +30,26 @@ struct CameraPresentationActor {
     std::uint16_t membershipKeyB{};
 };
 
+#if defined(gerunikku)
+struct CameraDebugEvent {
+    int turnSerial{};
+    int actionIndex{};
+    int commonActionId{};
+    std::uint16_t actorId{0xffff};
+    std::uint16_t targetId{0xffff};
+    std::uint8_t actorRouteCount{};
+    std::uint8_t maxRouteCount{};
+    std::uint8_t triggerSource{};
+    bool mapped{};
+    bool runtimeDecisionAvailable{};
+    bool runtimeCallFreeCamera{};
+    bool runtimeParam5{};
+    bool runtimeResetOnly{};
+    bool manualRuleWouldCall{};
+    bool productionCalledFreeCamera{};
+};
+#endif
+
 class camera {
 public:
     static bool ResetBattle(const CameraPresentationActor *actors, std::size_t actorCount);
@@ -37,6 +57,13 @@ public:
                      const dq9::freecam::fast::BattleActorRef *actors,
                      const dq9::freecam::fast::BattleActorRef *targets,
                      int actionCount, uint64_t *NowState, bool preemptive, bool bakuti);
+
+#if defined(gerunikku)
+    static void SetDebugCapture(bool enabled) noexcept;
+    static void ClearDebugEvents() noexcept;
+    static std::size_t DebugEventCount() noexcept;
+    static CameraDebugEvent DebugEventAt(std::size_t index) noexcept;
+#endif
 
 private:
     static void onFreeCameraMove(int *position, int action, int param5, uint64_t *NowState);

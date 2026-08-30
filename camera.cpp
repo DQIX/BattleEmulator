@@ -15,6 +15,13 @@ namespace {
 
 using dq9::freecam::fast::BattleActorRef;
 
+#if defined(gerunikku)
+thread_local bool gCameraDebugCapture = false;
+thread_local int gCameraDebugTurnSerial = 0;
+thread_local std::array<CameraDebugEvent, 1024> gCameraDebugEvents{};
+thread_local std::size_t gCameraDebugEventCount = 0;
+#endif
+
 enum class CameraRule {
     none,
     free_camera,
@@ -50,6 +57,25 @@ inline void AssertCameraMapping(const int action) noexcept {
 
 } // namespace
 
+#if defined(gerunikku)
+void camera::SetDebugCapture(const bool enabled) noexcept {
+    gCameraDebugCapture = enabled;
+}
+
+void camera::ClearDebugEvents() noexcept {
+    gCameraDebugEventCount = 0;
+    gCameraDebugTurnSerial = 0;
+}
+
+std::size_t camera::DebugEventCount() noexcept {
+    return gCameraDebugEventCount;
+}
+
+CameraDebugEvent camera::DebugEventAt(const std::size_t index) noexcept {
+    return index < gCameraDebugEventCount ? gCameraDebugEvents[index] : CameraDebugEvent{};
+}
+#endif
+
 bool camera::ResetBattle(const CameraPresentationActor *actors, const std::size_t actorCount) {
     using namespace dq9::freecam::fast;
     if (actors == nullptr || actorCount > dq9::freecam::detail::kMaxPresentationActors) return false;
@@ -64,8 +90,8 @@ bool camera::ResetBattle(const CameraPresentationActor *actors, const std::size_
                 .startNode = node,
                 .goalNode = node,
                 .movementEnabled = source.movementEnabled,
-                .presentationFlags = source.presentationFlags,
                 .occupancyExpansionDepth = source.occupancyExpansionDepth,
+                .presentationFlags = source.presentationFlags,
                 .worldX = source.worldX,
                 .worldY = source.worldY,
                 .worldZ = source.worldZ,
@@ -95,23 +121,10 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
     std::array<BattleActorRef, dq9::freecam::detail::kMaxPresentationActions> actionOrder{};
     if (actionCount < 0 || static_cast<std::size_t>(actionCount) > actionOrder.size()) return;
     for (int i = 0; i < actionCount; ++i) actionOrder[static_cast<std::size_t>(i)] = actors[i];
-    const bool runtimeReady = BeginTurn(std::span<const BattleActorRef>(actionOrder.data(), actionCount))
-        && BeginPresentationGoalSetup();
-    if (runtimeReady) {
-        for (int i = 0; i < actionCount; ++i) {
-            const auto* binding = dq9::freecam::bindings::Find(actions[i]);
-            if (binding == nullptr || !binding->mapped() || !actors[i].valid() || !targets[i].valid()) continue;
-            const std::uint16_t actorId = Dq9ActorId(actors[i]);
-            const std::uint16_t targetId = Dq9ActorId(targets[i]);
-            const std::array<std::uint16_t, 1> actionActorIds{actorId};
-            (void)AssignActorPresentationGoal(
-                actorId,
-                targetId,
-                std::span<const std::uint16_t>(actionActorIds.data(), actionActorIds.size()),
-                binding->attackFormationMode
-            );
-        }
-    }
+    const bool runtimeReady = BeginTurn(std::span<const BattleActorRef>(actionOrder.data(), actionCount));
+#if defined(gerunikku)
+    const int debugTurnSerial = gCameraDebugTurnSerial++;
+#endif
 
     bool preemptive = true;
     auto moture = false;
@@ -125,20 +138,69 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
         std::uint16_t runtimeActorId = kInvalidBattleActor;
         std::uint16_t runtimeTargetId = kInvalidBattleActor;
         if (runtimeReady && binding != nullptr && binding->mapped()
-            && actors[i].valid() && targets[i].valid()
-            && PlanCurrentActionRoutes(i)) {
+            && actors[i].valid() && targets[i].valid()) {
             runtimeActorId = Dq9ActorId(actors[i]);
             runtimeTargetId = Dq9ActorId(targets[i]);
-            const std::size_t targetSlot = FindPresentationActorIndex(runtimeTargetId);
-            runtimeDecision = binding->decide({
+            const std::array<std::uint16_t, 1> actionActorIds{runtimeActorId};
+            if (BeginPresentationGoalSetup()
+                && AssignActorPresentationGoal(
+                    runtimeActorId,
+                    runtimeTargetId,
+                    std::span<const std::uint16_t>(actionActorIds.data(), actionActorIds.size()),
+                    binding->attackFormationMode
+                )
+                && PlanCurrentActionRoutes(i)) {
+                const std::size_t targetSlot = FindPresentationActorIndex(runtimeTargetId);
+                runtimeDecision = binding->decide({
+                    .actorId = runtimeActorId,
+                    .targetId = runtimeTargetId,
+                    .turnActionIndex = static_cast<std::uint16_t>(i),
+                    .currentActorId = runtimeActorId,
+                    .targetPresentationSlot = targetSlot < 0xff ? static_cast<std::uint8_t>(targetSlot) : std::uint8_t{0xff},
+                });
+                hasRuntimeDecision = true;
+            }
+        }
+
+        const CameraRule rule = RuleForAction(after);
+#if defined(gerunikku)
+        if (gCameraDebugCapture && gCameraDebugEventCount < gCameraDebugEvents.size()) {
+            std::uint8_t actorRouteCount = 0;
+            std::uint8_t maxRouteCount = 0;
+            if (hasRuntimeDecision) {
+                if (const auto* route = FindCurrentRoute(runtimeActorId); route != nullptr) {
+                    actorRouteCount = route->count;
+                }
+                const auto& state = ThreadContext();
+                for (std::size_t routeIndex = 0; routeIndex < state.currentRoutes.actorCount; ++routeIndex) {
+                    if (state.currentRoutes.actors[routeIndex].count > maxRouteCount) {
+                        maxRouteCount = state.currentRoutes.actors[routeIndex].count;
+                    }
+                }
+            }
+            const bool manualWouldCall = rule != CameraRule::none;
+            const bool productionWouldCall = after == BattleEmulator::ZAKI
+                ? hasRuntimeDecision && runtimeDecision.callFreeCamera
+                : manualWouldCall;
+            gCameraDebugEvents[gCameraDebugEventCount++] = {
+                .turnSerial = debugTurnSerial,
+                .actionIndex = i,
+                .commonActionId = after,
                 .actorId = runtimeActorId,
                 .targetId = runtimeTargetId,
-                .turnActionIndex = static_cast<std::uint16_t>(i),
-                .currentActorId = runtimeActorId,
-                .targetPresentationSlot = targetSlot < 0xff ? static_cast<std::uint8_t>(targetSlot) : std::uint8_t{0xff},
-            });
-            hasRuntimeDecision = true;
+                .actorRouteCount = actorRouteCount,
+                .maxRouteCount = maxRouteCount,
+                .triggerSource = static_cast<std::uint8_t>(runtimeDecision.source),
+                .mapped = binding != nullptr && binding->mapped(),
+                .runtimeDecisionAvailable = hasRuntimeDecision,
+                .runtimeCallFreeCamera = runtimeDecision.callFreeCamera,
+                .runtimeParam5 = runtimeDecision.param5,
+                .runtimeResetOnly = runtimeDecision.resetOnly,
+                .manualRuleWouldCall = manualWouldCall,
+                .productionCalledFreeCamera = productionWouldCall,
+            };
         }
+#endif
 
         //守備力が高すぎる場合(ダメージ0)true、盾ガードは偽
         if (bakuti && after == BattleEmulator::SKY_ATTACK) {
@@ -150,7 +212,6 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
             continue;
         }
 
-        const CameraRule rule = RuleForAction(after);
         if (after == BattleEmulator::ZAKI && hasRuntimeDecision) {
             if (runtimeDecision.callFreeCamera) {
                 AssertCameraMapping(after);

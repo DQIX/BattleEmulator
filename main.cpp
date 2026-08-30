@@ -8,6 +8,7 @@
 
 #include "lcg.h"
 #include "BattleEmulator.h"
+#include "camera.h"
 #include "debug.h"
 #include "ActionOptimizer.h"
 #include "EnhancedCostCalculator.h"
@@ -915,6 +916,90 @@ int main(int argc, char* argv[]){
 		BattleEmulator::Main(&tracePosition, traceTurns, traceGene, tracePlayers, &traceResult,
 		                     traceSeed, nullptr, nullptr, -1, &traceState, traceTarget);
 		printTrace(traceSeed, tracePosition, tracePlayers, traceResult);
+		return 0;
+	}
+
+	if (argc >= 7 && std::string_view(argv[1]) == "--scan-camera") {
+		const int traceAction = std::stoi(argv[2], nullptr, 0);
+		const int traceTarget = std::stoi(argv[3], nullptr, 0);
+		const int traceTurns = std::stoi(argv[4], nullptr, 0);
+		const uint64_t startSeed = std::stoull(argv[5], nullptr, 0);
+		const uint64_t count = std::stoull(argv[6], nullptr, 0);
+		if (traceTurns < 1 || traceTurns > 349) throw std::invalid_argument("scan turns must be 1..349");
+		int32_t traceGene[350] = {};
+		makeDebugGene(traceGene, traceTurns, traceAction);
+		std::array<int, 9> categoryCounts{};
+		auto emitCandidate = [&](const char* category, const int categoryIndex, const uint64_t seed,
+		                         const CameraDebugEvent& event) {
+			if (categoryCounts[categoryIndex] >= 12) return;
+			++categoryCounts[categoryIndex];
+			std::cout << "CAMERA_CANDIDATE category=" << category
+			          << " seed=0x" << std::hex << seed << std::dec
+			          << " turn=" << event.turnSerial + 1
+			          << " actionIndex=" << event.actionIndex
+			          << " action=" << event.commonActionId
+			          << " actor=0x" << std::hex << event.actorId
+			          << " target=0x" << event.targetId << std::dec
+			          << " route=" << static_cast<unsigned>(event.actorRouteCount)
+			          << " maxRoute=" << static_cast<unsigned>(event.maxRouteCount)
+			          << " source=" << static_cast<unsigned>(event.triggerSource)
+			          << " call=" << event.runtimeCallFreeCamera
+			          << " param5=" << event.runtimeParam5
+			          << " reset=" << event.runtimeResetOnly
+			          << " manual=" << event.manualRuleWouldCall
+			          << " production=" << event.productionCalledFreeCamera << '\n';
+		};
+
+		camera::SetDebugCapture(true);
+		for (uint64_t offset = 0; offset < count; ++offset) {
+			const uint64_t seed = startSeed + offset;
+			if (seed == 0) continue;
+			Player tracePlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
+			BattleResult traceResult;
+			int tracePosition = 1;
+			uint64_t traceState = 0;
+			lcg::init(seed);
+			camera::ClearDebugEvents();
+			BattleEmulator::Main(&tracePosition, traceTurns, traceGene, tracePlayers, &traceResult,
+			                     seed, nullptr, nullptr, -1, &traceState, traceTarget);
+			CameraDebugEvent previousAttackEvent{};
+			bool havePreviousAttackEvent = false;
+			for (std::size_t eventIndex = 0; eventIndex < camera::DebugEventCount(); ++eventIndex) {
+				const CameraDebugEvent event = camera::DebugEventAt(eventIndex);
+				if (!event.runtimeDecisionAvailable) continue;
+				const bool attackAction = event.commonActionId == BattleEmulator::ATTACK_ENEMY
+				    || event.commonActionId == BattleEmulator::ATTACK_ALLY;
+				if (attackAction && havePreviousAttackEvent && event.actionIndex > 0
+				    && event.actorId == previousAttackEvent.actorId
+				    && event.targetId == previousAttackEvent.targetId) {
+					emitCandidate("potential-consecutive-attack-reset", 8, seed, event);
+				}
+				if (event.runtimeResetOnly) emitCandidate("reset-only", 0, seed, event);
+				if (event.manualRuleWouldCall && (!event.runtimeCallFreeCamera || event.runtimeResetOnly)) {
+					emitCandidate("manual-runtime-mismatch", 1, seed, event);
+				}
+				if (event.commonActionId == BattleEmulator::ZAKI && !event.runtimeCallFreeCamera) {
+					emitCandidate("zaki-suppressed", 2, seed, event);
+				}
+				if (event.commonActionId == BattleEmulator::ZAKI && event.runtimeCallFreeCamera && !event.runtimeParam5) {
+					emitCandidate("zaki-call-param5-0", 3, seed, event);
+				}
+				if (event.commonActionId == BattleEmulator::ZAKI && event.runtimeCallFreeCamera && event.runtimeParam5) {
+					emitCandidate("zaki-call-param5-1", 4, seed, event);
+				}
+				if (event.maxRouteCount > 4) emitCandidate("route-over-4", 5, seed, event);
+				if (event.triggerSource == 1) emitCandidate("actor-membership", 6, seed, event);
+				if (event.triggerSource == 3) emitCandidate("fallback-membership", 7, seed, event);
+				if (attackAction) {
+					previousAttackEvent = event;
+					havePreviousAttackEvent = true;
+				}
+			}
+		}
+		camera::SetDebugCapture(false);
+		std::cout << "CAMERA_SCAN_DONE seeds=" << count;
+		for (std::size_t i = 0; i < categoryCounts.size(); ++i) std::cout << " c" << i << '=' << categoryCounts[i];
+		std::cout << '\n';
 		return 0;
 	}
 

@@ -78,6 +78,11 @@ target_compile_definitions(erugi1_hayate PRIVATE hayate=1)
 add_executable(erugi1_gilyumei ${SOURCES})
 target_compile_definitions(erugi1_gilyumei PRIVATE gilyumei=1)
 
+add_executable(freecam_edge_validation
+        camera/freecam_edge_validation.cpp
+)
+target_include_directories(freecam_edge_validation PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
 string(TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)
 string(TIMESTAMP BUILD_TIME "%H:%M:%S" UTC)
 add_definitions(-DBUILD_DATE="${BUILD_DATE}" -DBUILD_TIME="${BUILD_TIME}")
