@@ -898,7 +898,7 @@ int main(int argc, char* argv[]){
 		uint64_t traceState = 0;
 		lcg::init(traceSeed);
 		BattleEmulator::Main(&tracePosition, 1, traceGene, tracePlayers, &traceResult,
-		                     traceSeed, nullptr, nullptr, -1, &traceState, traceTarget);
+		                     traceSeed, nullptr, nullptr, -1, &traceState, traceTarget, true);
 		printTrace(traceSeed, tracePosition, tracePlayers, traceResult);
 		return 0;
 	}
@@ -918,7 +918,7 @@ int main(int argc, char* argv[]){
 		uint64_t traceState = 0;
 		lcg::init(traceSeed);
 		BattleEmulator::Main(&tracePosition, traceTurns, traceGene, tracePlayers, &traceResult,
-		                     traceSeed, nullptr, nullptr, -1, &traceState, traceTarget);
+		                     traceSeed, nullptr, nullptr, -1, &traceState, traceTarget, true);
 		printTrace(traceSeed, tracePosition, tracePlayers, traceResult);
 		return 0;
 	}

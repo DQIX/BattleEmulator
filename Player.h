@@ -33,7 +33,7 @@ struct Player {
     int sleepingTurn = -1;
     int BuffLevel = 0;
     int BuffTurns = -1;
-    bool hasMagicMirror = false;
+    bool hasMagicMirror = false; // DQ9 live combat +0x14 bit 0x200 (Mirror Shield / spell reflection)
     int MagicMirrorTurn = -1;
     int AtkBuffLevel = 0;
     int AtkBuffTurn = -1;

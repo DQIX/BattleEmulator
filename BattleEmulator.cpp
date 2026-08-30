@@ -316,7 +316,9 @@ struct PhysicalAvoidanceResult {
 #if defined(gerunikku)
 constexpr int Ally_Level = 48;
 constexpr double Ally_TensionTable[4] = {1.5, 2.5, 4.0, 6.0};
-constexpr int shieldGuardP = 9; //盾ガード率 9%
+// 実盾ガード率は6.5%。RandInt(100)は整数0..99へ切り捨てられるため、
+// 比較閾値7（roll 0..6）で実効7%になる。
+constexpr int shieldGuardP = 7;
 constexpr int kaisinnP = 500;
 constexpr int WooshSlashKaisinnP = 100;
 constexpr int Enemy_level = 51;
@@ -324,14 +326,18 @@ constexpr int baseHP = 301;
 #elif defined(hayate)
 constexpr int Ally_Level = 49;
 constexpr double Ally_TensionTable[4] = {1.5, 2.5, 4.0, 6.0};
-constexpr int shieldGuardP = 9; //盾ガード率 9%
+// 実盾ガード率は6.5%。RandInt(100)は整数0..99へ切り捨てられるため、
+// 比較閾値7（roll 0..6）で実効7%になる。
+constexpr int shieldGuardP = 7;
 constexpr int kaisinnP = 500;
 constexpr int WooshSlashKaisinnP = 100;
 constexpr int Enemy_level = 51;
 #elif defined(gilyumei)
 constexpr int Ally_Level = 49;
 constexpr double Ally_TensionTable[4] = {1.5, 2.5, 4.0, 6.0};
-constexpr int shieldGuardP = 9; //盾ガード率 9%
+// 実盾ガード率は6.5%。RandInt(100)は整数0..99へ切り捨てられるため、
+// 比較閾値7（roll 0..6）で実効7%になる。
+constexpr int shieldGuardP = 7;
 constexpr int kaisinnP = 500;
 constexpr int WooshSlashKaisinnP = 100;
 constexpr int Enemy_level = 51;
@@ -597,7 +603,7 @@ std::string BattleEmulator::getActionName(int actionId) {
 bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
                          BattleResult* result,
                           uint64_t seed, const int eActions[350], const int damages[350], int mode,
-                          uint64_t *NowState, const int heroTargetOverride) {
+                          uint64_t *NowState, const int heroTargetOverride, const bool traceBoundaries) {
     resetCombo(NowState);
 #if defined(gerunikku)
     InitializeBattleActorRefs();
@@ -866,6 +872,12 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             }
         };
 
+        auto traceBoundary = [&](const char *label) {
+            if (traceBoundaries) {
+                std::cout << "TRACE boundary " << label << " position=" << *position << '\n';
+            }
+        };
+
         for (const int actor : order) {
             if (!Player::isPlayerAlive(players[actor])) {
                 continue;
@@ -882,6 +894,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         if (action == FLEE_ALLY) skipTurn = true;
 
                         if (!skipTurn) {
+                            traceBoundary("start FUN_02158dfc");
                             // FUN_02158dfc player pre-action path.
                             if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive && !players[0].confused) {
                                 (*position)++; // max: 100, lr: 0x02159b10
@@ -961,8 +974,11 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                                 targetWasGuardRedirect = true;
                             }
 
+                            traceBoundary("end FUN_02158dfc");
+                            traceBoundary("start FUN_021ebd9c_ct");
                             const int basedamage = callAttackFun(action, position, players, 0, target, NowState,
                                                                  targetWasGuardRedirect);
+                            traceBoundary("end FUN_021ebd9c_ct");
                             addResult(action, basedamage, false);
                             if (isHealingAction(action)) {
                                 Player::heal(players[0], basedamage);
@@ -978,6 +994,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                                 }
                             }
 
+                            traceBoundary("start FUN_021594bc");
                             // FUN_021594bc -> FUN_0215b174 at 0x0215957c.
                             // Medapani sets combat+0x5e=3. The primary confusion counter
                             // is decremented after each action; when it expires, the game
@@ -1035,6 +1052,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                                     }
                                 }
                             }
+                            traceBoundary("end FUN_021594bc");
                         } else {
                             addResult(action, 0, false);
                         }
@@ -1045,19 +1063,28 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     {
 #if defined(gerunikku)
                         if (!plannedIronValid[actor]) break;
+                        traceBoundary("start FUN_02158dfc");
                         if (EnemyLosesActionToCharm(position)) {
+                            traceBoundary("end FUN_02158dfc");
+                            traceBoundary("start FUN_021ebd9c_ct");
                             const int basedamage = callAttackFun(INACTIVE_ENEMY, position, players, actor, 0, NowState);
+                            traceBoundary("end FUN_021ebd9c_ct");
                             addResult(INACTIVE_ENEMY, basedamage, true);
                             const int validation = validateEnemy(INACTIVE_ENEMY, basedamage);
                             if (validation < 0) return false;
                             if (validation > 0) return true;
+                            traceBoundary("start FUN_021594bc");
                             postEnemyAction(actor);
+                            traceBoundary("end FUN_021594bc");
                             break;
                         }
                         (*position)++; // max: 100, lr: 0x02159b10
                         const EnemySelection selection = plannedIron[actor];
+                        traceBoundary("end FUN_02158dfc");
+                        traceBoundary("start FUN_021ebd9c_ct");
                         const int basedamage = callAttackFun(selection.action, position, players, actor,
                                                              selection.target, NowState);
+                        traceBoundary("end FUN_021ebd9c_ct");
                         addResult(selection.action, basedamage, true);
                         if (basedamage > 0 && selection.target >= 0 && selection.target < 4) {
                             Player::reduceHp(players[selection.target], basedamage);
@@ -1065,7 +1092,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         const int validation = validateEnemy(selection.action, basedamage);
                         if (validation < 0) return false;
                         if (validation > 0) return true;
+                        traceBoundary("start FUN_021594bc");
                         postEnemyAction(actor);
+                        traceBoundary("end FUN_021594bc");
 #endif
                         break;
                     }
@@ -1074,19 +1103,28 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 #if defined(gerunikku)
                         for (int bossActionIndex = 0; bossActionIndex < 2; ++bossActionIndex) {
                             if (!Player::isPlayerAlive(players[2]) || !Player::isPlayerAlive(players[0])) break;
+                            traceBoundary("start FUN_02158dfc");
                             if (EnemyLosesActionToCharm(position)) {
+                                traceBoundary("end FUN_02158dfc");
+                                traceBoundary("start FUN_021ebd9c_ct");
                                 const int basedamage = callAttackFun(INACTIVE_ENEMY, position, players, 2, 0, NowState);
+                                traceBoundary("end FUN_021ebd9c_ct");
                                 addResult(INACTIVE_ENEMY, basedamage, true);
                                 const int validation = validateEnemy(INACTIVE_ENEMY, basedamage);
                                 if (validation < 0) return false;
                                 if (validation > 0) return true;
+                                traceBoundary("start FUN_021594bc");
                                 postEnemyAction(2);
+                                traceBoundary("end FUN_021594bc");
                                 continue;
                             }
                             const EnemySelection selection = selectGerunikuAction(position, players, gerunikuUsedSlots);
                             (*position)++; // max: 100, lr: 0x02159b10
+                            traceBoundary("end FUN_02158dfc");
+                            traceBoundary("start FUN_021ebd9c_ct");
                             const int basedamage = callAttackFun(selection.action, position, players, 2,
                                                                  selection.target, NowState);
+                            traceBoundary("end FUN_021ebd9c_ct");
                             addResult(selection.action, basedamage, true);
                             if (basedamage > 0 && selection.target >= 0 && selection.target < 4) {
                                 Player::reduceHp(players[selection.target], basedamage);
@@ -1094,7 +1132,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             const int validation = validateEnemy(selection.action, basedamage);
                             if (validation < 0) return false;
                             if (validation > 0) return true;
+                            traceBoundary("start FUN_021594bc");
                             postEnemyAction(2);
+                            traceBoundary("end FUN_021594bc");
                         }
 #endif
                         break;
@@ -2048,6 +2088,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     players[attacker].specialChargeTurn = SpecialChargeTurns;
                 }
             }
+            // Real ROM: Mirror Shield sets live combat status +0x14 bit 0x200.
             players[attacker].hasMagicMirror = true;
             players[attacker].MagicMirrorTurn = 6;
             resetCombo(NowState);
@@ -2412,11 +2453,13 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
                 // seed 0x2A実測: 成功時もgeneric physical-baseを通る。
                 // ATK125/DEF282では0なのでfloat RNGなしで021e81a0へ進み、
-                // 0damage枝では021e54fcを通らず021ed7a8へ直行する。
+                // 021e81a0の0/1結果を内部damageとして扱う。1ならHP damageには
+                // 反映しないが、ROMは021e54fcを通ってから021ed7a8へ進む。
                 baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
                 if (baseDamage == 0) {
-                    (void)lcg::getPercent(position, 2); // lr: 0x021e81a0
-                } else {
+                    baseDamage = lcg::getPercent(position, 2); // lr: 0x021e81a0
+                }
+                if (baseDamage != 0) {
                     (*position)++; // lr: 0x021e54fc
                 }
                 (*position)++; // max: 100, lr: 0x021ed7a8
