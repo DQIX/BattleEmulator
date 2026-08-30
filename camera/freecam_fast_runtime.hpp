@@ -221,10 +221,10 @@ template <std::uint16_t ActionId>
     return generated::kFreeCameraMapperAllowed[ActionId] != 0;
 }
 
-static_assert(!HasAnyMinedFreeCameraTriggerSource<503>());
-static_assert(!HasAnyMinedFreeCameraTriggerSource<929>());
-static_assert(!IsFreeCameraMapperAllowed<503>());
-static_assert(!IsFreeCameraMapperAllowed<929>());
+
+
+
+
 
 template <std::uint16_t ActionId>
 [[nodiscard]] consteval auto BuildActorMembershipColumn() {

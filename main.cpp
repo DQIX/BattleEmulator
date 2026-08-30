@@ -1036,9 +1036,9 @@ int main(int argc, char* argv[]){
 		const int wantedCommonAction = argc >= 11 ? std::stoi(argv[10], nullptr, 0) : -1;
 		const int maxRecord = argc >= 12 ? std::stoi(argv[11], nullptr, 0) : std::numeric_limits<int>::max();
 		if (searchTurns < 1 || searchTurns > 349) throw std::invalid_argument("scan-action-seeds turns must be 1..349");
-		if (perAction < 1) throw std::invalid_argument("scan-action-seeds perAction must be >= 1");
+		if (perAction < 0) throw std::invalid_argument("scan-action-seeds perAction must be >= 0 (0 = emit all matches)");
 
-		using dq9::freecam::bindings::Find;
+		using dq9::freecam::actions::Find;
 		using namespace dq9::freecam::fast;
 		if (wantedPresentationType >= 0) {
 			std::cout << "ROM_PRESENTATION_TYPE type=" << wantedPresentationType << '\n';
@@ -1087,7 +1087,7 @@ int main(int argc, char* argv[]){
 					bestRecord[static_cast<std::size_t>(commonAction)] = record;
 					bestSeed[static_cast<std::size_t>(commonAction)] = seed;
 				}
-				if (emittedCounts[static_cast<std::size_t>(commonAction)] >= perAction) continue;
+				if (perAction != 0 && emittedCounts[static_cast<std::size_t>(commonAction)] >= perAction) continue;
 				++emittedCounts[static_cast<std::size_t>(commonAction)];
 				std::cout << "ACTION_SEED common=" << commonAction
 				          << " name=\"" << BattleEmulator::getActionName(commonAction) << "\""

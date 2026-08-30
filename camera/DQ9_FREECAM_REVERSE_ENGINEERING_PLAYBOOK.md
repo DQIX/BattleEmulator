@@ -9,15 +9,16 @@
 - 敵数・味方数をcamera.cppへハードコードしない。ゲルニック戦のroster/初期座標/monster IDはBattleEmulator側のencounter setupが一般camera APIへ供給する。
 - BattleEmulator player slotから `0xC0 + index` をcamera.cppで生成しない。camera境界では `BattleActorRef` を受け、`Dq9ActorId()`を使用する。
 - `actor==0 ? ally : enemy` のようにBattleEmulator固有slot意味をcamera側へ漏らさない。
-- generated ROM metadataはcompile-timeで使う。hot loopでROM/巨大binを開かない。既知actionのcommon-ID→DQ9-IDは`freecam_action_mapper.hpp`のcompile-time bindingを使い、線形探索tableを作らない。
-- `freecam_action_mapper.hpp`は**free-camera trigger pipelineへ入り得るaction専用**。presentation stateを再現したい、future actorのtargetを知りたい、内部action IDを保持したい、という理由で非freecam actionを登録してはいけない。`Bind<>`はROM mining済みBACT / actor membership / fallback membershipの全てが空ならcompile-time errorにする。
+- generated ROM metadataはcompile-timeで使う。hot loopでROM/巨大binを開かない。BattleEmulator ecosystem共通のcommon/god IDは維持し、既知actionのcommon-ID→DQ9-IDとpresentation metadataは`dq9_action_mapper.hpp`でcompile-time解決する。freecam mapperへ一般action mappingの責務を持ち込まない。
+- `freecam_action_mapper.hpp`は**free-camera trigger pipelineへ入り得るaction専用**。presentation stateを再現したい、future actorのtargetを知りたい、内部action IDを保持したい、という理由で非freecam actionを登録してはいけない。`kFreeCameraActions`完成後にconstevalで全slotを走査し、common/god ID slot整合・一般DQ9 metadata整合・generated freecam gateを検証する。DQ9 503/912/929のような非freecam actionは一般metadata側にのみ置く。
 - DQ9 action ID・target分類・`operation_type`等は`camera/dq9-action-target-classification.csv`が既存のデータマイニング台帳。`build_freecam_fast_generated.mjs`がtarget side/scope、repeat mode、operation type、resource cost、target-handler judgment等を1024-entry constexpr tableとして`freecam_fast_generated.hpp`へ焼く。mapperの第一template引数をseed sweepで再発見しない。CSVで既に解決済みのIDを再調査するのは車輪の再開発。
-- freecam mapperのbuild gateも生成時に前計算する。`build_freecam_fast_generated.mjs`がBACT + 617 actor membership + fallback membershipを全1024 actionについて一度だけ集約して`kHasAnyMinedFreeCameraTriggerSource`を生成し、C++ `Bind<>`はそのO(1) constexpr値で静的triggerless actionを拒否する。巨大membership表をbindingごとにconsteval総走査しない。
+- freecam mapperのbuild gateはgenerated constexpr値を使うが、`kHasAnyMinedFreeCameraTriggerSource`をfreecam可否そのものと同一視しない。BACT/membershipはtrigger-source候補の材料であり、誤った中間実測を個別`static_assert`へ固定しない。最終的なmapper整合は`kFreeCameraActions`のconsteval全走査で検査する。巨大membership表をbindingごとにconsteval総走査しない。
 - 画像が必要なら `C:\Users\owner\Documents\desmume_webassembly_harness\harness\screenshots` をisolationへ追加して画像ツールで読む。許可root外だったことを理由にUI確認を諦めない。
 ## 主要ソース
 - `camera.cpp`, `camera.h`: BattleEmulatorとのadapterと既存RNG消費。
 - `camera/freecam_actor.hpp`: BattleActorRefとDQ9 actor ID変換。人数に依存させない。
-- `camera/freecam_action_mapper.hpp`: BattleEmulator common action ID→ROM DQ9 action IDのcompile-time binding。
+- `camera/dq9_action_mapper.hpp`: BattleEmulator ecosystem共通common/god ID→ROM DQ9 action IDと一般presentation metadataのcompile-time binding。
+- `camera/freecam_action_mapper.hpp`: 上記一般metadataを参照し、freecam対象actionだけを`Bind<CommonAction>()`する専用mapper。
 - `camera/freecam_fast_runtime.hpp`: ROM metadataをconsteval抽出し、route/membership/selector suppressionでTriggerDecisionを作るfast runtime。
 - `camera/freecam_route.hpp`: presentation node graphとroute planner。
 - `camera/freecam_setup.hpp`: goal assignment、occupancy、fallback goal、presentation state。

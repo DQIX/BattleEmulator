@@ -7,12 +7,12 @@ Updated: 2026-08-30 19:15 JST
 - ROM fixed data must be mined through existing scripts under `C:\Users\owner\Documents\tunnelworkspace\BattleArrow`; extend/reuse them when additional data is needed.
 - `freecam_action_mapper.hpp` is freecam-only. Non-freecam/presentation-only actions must never be added there. `Bind<>` now has a compile-time guard derived from mined BACT + all actor-membership + fallback-membership data and rejects statically triggerless DQ9 actions.
 - Existing DQ9 action IDs/target/operation data come from `camera/dq9-action-target-classification.csv`; `build_freecam_fast_generated.mjs` now bakes the required fixed columns into constexpr arrays. Do not rediscover those IDs with seed sweeps.
-- The freecam-only mapper gate is precomputed by the same generator from ROM-mined BACT + all 617 actor memberships + fallback memberships into `kHasAnyMinedFreeCameraTriggerSource[1024]`; `Bind<>` now performs only O(1) constexpr lookup. DQ9 503 and 929 are compile-time asserted triggerless.
+- The freecam-only mapper is validated by a consteval full-table walk after `kFreeCameraActions` is built. Do not add presentation-only actions to it. The old per-action assertions that DQ9 503/929 were mined triggerless were removed because that premise came from an unreliable intermediate trigger-source heuristic; 503/929 remain non-freecam actions and belong only to general action metadata.
 - DeSmuME harness is the execution oracle. Ghidra is a reference for stable/static code; live overlay disassembly is authoritative for swapped overlay addresses.
 
 ## Confirmed and already reflected
 - DQ9 actor IDs are arithmetic (`Ally i -> i`, `Enemy i -> 0xC0+i`).
-- `WHIPPING_BOY` maps to DQ9 action `109` and is present in `freecam_action_mapper.hpp`.
+- `WHIPPING_BOY` maps to DQ9 action `929` (`ゲルニックかばう`) in general action metadata and is intentionally absent from `freecam_action_mapper.hpp`. DQ9 action `109` is `HELM_SPLITTER` (`かぶと割り`).
 - Bindings for Zaki and the three thrust skills are present in `freecam_action_mapper.hpp`.
 - Fast runtime exposes generic equivalents of ROM target resolution and movement eligibility:
   - `ResolveActorPresentationTarget(...)`
@@ -64,9 +64,9 @@ Updated: 2026-08-30 19:15 JST
 - These brute-force results are candidate seeds only. Unknown common→DQ9 mapping and compatibility shapes remain forbidden from production until DeSmuME measurement or ROM mining confirms them.
 - First candidate promoted: seed 0x1 common187 Bagima(strong) was measured in the ROM as DQ9 action 463. Its next-setup 12-slot residue is exactly the known type-1 mask, and ROM `actdata` mining independently returns type1 / formation2 / fallback463. `GERUNIKKU_BAGIMA_STRONG` is now bound to DQ9 463 in `freecam_action_mapper.hpp`.
 - Seed 0x2 live ROM records confirmed the first two C++ enemy candidates before the model diverges later in the turn: common185 Eerie Light -> DQ9 155 (ROM type22/formation1), common31 Magic Mirror -> DQ9 55 (ROM type31/formation2). Both bindings are now production. Their residue producer types remain unknown and are deliberately not added to `ApplyKnownRosterField4PostActionCompatibility` yet.
-- common21 `INACTIVE_ENEMY`: record-0 seed 0x1b2 -> fresh live ROM DQ9 503; ROM mining type0/formation0/fallback503. Mapper binding is production; type0 full residue is still unknown.
-- common186 `GERUNIKKU_MEDAPANI`: record-0 seed 0x55 -> fresh live ROM DQ9 912; ROM mining type21/formation2/fallback912. Mapper binding is production; type21 residue remains unknown.
-- 200k sweep gave common21 `INACTIVE_ENEMY` a record-0 candidate at seed 0x1b2. Fresh ROM measurement confirmed the first enemy action is DQ9 503; ROM mining confirms type0/formation0/fallback503. The mapper now binds `INACTIVE_ENEMY -> 503`. Full type0 12-slot residue is still intentionally unimplemented.
+- common21 `INACTIVE_ENEMY`: record-0 seed 0x1b2 -> fresh live ROM DQ9 503; ROM mining type0/formation0/fallback503. This mapping belongs to general action metadata only; 503 is non-freecam. Type0 full residue is still unknown.
+- common186 `GERUNIKKU_MEDAPANI`: record-0 seed 0x55 -> fresh live ROM DQ9 912; ROM mining type21/formation2/fallback912. This mapping belongs to general action metadata only; do not register it in the freecam mapper. Type21 residue remains unknown.
+- 200k sweep gave common21 `INACTIVE_ENEMY` a record-0 candidate at seed 0x1b2. Fresh ROM measurement confirmed the first enemy action is DQ9 503; ROM mining confirms type0/formation0/fallback503. The general action metadata maps `INACTIVE_ENEMY -> 503`; the freecam mapper does not. Full type0 12-slot residue is still intentionally unimplemented.
 - The brute-force mode now records `bestRecord/bestSeed` per common action. Use the smallest record-index candidate for ROM verification, because later records can diverge after an earlier RNG/model mismatch even when the candidate action itself exists elsewhere.
 
 ## Compiler-stack compatibility fact
