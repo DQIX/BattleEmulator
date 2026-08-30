@@ -923,6 +923,57 @@ int main(int argc, char* argv[]){
 		return 0;
 	}
 
+	if (argc >= 5 && std::string_view(argv[1]) == "--trace-sequence") {
+		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
+		const int currentSeedPosition = std::stoi(argv[3], nullptr, 0);
+		Player tracePlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
+		int tracePosition = currentSeedPosition + 1;
+		uint64_t traceState = 0;
+		lcg::init(traceSeed);
+
+		for (int step = 0; step < argc - 4; ++step) {
+			const std::string_view token(argv[step + 4]);
+			const std::size_t separator = token.find(':');
+			const int action = std::stoi(std::string(token.substr(0, separator)), nullptr, 0);
+			const int target = separator == std::string_view::npos
+				? -1
+				: std::stoi(std::string(token.substr(separator + 1)), nullptr, 0);
+			int32_t traceGene[350] = {};
+			makeDebugGene(traceGene, 1, action);
+			BattleResult traceResult;
+
+			std::cout << "TRACE sequence-step=" << step
+			          << " action=" << action
+			          << " target=" << target
+			          << " startPosition=" << tracePosition << '\n';
+			BattleEmulator::Main(&tracePosition, 1, traceGene, tracePlayers, &traceResult,
+			                     traceSeed, nullptr, nullptr, -1, &traceState, target, true);
+			std::cout << "TRACE sequence-state step=" << step
+			          << " position=" << tracePosition
+			          << " hp=" << tracePlayers[0].hp << ',' << tracePlayers[1].hp << ','
+			          << tracePlayers[2].hp << ',' << tracePlayers[3].hp
+			          << " heroMp=" << tracePlayers[0].mp
+			          << " mirror=" << tracePlayers[0].hasMagicMirror
+			          << " mirrorTurn=" << tracePlayers[0].MagicMirrorTurn
+			          << " buffLevel=" << tracePlayers[0].BuffLevel
+			          << " buffTurns=" << tracePlayers[0].BuffTurns
+			          << " tension=" << tracePlayers[0].TensionLevel << '\n';
+			for (int i = 0; i < traceResult.position; ++i) {
+				std::cout << "TRACE sequence-record step=" << step
+				          << " record=" << i
+				          << " turn=" << traceResult.turns[i]
+				          << " action=" << traceResult.actions[i]
+				          << " damage=" << traceResult.damages[i]
+				          << " enemy=" << traceResult.isEnemy[i] << '\n';
+			}
+			if (tracePlayers[0].hp <= 0 ||
+			    (tracePlayers[1].hp <= 0 && tracePlayers[2].hp <= 0 && tracePlayers[3].hp <= 0)) {
+				break;
+			}
+		}
+		return 0;
+	}
+
 	if (argc >= 7 && std::string_view(argv[1]) == "--scan-camera") {
 		const int traceAction = std::stoi(argv[2], nullptr, 0);
 		const int traceTarget = std::stoi(argv[3], nullptr, 0);
