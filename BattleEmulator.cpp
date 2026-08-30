@@ -3134,9 +3134,7 @@ void BattleEmulator::ProcessRage(int *position, int baseDamage, Player players[4
     // Rage transition belongs to enemy actors in this battle model.  The old
     // generic defender implementation incorrectly allowed enemy attacks on the
     // hero (actor 0) to consume rage RNG at the 50% / 25% HP thresholds.
-    if (defender == 0) {
-        return;
-    }
+    assert(defender != 0);
 
     // if (kaisinn) {
     //     return;
