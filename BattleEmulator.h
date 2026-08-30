@@ -136,7 +136,8 @@ public:
 
     static bool
     Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
-         BattleResult* result, uint64_t seed, const int eActions[350], const int damages[350], int mode, uint64_t *NowState);
+         BattleResult* result, uint64_t seed, const int eActions[350], const int damages[350], int mode,
+         uint64_t *NowState, int heroTargetOverride = -1);
 
     static std::string getActionName(int actionId);
 
@@ -175,7 +176,8 @@ private:
 
     static int FUN_021e8458_typeD(int *position, double difference, double base);
 
-    static int callAttackFun(int32_t Id, int *position, Player *players, int attacker, int defender, uint64_t *NowState);
+    static int callAttackFun(int32_t Id, int *position, Player *players, int attacker, int defender,
+                             uint64_t *NowState, bool targetWasGuardRedirect = false);
 
     static double FUN_021dbc04(int baseHp, double maxHp);
 

@@ -228,11 +228,56 @@ namespace {
     return 0;
 }
 
+[[nodiscard]] constexpr int TargetEvadePercent(const int defender) noexcept {
+#if defined(gerunikku)
+    // ゲルニック将軍: Evade 4% / てっこうまじん: Evade 0%.
+    if (defender == 2) return 4;
+    if (defender == 1 || defender == 3) return 0;
+#else
+    (void)defender;
+#endif
+    return 0;
+}
+
+[[nodiscard]] constexpr int TargetBlockPercent(const int defender) noexcept {
+#if defined(gerunikku)
+    // ゲルニック将軍: Block 0% / てっこうまじん: Block 4%.
+    if (defender == 1 || defender == 3) return 4;
+    if (defender == 2) return 0;
+#else
+    (void)defender;
+#endif
+    return 0;
+}
+
+struct PhysicalAvoidanceResult {
+    bool evaded{};
+    bool blocked{};
+
+    [[nodiscard]] constexpr bool avoided() const noexcept { return evaded || blocked; }
+};
+
+[[nodiscard]] inline PhysicalAvoidanceResult ResolveHeroPhysicalAvoidance(int *position,
+                                                                          const int defender) noexcept {
+    // FUN_02158718: RandInt(100) < evade%. みかわし成立時は盾判定へ進まない。
+    if (lcg::getPercent(position, 100) < TargetEvadePercent(defender)) {
+        return {.evaded = true, .blocked = false};
+    }
+    // FUN_021585b0: RandInt(100) をfloat化し block% と比較。Block 0%でも呼ばれる。
+    return {
+        .evaded = false,
+        .blocked = lcg::getPercent(position, 100) < TargetBlockPercent(defender),
+    };
+}
+
+
 #if defined(gerunikku)
 [[nodiscard]] inline bool EnemyLosesActionToCharm(int *position) noexcept {
-    // ゲルニック/てっこうまじん: Charm 005 = 0.05 probability.
-    // RandInt(100), lr: 0x021588ec
-    if (lcg::getPercent(position, 100) >= 5) return false;
+    // FUN_021587cc: Charm byte 5 is converted to 5/100 and multiplied by the
+    // target-side factor from FUN_02157b9c. This encounter's live threshold is
+    // 0.186f, compared against float(RandInt(100)); therefore only roll 0 can pass.
+    // RandInt(100), lr: 0x021588ec.
+    if (lcg::getPercent(position, 100) != 0) return false;
     // 成立候補時のみ結果table {90,5,5} を選ぶ。
     // この戦闘で実装対象の「みとれて動けない」は先頭90% branch。
     // RandInt(100), lr: 0x02158964
@@ -525,7 +570,7 @@ std::string BattleEmulator::getActionName(int actionId) {
 bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
                          BattleResult* result,
                           uint64_t seed, const int eActions[350], const int damages[350], int mode,
-                          uint64_t *NowState) {
+                          uint64_t *NowState, const int heroTargetOverride) {
     resetCombo(NowState);
     player0_has_initiative = false;
     TiggerSkyAttack = false;
@@ -694,6 +739,10 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         };
 
         auto primaryHeroTarget = [&]() noexcept {
+            if (heroTargetOverride >= 1 && heroTargetOverride <= 3 &&
+                Player::isPlayerAlive(players[heroTargetOverride])) {
+                return heroTargetOverride;
+            }
             if (Player::isPlayerAlive(players[2])) return 2;
             if (Player::isPlayerAlive(players[1])) return 1;
             if (Player::isPlayerAlive(players[3])) return 3;
@@ -709,6 +758,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         auto isGuardableHeroAction = [](const int action) noexcept {
             switch (action) {
                 case ATTACK_ALLY:
+                case MULTITHRUST:
                 case MERCURIAL_THRUST:
                 case THUNDER_THRUST:
                 case BEAST_THRUST:
@@ -871,12 +921,15 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
                             int target = primaryHeroTarget();
                             if (target < 0) return false;
+                            bool targetWasGuardRedirect = false;
                             if (target == 2 && isGuardableHeroAction(action) && players[2].guardedBy >= 0 &&
                                 Player::isPlayerAlive(players[players[2].guardedBy])) {
                                 target = players[2].guardedBy;
+                                targetWasGuardRedirect = true;
                             }
 
-                            const int basedamage = callAttackFun(action, position, players, 0, target, NowState);
+                            const int basedamage = callAttackFun(action, position, players, 0, target, NowState,
+                                                                 targetWasGuardRedirect);
                             addResult(action, basedamage, false);
                             if (isHealingAction(action)) {
                                 Player::heal(players[0], basedamage);
@@ -1049,7 +1102,7 @@ constexpr double Enemy_TensionTable[4] = {1.3, 2.0, 3.0, 4.5}; //一部の敵は
 
 
 int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, int attacker, int defender,
-                                  uint64_t *NowState) {
+                                  uint64_t *NowState, const bool targetWasGuardRedirect) {
     for (int j = 0; j < 4; ++j) {
         preHP[j] = players[j].hp;
     }
@@ -1061,7 +1114,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
     bool kaihi = false;
     bool tate = false;
     bool vitalPointInstantDeath = false;
-    bool thunderSelectorFailed = false;
+    PhysicalAvoidanceResult physicalAvoidance{};
     int OffensivePower = players[attacker].defaultATK;
     int percent_tmp;
     auto totalDamage = 0;
@@ -1255,29 +1308,27 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             players[attacker].mp -= 8;
             (*position) += 2;
             (*position)++; //不明 0x021ec6f8
-            (*position)++; //会心
-            if (lcg::getPercent(position, 100) < 2) {
-                //0x021587b0 本物みかわし
-                kaihi = true;
-            } else {
-                (*position)++; //0x021586fc 盾
+            if (targetWasGuardRedirect) {
+                (*position)++; // planned 03A1 target redirect, max:1, lr: 0x021ea6bc
             }
+            (*position)++; //会心
+            physicalAvoidance = ResolveHeroPhysicalAvoidance(position, defender);
+            kaihi = physicalAvoidance.avoided();
             (*position)++; //0x02157f58 ニセ回避
             FUN_0207564c(position, players[attacker].atk, players[defender].def);
-            if (lcg::getPercent(position, 2) == 0) {
-                tmp = OffensivePower * lcg::floatRand(position, 0.95, 1.05);
-                // Selector 45 returns the battle offensive stat directly; weapon-element
-                // resistance is not applied to this direct-damage result.
-                baseDamage = static_cast<int>(tmp);
-            } else {
-                kaihi = true;
-                thunderSelectorFailed = true;
+            const int thunderSelectorRoll = lcg::getPercent(position, 2); // lr: 0x021d9f48
+            if (!kaihi) {
+                if (thunderSelectorRoll == 0) {
+                    tmp = OffensivePower * lcg::floatRand(position, 0.95, 1.05);
+                    // Selector 45 returns the battle offensive stat directly; weapon-element
+                    // resistance is not applied to this direct-damage result.
+                    baseDamage = static_cast<int>(tmp);
+                } else {
+                    kaihi = true;
+                }
             }
 
             if (kaihi) {
-                if (!thunderSelectorFailed) {
-                    process7A8(position, baseDamage, players, defender);
-                }
                 baseDamage = 0;
             } else {
                 if (baseDamage != 0) {
@@ -1302,7 +1353,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position)++; // RandIntRange(3,4), lr: 0x0216139c
             (*position)++; // RandIntRange(6,8), lr: 0x021613b0
             (*position)++; // max:100, lr: 0x021ec6f8
-            if (attacker == 0 && defender != 2 && players[2].guardedBy == defender) {
+            if (targetWasGuardRedirect) {
                 (*position)++; // planned 03A1 target redirect, max:1, lr: 0x021ea6bc
             }
             (*position)++; // critical RandInt(10000), threshold 100, lr: 0x02158584
@@ -1652,8 +1703,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                         hasKaisinn = true;
                     }
                 }
-                (*position)++;//みかわし
-                (*position)++; //盾ガード 0x021586fc 0%
+                physicalAvoidance = ResolveHeroPhysicalAvoidance(position, defender);
+                kaihi = physicalAvoidance.avoided();
 
                 (*position)++; //ニセ回避 0x02157f58 100%
                 baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
@@ -1689,16 +1740,16 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     baseDamage = 0;
                 }
 
-                preHP[1] = std::max(0, preHP[1] - baseDamage);
+                preHP[defender] = std::max(0, preHP[defender] - baseDamage);
                 totalDamage += baseDamage;
-                if (preHP[1] <= 0) {
+                if (preHP[defender] <= 0) {
                     return totalDamage;
                 }
             }
             if (hasKaisinn) {
                 (*position) += 2;
             }
-            if (preHP[1] > 0) {
+            if (preHP[defender] > 0) {
                 if (!players[attacker].specialCharge && lcg::getPercent(position, 100) < 1) {
                     players[attacker].specialCharge = true;
                     players[attacker].specialChargeTurn = SpecialChargeTurns;
@@ -2311,8 +2362,15 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 if (players[defender].magicResistanceLevel > -2) {
                     --players[defender].magicResistanceLevel;
                 }
-                (*position)++; // max: 2, lr: 0x021e81a0
-                (*position)++; // max: 100, lr: 0x021e54fc
+                // seed 0x2A実測: 成功時もgeneric physical-baseを通る。
+                // ATK125/DEF282では0なのでfloat RNGなしで021e81a0へ進み、
+                // 0damage枝では021e54fcを通らず021ed7a8へ直行する。
+                baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
+                if (baseDamage == 0) {
+                    (void)lcg::getPercent(position, 2); // lr: 0x021e81a0
+                } else {
+                    (*position)++; // lr: 0x021e54fc
+                }
                 (*position)++; // max: 100, lr: 0x021ed7a8
             } else {
                 (*position)++; // max: 100, lr: 0x021ed7a8
@@ -2638,8 +2696,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             }
             (*position) += 2;
             (*position)++; // max:100, lr: 0x021ec6f8
-            if ((Id & 0xffff) == BattleEmulator::MERCURIAL_THRUST
-                && attacker == 0 && defender != 2 && players[2].guardedBy == defender) {
+            if (targetWasGuardRedirect) {
                 (*position)++; // planned 03A1 target redirect, max:1, lr: 0x021ea6bc
             }
             //会心
@@ -2651,11 +2708,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 kaisinn = true;
             }
 
-            //みかわし(相手)
-            if (!players[0].paralysis) {
-                (*position)++;//みかわし
-                (*position)++; //盾ガード(幼女は盾を持っていないので0%)
-            }
+            physicalAvoidance = ResolveHeroPhysicalAvoidance(position, defender);
+            kaihi = physicalAvoidance.avoided();
 
             (*position)++; //回避
             baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
@@ -2700,7 +2754,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             baseDamage = static_cast<int>((tmp));
 
             vitalPointInstantDeath = false;
-            if ((Id & 0xffff) == BattleEmulator::VITAL_POINT_THRUST) {
+            if (!kaihi && (Id & 0xffff) == BattleEmulator::VITAL_POINT_THRUST) {
                 const int deathResistance = TargetDeathResistancePercent(defender);
                 if (deathResistance > 0) {
                     // FUN_021e4e9c: 12.5 * (Death / 100), strict roll < threshold.

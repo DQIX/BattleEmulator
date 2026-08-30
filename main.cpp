@@ -885,6 +885,7 @@ int main(int argc, char* argv[]){
 	if (argc >= 3 && std::string_view(argv[1]) == "--trace-turn") {
 		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
 		const int traceAction = argc >= 4 ? std::stoi(argv[3], nullptr, 0) : BattleEmulator::DEFENCE;
+		const int traceTarget = argc >= 5 ? std::stoi(argv[4], nullptr, 0) : -1;
 		int32_t traceGene[350] = {};
 		makeDebugGene(traceGene, 1, traceAction);
 		Player tracePlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
@@ -893,7 +894,7 @@ int main(int argc, char* argv[]){
 		uint64_t traceState = 0;
 		lcg::init(traceSeed);
 		BattleEmulator::Main(&tracePosition, 1, traceGene, tracePlayers, &traceResult,
-		                     traceSeed, nullptr, nullptr, -1, &traceState);
+		                     traceSeed, nullptr, nullptr, -1, &traceState, traceTarget);
 		printTrace(traceSeed, tracePosition, tracePlayers, traceResult);
 		return 0;
 	}
@@ -902,6 +903,7 @@ int main(int argc, char* argv[]){
 		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
 		const int traceTurns = argc >= 4 ? std::stoi(argv[3], nullptr, 0) : 10;
 		const int traceAction = argc >= 5 ? std::stoi(argv[4], nullptr, 0) : BattleEmulator::DEFENCE;
+		const int traceTarget = argc >= 6 ? std::stoi(argv[5], nullptr, 0) : -1;
 		if (traceTurns < 1 || traceTurns > 349) throw std::invalid_argument("trace turns must be 1..349");
 		int32_t traceGene[350] = {};
 		makeDebugGene(traceGene, traceTurns, traceAction);
@@ -911,8 +913,56 @@ int main(int argc, char* argv[]){
 		uint64_t traceState = 0;
 		lcg::init(traceSeed);
 		BattleEmulator::Main(&tracePosition, traceTurns, traceGene, tracePlayers, &traceResult,
-		                     traceSeed, nullptr, nullptr, -1, &traceState);
+		                     traceSeed, nullptr, nullptr, -1, &traceState, traceTarget);
 		printTrace(traceSeed, tracePosition, tracePlayers, traceResult);
+		return 0;
+	}
+
+	if (argc >= 4 && std::string_view(argv[1]) == "--find-hero-zero") {
+		const int traceAction = std::stoi(argv[2], nullptr, 0);
+		const int traceTarget = std::stoi(argv[3], nullptr, 0);
+		const uint64_t startSeed = argc >= 5 ? std::stoull(argv[4], nullptr, 0) : 1;
+		const uint64_t count = argc >= 6 ? std::stoull(argv[5], nullptr, 0) : 10000;
+		const bool requireNoGuard = argc >= 7 && std::stoi(argv[6], nullptr, 0) != 0;
+		int32_t traceGene[350] = {};
+		makeDebugGene(traceGene, 1, traceAction);
+		for (uint64_t offset = 0; offset < count; ++offset) {
+			const uint64_t seed = startSeed + offset;
+			if (seed == 0) continue;
+			Player tracePlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
+			BattleResult traceResult;
+			int tracePosition = 1;
+			uint64_t traceState = 0;
+			lcg::init(seed);
+			BattleEmulator::Main(&tracePosition, 1, traceGene, tracePlayers, &traceResult,
+			                     seed, nullptr, nullptr, -1, &traceState, traceTarget);
+			bool guardWasPlanned = false;
+			if (requireNoGuard) {
+				for (int record = 0; record < traceResult.position; ++record) {
+					if (traceResult.isEnemy[record] &&
+					    traceResult.actions[record] == BattleEmulator::WHIPPING_BOY) {
+						guardWasPlanned = true;
+						break;
+					}
+				}
+			}
+			if (guardWasPlanned) continue;
+			for (int record = 0; record < traceResult.position; ++record) {
+				if (!traceResult.isEnemy[record] && traceResult.actions[record] == traceAction &&
+				    traceResult.damages[record] == 0) {
+					std::cout << "FOUND_HERO_ZERO action=" << traceAction
+					          << " target=" << traceTarget
+					          << " seed=0x" << std::hex << seed << std::dec
+					          << " position=" << tracePosition << '\n';
+					printTrace(seed, tracePosition, tracePlayers, traceResult);
+					return 0;
+				}
+			}
+		}
+		std::cout << "NOT_FOUND_HERO_ZERO action=" << traceAction
+		          << " target=" << traceTarget
+		          << " startSeed=0x" << std::hex << startSeed << std::dec
+		          << " count=" << count << '\n';
 		return 0;
 	}
 
