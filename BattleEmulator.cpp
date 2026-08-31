@@ -1212,12 +1212,16 @@ bool BattleEmulator::IsHeroCommandSelectable(const SearchState& state,
             return hero.SpecialMedicineCount > 0;
         case MAGIC_WATER:
             return hero.MagicWaterCount > 0;
+        case SAGE_ELIXIR:
+            return hero.SageElixirCount > 0;
+        case ELFIN_ELIXIR:
+            return hero.ElfinElixirCount > 0;
         case BUFF:
             return hero.mp >= 3;
         case MULTITHRUST:
             return hero.mp >= 4;
         case GOSPEL_SONG:
-            return hero.specialChargeTurn >= 1;
+            return hero.specialCharge && hero.specialChargeTurn >= 1;
         case INSULATE:
             return hero.mp >= 4;
         case VITAL_POINT_THRUST:

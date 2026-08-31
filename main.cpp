@@ -338,8 +338,6 @@ bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aAct
 		turns++;
 	}
 
-	lcg::init(seed);
-
 #if !defined(OPTIMIZE_MODE)
 	Genome genome = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, -1, gene, 0);
     BattleResult result;
@@ -350,10 +348,10 @@ bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aAct
 		uint64_t nowState = 0;
 		BattleEmulator::Main(&position, 100, g.actions, players, &res, seed, nullptr, nullptr, -1, &nowState);
 		#if defined(gerunikku)
-		bool win = players[1].hp <= 0 && players[2].hp <= 0 && players[3].hp <= 0;
+		bool win = players[0].hp > 0 && players[1].hp <= 0 && players[2].hp <= 0 && players[3].hp <= 0;
 		return { win, players[2].hp, res.turn, res.position };
 		#else
-		bool win = players[1].hp <= 0;
+		bool win = players[0].hp > 0 && players[1].hp <= 0;
 		return { win, players[1].hp, res.turn, res.position };
 		#endif
 	};
@@ -690,8 +688,6 @@ namespace {
     }
 
     std::string buildDumpOutput(const Player copiedPlayers[4], uint64_t seed, int numThreads, bool dropbug) {
-        lcg::init(seed, true);
-
         BattleEmulator::ResetTurnProcessed();
 
     	std::stringstream ss;
@@ -897,6 +893,53 @@ int main(int argc, char* argv[]){
 			}
 		}
 		return 0;
+	}
+
+	if (argc >= 3 && std::string_view(argv[1]) == "--trace-iddfs") {
+		const uint64_t searchSeed = std::stoull(argv[2], nullptr, 0);
+		int searchActions[350];
+		std::fill(std::begin(searchActions), std::end(searchActions), -1);
+		int knownTurns = 0;
+		for (int argIndex = 3; argIndex < argc && knownTurns < 349; ++argIndex) {
+			const std::string_view token(argv[argIndex]);
+			const std::size_t separator = token.find(':');
+			const int action = std::stoi(std::string(token.substr(0, separator)), nullptr, 0);
+			const int target = separator == std::string_view::npos
+				? -1
+				: std::stoi(std::string(token.substr(separator + 1)), nullptr, 0);
+			searchActions[knownTurns++] = BattleEmulator::PackHeroAction(action, target);
+		}
+
+		Genome genome = ActionOptimizer::RunAlgorithm(
+			copiedPlayers, searchSeed, knownTurns, -1, searchActions, 0);
+		std::cout << "IDDFS nodes=" << ActionOptimizer::getNodesUsed()
+		          << " knownTurns=" << knownTurns << '\n';
+		std::cout << "IDDFS actions=";
+		for (int index = 0; index < 350 && genome.actions[index] > 0; ++index) {
+			const int packed = genome.actions[index];
+			std::cout << (index == 0 ? "" : ",")
+			          << BattleEmulator::HeroActionId(packed);
+			const int target = BattleEmulator::HeroTargetId(packed);
+			if (target >= 0) std::cout << ':' << target;
+		}
+		std::cout << '\n';
+
+		Player verifyPlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
+		BattleResult verifyResult;
+		int verifyPosition = 1;
+		uint64_t verifyState = 0;
+		lcg::init(searchSeed, true);
+		BattleEmulator::Main(&verifyPosition, 100, genome.actions, verifyPlayers, &verifyResult,
+		                     searchSeed, nullptr, nullptr, -1, &verifyState);
+		const bool win = verifyPlayers[0].hp > 0
+			&& verifyPlayers[1].hp <= 0
+			&& verifyPlayers[2].hp <= 0
+			&& verifyPlayers[3].hp <= 0;
+		std::cout << "IDDFS verify win=" << win
+		          << " position=" << verifyPosition
+		          << " hp=" << verifyPlayers[0].hp << ',' << verifyPlayers[1].hp << ','
+		          << verifyPlayers[2].hp << ',' << verifyPlayers[3].hp << '\n';
+		return win ? 0 : 2;
 	}
 
 	if (argc >= 7 && std::string_view(argv[1]) == "--scan-camera") {

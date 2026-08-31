@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cstdint>
 #include <limits>
+#include <stdexcept>
 
 #include "BattleEmulator.h"
 #include "lcg.h"
@@ -11,7 +13,12 @@
 namespace {
 
 constexpr int kActionHistoryCapacity = 350;
-constexpr int kMaxSearchDepth = kActionHistoryCapacity - 1;
+// Workspace capacity only, never a silent search cutoff. Geruniku is normally
+// decided in roughly 15 total turns; 32 slots leave ample headroom without
+// carrying the old 350-turn path in every dominance record. If IDDFS ever
+// reaches this capacity without a win, fail loudly instead of claiming that no
+// solution exists.
+constexpr int kSearchPathCapacity = 32;
 constexpr std::size_t kDominanceBucketCount = 8192;
 constexpr std::size_t kDominanceRecordCapacity = 32768;
 constexpr std::uint32_t kNoDominanceRecord = UINT32_MAX;
@@ -22,7 +29,7 @@ static_assert((kDominanceBucketCount & (kDominanceBucketCount - 1)) == 0);
 // this explicit profile at every depth. The profile contains the known victory
 // backbone, instant-death attempts and practical RNG-adjustment commands.
 #if defined(gerunikku)
-constexpr std::array<BattleEmulator::SearchCommand, 34> kScenarioCommands{{
+constexpr std::array<BattleEmulator::SearchCommand, 36> kScenarioCommands{{
     {BattleEmulator::MAGIC_MIRROR, -1},
     {BattleEmulator::BUFF, -1},
     {BattleEmulator::PSYCHE_UP_ALLY, -1},
@@ -60,13 +67,15 @@ constexpr std::array<BattleEmulator::SearchCommand, 34> kScenarioCommands{{
     {BattleEmulator::FULLHEAL, -1},
     {BattleEmulator::SPECIAL_MEDICINE, -1},
     {BattleEmulator::MAGIC_WATER, -1},
+    {BattleEmulator::SAGE_ELIXIR, -1},
+    {BattleEmulator::ELFIN_ELIXIR, -1},
     {BattleEmulator::DEFENCE, -1},
     {BattleEmulator::DEFENDING_CHAMPION, -1},
     {BattleEmulator::INSULATE, -1},
     {BattleEmulator::GOSPEL_SONG, -1},
 }};
 #else
-constexpr std::array<BattleEmulator::SearchCommand, 18> kScenarioCommands{{
+constexpr std::array<BattleEmulator::SearchCommand, 20> kScenarioCommands{{
     {BattleEmulator::ATTACK_ALLY, 1},
     {BattleEmulator::THUNDER_THRUST, 1},
     {BattleEmulator::BEAST_THRUST, 1},
@@ -83,6 +92,8 @@ constexpr std::array<BattleEmulator::SearchCommand, 18> kScenarioCommands{{
     {BattleEmulator::FULLHEAL, -1},
     {BattleEmulator::SPECIAL_MEDICINE, -1},
     {BattleEmulator::MAGIC_WATER, -1},
+    {BattleEmulator::SAGE_ELIXIR, -1},
+    {BattleEmulator::ELFIN_ELIXIR, -1},
     {BattleEmulator::DEFENCE, -1},
     {BattleEmulator::DEFENDING_CHAMPION, -1},
 }};
@@ -94,15 +105,15 @@ struct DominanceRecord {
     std::uint16_t depth{};
     int allyHp{};
     int allyMp{};
-    std::array<std::uint16_t, kMaxSearchDepth> path{};
+    std::array<std::uint16_t, kSearchPathCapacity> path{};
 };
 
 struct SearchWorkspace {
     BattleEmulator::SearchState root{};
     BattleEmulator::SearchState replayA{};
     BattleEmulator::SearchState replayB{};
-    std::array<std::uint16_t, kMaxSearchDepth> path{};
-    std::array<std::uint16_t, kMaxSearchDepth> solution{};
+    std::array<std::uint16_t, kSearchPathCapacity> path{};
+    std::array<std::uint16_t, kSearchPathCapacity> solution{};
     int solutionDepth{-1};
     std::uint64_t visitedNodes{};
     bool dominanceOverflow{};
@@ -134,9 +145,12 @@ std::uint32_t gNodesUsed{};
 
 [[nodiscard]] bool BattleWon(const BattleEmulator::SearchState& state) noexcept {
 #if defined(gerunikku)
-    return state.players[1].hp <= 0 && state.players[2].hp <= 0 && state.players[3].hp <= 0;
+    return state.players[0].hp > 0
+        && state.players[1].hp <= 0
+        && state.players[2].hp <= 0
+        && state.players[3].hp <= 0;
 #else
-    return state.players[1].hp <= 0;
+    return state.players[0].hp > 0 && state.players[1].hp <= 0;
 #endif
 }
 
@@ -170,6 +184,55 @@ std::uint32_t gNodesUsed{};
     return hash ^ (value + UINT64_C(0x9e3779b97f4a7c15) + (hash << 6) + (hash >> 2));
 }
 
+[[nodiscard]] std::uint64_t MixPlayerState(
+    std::uint64_t hash,
+    const Player& player,
+    const bool includeHpMp
+) noexcept {
+    if (includeHpMp) {
+        hash = Mix(hash, static_cast<std::uint32_t>(player.hp));
+        hash = Mix(hash, static_cast<std::uint32_t>(player.mp));
+    }
+    hash = Mix(hash, static_cast<std::uint32_t>(player.maxHp));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.atk));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.defaultATK));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.def));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.defaultDEF));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.speed));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.HealPower));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.maxMp));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.specialCharge));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.dirtySpecialCharge));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.specialChargeTurn));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.paralysis));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.paralysisLevel));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.paralysisTurns));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.SpecialMedicineCount));
+    hash = Mix(hash, std::bit_cast<std::uint64_t>(player.defence));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.sleeping));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.sleepingTurn));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.BuffLevel));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.BuffTurns));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.hasMagicMirror));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.MagicMirrorTurn));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.AtkBuffLevel));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.AtkBuffTurn));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.TensionLevel));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.rage));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.SageElixirCount));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.ElfinElixirCount));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.MagicWaterCount));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.InsulateLevel));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.InsulateTurns));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.inactive));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.rageTurns));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.magicResistanceLevel));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.confused));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.confusionTurns));
+    hash = Mix(hash, static_cast<std::uint32_t>(player.guardedBy));
+    return hash;
+}
+
 // Bucket key only. A key match is never used as proof of state equality.
 // SameNonResourceState() is mandatory before an HP/MP dominance prune.
 [[nodiscard]] std::uint64_t CoarseNonResourceKey(
@@ -180,13 +243,10 @@ std::uint32_t gNodesUsed{};
     hash = Mix(hash, static_cast<std::uint64_t>(depth));
     hash = Mix(hash, static_cast<std::uint32_t>(state.position));
     hash = Mix(hash, state.nowState);
-    hash = Mix(hash, static_cast<std::uint32_t>(state.players[1].hp));
-    hash = Mix(hash, static_cast<std::uint32_t>(state.players[2].hp));
-    hash = Mix(hash, static_cast<std::uint32_t>(state.players[3].hp));
-    hash = Mix(hash, static_cast<std::uint32_t>(state.players[0].BuffLevel));
-    hash = Mix(hash, static_cast<std::uint32_t>(state.players[0].AtkBuffLevel));
-    hash = Mix(hash, static_cast<std::uint32_t>(state.players[0].TensionLevel));
-    hash = Mix(hash, static_cast<std::uint32_t>(state.players[0].MagicMirrorTurn));
+    hash = MixPlayerState(hash, state.players[0], false);
+    hash = MixPlayerState(hash, state.players[1], true);
+    hash = MixPlayerState(hash, state.players[2], true);
+    hash = MixPlayerState(hash, state.players[3], true);
     return hash;
 }
 
@@ -235,13 +295,12 @@ void ResetDominance(SearchWorkspace& workspace) noexcept {
 
 [[nodiscard]] bool AcceptByHpMpDominance(
     SearchWorkspace& workspace,
-    const int depth
+    const int depth,
+    const BattleEmulator::SearchState& candidateState
 ) {
-    if (!Replay(workspace, workspace.path.data(), depth, &workspace.replayB)) return true;
-
-    const int candidateHp = workspace.replayB.players[0].hp;
-    const int candidateMp = workspace.replayB.players[0].mp;
-    const std::uint64_t key = CoarseNonResourceKey(workspace.replayB, depth);
+    const int candidateHp = candidateState.players[0].hp;
+    const int candidateMp = candidateState.players[0].mp;
+    const std::uint64_t key = CoarseNonResourceKey(candidateState, depth);
     const std::size_t bucket = static_cast<std::size_t>(key) & (kDominanceBucketCount - 1);
 
     for (std::uint32_t recordIndex = workspace.bucketHeads[bucket];
@@ -250,8 +309,8 @@ void ResetDominance(SearchWorkspace& workspace) noexcept {
         const DominanceRecord& record = workspace.records[recordIndex];
         if (record.key != key || record.depth != depth) continue;
         if (record.allyHp < candidateHp || record.allyMp < candidateMp) continue;
-        if (!Replay(workspace, record.path.data(), record.depth, &workspace.replayA)) continue;
-        if (!SameNonResourceState(workspace.replayA, workspace.replayB)) continue;
+        if (!Replay(workspace, record.path.data(), record.depth, &workspace.replayB)) continue;
+        if (!SameNonResourceState(workspace.replayB, candidateState)) continue;
 
         // Exact same future-affecting state, with no less HP and no less MP.
         // The recorded path therefore has a superset of survival/command
@@ -292,7 +351,7 @@ void ResetDominance(SearchWorkspace& workspace) noexcept {
     }
     if (workspace.replayA.players[0].hp <= 0 || depth >= depthLimit) return false;
 
-    if (depth > 0 && !AcceptByHpMpDominance(workspace, depth)) return false;
+    if (depth > 0 && !AcceptByHpMpDominance(workspace, depth, workspace.replayA)) return false;
 
     std::array<std::uint16_t, kScenarioCommands.size()> candidates{};
     const std::size_t candidateCount = BuildCandidates(workspace.replayA, candidates);
@@ -346,6 +405,7 @@ void ResetDominance(SearchWorkspace& workspace) noexcept {
     const int actions[kActionHistoryCapacity]
 ) {
     SearchWorkspace& workspace = gWorkspace;
+    gNodesUsed = 0;
     workspace.path.fill(0);
     workspace.solution.fill(0);
     workspace.solutionDepth = -1;
@@ -373,7 +433,8 @@ void ResetDominance(SearchWorkspace& workspace) noexcept {
         return ToGenome(workspace.root, knownTurns, 0, actions, workspace);
     }
 
-    const int depthCap = std::min(kMaxSearchDepth, kActionHistoryCapacity - knownTurns - 1);
+    const int resultCapacity = kActionHistoryCapacity - knownTurns - 1;
+    const int depthCap = std::max(0, std::min(kSearchPathCapacity, resultCapacity));
     for (int depthLimit = 1; depthLimit <= depthCap; ++depthLimit) {
         ResetDominance(workspace);
         if (!DepthFirstSearch(workspace, 0, depthLimit)) continue;
@@ -383,6 +444,11 @@ void ResetDominance(SearchWorkspace& workspace) noexcept {
             workspace.visitedNodes,
             std::numeric_limits<std::uint32_t>::max()));
         return ToGenome(workspace.replayA, knownTurns, workspace.solutionDepth, actions, workspace);
+    }
+
+    if (resultCapacity > kSearchPathCapacity) {
+        throw std::runtime_error(
+            "IDDFS search workspace exhausted without a win; increase kSearchPathCapacity instead of treating this as no solution");
     }
 
     gNodesUsed = static_cast<std::uint32_t>(std::min<std::uint64_t>(
