@@ -1364,27 +1364,53 @@ async function ensureWorkerScript() {
     }
 }
 
-async function ensureModulePayload(moduleUrl) {
+function resolveRuntimeAssets(emulator) {
+    const assets = emulator && emulator.runtimeAssets;
+    if (!assets || typeof assets !== "object") {
+        return {};
+    }
+    return Object.fromEntries(
+        Object.entries(assets).map(([name, url]) => [
+            name,
+            new URL(url, window.location.href).toString()
+        ])
+    );
+}
+
+async function ensureModulePayload(moduleUrl, emulator = state.active) {
     if (state.moduleCache.has(moduleUrl)) {
         return state.moduleCache.get(moduleUrl);
     }
 
     const jsText = await fetch(moduleUrl).then((r) => r.text());
+    const runtimeAssetUrls = resolveRuntimeAssets(emulator);
+    const runtimeAssets = Object.fromEntries(await Promise.all(
+        Object.entries(runtimeAssetUrls).map(async ([name, url]) => {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`runtime asset load failed: ${url}`);
+            }
+            return [name, await response.text()];
+        })
+    ));
 
-    const payload = {jsText};
+    const payload = {
+        jsText,
+        runtimeAssets
+    };
     state.moduleCache.set(moduleUrl, payload);
     return payload;
 }
 
 
-function preloadModule(moduleUrl) {
+function preloadModule(moduleUrl, emulator = state.active) {
     return enqueuePreload(async () => {
         if (!state.preload) {
             return;
         }
         try {
             await ensureWorkerScript();
-            await ensureModulePayload(moduleUrl);
+            await ensureModulePayload(moduleUrl, emulator);
             appendLog(`preloaded ${moduleUrl}`);
         } catch (err) {
             console.error("module preload failed:", err);
@@ -1477,7 +1503,7 @@ function setActiveEmulator(index) {
     appendLog(`selected emulator ${emulator.label}`);
     if (state.preload) {
         const moduleUrl = new URL(emulator.module, window.location.href).toString();
-        preloadModule(moduleUrl);
+        preloadModule(moduleUrl, emulator);
     }
 }
 
@@ -1598,6 +1624,9 @@ async function runSearch() {
     }
 
     const threads = Math.max(1, Math.min(32, parseIntValue(ui.threads) || 4));
+    const searchThreads = state.active.multithreaded
+        ? Math.max(1, Number.parseInt(state.active.pthreadPoolSize, 10) || threads)
+        : threads;
     const rawInput = ui.actionInput.value;
     const input = rawInput.trim();
     if (!input) {
@@ -1642,7 +1671,7 @@ async function runSearch() {
     const inputActions = parsed.actions.join(" ");
 
     const moduleUrl = new URL(state.active.module, window.location.href).toString();
-    const payload = await ensureModulePayload(moduleUrl);
+    const payload = await ensureModulePayload(moduleUrl, state.active);
     await ensureWorkerScript();
     const clients = ranges.map(() => createWorkerClient("worker.js"));
 
@@ -1654,6 +1683,7 @@ async function runSearch() {
                 client.call("prepare", {
                     moduleKey: moduleUrl,
                     moduleSource: payload.jsText,
+                    runtimeAssets: payload.runtimeAssets,
                     input: inputActions
                 })
             )
@@ -1678,6 +1708,7 @@ async function runSearch() {
                 endSeed: ranges[index].end.toString(),
                 moduleKey: moduleUrl,
                 moduleSource: payload.jsText,
+                runtimeAssets: payload.runtimeAssets,
             })
         );
 
@@ -1750,10 +1781,11 @@ async function runSearch() {
             moduleUrl,
             resultIndex: 0,
             seed: foundSeed,
-            numThreads: threads,
+            numThreads: searchThreads,
             dropbug: true,
             moduleKey: moduleUrl,
             moduleSource: payload.jsText,
+            runtimeAssets: payload.runtimeAssets,
         });
 
         if (searchResult.type === "error") {
@@ -1766,10 +1798,11 @@ async function runSearch() {
                 moduleUrl,
                 resultIndex: 0,
                 seed: foundSeed,
-                numThreads: threads,
+                numThreads: searchThreads,
                 dropbug: false,
                 moduleKey: moduleUrl,
                 moduleSource: payload.jsText,
+                runtimeAssets: payload.runtimeAssets,
             });
         }
 

@@ -1,24 +1,41 @@
 /*
   worker.js
-  - Emscripten SINGLE_FILE 前提
+  - Emscripten の main JS は文字列で受け取る
+  - pthread 等で外部 runtime asset が生成された場合は manifest の URL mapping を使う
   - module.js は Document 側で fetch し、文字列として渡す
-  - worker からのネットワークリクエストは発生しない
 */
 
 let moduleReady = null;
 let moduleKey = "";
+let runtimeAssetBlobUrls = {};
 
 /**
  * Emscripten module をコード文字列から初期化する
  */
-function loadModuleFromSource(jsText, key) {
+function loadModuleFromSource(jsText, key, runtimeAssets = {}) {
   if (moduleReady && key === moduleKey) {
     return moduleReady;
   }
 
   moduleKey = key;
   moduleReady = new Promise((resolve, reject) => {
+    const mainModuleBlob = new Blob([jsText], {type: "application/javascript"});
     self.Module = {
+      // Emscripten posts this Blob to each pthread worker. Its generated
+      // helper creates the object URL inside that child worker, avoiding any
+      // dependency on Blob URL visibility between Worker globals.
+      mainScriptUrlOrBlob: mainModuleBlob,
+      locateFile(path, prefix) {
+        if (Object.prototype.hasOwnProperty.call(runtimeAssets, path)) {
+          if (!runtimeAssetBlobUrls[path]) {
+            runtimeAssetBlobUrls[path] = URL.createObjectURL(
+              new Blob([runtimeAssets[path]], {type: "application/javascript"})
+            );
+          }
+          return runtimeAssetBlobUrls[path];
+        }
+        return `${prefix || ""}${path}`;
+      },
       onRuntimeInitialized() {
         resolve(self.Module);
       }
@@ -43,6 +60,7 @@ self.onmessage = async (event) => {
     type,
     moduleKey: key,
     moduleSource,
+    runtimeAssets,
     input,
     resultIndex,
     startSeed,
@@ -55,12 +73,12 @@ self.onmessage = async (event) => {
   try {
     // load / prepare のどちらでも Module を初期化
     if (type === "load") {
-      await loadModuleFromSource(moduleSource, key);
+      await loadModuleFromSource(moduleSource, key, runtimeAssets);
       self.postMessage({ id, type: "loaded" });
       return;
     }
 
-    const Module = await loadModuleFromSource(moduleSource, key);
+    const Module = await loadModuleFromSource(moduleSource, key, runtimeAssets);
 
     if (type === "prepare") {
       const count = Module.ccall(

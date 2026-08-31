@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT_DIR="${OUTPUT_DIR:-${ROOT}/public}"
 BRANCH_NAME="${BRANCH_NAME:-local}"
+PTHREAD_POOL_SIZE="${PTHREAD_POOL_SIZE:-8}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -98,18 +99,65 @@ while read -r line; do
   defines="${line#*:}"
 
   out_dir="${branch_dir}/${variant}"
+  rm -rf "${out_dir}"
   mkdir -p "${out_dir}"
 
   echo "==> Building ${BRANCH_NAME} / ${variant}"
 
+  multithreaded=false
+  variant_flags=()
+  if [[ " ${defines} " == *" -DMULTITHREADING=1 "* ]]; then
+    multithreaded=true
+    variant_flags+=(
+      -pthread
+      "-sPTHREAD_POOL_SIZE=${PTHREAD_POOL_SIZE}"
+    )
+  fi
+
   emcc "${SRC_FILES[@]}" \
     ${defines} \
+    "${variant_flags[@]}" \
     "${EMCC_FLAGS[@]}" \
     -o "${out_dir}/emulator.js"
 
-  manifest_entries+=(
-    "{\"id\":\"${variant}\",\"label\":\"${variant}\",\"branch\":\"${BRANCH_NAME}\",\"module\":\"branches/${BRANCH_NAME}/${variant}/emulator.js\",\"defaultThreads\":4}"
-  )
+  runtime_assets=()
+  while IFS= read -r -d '' asset_path; do
+    asset_name="$(basename "${asset_path}")"
+    [[ "${asset_name}" == "emulator.js" ]] && continue
+    runtime_assets+=("${asset_name}=branches/${BRANCH_NAME}/${variant}/${asset_name}")
+  done < <(find "${out_dir}" -maxdepth 1 -type f -print0)
+
+  if [[ "${multithreaded}" == "true" && ${#runtime_assets[@]} -eq 0 ]]; then
+    echo "multithreaded build produced no external runtime asset: ${BRANCH_NAME}/${variant}" >&2
+    exit 1
+  fi
+
+  manifest_entries+=("$(python3 - \
+    "${variant}" \
+    "${BRANCH_NAME}" \
+    "branches/${BRANCH_NAME}/${variant}/emulator.js" \
+    "${multithreaded}" \
+    "${PTHREAD_POOL_SIZE}" \
+    "${runtime_assets[@]}" <<'PY'
+import json
+import sys
+
+variant, branch, module, multithreaded, pthread_pool_size, *assets = sys.argv[1:]
+entry = {
+    "id": variant,
+    "label": variant,
+    "branch": branch,
+    "module": module,
+    "defaultThreads": 4,
+    "multithreaded": multithreaded == "true",
+}
+if entry["multithreaded"]:
+    entry["pthreadPoolSize"] = int(pthread_pool_size)
+if assets:
+    entry["runtimeAssets"] = dict(asset.split("=", 1) for asset in assets)
+print(json.dumps(entry, separators=(",", ":")))
+PY
+  )")
 done <<< "${variants}"
 
 manifest_path="${branch_dir}/manifest.json"
