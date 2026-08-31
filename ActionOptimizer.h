@@ -23,6 +23,9 @@ public:
     static void updateCompromiseScore(Genome &genome);
 
     static uint32_t getNodesUsed();
+    static uint64_t getDominancePruned();
+    static uint32_t getDominanceRecordsMax();
+    static uint32_t getDominanceOverflowIterations();
 };
 
 #endif // ACTION_OPTIMIZER_FIXED_H

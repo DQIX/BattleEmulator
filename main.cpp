@@ -6,6 +6,7 @@
 #include <sstream>
 #include <fstream>
 #include <vector>
+#include <chrono>
 
 #include "lcg.h"
 #include "BattleEmulator.h"
@@ -910,10 +911,23 @@ int main(int argc, char* argv[]){
 			searchActions[knownTurns++] = BattleEmulator::PackHeroAction(action, target);
 		}
 
+		const auto searchStart = std::chrono::steady_clock::now();
 		Genome genome = ActionOptimizer::RunAlgorithm(
 			copiedPlayers, searchSeed, knownTurns, -1, searchActions, 0);
-		std::cout << "IDDFS nodes=" << ActionOptimizer::getNodesUsed()
-		          << " knownTurns=" << knownTurns << '\n';
+		const auto searchElapsed = std::chrono::steady_clock::now() - searchStart;
+		const auto searchMs = std::chrono::duration_cast<std::chrono::milliseconds>(searchElapsed).count();
+		const auto searchNodes = ActionOptimizer::getNodesUsed();
+		const auto nodesPerSecond = searchMs > 0
+			? (static_cast<std::uint64_t>(searchNodes) * UINT64_C(1000)) / static_cast<std::uint64_t>(searchMs)
+			: UINT64_C(0);
+		std::cout << "IDDFS nodes=" << searchNodes
+		          << " knownTurns=" << knownTurns
+		          << " elapsedMs=" << searchMs
+		          << " nodesPerSec=" << nodesPerSecond
+		          << " dominancePruned=" << ActionOptimizer::getDominancePruned()
+		          << " dominanceRecordsMax=" << ActionOptimizer::getDominanceRecordsMax()
+		          << " dominanceOverflowIterations=" << ActionOptimizer::getDominanceOverflowIterations()
+		          << '\n';
 		std::cout << "IDDFS actions=";
 		for (int index = 0; index < 350 && genome.actions[index] > 0; ++index) {
 			const int packed = genome.actions[index];
@@ -926,7 +940,9 @@ int main(int argc, char* argv[]){
 
 		Player verifyPlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
 		BattleResult verifyResult;
-		int verifyPosition = 1;
+		// RunIddfs starts from the ROM baseline after setSeedFromInitial(seed, 1):
+		// position #1 is already consumed, so the first battle RNG read is #2.
+		int verifyPosition = 2;
 		uint64_t verifyState = 0;
 		lcg::init(searchSeed, true);
 		BattleEmulator::Main(&verifyPosition, 100, genome.actions, verifyPlayers, &verifyResult,

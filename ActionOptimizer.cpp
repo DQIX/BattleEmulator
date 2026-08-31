@@ -105,17 +105,19 @@ struct DominanceRecord {
     std::uint16_t depth{};
     int allyHp{};
     int allyMp{};
-    std::array<std::uint16_t, kSearchPathCapacity> path{};
+    BattleEmulator::SearchState state{};
 };
 
 struct SearchWorkspace {
     BattleEmulator::SearchState root{};
-    BattleEmulator::SearchState replayA{};
-    BattleEmulator::SearchState replayB{};
+    std::array<BattleEmulator::SearchState, kSearchPathCapacity + 1> states{};
     std::array<std::uint16_t, kSearchPathCapacity> path{};
     std::array<std::uint16_t, kSearchPathCapacity> solution{};
     int solutionDepth{-1};
     std::uint64_t visitedNodes{};
+    std::uint64_t dominancePruned{};
+    std::uint32_t maxDominanceRecords{};
+    std::uint32_t dominanceOverflowIterations{};
     bool dominanceOverflow{};
     std::array<std::uint32_t, kDominanceBucketCount> bucketHeads{};
     std::array<DominanceRecord, kDominanceRecordCapacity> records{};
@@ -256,21 +258,6 @@ void ResetDominance(SearchWorkspace& workspace) noexcept {
     workspace.dominanceOverflow = false;
 }
 
-[[nodiscard]] bool Replay(
-    SearchWorkspace& workspace,
-    const std::uint16_t* path,
-    const int depth,
-    BattleEmulator::SearchState* destination
-) {
-    *destination = workspace.root;
-    for (int index = 0; index < depth; ++index) {
-        if (!BattleEmulator::StepSearchStateInPlace(destination, UnpackCommand(path[index]))) {
-            return false;
-        }
-    }
-    return true;
-}
-
 [[nodiscard]] std::size_t BuildCandidates(
     const BattleEmulator::SearchState& state,
     std::array<std::uint16_t, kScenarioCommands.size()>& candidates
@@ -309,19 +296,22 @@ void ResetDominance(SearchWorkspace& workspace) noexcept {
         const DominanceRecord& record = workspace.records[recordIndex];
         if (record.key != key || record.depth != depth) continue;
         if (record.allyHp < candidateHp || record.allyMp < candidateMp) continue;
-        if (!Replay(workspace, record.path.data(), record.depth, &workspace.replayB)) continue;
-        if (!SameNonResourceState(workspace.replayB, candidateState)) continue;
+        if (!SameNonResourceState(record.state, candidateState)) continue;
 
         // Exact same future-affecting state, with no less HP and no less MP.
         // The recorded path therefore has a superset of survival/command
         // possibilities and safely dominates this one.
+        ++workspace.dominancePruned;
         return false;
     }
 
     if (workspace.recordCount >= kDominanceRecordCapacity) {
         // Capacity exhaustion must never become an approximate prune. Keep
         // exploring; only stop adding new dominance records.
-        workspace.dominanceOverflow = true;
+        if (!workspace.dominanceOverflow) {
+            workspace.dominanceOverflow = true;
+            ++workspace.dominanceOverflowIterations;
+        }
         return true;
     }
 
@@ -330,9 +320,10 @@ void ResetDominance(SearchWorkspace& workspace) noexcept {
     record.depth = static_cast<std::uint16_t>(depth);
     record.allyHp = candidateHp;
     record.allyMp = candidateMp;
-    std::copy_n(workspace.path.begin(), depth, record.path.begin());
+    record.state = candidateState;
     record.next = workspace.bucketHeads[bucket];
     workspace.bucketHeads[bucket] = workspace.recordCount++;
+    workspace.maxDominanceRecords = std::max(workspace.maxDominanceRecords, workspace.recordCount);
     return true;
 }
 
@@ -343,20 +334,25 @@ void ResetDominance(SearchWorkspace& workspace) noexcept {
 ) {
     ++workspace.visitedNodes;
 
-    if (!Replay(workspace, workspace.path.data(), depth, &workspace.replayA)) return false;
-    if (BattleWon(workspace.replayA)) {
+    const BattleEmulator::SearchState& currentState = workspace.states[depth];
+    if (BattleWon(currentState)) {
         workspace.solutionDepth = depth;
         std::copy_n(workspace.path.begin(), depth, workspace.solution.begin());
         return true;
     }
-    if (workspace.replayA.players[0].hp <= 0 || depth >= depthLimit) return false;
+    if (currentState.players[0].hp <= 0 || depth >= depthLimit) return false;
 
-    if (depth > 0 && !AcceptByHpMpDominance(workspace, depth, workspace.replayA)) return false;
+    if (depth > 0 && !AcceptByHpMpDominance(workspace, depth, currentState)) return false;
 
     std::array<std::uint16_t, kScenarioCommands.size()> candidates{};
-    const std::size_t candidateCount = BuildCandidates(workspace.replayA, candidates);
+    const std::size_t candidateCount = BuildCandidates(currentState, candidates);
     for (std::size_t index = 0; index < candidateCount; ++index) {
         workspace.path[depth] = candidates[index];
+        workspace.states[depth + 1] = currentState;
+        if (!BattleEmulator::StepSearchStateInPlace(
+                &workspace.states[depth + 1], UnpackCommand(candidates[index]))) {
+            continue;
+        }
         if (DepthFirstSearch(workspace, depth + 1, depthLimit)) return true;
     }
     return false;
@@ -410,6 +406,9 @@ void ResetDominance(SearchWorkspace& workspace) noexcept {
     workspace.solution.fill(0);
     workspace.solutionDepth = -1;
     workspace.visitedNodes = 0;
+    workspace.dominancePruned = 0;
+    workspace.maxDominanceRecords = 0;
+    workspace.dominanceOverflowIterations = 0;
 
     // The seed is fixed by the brute-force phase. Generate the cache once;
     // every branch is then determined by SearchState::position.
@@ -440,13 +439,14 @@ void ResetDominance(SearchWorkspace& workspace) noexcept {
     const int depthCap = std::max(0, std::min(kSearchPathCapacity, resultCapacity));
     for (int depthLimit = 1; depthLimit <= depthCap; ++depthLimit) {
         ResetDominance(workspace);
+        workspace.states[0] = workspace.root;
         if (!DepthFirstSearch(workspace, 0, depthLimit)) continue;
 
-        Replay(workspace, workspace.solution.data(), workspace.solutionDepth, &workspace.replayA);
         gNodesUsed = static_cast<std::uint32_t>(std::min<std::uint64_t>(
             workspace.visitedNodes,
             std::numeric_limits<std::uint32_t>::max()));
-        return ToGenome(workspace.replayA, knownTurns, workspace.solutionDepth, actions, workspace);
+        return ToGenome(workspace.states[workspace.solutionDepth], knownTurns,
+                        workspace.solutionDepth, actions, workspace);
     }
 
     if (resultCapacity > kSearchPathCapacity) {
@@ -496,6 +496,18 @@ void ActionOptimizer::updateCompromiseScore(Genome& genome) {
     // learned cost, heuristic ranking or approximate branch elimination.
     genome.compromiseScore = 0;
     genome.isEliminated = false;
+}
+
+uint64_t ActionOptimizer::getDominancePruned() {
+    return gWorkspace.dominancePruned;
+}
+
+uint32_t ActionOptimizer::getDominanceRecordsMax() {
+    return gWorkspace.maxDominanceRecords;
+}
+
+uint32_t ActionOptimizer::getDominanceOverflowIterations() {
+    return gWorkspace.dominanceOverflowIterations;
 }
 
 std::uint32_t ActionOptimizer::getNodesUsed() {
