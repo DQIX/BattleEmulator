@@ -414,7 +414,10 @@ void ResetDominance(SearchWorkspace& workspace) noexcept {
     // The seed is fixed by the brute-force phase. Generate the cache once;
     // every branch is then determined by SearchState::position.
     lcg::init(seed, true);
-    if (!BattleEmulator::InitializeSearchState(&workspace.root, players, 1)) return {};
+    // The ROM baseline is injected with setSeedFromInitial(seed, position=1).
+    // That live seed is the value already consumed at #1, so the first battle
+    // RNG read is #2. SearchState::position denotes the next cached entry.
+    if (!BattleEmulator::InitializeSearchState(&workspace.root, players, 2)) return {};
 
     // Build the exact search root once by replaying the already-known prefix.
     for (int index = 0; index < knownTurns; ++index) {
