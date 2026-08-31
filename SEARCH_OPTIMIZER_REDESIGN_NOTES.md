@@ -13,7 +13,7 @@ BattleEmulator::Main はすでに1ターン単位の `heroTargetOverride` を受
 実走回帰ではseed `0x084c`, initial position 1, 一閃づき45について `target=1` は既知の鉄甲魔人A経路 (`position=78`, hero damage=0) を再現し、`target=2` は別の経路 (`position=86`, hero damage=317) へ分岐した。したがってpacked targetは単なる格納形式ではなく、実際にBattleEmulatorの未来へ反映されることを確認済み。
 ## 状態圧縮について
 「同一未来状態なら過去の行動列は不要」という原理自体は採用可能。ただしHP、MP、敵HP、敵状態、RNG position、NowState、ミラー、スカラ、テンション等の組合せが完全一致する確率は低く、完全一致transpositionだけを高速化の主役と見積もってはいけない。特に敵HPや敵状態は敵AI・怒り・乱数消費を変えるため近似統合禁止。ミラー、スカラ等も解除乱数を含むため近似統合禁止。
-味方HP/MP圧縮は採用方針。ここでいう圧縮は「HP/MPをhashから雑に落とす」ことではない。`position`、敵HP/敵状態、味方のHP/MP以外の全Player状態、`NowState`、camera runtime等、未来の乱数列・敵AI・行動可否・free-camera RNG消費へ影響する状態が完全一致したものだけを同一クラスとして扱い、そのクラス内で `(allyHp, allyMp)` のPareto dominanceを使う。すなわち既存経路Aが `hpA >= hpB && mpA >= mpB` を満たすならBを捨てられる。hashは検索高速化の索引に使ってよいが、hash一致だけで同一状態扱いしてはいけず、HP/MPを除くexact state比較を必須にする。MP不足では技がgray-outするのでaction可否は実MPを見る。フェーズ内で到達可能な最大MPを使った証明可能なfeasibility pruneも追加候補。
+味方HP/MP Pareto dominance圧縮は一度実装したが、exact non-resource stateのhash作成・完全比較・record保持コストが探索削減量を上回り、Performance実測で遅くなったため棄却済み。現 `ActionOptimizer.cpp` はこのdominance tableを持たず、`getDominancePruned/getDominanceRecordsMax/getDominanceOverflowIterations` は互換APIとして0を返す。再導入は実測根拠なしに行わない。
 ## ProcessRageについて
 BattleEmulator.cpp の旧一般化では `ProcessRage` が defender=0 の主人公にも適用され、味方HPの50%/25%境界で乱数を消費し得た。これはこの戦闘モデルでは敵側だけを経由する処理であるため、defender==0ならreturnする修正を反映済み。これは「味方HP差が乱数を変える」という誤った一般化を取り除くための修正。
 ## アルゴリズム案の扱い
@@ -35,12 +35,12 @@ root以降のpathは固定長の小さな `SearchCommand path[]` で保持する
 ## ゲルニック用IDDFSの規模見積り
 branch数を9と固定した以前の見積りは楽観的すぎるため撤回する。乱数調整用commandを含めれば実効branch数はscenario profile次第で増える。総当たりで既知行動列が数ターン得られることはあるが、最短解まであと何ターンかは探索前には分からないため、そこからremaining depthを推定して枝刈りや探索上限へ使わない。A*の50,000 Genome poolよりpath-only IDDFSがメモリ面で有利という判断は維持する。速度はprofileのbranch数とBattleEmulator::Stepの実測値から評価し、必要ならMSVC profilerでhot pathを最適化する。探索時間による枝打ち・timeoutによる近似解採用は禁止。遅いことは探索空間を捨てる理由にしない。
 
-麻痺・睡眠・inactive・混乱中は通常のコマンド選択画面を経由しないため、探索器が複数commandを枝分けする状態ではない。`BuildCandidates` はこの場合placeholder 1枝だけを生成し、実際の行動は `BattleEmulator::Main` のplayer pre-actionで `PARALYSIS / CURE_PARALYSIS / SLEEPING / CURE_SLEEPING / INACTIVE_ALLY / CURE_CONFUSION / confusion action` へ置換される。麻痺回復、睡眠回復、混乱回復、混乱行動抽選はそこでRNGを消費するため、`Player::paralysis/paralysisLevel/paralysisTurns/sleeping/sleepingTurn/inactive/confused/confusionTurns` はHP/MP圧縮時のexact non-resource stateから絶対に落としてはいけない。現 `Player::operator==` はdefault比較なのでこれらを含む全fieldを比較し、coarse bucket keyにも明示的に混ぜている。
+麻痺・睡眠・inactive・混乱中は通常のコマンド選択画面を経由しないため、探索器が複数commandを枝分けする状態ではない。`BuildCandidates` はこの場合placeholder 1枝だけを生成し、実際の行動は `BattleEmulator::Main` のplayer pre-actionで `PARALYSIS / CURE_PARALYSIS / SLEEPING / CURE_SLEEPING / INACTIVE_ALLY / CURE_CONFUSION / confusion action` へ置換される。麻痺回復、睡眠回復、混乱回復、混乱行動抽選はそこでRNGを消費するため、これらのstateを将来別の安全な圧縮へ使う場合も落としてはいけない。
 
-HP/MP dominanceはhash一致だけで行わない。`position + nowState + camera RuntimeSnapshot + 敵3体Player完全一致 + 主人公HP/MP以外のPlayer完全一致` を実stateで再生比較し、そのうえで既存経路の主人公HP>=候補HPかつMP>=候補MPのときだけ候補を落とす。`ProcessRage` は現BattleEmulatorでは敵actor専用で `assert(defender != 0)` になっており、主人公HPの50%/25%境界はRNGを変えない。主人公MPは現在MPによるgray-outとコスト消費に使われるだけなので、高HP/高MP側は同じ非resource stateの低HP/低MP側の未来を包含する。camera runtimeも `RuntimeState::operator==` のdefault比較でprevious action、retry、route、occupancy、roster artifact等を含めて保持する。
+旧HP/MP dominance実装は `position + nowState + camera RuntimeSnapshot + 敵3体Player完全一致 + 主人公HP/MP以外のPlayer完全一致` を確認してからPareto比較する安全側の実装だったが、そのexact比較自体が重く、実測で総性能を落としたため削除済み。この安全性の議論は再設計時の参考に留め、現探索器がdominanceを行っているとは扱わない。
 
 IDDFSのpath workspaceは350手を常駐させず固定32slotとする。ただし32を「解なし」と判定する探索上限にはしない。depth 1から順に完全探索し、32までに勝利が見つからず結果配列側にまだ余地がある場合はcapacity exhaustionを明示エラーにして停止する。黙ってrootや近似解を返して探索空間を切ったことにしない。ゲルニック戦は通常おおむね15総ターン以内で決着するため32はworkspaceとして十分な余裕を持つが、これは最短解の残りターン推定には使わない。
-採用アルゴリズムはヒューリスティクスを使わないIDDFS + 味方HP/MP dominance圧縮。IDDFSは深さ順の完全探索で最短ターンを保証し、探索時間timeoutや経験的heuristicで枝を捨てない。圧縮は上記のexact non-resource state一致時だけ行う。完全state一致だけのtranspositionは一致率が低いため高速化の主役に見積もらないが、HP/MPだけを資源軸として外した同値クラスなら有効な合流が増える可能性がある。state indexのメモリ量はWASM 2GB制限を意識し、巨大node poolではなく固定容量/事前確保を優先し、overflow時に近似へ落とさず明示的に扱う。MPによる枝生成は現在MPに対する実ROMのgray-out条件だけを厳密に扱う。探索開始時点で最短解までの残りターン数は未知なので、「残りターン内に回復可能な最大MP」等を使った未来予測feasibility pruneは採用しない。
+採用アルゴリズムはヒューリスティクスを使わないIDDFS。IDDFSは深さ順の完全探索で最短ターンを保証し、探索時間timeoutや経験的heuristicで枝を捨てない。HP/MP dominance圧縮は性能実測で棄却済みで、現探索器には入れない。完全state一致transpositionも一致率と比較コストから高速化の主役に見積もらない。MPによる枝生成は現在MPに対する実ROMのgray-out条件だけを厳密に扱う。探索開始時点で最短解までの残りターン数は未知なので、「残りターン内に回復可能な最大MP」等を使った未来予測feasibility pruneは採用しない。
 ## trace/debug APIへの波及
 現 `--trace-sequence` は各stepで `Main(..., RunCount=1, ...)` を個別に呼んでいるため、ゲルニックbuildでは各step冒頭にcamera battleがresetされる。戦闘本体checkpointの比較には使えても、camera込みの長期state検証器としては不正確。新 `Step` API完成後は `--trace-sequence` も同じStepへ載せ替え、探索とdebug traceでcamera state保持規約を一本化する。最終探索解の検証もrootからsolution pathをStepで再生し、必要な `BattleResult` / boundary traceを取る。
 さらに、旧 `--trace-sequence` にはcamera resetとは独立した重大なバグがあった。各stepごとに `makeDebugGene(traceGene, 1, action)` で `Gene[0]` だけを埋めていた一方、`BattleEmulator::Main` は `NowState` に保存された絶対turnから `genePosition = counterJ - 1` を計算して `Gene[genePosition]` を読む。そのため2step目以降は指定したactionが `Gene[1]`, `Gene[2]` ... に存在せず、`ATTACK_ALLY` へfallbackし得た。つまり旧trace-sequenceは「表示上はstepごとのactionを受け取っているが、実際のBattleEmulatorは2step目以降そのactionを実行していない」可能性があった。
@@ -70,3 +70,5 @@ production cameraは `dq9::freecam::fast::RuntimeState gRuntimeState` をthread_
 
 ## 追加で確定したgoalバグ
 旧ActionOptimizerはゲルニック `EnemyPlayer.hp <= 0` だけで探索成功としていたため、鉄甲魔人A/Bが生存したままでも「勝利」を返し得た。SearchRequestの最終再実行も同じ判定だった。ゲルニック戦のgoalは `players[1], players[2], players[3]` 全員のHP<=0へ修正済み。FLEEについては後の実装確認で「敵全滅goalへ到達不能」という扱いが誤りと判明したため、乱数調整commandとしてscenario profileへ復帰させた。
+
+**フリーカメラがずれたからといって、犯人にするな。当然TRACE boundaryが違えば、当然フリーカメラもずれる。**

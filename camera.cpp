@@ -273,8 +273,8 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                 }
             }
             const bool manualWouldCall = rule != CameraRule::none;
-            const bool productionWouldCall = after == BattleEmulator::ZAKI
-                ? hasRuntimeDecision && runtimeDecision.callFreeCamera
+            const bool productionWouldCall = hasRuntimeDecision
+                ? runtimeDecision.callFreeCamera
                 : manualWouldCall;
             debugEventIndex = gCameraDebugEventCount;
             auto& debugEvent = gCameraDebugEvents[gCameraDebugEventCount++];
@@ -356,7 +356,14 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
         }
         if (rule != CameraRule::none) {
             AssertCameraMapping(after);
-            onFreeCameraMove(position, after, preemptive ? 1 : 0, NowState, traceBoundaries);
+            if (hasRuntimeDecision) {
+                if (runtimeDecision.callFreeCamera) {
+                    onFreeCameraMove(position, after, runtimeDecision.param5 ? 1 : 0,
+                                     NowState, traceBoundaries);
+                }
+            } else {
+                onFreeCameraMove(position, after, preemptive ? 1 : 0, NowState, traceBoundaries);
+            }
         }
         if (HasTrackingCameraOneRng(after)) {
             if (traceBoundaries) {

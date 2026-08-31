@@ -12,12 +12,20 @@
 
 class ActionOptimizer {
 public:
+    struct DepthProbeResult {
+        uint64_t nodes = 0;
+        bool win = false;
+        int solutionDepth = -1;
+    };
+
     // Heuristic-free IDDFS. maxGenerations/seedOffset remain only for ABI compatibility.
     static Genome RunAlgorithm(const Player players[4], uint64_t seed, int turns, int maxGenerations,
                                int actions[350], int seedOffset);
     static std::pair<int, Genome> RunAlgorithmAsync(const Player players[4], uint64_t seed, int turns,
                                                     int maxGenerations, int actions[350], int numThreads,
                                                     bool dropbug);
+    static DepthProbeResult ProbeDepth(const Player players[4], uint64_t seed, int depthLimit,
+                                       int numThreads);
 
     // Compatibility no-op retained for older callers.
     static void updateCompromiseScore(Genome &genome);

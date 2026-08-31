@@ -684,6 +684,42 @@ std::pair<int, Genome> ActionOptimizer::RunAlgorithmAsync(
     return {0, RunParallelIddfs(players, seed, turns, actions, numThreads)};
 }
 
+ActionOptimizer::DepthProbeResult ActionOptimizer::ProbeDepth(
+    const Player players[4],
+    const std::uint64_t seed,
+    const int depthLimit,
+    const int numThreads
+) {
+    if (depthLimit < 1 || depthLimit > kSearchPathCapacity) {
+        throw std::invalid_argument("IDDFS probe depth must be 1..kSearchPathCapacity");
+    }
+
+    const int threadCount = std::clamp(numThreads, 1, kMaxSearchThreads);
+    if (threadCount == 1) {
+        SearchWorkspace& workspace = gWorkspace;
+        workspace.path.fill(0);
+        workspace.solution.fill(0);
+        workspace.solutionDepth = -1;
+        workspace.visitedNodes = 0;
+        lcg::init(seed, true);
+        if (!BattleEmulator::InitializeSearchState(&workspace.root, players, 2)) return {};
+        workspace.states[0] = workspace.root;
+        const bool win = DepthFirstSearch(workspace, 0, depthLimit);
+        return {workspace.visitedNodes, win, workspace.solutionDepth};
+    }
+
+    ParallelSearchWorkspace& workspace = gParallelWorkspace;
+    workspace.seed = seed;
+    lcg::init(seed, true);
+    if (!BattleEmulator::InitializeSearchState(&workspace.root, players, 2)) return {};
+    const bool win = RunParallelDepth(workspace, depthLimit, threadCount);
+    std::uint64_t nodes = 0;
+    for (int worker = 0; worker < threadCount; ++worker) {
+        nodes += workspace.workerVisited[static_cast<std::size_t>(worker)];
+    }
+    return {nodes, win, workspace.solutionDepth};
+}
+
 void ActionOptimizer::updateCompromiseScore(Genome& genome) {
     // Compatibility no-op. The IDDFS implementation has no compromise score,
     // learned cost, heuristic ranking or approximate branch elimination.

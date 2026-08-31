@@ -904,7 +904,7 @@ int main(int argc, char* argv[]){
 			          << " startPosition=" << traceState.position << '\n';
 			BattleEmulator::SearchState nextState{};
 			if (!BattleEmulator::StepSearchState(traceState, {action, target}, &nextState,
-			                                     &traceResult, true)) {
+			                                     &traceResult, step == argc - 5)) {
 				throw std::runtime_error("failed to execute trace search step");
 			}
 			traceState = nextState;
@@ -949,6 +949,40 @@ int main(int argc, char* argv[]){
 			}
 		}
 		camera::SetDebugCapture(false);
+		return 0;
+	}
+
+	if (argc >= 5 && std::string_view(argv[1]) == "--trace-sequence-summary") {
+		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
+		const int currentSeedPosition = std::stoi(argv[3], nullptr, 0);
+		lcg::init(traceSeed, true);
+		BattleEmulator::SearchState traceState{};
+		if (!BattleEmulator::InitializeSearchState(&traceState, copiedPlayers,
+		                                          currentSeedPosition + 1)) {
+			throw std::runtime_error("failed to initialize trace search state");
+		}
+		for (int step = 0; step < argc - 4; ++step) {
+			const std::string_view token(argv[step + 4]);
+			const std::size_t separator = token.find(':');
+			const int action = std::stoi(std::string(token.substr(0, separator)), nullptr, 0);
+			const int target = separator == std::string_view::npos
+				? -1
+				: std::stoi(std::string(token.substr(separator + 1)), nullptr, 0);
+			if (!BattleEmulator::StepSearchStateInPlace(&traceState, {action, target})) {
+				throw std::runtime_error("failed to execute summary trace search step");
+			}
+			std::cout << "TRACE_SUMMARY step=" << (step + 1)
+			          << " action=" << action
+			          << " target=" << target
+			          << " position=" << traceState.position
+			          << " hp=" << traceState.players[0].hp << ',' << traceState.players[1].hp << ','
+			          << traceState.players[2].hp << ',' << traceState.players[3].hp
+			          << " heroMp=" << traceState.players[0].mp << '\n';
+			if (traceState.players[0].hp <= 0 ||
+			    (traceState.players[1].hp <= 0 && traceState.players[2].hp <= 0 && traceState.players[3].hp <= 0)) {
+				break;
+			}
+		}
 		return 0;
 	}
 
@@ -1025,7 +1059,37 @@ int main(int argc, char* argv[]){
 		          << " position=" << verifyPosition
 		          << " hp=" << verifyPlayers[0].hp << ',' << verifyPlayers[1].hp << ','
 		          << verifyPlayers[2].hp << ',' << verifyPlayers[3].hp << '\n';
+		std::cout << dumpTable(verifyResult, genome.actions, -1);
 		return win ? 0 : 2;
+	}
+
+	if (argc >= 4 && std::string_view(argv[1]) == "--probe-iddfs-depth") {
+		const uint64_t searchSeed = std::stoull(argv[2], nullptr, 0);
+		const int depthLimit = std::stoi(argv[3], nullptr, 0);
+		int searchThreads = 1;
+		if (argc >= 5) {
+			const std::string_view option(argv[4]);
+			constexpr std::string_view threadPrefix = "--threads=";
+			if (option.starts_with(threadPrefix)) {
+				searchThreads = std::max(1, std::stoi(std::string(option.substr(threadPrefix.size()))));
+			}
+		}
+		const auto started = std::chrono::steady_clock::now();
+		const auto probe = ActionOptimizer::ProbeDepth(copiedPlayers, searchSeed, depthLimit, searchThreads);
+		const auto elapsed = std::chrono::steady_clock::now() - started;
+		const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+		const auto nodesPerSecond = elapsedMs > 0
+			? (probe.nodes * UINT64_C(1000)) / static_cast<std::uint64_t>(elapsedMs)
+			: UINT64_C(0);
+		std::cout << "IDDFS_PROBE seed=0x" << std::hex << searchSeed << std::dec
+		          << " depth=" << depthLimit
+		          << " threads=" << searchThreads
+		          << " nodes=" << probe.nodes
+		          << " elapsedMs=" << elapsedMs
+		          << " nodesPerSec=" << nodesPerSecond
+		          << " win=" << probe.win
+		          << " solutionDepth=" << probe.solutionDepth << '\n';
+		return 0;
 	}
 
 	if (argc >= 7 && std::string_view(argv[1]) == "--scan-camera") {
