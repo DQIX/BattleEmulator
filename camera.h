@@ -64,10 +64,13 @@ public:
     static bool ResetBattle(const CameraPresentationActor *actors, std::size_t actorCount);
     static RuntimeSnapshot CaptureRuntimeState() noexcept;
     static void RestoreRuntimeState(const RuntimeSnapshot& state) noexcept;
+    static void BindRuntimeState(RuntimeSnapshot* state) noexcept;
+    static void UnbindRuntimeState() noexcept;
     static void Main(int *position, const int32_t *actions,
                      const dq9::freecam::fast::BattleActorRef *actors,
                      const dq9::freecam::fast::BattleActorRef *targets,
-                     int actionCount, uint64_t *NowState, bool preemptive, bool bakuti);
+                     int actionCount, uint64_t *NowState, bool preemptive, bool bakuti,
+                     bool traceBoundaries = false);
 
 #if defined(gerunikku)
     static void SetDebugCapture(bool enabled) noexcept;
@@ -77,7 +80,8 @@ public:
 #endif
 
 private:
-    static void onFreeCameraMove(int *position, int action, int param5, uint64_t *NowState);
+    static void onFreeCameraMove(int *position, int action, int param5, uint64_t *NowState,
+                                 bool traceBoundaries);
 };
 
 

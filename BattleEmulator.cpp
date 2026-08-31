@@ -605,18 +605,16 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                           uint64_t seed, const int eActions[350], const int damages[350], int mode,
                           uint64_t *NowState, const int heroTargetOverride, const bool traceBoundaries,
                           const int heroActionOverride, const bool initializeCameraBattle) {
-    resetCombo(NowState);
 #if defined(gerunikku)
-    InitializeBattleActorRefs();
-    if (initializeCameraBattle && !InitializeCameraBattle()) return false;
+    if (initializeCameraBattle) {
+        InitializeBattleActorRefs();
+        if (!InitializeCameraBattle()) return false;
+    }
 #endif
-    player0_has_initiative = false;
-    TiggerSkyAttack = false;
-    actionsPosition = 0;
     int genePosition = 0;
     int exCounter = 0;
     int exCounter1 = 0;
-    uint64_t tmpState = -1;
+    uint64_t tmpState;
 
     auto startPos = static_cast<int>(((*NowState) >> 12) & 0xfffff);
     if (startPos != 0) {
@@ -669,11 +667,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
         players[0].defence = 1.0;
 
-        for (int32_t &action: actions) {
-            action = -1;
-        }
-        for (auto &actor : actionActors) actor = {};
-        for (auto &target : actionTargets) target = {};
+        // callAttackFun() overwrites every entry in [0, actionsPosition), and
+        // camera::Main() is given that exact count. Clearing the unused tail on
+        // every searched turn only writes memory that cannot be observed.
         actionsPosition = 0;
         double speed0 = Player::isPlayerAlive(players[0]) && players[0].speed > 0
             ? players[0].speed * lcg::floatRand(position, 0.51, 1.0) // float, lr: 0x0215efac
@@ -1159,10 +1155,13 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         }
 
         if (Player::isPlayerAlive(players[0]) && anyEnemyAlive()) {
+            if (traceBoundaries) {
+                std::cout << "TRACE rng lr=0x0215962c consume=" << *position << '\n';
+            }
             (*position)++; // max: 100, lr: 0x0215962c
         }
         camera::Main(position, actions, actionActors, actionTargets, actionsPosition,
-                     NowState, player0_has_initiative, TiggerSkyAttack);
+                     NowState, player0_has_initiative, TiggerSkyAttack, traceBoundaries);
     }
     if (mode != -1 && mode != -2) {
         startTurn = RunCount - 2;
@@ -1240,27 +1239,34 @@ bool BattleEmulator::StepSearchState(const SearchState& source, const SearchComm
                                      BattleResult* result, const bool traceBoundaries) {
     if (destination == nullptr || command.action <= 0) return false;
 
-    // Do not copy the full SearchState here. cameraRuntime is the largest part
-    // of the snapshot; copying it to destination and then immediately copying
-    // it again into the camera thread-local state is redundant. Restore the
-    // exact parent camera snapshot directly, copy only battle-core state, run
-    // one turn, then capture the exact child camera snapshot.
+    const bool searchFastPath = result == nullptr && !traceBoundaries;
+
     for (int i = 0; i < 4; ++i) destination->players[i] = source.players[i];
     destination->position = source.position;
     destination->nowState = source.nowState;
-    camera::RestoreRuntimeState(source.cameraRuntime);
-
-    BattleResult scratchResult;
-    BattleResult* output = result != nullptr ? result : &scratchResult;
-    *output = BattleResult{};
+    if (searchFastPath) {
+        // Search owns both snapshots. Copy the parent camera state once into
+        // the child slot, then let production camera code mutate that child
+        // snapshot directly instead of copying through thread-local storage
+        // twice per edge.
+        destination->cameraRuntime = source.cameraRuntime;
+        camera::BindRuntimeState(&destination->cameraRuntime);
+    } else {
+        camera::RestoreRuntimeState(source.cameraRuntime);
+    }
 
     const int mode = result != nullptr ? -1 : -2;
+    if (result != nullptr) *result = BattleResult{};
     const int packedAction = PackHeroAction(command.action, command.target);
-    Main(&destination->position, 1, nullptr, destination->players, output,
+    Main(&destination->position, 1, nullptr, destination->players, result,
          0, nullptr, nullptr, mode, &destination->nowState,
          -1, traceBoundaries, packedAction, false);
 
-    destination->cameraRuntime = camera::CaptureRuntimeState();
+    if (searchFastPath) {
+        camera::UnbindRuntimeState();
+    } else {
+        destination->cameraRuntime = camera::CaptureRuntimeState();
+    }
     return true;
 }
 
@@ -1268,19 +1274,19 @@ bool BattleEmulator::StepSearchStateInPlace(SearchState* state, const SearchComm
                                             BattleResult* result, const bool traceBoundaries) {
     if (state == nullptr || command.action <= 0) return false;
 
-    camera::RestoreRuntimeState(state->cameraRuntime);
-
-    BattleResult scratchResult;
-    BattleResult* output = result != nullptr ? result : &scratchResult;
-    *output = BattleResult{};
+    const bool searchFastPath = result == nullptr && !traceBoundaries;
+    if (searchFastPath) camera::BindRuntimeState(&state->cameraRuntime);
+    else camera::RestoreRuntimeState(state->cameraRuntime);
 
     const int mode = result != nullptr ? -1 : -2;
+    if (result != nullptr) *result = BattleResult{};
     const int packedAction = PackHeroAction(command.action, command.target);
-    Main(&state->position, 1, nullptr, state->players, output,
+    Main(&state->position, 1, nullptr, state->players, result,
          0, nullptr, nullptr, mode, &state->nowState,
          -1, traceBoundaries, packedAction, false);
 
-    state->cameraRuntime = camera::CaptureRuntimeState();
+    if (searchFastPath) camera::UnbindRuntimeState();
+    else state->cameraRuntime = camera::CaptureRuntimeState();
     return true;
 }
 

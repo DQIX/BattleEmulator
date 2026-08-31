@@ -182,8 +182,17 @@ void camera::RestoreRuntimeState(const RuntimeSnapshot& state) noexcept {
     dq9::freecam::fast::ThreadContext() = state;
 }
 
+void camera::BindRuntimeState(RuntimeSnapshot* state) noexcept {
+    dq9::freecam::fast::BindThreadContext(state);
+}
+
+void camera::UnbindRuntimeState() noexcept {
+    dq9::freecam::fast::UnbindThreadContext();
+}
+
 void camera::Main(int *position, const int32_t *actions, const BattleActorRef *actors, const BattleActorRef *targets,
-                  const int actionCount, uint64_t *NowState, bool preemptive1, bool bakuti) {
+                  const int actionCount, uint64_t *NowState, bool preemptive1, bool bakuti,
+                  const bool traceBoundaries) {
     (void)preemptive1;
 
     using namespace dq9::freecam::fast;
@@ -303,7 +312,7 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
         }
         if (moture && after == BattleEmulator::MERA_ZOMA) {
             AssertCameraMapping(after);
-            onFreeCameraMove(position, after, 1, NowState);
+            onFreeCameraMove(position, after, 1, NowState, traceBoundaries);
 #if defined(gerunikku)
             finalizeDebugEvent();
 #endif
@@ -313,7 +322,8 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
         if (after == BattleEmulator::ZAKI && hasRuntimeDecision) {
             if (runtimeDecision.callFreeCamera) {
                 AssertCameraMapping(after);
-                onFreeCameraMove(position, after, runtimeDecision.param5 ? 1 : 0, NowState);
+                onFreeCameraMove(position, after, runtimeDecision.param5 ? 1 : 0, NowState,
+                                 traceBoundaries);
             }
             if (hasPresentationSetup && actionMetadata != nullptr) {
                 (void)CommitActionProgressRaw(
@@ -337,7 +347,7 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
         }
         if (rule != CameraRule::none) {
             AssertCameraMapping(after);
-            onFreeCameraMove(position, after, preemptive ? 1 : 0, NowState);
+            onFreeCameraMove(position, after, preemptive ? 1 : 0, NowState, traceBoundaries);
 
             if (rule == CameraRule::free_camera_with_tracking_fallback
                 && !FreeCameraBuilt(NowState)) {
@@ -365,14 +375,21 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
     }
 }
 
-void camera::onFreeCameraMove(int *position, const int action, const int param5, uint64_t * NowState) {
+void camera::onFreeCameraMove(int *position, const int action, const int param5, uint64_t * NowState,
+                              const bool traceBoundaries) {
     auto counter = ((*NowState) >> 8) & 0xf;
     do {
         if (param5 == 0) {
+            if (traceBoundaries) {
+                std::cout << "TRACE rng lr=0x0216fe40 consume=" << *position << '\n';
+            }
             (*position)++;
             if (counter == 0) {
                 counter++;
                 break;
+            }
+            if (traceBoundaries) {
+                std::cout << "TRACE rng lr=0x0216fe68 consume=" << *position << '\n';
             }
             auto ret = lcg::getPercent(position, 5 - counter);
             if (ret == 0 || counter == 5) {

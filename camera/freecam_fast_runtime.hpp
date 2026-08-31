@@ -505,9 +505,18 @@ struct RuntimeState {
 };
 
 inline thread_local RuntimeState gRuntimeState{};
+inline thread_local RuntimeState* gRuntimeStateOverride = nullptr;
 
 [[nodiscard]] inline RuntimeState& ThreadContext() noexcept {
-    return gRuntimeState;
+    return gRuntimeStateOverride != nullptr ? *gRuntimeStateOverride : gRuntimeState;
+}
+
+inline void BindThreadContext(RuntimeState* state) noexcept {
+    gRuntimeStateOverride = state;
+}
+
+inline void UnbindThreadContext() noexcept {
+    gRuntimeStateOverride = nullptr;
 }
 
 inline void InvalidateCurrentRoutes(RuntimeState& state) noexcept {
@@ -516,11 +525,12 @@ inline void InvalidateCurrentRoutes(RuntimeState& state) noexcept {
 }
 
 inline void ResetBattle() noexcept {
-    gRuntimeState = {};
-    gRuntimeState.battleActive = true;
-    gRuntimeState.turnActionActors.fill(detail::kInvalidPresentationActor);
-    gRuntimeState.presentationMembershipProfiles.fill(kInvalidMembershipProfile);
-    gRuntimeState.rosterField4Nonzero.fill(false);
+    auto& state = ThreadContext();
+    state = {};
+    state.battleActive = true;
+    state.turnActionActors.fill(detail::kInvalidPresentationActor);
+    state.presentationMembershipProfiles.fill(kInvalidMembershipProfile);
+    state.rosterField4Nonzero.fill(false);
 }
 
 [[nodiscard]] inline bool BeginTurn(const std::span<const BattleActorRef> actionOrder) noexcept {

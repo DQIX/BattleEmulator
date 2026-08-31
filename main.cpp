@@ -821,6 +821,40 @@ int main(int argc, char* argv[]){
 		return 0;
 	}
 
+	if (argc >= 7 && std::string_view(argv[1]) == "--bench-search-turn") {
+		const uint64_t benchSeed = std::stoull(argv[2], nullptr, 0);
+		const int benchAction = std::stoi(argv[3], nullptr, 0);
+		const int benchTarget = std::stoi(argv[4], nullptr, 0);
+		const int currentSeedPosition = std::stoi(argv[5], nullptr, 0);
+		const int iterations = std::stoi(argv[6], nullptr, 0);
+		if (iterations < 1) throw std::invalid_argument("benchmark iterations must be positive");
+
+		lcg::init(benchSeed, true);
+		BattleEmulator::SearchState root{};
+		if (!BattleEmulator::InitializeSearchState(&root, copiedPlayers, currentSeedPosition + 1)) {
+			throw std::runtime_error("failed to initialize benchmark search state");
+		}
+		BattleEmulator::SearchState child{};
+		std::uint64_t checksum = 0;
+		const auto started = std::chrono::steady_clock::now();
+		for (int iteration = 0; iteration < iterations; ++iteration) {
+			if (!BattleEmulator::StepSearchState(root, {benchAction, benchTarget}, &child)) {
+				throw std::runtime_error("failed to execute benchmark search step");
+			}
+			checksum += static_cast<std::uint64_t>(child.position);
+			checksum += static_cast<std::uint32_t>(child.players[0].hp);
+			checksum += child.nowState;
+		}
+		const auto elapsed = std::chrono::steady_clock::now() - started;
+		const auto elapsedNs = std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
+		std::cout << "BENCH search-turn iterations=" << iterations
+		          << " elapsedMs=" << (elapsedNs / 1000000.0)
+		          << " nsPerTurn=" << (static_cast<double>(elapsedNs) / iterations)
+		          << " turnsPerSec=" << (iterations * 1000000000.0 / elapsedNs)
+		          << " checksum=" << checksum << '\n';
+		return 0;
+	}
+
 	if (argc >= 3 && std::string_view(argv[1]) == "--trace-battle") {
 		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
 		const int traceTurns = argc >= 4 ? std::stoi(argv[3], nullptr, 0) : 10;
@@ -850,6 +884,9 @@ int main(int argc, char* argv[]){
 		                                          currentSeedPosition + 1)) {
 			throw std::runtime_error("failed to initialize trace search state");
 		}
+		camera::SetDebugCapture(true);
+		camera::ClearDebugEvents();
+		std::size_t cameraEventOffset = 0;
 
 		for (int step = 0; step < argc - 4; ++step) {
 			const std::string_view token(argv[step + 4]);
@@ -888,11 +925,29 @@ int main(int argc, char* argv[]){
 				          << " damage=" << traceResult.damages[i]
 				          << " enemy=" << traceResult.isEnemy[i] << '\n';
 			}
+			const std::size_t cameraEventCount = camera::DebugEventCount();
+			for (; cameraEventOffset < cameraEventCount; ++cameraEventOffset) {
+				const CameraDebugEvent event = camera::DebugEventAt(cameraEventOffset);
+				std::cout << "TRACE sequence-camera step=" << step
+				          << " actionIndex=" << event.actionIndex
+				          << " action=" << event.commonActionId
+				          << " actor=0x" << std::hex << event.actorId
+				          << " target=0x" << event.targetId << std::dec
+				          << " route=" << static_cast<unsigned>(event.actorRouteCount)
+				          << " maxRoute=" << static_cast<unsigned>(event.maxRouteCount)
+				          << " source=" << static_cast<unsigned>(event.triggerSource)
+				          << " call=" << event.runtimeCallFreeCamera
+				          << " param5=" << event.runtimeParam5
+				          << " reset=" << event.runtimeResetOnly
+				          << " manual=" << event.manualRuleWouldCall
+				          << " production=" << event.productionCalledFreeCamera << '\n';
+			}
 			if (traceState.players[0].hp <= 0 ||
 			    (traceState.players[1].hp <= 0 && traceState.players[2].hp <= 0 && traceState.players[3].hp <= 0)) {
 				break;
 			}
 		}
+		camera::SetDebugCapture(false);
 		return 0;
 	}
 
