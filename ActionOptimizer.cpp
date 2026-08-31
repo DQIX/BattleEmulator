@@ -176,6 +176,26 @@ void PushParallelStack(
     }
 }
 
+void PushParallelBatch(
+    ParallelSearchWorkspace& workspace,
+    std::atomic<std::uint64_t>& head,
+    const std::uint32_t firstNodeIndex,
+    const std::uint32_t lastNodeIndex
+) noexcept {
+    std::uint64_t observed = head.load(std::memory_order_relaxed);
+    for (;;) {
+        workspace.nodes[lastNodeIndex].next = HeadIndex(observed);
+        const std::uint64_t desired = TaggedHead(HeadTag(observed) + 1U, firstNodeIndex);
+        if (head.compare_exchange_weak(
+                observed, desired,
+                std::memory_order_release,
+                std::memory_order_relaxed)) {
+            return;
+        }
+    }
+}
+
+
 [[nodiscard]] std::uint32_t PopParallelStack(
     ParallelSearchWorkspace& workspace,
     std::atomic<std::uint64_t>& head
@@ -281,6 +301,7 @@ void ParallelSearchWorker(
 
     std::uint64_t visited = 0;
     std::array<std::uint16_t, kScenarioCommands.size()> candidates{};
+    std::array<std::uint32_t, kScenarioCommands.size()> readyChildren{};
     std::array<std::uint32_t, 64> freeCache{};
     std::size_t freeCacheSize = 0;
 
@@ -332,13 +353,13 @@ void ParallelSearchWorker(
                     expected, true,
                     std::memory_order_acq_rel,
                     std::memory_order_acquire)) {
-                workspace.solution = node.path;
+                std::copy_n(node.path.begin(), node.depth, workspace.solution.begin());
                 workspace.solutionState = node.state;
                 workspace.solutionDepth = node.depth;
             }
         } else if (node.state.players[0].hp > 0 && node.depth < workspace.depthLimit) {
             const std::size_t candidateCount = BuildCandidates(node.state, candidates);
-
+            std::size_t readyCount = 0;
             // Global task storage is a LIFO stack. Publish in reverse command
             // order so the serial-first command remains the first likely task.
             for (std::size_t reverse = candidateCount;
@@ -355,7 +376,7 @@ void ParallelSearchWorker(
 
                 ParallelNode& child = workspace.nodes[childIndex];
                 child.depth = static_cast<std::uint8_t>(node.depth + 1);
-                child.path = node.path;
+                std::copy_n(node.path.begin(), node.depth, child.path.begin());
                 child.path[node.depth] = candidates[candidateIndex];
 
                 if (!BattleEmulator::StepSearchState(
@@ -365,12 +386,24 @@ void ParallelSearchWorker(
                     releaseNode(childIndex);
                     continue;
                 }
+                readyChildren[readyCount++] = childIndex;
+            }
 
-                workspace.outstanding.fetch_add(1, std::memory_order_relaxed);
-                PushParallelStack(
+            if (workspace.abortRequested.load(std::memory_order_acquire)
+                || workspace.solutionFound.load(std::memory_order_acquire)) {
+                for (std::size_t index = 0; index < readyCount; ++index) {
+                    releaseNode(readyChildren[index]);
+                }
+            } else if (readyCount != 0) {
+                for (std::size_t index = readyCount; index > 1; --index) {
+                    workspace.nodes[readyChildren[index - 1]].next = readyChildren[index - 2];
+                }
+                workspace.outstanding.fetch_add(readyCount, std::memory_order_relaxed);
+                PushParallelBatch(
                     workspace,
                     workspace.taskHeads[static_cast<std::size_t>(workerIndex)],
-                    childIndex
+                    readyChildren[readyCount - 1],
+                    readyChildren[0]
                 );
             }
         }
