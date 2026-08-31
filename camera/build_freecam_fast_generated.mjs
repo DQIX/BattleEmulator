@@ -230,7 +230,7 @@ const hasAnyMinedFreeCameraTriggerSource = buildHasAnyMinedFreeCameraTriggerSour
   inputBytes.get("freecam-action-metadata.bin"),
   inputBytes.get("freecam-membership-metadata.bin"),
 );
-const triggerTablePath = path.resolve(root, "..", "..", "freecam-action-trigger-table.csv");
+const triggerTablePath = path.resolve(root, "freecam-action-trigger-table.csv");
 const triggerTableCsv = await readFile(triggerTablePath, "utf8");
 const { behavior: cameraBehavior, rows: triggerRows } = parseFreeCameraBehavior(triggerTableCsv);
 const freeCameraMapperAllowed = new Uint8Array(actionCount);
