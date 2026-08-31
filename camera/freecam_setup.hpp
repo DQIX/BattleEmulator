@@ -284,6 +284,8 @@ constexpr void PaintPresentationClass(
     }
 }
 
+#include "freecam_class_generated.hpp"
+
 // overlay_d_25:021E1CF0 restores an actor after its presentation class was
 // removed from the occupancy map. Unlike the turn-wide 021E1A1C rebuild, this
 // path restores start, auxiliary, and the auxiliary-centered footprint before
@@ -297,7 +299,7 @@ constexpr void RestorePresentationActorFootprint(
     if (actor.auxiliaryNode < occupancy.size()) {
         occupancy[actor.auxiliaryNode] = presentationClass;
         if (actor.occupancyExpansionDepth != 0) {
-            PaintPresentationClass(
+            PaintPresentationClassForExpansion<false>(
                 occupancy,
                 actor.auxiliaryNode,
                 presentationClass,
@@ -339,6 +341,8 @@ constexpr void PaintPresentationDistance(
     }
 }
 
+#include "freecam_paint_generated.hpp"
+
 [[nodiscard]] constexpr PresentationOccupancyMap BuildPresentationOccupancy(
     const std::span<const PresentationActorState> actors,
     PresentationOccupancyMap occupancy = {}
@@ -352,7 +356,7 @@ constexpr void PaintPresentationDistance(
         const std::uint8_t presentationClass = PresentationClassForActor(actor.actorId);
         if (node < occupancy.size()) occupancy[node] = presentationClass;
         if (actor.occupancyExpansionDepth != 0 && node < occupancy.size()) {
-            PaintPresentationClass(
+            PaintPresentationClassForExpansion<false>(
                 occupancy,
                 node,
                 presentationClass,
@@ -583,18 +587,17 @@ constexpr void InvalidateGoalNeighborConflicts(
     const std::uint8_t holdDepth = expansion == 0
         ? 1
         : static_cast<std::uint8_t>(expansion + 1);
-    PaintPresentationDistance(levels, pivot, maximumLayer, holdDepth);
+    PaintPresentationDistanceForExpansion<false>(levels, pivot, expansion);
 
     PresentationOccupancyMap targetArea{};
     if (actorIsInAction) {
-        PaintPresentationDistance(targetArea, pivot, maximumLayer, holdDepth);
+        PaintPresentationDistanceForExpansion<false>(targetArea, pivot, expansion);
         targetArea[pivot] = PresentationClassForActor(target.actorId);
-        PaintPresentationClass(
+        PaintPresentationClassForExpansion<true>(
             targetArea,
             pivot,
             PresentationClassForActor(target.actorId),
-            expansion,
-            holdDepth
+            expansion
         );
     }
 
@@ -677,7 +680,7 @@ constexpr void InvalidateGoalNeighborConflicts(
 
     if (actorIsInAction && attackFormationMode != 2) {
         PresentationOccupancyMap adjacent{};
-        PaintPresentationDistance(adjacent, pivot, 1, holdDepth);
+        PaintPresentationDistanceForExpansion<true>(adjacent, pivot, expansion);
         if ((actor.startNode < adjacent.size() && adjacent[actor.startNode] == 1)
             || actor.startNode == pivot) {
             goal = actor.startNode;

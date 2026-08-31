@@ -10,3 +10,5 @@
 /public
 /interface-design-main
 /camera/freecam_fast_generated.hpp
+/camera/freecam_paint_generated.hpp
+/camera/freecam_class_generated.hpp

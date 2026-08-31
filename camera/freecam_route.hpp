@@ -13,18 +13,32 @@ inline constexpr std::size_t kMaxPresentationActors = 12;
 inline constexpr std::size_t kMaxPresentationActions = 60;
 inline constexpr std::size_t kMaxPresentationRoute = 16;
 
-[[nodiscard]] constexpr bool IsPresentationNode(const int row, const int column) noexcept {
+#if defined(_MSC_VER)
+#define DQ9_FREECAM_ROUTE_FORCE_INLINE __forceinline
+#elif defined(__GNUC__) || defined(__clang__)
+#define DQ9_FREECAM_ROUTE_FORCE_INLINE inline __attribute__((always_inline))
+#else
+#define DQ9_FREECAM_ROUTE_FORCE_INLINE inline
+#endif
+
+[[nodiscard]] DQ9_FREECAM_ROUTE_FORCE_INLINE constexpr bool IsPresentationNode(
+    const int row,
+    const int column
+) noexcept {
     return row >= 0 && row < 9 && column >= 0 && column < 9 && !(row % 2 != 0 && column == 8);
 }
 
-[[nodiscard]] constexpr std::uint8_t PresentationNode(const int row, const int column) noexcept {
+[[nodiscard]] DQ9_FREECAM_ROUTE_FORCE_INLINE constexpr std::uint8_t PresentationNode(
+    const int row,
+    const int column
+) noexcept {
     return IsPresentationNode(row, column)
         ? static_cast<std::uint8_t>(row * 9 + column)
         : kInvalidPresentationNode;
 }
 
 // Exact neighbor order from overlay_d_00:02170F58.
-[[nodiscard]] constexpr std::array<std::uint8_t, 6> PresentationNeighbors(
+[[nodiscard]] DQ9_FREECAM_ROUTE_FORCE_INLINE constexpr std::array<std::uint8_t, 6> PresentationNeighbors(
     const std::uint8_t node
 ) noexcept {
     if (node >= 81) {
@@ -56,6 +70,8 @@ inline constexpr std::size_t kMaxPresentationRoute = 16;
         PresentationNode(row - 1, column + 1),
     };
 }
+
+#undef DQ9_FREECAM_ROUTE_FORCE_INLINE
 
 struct PresentationPath {
     // 02171498 writes goal -> ... -> start. The caller consumes nodes[count - 2]
