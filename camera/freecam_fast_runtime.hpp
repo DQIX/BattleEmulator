@@ -64,9 +64,9 @@ inline constexpr std::size_t kActionCount = 1024;
 inline constexpr std::uint16_t kInvalidActionId = UINT16_C(0xffff);
 inline constexpr std::uint32_t kInvalidProfileIndex = UINT32_C(0xffffffff);
 
-static_assert(generated::kCameraMetadataBytes.size() == 4240);
+static_assert(generated::kCameraMetadataBytes.size() == 5264);
 static_assert(MagicIs(generated::kCameraMetadataBytes, 'F', 'C', 'M', '1'));
-static_assert(ReadU32(generated::kCameraMetadataBytes, 4) == 1);
+static_assert(ReadU32(generated::kCameraMetadataBytes, 4) == 2);
 static_assert(ReadU32(generated::kCameraMetadataBytes, 8) == kActionCount);
 
 static_assert(generated::kActionMetadataBytes.size() == 4116);
@@ -91,7 +91,7 @@ static_assert(generated::kCameraBehaviorCode.size() == kActionCount);
 static_assert(generated::kFreeCameraMapperAllowed.size() == kActionCount);
 
 static_assert(MagicIs(generated::kMembershipMetadataBytes, 'F', 'C', 'M', 'M'));
-static_assert(ReadU32(generated::kMembershipMetadataBytes, 4) == 1);
+static_assert(ReadU32(generated::kMembershipMetadataBytes, 4) == 2);
 static_assert(ReadU32(generated::kMembershipMetadataBytes, 8) == kActionCount);
 
 static_assert(generated::kMonsterPresentationMetadataBytes.size() == 20 + 1024);
@@ -138,6 +138,12 @@ struct ActorProfileMapEntry {
         generated::kCameraMetadataBytes,
         16 + 128 + static_cast<std::size_t>(actionId) * 4
     );
+}
+
+[[nodiscard]] constexpr std::uint8_t TrackingCameraOneRngCount(const std::uint16_t actionId) {
+    if (actionId >= kActionCount) return 0;
+    constexpr std::size_t offset = 16 + 128 + kActionCount * 4;
+    return generated::kCameraMetadataBytes[offset + actionId];
 }
 
 [[nodiscard]] constexpr std::uint16_t FallbackLookupActionId(const std::uint16_t actionId) {
@@ -189,7 +195,7 @@ struct ActorProfileMapEntry {
     return generated::kMonsterPresentationMetadataBytes[20 + monsterId];
 }
 
-[[nodiscard]] consteval std::uint64_t ActorMembershipPacked(
+[[nodiscard]] constexpr std::uint64_t ActorMembershipPacked(
     const std::uint32_t profileIndex,
     const std::uint16_t actionId
 ) {
@@ -199,7 +205,7 @@ struct ActorProfileMapEntry {
     return ReadU64(generated::kMembershipMetadataBytes, headerSize + cell * 8);
 }
 
-[[nodiscard]] consteval std::uint64_t FallbackMembershipPacked(const std::uint16_t actionId) {
+[[nodiscard]] constexpr std::uint64_t FallbackMembershipPacked(const std::uint16_t actionId) {
     if (actionId >= kActionCount) return 0;
     constexpr std::size_t headerSize = 32;
     constexpr std::size_t actorCellsBytes = kActorProfileCount * kActionCount * 8;
@@ -296,6 +302,7 @@ inline constexpr std::uint32_t kInvalidMembershipProfile = metadata::kInvalidPro
 struct MembershipCell {
     std::uint32_t selectorProjection{};
     std::uint16_t count{};
+    std::uint16_t trackingCameraOneRngCount{};
 
     [[nodiscard]] constexpr bool Present() const noexcept {
         return count != 0;
@@ -324,6 +331,7 @@ enum class TargetScope : std::uint8_t {
     return {
         static_cast<std::uint32_t>(packed),
         static_cast<std::uint16_t>((packed >> 32) & UINT64_C(0xffff)),
+        static_cast<std::uint16_t>((packed >> 48) & UINT64_C(0xffff)),
     };
 }
 
@@ -426,6 +434,11 @@ enum class TriggerSource : std::uint8_t {
     action_bact,
     fallback_membership,
     reset_only,
+};
+
+struct TrackingCameraDecision {
+    TriggerSource source{TriggerSource::none};
+    std::uint16_t rngCount{};
 };
 
 struct TriggerDecision {
@@ -665,6 +678,36 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     return index < state.presentationActorCount
         ? state.presentationMembershipProfiles[index]
         : kInvalidMembershipProfile;
+}
+
+[[nodiscard]] inline TrackingCameraDecision TrackingCameraFor(
+    const std::uint16_t dq9ActionId,
+    const std::uint16_t actorId
+) noexcept {
+    if (dq9ActionId >= metadata::kActionCount) return {};
+
+    const std::uint32_t profile = PresentationMembershipProfileForActor(actorId);
+    const MembershipCell actorMembership = DecodeMembershipCell(
+        metadata::ActorMembershipPacked(profile, dq9ActionId)
+    );
+    if (actorMembership.Present()) {
+        return {TriggerSource::actor_membership, actorMembership.trackingCameraOneRngCount};
+    }
+
+    if (metadata::HasBact(dq9ActionId)) {
+        return {TriggerSource::action_bact, metadata::TrackingCameraOneRngCount(dq9ActionId)};
+    }
+
+    const std::uint16_t fallbackActionId = metadata::FallbackLookupActionId(dq9ActionId);
+    if (fallbackActionId != metadata::kInvalidActionId) {
+        const MembershipCell fallbackMembership = DecodeMembershipCell(
+            metadata::FallbackMembershipPacked(fallbackActionId)
+        );
+        if (fallbackMembership.Present()) {
+            return {TriggerSource::fallback_membership, fallbackMembership.trackingCameraOneRngCount};
+        }
+    }
+    return {};
 }
 
 [[nodiscard]] inline bool SetPlayerMembershipProfile(

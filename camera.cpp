@@ -44,17 +44,6 @@ enum class CameraRule {
     }
 }
 
-[[nodiscard]] constexpr bool HasTrackingCameraOneRng(const int action) noexcept {
-    switch (action) {
-        case BattleEmulator::DRAGON_SLASH:   // DQ9 63
-        case BattleEmulator::MIRACLE_SLASH:  // DQ9 65
-        case BattleEmulator::HELM_SPLITTER:  // DQ9 109, live-confirmed 0x0216F0E4
-            return true;
-        default:
-            return false;
-    }
-}
-
 inline void AssertCameraMapping(const int action) noexcept {
     const auto* binding = dq9::freecam::bindings::Find(action);
     assert(binding != nullptr && binding->mapped());
@@ -254,6 +243,9 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                 }
             }
         }
+        const TrackingCameraDecision trackingCameraDecision = hasActionMetadata
+            ? TrackingCameraFor(actionMetadata->dq9ActionId, runtimeActorId)
+            : TrackingCameraDecision{};
 
         const CameraRule rule = RuleForAction(after);
 #if defined(gerunikku)
@@ -354,6 +346,14 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
 #endif
             continue;
         }
+        for (std::uint16_t trackingIndex = 0;
+             trackingIndex < trackingCameraDecision.rngCount;
+             ++trackingIndex) {
+            if (traceBoundaries) {
+                std::cout << "TRACE rng lr=0x0216f0e4 max=8 consume=" << *position << '\n';
+            }
+            (void)lcg::getPercent(position, 8); // lr: 0x0216f0e4, max: 8
+        }
         if (hasRuntimeDecision) {
             if (runtimeDecision.callFreeCamera) {
                 AssertCameraMapping(after);
@@ -363,12 +363,6 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
         } else if (rule != CameraRule::none) {
             AssertCameraMapping(after);
             onFreeCameraMove(position, after, preemptive ? 1 : 0, NowState, traceBoundaries);
-        }
-        if (HasTrackingCameraOneRng(after)) {
-            if (traceBoundaries) {
-                std::cout << "TRACE rng lr=0x0216f0e4 max=8 consume=" << *position << '\n';
-            }
-            (void)lcg::getPercent(position, 8); // lr: 0x0216f0e4, max: 8
         }
         if (after != BattleEmulator::ATTACK_ALLY) {//味方の攻撃→上空だとフリーカメラが特異点の挙動する
             preemptive = false;
