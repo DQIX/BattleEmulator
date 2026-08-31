@@ -354,16 +354,15 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
 #endif
             continue;
         }
-        if (rule != CameraRule::none) {
-            AssertCameraMapping(after);
-            if (hasRuntimeDecision) {
-                if (runtimeDecision.callFreeCamera) {
-                    onFreeCameraMove(position, after, runtimeDecision.param5 ? 1 : 0,
-                                     NowState, traceBoundaries);
-                }
-            } else {
-                onFreeCameraMove(position, after, preemptive ? 1 : 0, NowState, traceBoundaries);
+        if (hasRuntimeDecision) {
+            if (runtimeDecision.callFreeCamera) {
+                AssertCameraMapping(after);
+                onFreeCameraMove(position, after, runtimeDecision.param5 ? 1 : 0,
+                                 NowState, traceBoundaries);
             }
+        } else if (rule != CameraRule::none) {
+            AssertCameraMapping(after);
+            onFreeCameraMove(position, after, preemptive ? 1 : 0, NowState, traceBoundaries);
         }
         if (HasTrackingCameraOneRng(after)) {
             if (traceBoundaries) {

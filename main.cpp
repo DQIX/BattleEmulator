@@ -936,6 +936,8 @@ int main(int argc, char* argv[]){
 				          << " target=0x" << event.targetId << std::dec
 				          << " route=" << static_cast<unsigned>(event.actorRouteCount)
 				          << " maxRoute=" << static_cast<unsigned>(event.maxRouteCount)
+				          << " mapped=" << event.mapped
+				          << " decision=" << event.runtimeDecisionAvailable
 				          << " source=" << static_cast<unsigned>(event.triggerSource)
 				          << " call=" << event.runtimeCallFreeCamera
 				          << " param5=" << event.runtimeParam5

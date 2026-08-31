@@ -80,6 +80,7 @@ inline constexpr auto kFreeCameraActions = [] {
     actions[BattleEmulator::THUNDER_THRUST] = Bind<BattleEmulator::THUNDER_THRUST>();
     actions[BattleEmulator::BEAST_THRUST] = Bind<BattleEmulator::BEAST_THRUST>();
     actions[BattleEmulator::VITAL_POINT_THRUST] = Bind<BattleEmulator::VITAL_POINT_THRUST>();
+    actions[BattleEmulator::HELM_SPLITTER] = Bind<BattleEmulator::HELM_SPLITTER>();
     actions[BattleEmulator::ZAKI] = Bind<BattleEmulator::ZAKI>();
     actions[BattleEmulator::ZARAKI] = Bind<BattleEmulator::ZARAKI>();
     actions[BattleEmulator::MEDICINAL_HERBS] = Bind<BattleEmulator::MEDICINAL_HERBS>();
@@ -135,6 +136,7 @@ static_assert(kFreeCameraActions[BattleEmulator::ATTACK_ALLY].dq9ActionId == 1);
 static_assert(kFreeCameraActions[BattleEmulator::THUNDER_THRUST].dq9ActionId == 72);
 static_assert(kFreeCameraActions[BattleEmulator::BEAST_THRUST].dq9ActionId == 70);
 static_assert(kFreeCameraActions[BattleEmulator::VITAL_POINT_THRUST].dq9ActionId == 71);
+static_assert(kFreeCameraActions[BattleEmulator::HELM_SPLITTER].dq9ActionId == 109);
 static_assert(kFreeCameraActions[BattleEmulator::ZAKI].dq9ActionId == 24);
 static_assert(kFreeCameraActions[BattleEmulator::ZARAKI].dq9ActionId == 25);
 static_assert(kFreeCameraActions[BattleEmulator::MEDICINAL_HERBS].dq9ActionId == 255);
