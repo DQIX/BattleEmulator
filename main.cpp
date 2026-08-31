@@ -340,7 +340,8 @@ bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aAct
 	}
 
 #if !defined(OPTIMIZE_MODE)
-	Genome genome = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, -1, gene, 0);
+	Genome genome = ActionOptimizer::RunAlgorithmAsync(
+		copiedPlayers2, seed, turns, -1, gene, 8, dropbug).second;
     BattleResult result;
 
 	auto runMain = [&](const Genome& g, BattleResult& res) -> RunResult {
@@ -953,10 +954,20 @@ int main(int argc, char* argv[]){
 
 	if (argc >= 3 && std::string_view(argv[1]) == "--trace-iddfs") {
 		const uint64_t searchSeed = std::stoull(argv[2], nullptr, 0);
+		int searchThreads = 1;
+		int firstActionArg = 3;
+		if (argc >= 4) {
+			const std::string_view option(argv[3]);
+			constexpr std::string_view threadPrefix = "--threads=";
+			if (option.starts_with(threadPrefix)) {
+				searchThreads = std::max(1, std::stoi(std::string(option.substr(threadPrefix.size()))));
+				firstActionArg = 4;
+			}
+		}
 		int searchActions[350];
 		std::fill(std::begin(searchActions), std::end(searchActions), -1);
 		int knownTurns = 0;
-		for (int argIndex = 3; argIndex < argc && knownTurns < 349; ++argIndex) {
+		for (int argIndex = firstActionArg; argIndex < argc && knownTurns < 349; ++argIndex) {
 			const std::string_view token(argv[argIndex]);
 			const std::size_t separator = token.find(':');
 			const int action = std::stoi(std::string(token.substr(0, separator)), nullptr, 0);
@@ -967,8 +978,11 @@ int main(int argc, char* argv[]){
 		}
 
 		const auto searchStart = std::chrono::steady_clock::now();
-		Genome genome = ActionOptimizer::RunAlgorithm(
-			copiedPlayers, searchSeed, knownTurns, -1, searchActions, 0);
+		Genome genome = searchThreads > 1
+			? ActionOptimizer::RunAlgorithmAsync(
+				copiedPlayers, searchSeed, knownTurns, -1, searchActions, searchThreads, false).second
+			: ActionOptimizer::RunAlgorithm(
+				copiedPlayers, searchSeed, knownTurns, -1, searchActions, 0);
 		const auto searchElapsed = std::chrono::steady_clock::now() - searchStart;
 		const auto searchMs = std::chrono::duration_cast<std::chrono::milliseconds>(searchElapsed).count();
 		const auto searchNodes = ActionOptimizer::getNodesUsed();
@@ -977,6 +991,7 @@ int main(int argc, char* argv[]){
 			: UINT64_C(0);
 		std::cout << "IDDFS nodes=" << searchNodes
 		          << " knownTurns=" << knownTurns
+		          << " threads=" << searchThreads
 		          << " elapsedMs=" << searchMs
 		          << " nodesPerSec=" << nodesPerSecond
 		          << " dominancePruned=" << ActionOptimizer::getDominancePruned()

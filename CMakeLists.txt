@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.28)
 project(newDirectory)
 
 set(CMAKE_CXX_STANDARD 20)
+find_package(Threads REQUIRED)
 
 if(MSVC)
     # ポリシーの設定
@@ -77,6 +78,10 @@ target_compile_definitions(erugi1_hayate PRIVATE hayate=1)
 
 add_executable(erugi1_gilyumei ${SOURCES})
 target_compile_definitions(erugi1_gilyumei PRIVATE gilyumei=1)
+
+foreach(target gerunikku gerunikku_gouketu_opt erugi1_hayate erugi1_gilyumei)
+    target_link_libraries(${target} PRIVATE Threads::Threads)
+endforeach()
 
 add_executable(freecam_edge_validation
         camera/freecam_edge_validation.cpp

@@ -56,9 +56,18 @@ SRC_FILES=(
   EnhancedHeapQueue.cpp
 )
 
+# Generated camera kernels are intentionally not tracked. Rebuild them from
+# the checked-in metadata before every WebAssembly compile so a clean checkout
+# never depends on stale local generated headers.
+(
+  cd "${ROOT}/camera"
+  node build_freecam_fast_generated.mjs
+)
+
 EMCC_FLAGS=(
   -std=c++20
   -O3
+  -pthread
   -sALLOW_MEMORY_GROWTH=1
   -sENVIRONMENT=worker,web
   -sWASM_BIGINT=1
@@ -68,6 +77,7 @@ EMCC_FLAGS=(
 
   -sWASM_ASYNC_COMPILATION=0
   -sSINGLE_FILE=1
+  -sPTHREAD_POOL_SIZE=8
 
   "-sEXPORTED_FUNCTIONS=['_wasm_prepare_input','_wasm_get_last_error','_wasm_bruteforce_range','_wasm_get_turn_processed','_wasm_get_found_seeds','_wasm_search_dump']"
   "-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','UTF8ToString']"

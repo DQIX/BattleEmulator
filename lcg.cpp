@@ -7,20 +7,21 @@
 #include <cassert>
 #include <cstdint>
 
-#if defined(OPTIMIZE_MODE)
 // Define the size of the array
 const int ARRAY_SIZE = 7000;
 
+#if defined(OPTIMIZE_MODE)
 thread_local uint32_t precalcTop32[ARRAY_SIZE]; // 固定メモリ
 thread_local int nowCounter = 1;
 thread_local uint64_t now_seed = 0;      // 現在のシード（逐次 or ジャンプ後）
 thread_local bool init_mode;         // true = 初期一括生成モード
 #else
-const int ARRAY_SIZE = 7000;
-uint32_t precalcTop32[ARRAY_SIZE]; // 固定メモリ
+// Normal/MSVC/WebAssembly search precomputes this once before spawning workers.
+// During the parallel IDDFS the table and its completed cursor are read-only.
+uint32_t precalcTop32[ARRAY_SIZE];
 int nowCounter = 1;
-uint64_t now_seed;      // 現在のシード（逐次 or ジャンプ後）
-bool init_mode;         // true = 初期一括生成モード
+uint64_t now_seed = 0;
+bool init_mode;
 #endif
 
 inline uint64_t lcg::lcg_rand(uint64_t seed) {

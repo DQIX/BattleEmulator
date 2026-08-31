@@ -2,10 +2,14 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <bit>
 #include <cstdint>
+#include <future>
 #include <limits>
+#include <mutex>
 #include <stdexcept>
+#include <thread>
 
 #include "BattleEmulator.h"
 #include "lcg.h"
@@ -19,11 +23,10 @@ constexpr int kActionHistoryCapacity = 350;
 // reaches this capacity without a win, fail loudly instead of claiming that no
 // solution exists.
 constexpr int kSearchPathCapacity = 32;
-constexpr std::size_t kDominanceBucketCount = 8192;
-constexpr std::size_t kDominanceRecordCapacity = 32768;
-constexpr std::uint32_t kNoDominanceRecord = UINT32_MAX;
+constexpr int kMaxSearchThreads = 8;
+constexpr std::uint32_t kParallelNodeCapacity = 16384;
+constexpr std::uint32_t kInvalidParallelNode = UINT32_MAX;
 
-static_assert((kDominanceBucketCount & (kDominanceBucketCount - 1)) == 0);
 
 // Scenario profile, not a heuristic. IDDFS explores every selectable command in
 // this explicit profile at every depth. The profile contains the known victory
@@ -99,15 +102,6 @@ constexpr std::array<BattleEmulator::SearchCommand, 20> kScenarioCommands{{
 }};
 #endif
 
-struct DominanceRecord {
-    std::uint64_t key{};
-    std::uint32_t next{kNoDominanceRecord};
-    std::uint16_t depth{};
-    int allyHp{};
-    int allyMp{};
-    BattleEmulator::SearchState state{};
-};
-
 struct SearchWorkspace {
     BattleEmulator::SearchState root{};
     std::array<BattleEmulator::SearchState, kSearchPathCapacity + 1> states{};
@@ -115,19 +109,114 @@ struct SearchWorkspace {
     std::array<std::uint16_t, kSearchPathCapacity> solution{};
     int solutionDepth{-1};
     std::uint64_t visitedNodes{};
-    std::uint64_t dominancePruned{};
-    std::uint32_t maxDominanceRecords{};
-    std::uint32_t dominanceOverflowIterations{};
-    bool dominanceOverflow{};
-    std::array<std::uint32_t, kDominanceBucketCount> bucketHeads{};
-    std::array<DominanceRecord, kDominanceRecordCapacity> records{};
-    std::uint32_t recordCount{};
 };
 
 // One synchronous search owns one worker/WASM instance. Keep search memory fixed
 // and C++-owned: no per-node malloc, no 350-action Genome copies, no open set.
 SearchWorkspace gWorkspace{};
 std::uint32_t gNodesUsed{};
+
+struct ParallelNode {
+    BattleEmulator::SearchState state{};
+    std::array<std::uint16_t, kSearchPathCapacity> path{};
+    std::uint8_t depth{};
+    std::uint32_t next{kInvalidParallelNode};
+};
+
+struct ParallelSearchWorkspace {
+    BattleEmulator::SearchState root{};
+    std::array<ParallelNode, kParallelNodeCapacity> nodes{};
+    // Tagged stack heads: high 32 bits are an ABA counter, low 32 bits are a slot index.
+    std::atomic<std::uint64_t> freeHead{};
+    std::array<std::atomic<std::uint64_t>, kMaxSearchThreads> taskHeads{};
+    std::atomic<std::uint64_t> outstanding{};
+    std::atomic<bool> solutionFound{};
+    std::atomic<bool> abortRequested{};
+    std::array<std::uint64_t, kMaxSearchThreads> workerVisited{};
+    std::array<std::uint16_t, kSearchPathCapacity> solution{};
+    BattleEmulator::SearchState solutionState{};
+    int solutionDepth{-1};
+    int depthLimit{};
+    int activeThreadCount{};
+    std::uint64_t seed{};
+};
+
+ParallelSearchWorkspace gParallelWorkspace{};
+
+[[nodiscard]] constexpr std::uint64_t TaggedHead(
+    const std::uint32_t tag,
+    const std::uint32_t index
+) noexcept {
+    return (static_cast<std::uint64_t>(tag) << 32) | index;
+}
+
+[[nodiscard]] constexpr std::uint32_t HeadIndex(const std::uint64_t head) noexcept {
+    return static_cast<std::uint32_t>(head);
+}
+
+[[nodiscard]] constexpr std::uint32_t HeadTag(const std::uint64_t head) noexcept {
+    return static_cast<std::uint32_t>(head >> 32);
+}
+
+void PushParallelStack(
+    ParallelSearchWorkspace& workspace,
+    std::atomic<std::uint64_t>& head,
+    const std::uint32_t nodeIndex
+) noexcept {
+    std::uint64_t observed = head.load(std::memory_order_relaxed);
+    for (;;) {
+        workspace.nodes[nodeIndex].next = HeadIndex(observed);
+        const std::uint64_t desired = TaggedHead(HeadTag(observed) + 1U, nodeIndex);
+        if (head.compare_exchange_weak(
+                observed, desired,
+                std::memory_order_release,
+                std::memory_order_relaxed)) {
+            return;
+        }
+    }
+}
+
+[[nodiscard]] std::uint32_t PopParallelStack(
+    ParallelSearchWorkspace& workspace,
+    std::atomic<std::uint64_t>& head
+) noexcept {
+    std::uint64_t observed = head.load(std::memory_order_acquire);
+    for (;;) {
+        const std::uint32_t nodeIndex = HeadIndex(observed);
+        if (nodeIndex == kInvalidParallelNode) return kInvalidParallelNode;
+        const std::uint32_t next = workspace.nodes[nodeIndex].next;
+        const std::uint64_t desired = TaggedHead(HeadTag(observed) + 1U, next);
+        if (head.compare_exchange_weak(
+                observed, desired,
+                std::memory_order_acq_rel,
+                std::memory_order_acquire)) {
+            return nodeIndex;
+        }
+    }
+}
+
+void ResetParallelArena(ParallelSearchWorkspace& workspace) noexcept {
+    for (std::uint32_t index = 0; index < kParallelNodeCapacity; ++index) {
+        workspace.nodes[index].next = index + 1U < kParallelNodeCapacity
+            ? index + 1U
+            : kInvalidParallelNode;
+    }
+    workspace.freeHead.store(TaggedHead(0, 0), std::memory_order_relaxed);
+    for (auto& taskHead : workspace.taskHeads) {
+        taskHead.store(TaggedHead(0, kInvalidParallelNode), std::memory_order_relaxed);
+    }
+    workspace.outstanding.store(0, std::memory_order_relaxed);
+    workspace.solutionFound.store(false, std::memory_order_relaxed);
+    workspace.abortRequested.store(false, std::memory_order_relaxed);
+    workspace.workerVisited.fill(0);
+    workspace.solution.fill(0);
+    workspace.solutionDepth = -1;
+}
+
+[[nodiscard]] bool ParallelStopRequested(const ParallelSearchWorkspace& workspace) noexcept {
+    return workspace.solutionFound.load(std::memory_order_acquire)
+        || workspace.abortRequested.load(std::memory_order_acquire);
+}
 
 [[nodiscard]] constexpr std::uint16_t PackCommand(
     const BattleEmulator::SearchCommand command
@@ -156,107 +245,6 @@ std::uint32_t gNodesUsed{};
 #endif
 }
 
-[[nodiscard]] bool SameAllyExceptHpMp(const Player& lhs, const Player& rhs) noexcept {
-    Player left = lhs;
-    Player right = rhs;
-    left.hp = 0;
-    right.hp = 0;
-    left.mp = 0;
-    right.mp = 0;
-    return left == right;
-}
-
-[[nodiscard]] bool SameNonResourceState(
-    const BattleEmulator::SearchState& lhs,
-    const BattleEmulator::SearchState& rhs
-) noexcept {
-    return lhs.position == rhs.position
-        && lhs.nowState == rhs.nowState
-        && SameAllyExceptHpMp(lhs.players[0], rhs.players[0])
-        && lhs.players[1] == rhs.players[1]
-        && lhs.players[2] == rhs.players[2]
-        && lhs.players[3] == rhs.players[3]
-        && lhs.cameraRuntime == rhs.cameraRuntime;
-}
-
-[[nodiscard]] constexpr std::uint64_t Mix(
-    std::uint64_t hash,
-    const std::uint64_t value
-) noexcept {
-    return hash ^ (value + UINT64_C(0x9e3779b97f4a7c15) + (hash << 6) + (hash >> 2));
-}
-
-[[nodiscard]] std::uint64_t MixPlayerState(
-    std::uint64_t hash,
-    const Player& player,
-    const bool includeHpMp
-) noexcept {
-    if (includeHpMp) {
-        hash = Mix(hash, static_cast<std::uint32_t>(player.hp));
-        hash = Mix(hash, static_cast<std::uint32_t>(player.mp));
-    }
-    hash = Mix(hash, static_cast<std::uint32_t>(player.maxHp));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.atk));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.defaultATK));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.def));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.defaultDEF));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.speed));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.HealPower));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.maxMp));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.specialCharge));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.dirtySpecialCharge));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.specialChargeTurn));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.paralysis));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.paralysisLevel));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.paralysisTurns));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.SpecialMedicineCount));
-    hash = Mix(hash, std::bit_cast<std::uint64_t>(player.defence));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.sleeping));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.sleepingTurn));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.BuffLevel));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.BuffTurns));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.hasMagicMirror));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.MagicMirrorTurn));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.AtkBuffLevel));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.AtkBuffTurn));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.TensionLevel));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.rage));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.SageElixirCount));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.ElfinElixirCount));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.MagicWaterCount));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.InsulateLevel));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.InsulateTurns));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.inactive));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.rageTurns));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.magicResistanceLevel));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.confused));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.confusionTurns));
-    hash = Mix(hash, static_cast<std::uint32_t>(player.guardedBy));
-    return hash;
-}
-
-// Bucket key only. A key match is never used as proof of state equality.
-// SameNonResourceState() is mandatory before an HP/MP dominance prune.
-[[nodiscard]] std::uint64_t CoarseNonResourceKey(
-    const BattleEmulator::SearchState& state,
-    const int depth
-) noexcept {
-    std::uint64_t hash = UINT64_C(0xcbf29ce484222325);
-    hash = Mix(hash, static_cast<std::uint64_t>(depth));
-    hash = Mix(hash, static_cast<std::uint32_t>(state.position));
-    hash = Mix(hash, state.nowState);
-    hash = MixPlayerState(hash, state.players[0], false);
-    hash = MixPlayerState(hash, state.players[1], true);
-    hash = MixPlayerState(hash, state.players[2], true);
-    hash = MixPlayerState(hash, state.players[3], true);
-    return hash;
-}
-
-void ResetDominance(SearchWorkspace& workspace) noexcept {
-    workspace.bucketHeads.fill(kNoDominanceRecord);
-    workspace.recordCount = 0;
-    workspace.dominanceOverflow = false;
-}
 
 [[nodiscard]] std::size_t BuildCandidates(
     const BattleEmulator::SearchState& state,
@@ -280,52 +268,158 @@ void ResetDominance(SearchWorkspace& workspace) noexcept {
     return count;
 }
 
-[[nodiscard]] bool AcceptByHpMpDominance(
-    SearchWorkspace& workspace,
-    const int depth,
-    const BattleEmulator::SearchState& candidateState
+void ParallelSearchWorker(
+    ParallelSearchWorkspace& workspace,
+    const int workerIndex
 ) {
-    const int candidateHp = candidateState.players[0].hp;
-    const int candidateMp = candidateState.players[0].mp;
-    const std::uint64_t key = CoarseNonResourceKey(candidateState, depth);
-    const std::size_t bucket = static_cast<std::size_t>(key) & (kDominanceBucketCount - 1);
+    // OPTIMIZE_MODE historically keeps its LCG cache in TLS, so those workers
+    // initialize once. Normal/MSVC/WebAssembly builds share the cache that the
+    // caller fully precomputed before worker launch; it is read-only here.
+#if defined(OPTIMIZE_MODE)
+    lcg::init(workspace.seed, true);
+#endif
 
-    for (std::uint32_t recordIndex = workspace.bucketHeads[bucket];
-         recordIndex != kNoDominanceRecord;
-         recordIndex = workspace.records[recordIndex].next) {
-        const DominanceRecord& record = workspace.records[recordIndex];
-        if (record.key != key || record.depth != depth) continue;
-        if (record.allyHp < candidateHp || record.allyMp < candidateMp) continue;
-        if (!SameNonResourceState(record.state, candidateState)) continue;
+    std::uint64_t visited = 0;
+    std::array<std::uint16_t, kScenarioCommands.size()> candidates{};
+    std::array<std::uint32_t, 64> freeCache{};
+    std::size_t freeCacheSize = 0;
 
-        // Exact same future-affecting state, with no less HP and no less MP.
-        // The recorded path therefore has a superset of survival/command
-        // possibilities and safely dominates this one.
-        ++workspace.dominancePruned;
-        return false;
-    }
-
-    if (workspace.recordCount >= kDominanceRecordCapacity) {
-        // Capacity exhaustion must never become an approximate prune. Keep
-        // exploring; only stop adding new dominance records.
-        if (!workspace.dominanceOverflow) {
-            workspace.dominanceOverflow = true;
-            ++workspace.dominanceOverflowIterations;
+    auto acquireNode = [&]() noexcept -> std::uint32_t {
+        if (freeCacheSize != 0) return freeCache[--freeCacheSize];
+        return PopParallelStack(workspace, workspace.freeHead);
+    };
+    auto releaseNode = [&](const std::uint32_t nodeIndex) noexcept {
+        if (freeCacheSize < freeCache.size()) {
+            freeCache[freeCacheSize++] = nodeIndex;
+        } else {
+            PushParallelStack(workspace, workspace.freeHead, nodeIndex);
         }
-        return true;
+    };
+
+    auto acquireTask = [&]() noexcept -> std::uint32_t {
+        if (const std::uint32_t own = PopParallelStack(
+                workspace,
+                workspace.taskHeads[static_cast<std::size_t>(workerIndex)]);
+            own != kInvalidParallelNode) {
+            return own;
+        }
+        for (int offset = 1; offset < workspace.activeThreadCount; ++offset) {
+            const int victim = (workerIndex + offset) % workspace.activeThreadCount;
+            if (const std::uint32_t stolen = PopParallelStack(
+                    workspace,
+                    workspace.taskHeads[static_cast<std::size_t>(victim)]);
+                stolen != kInvalidParallelNode) {
+                return stolen;
+            }
+        }
+        return kInvalidParallelNode;
+    };
+
+    while (!ParallelStopRequested(workspace)) {
+        const std::uint32_t nodeIndex = acquireTask();
+        if (nodeIndex == kInvalidParallelNode) {
+            if (workspace.outstanding.load(std::memory_order_acquire) == 0) break;
+            std::this_thread::yield();
+            continue;
+        }
+
+        ParallelNode& node = workspace.nodes[nodeIndex];
+        ++visited;
+
+        if (BattleWon(node.state)) {
+            bool expected = false;
+            if (workspace.solutionFound.compare_exchange_strong(
+                    expected, true,
+                    std::memory_order_acq_rel,
+                    std::memory_order_acquire)) {
+                workspace.solution = node.path;
+                workspace.solutionState = node.state;
+                workspace.solutionDepth = node.depth;
+            }
+        } else if (node.state.players[0].hp > 0 && node.depth < workspace.depthLimit) {
+            const std::size_t candidateCount = BuildCandidates(node.state, candidates);
+
+            // Global task storage is a LIFO stack. Publish in reverse command
+            // order so the serial-first command remains the first likely task.
+            for (std::size_t reverse = candidateCount;
+                 reverse > 0 && !ParallelStopRequested(workspace);
+                 --reverse) {
+                const std::size_t candidateIndex = reverse - 1;
+                const std::uint32_t childIndex = acquireNode();
+                if (childIndex == kInvalidParallelNode) {
+                    // Capacity is only a memory-safety boundary. Never turn pool
+                    // exhaustion into a missing branch / approximate result.
+                    workspace.abortRequested.store(true, std::memory_order_release);
+                    break;
+                }
+
+                ParallelNode& child = workspace.nodes[childIndex];
+                child.depth = static_cast<std::uint8_t>(node.depth + 1);
+                child.path = node.path;
+                child.path[node.depth] = candidates[candidateIndex];
+
+                if (!BattleEmulator::StepSearchState(
+                        node.state,
+                        UnpackCommand(candidates[candidateIndex]),
+                        &child.state)) {
+                    releaseNode(childIndex);
+                    continue;
+                }
+
+                workspace.outstanding.fetch_add(1, std::memory_order_relaxed);
+                PushParallelStack(
+                    workspace,
+                    workspace.taskHeads[static_cast<std::size_t>(workerIndex)],
+                    childIndex
+                );
+            }
+        }
+
+        releaseNode(nodeIndex);
+        workspace.outstanding.fetch_sub(1, std::memory_order_acq_rel);
     }
 
-    DominanceRecord& record = workspace.records[workspace.recordCount];
-    record.key = key;
-    record.depth = static_cast<std::uint16_t>(depth);
-    record.allyHp = candidateHp;
-    record.allyMp = candidateMp;
-    record.state = candidateState;
-    record.next = workspace.bucketHeads[bucket];
-    workspace.bucketHeads[bucket] = workspace.recordCount++;
-    workspace.maxDominanceRecords = std::max(workspace.maxDominanceRecords, workspace.recordCount);
-    return true;
+    workspace.workerVisited[static_cast<std::size_t>(workerIndex)] = visited;
 }
+
+[[nodiscard]] bool RunParallelDepth(
+    ParallelSearchWorkspace& workspace,
+    const int depthLimit,
+    const int threadCount
+) {
+    ResetParallelArena(workspace);
+    workspace.depthLimit = depthLimit;
+    workspace.activeThreadCount = threadCount;
+
+    const std::uint32_t rootIndex = PopParallelStack(workspace, workspace.freeHead);
+    if (rootIndex == kInvalidParallelNode) {
+        throw std::runtime_error("parallel IDDFS node arena has no root slot");
+    }
+    ParallelNode& rootNode = workspace.nodes[rootIndex];
+    rootNode.state = workspace.root;
+    rootNode.path.fill(0);
+    rootNode.depth = 0;
+    workspace.outstanding.store(1, std::memory_order_relaxed);
+    PushParallelStack(workspace, workspace.taskHeads[0], rootIndex);
+
+    std::array<std::future<void>, kMaxSearchThreads> futures{};
+    for (int worker = 0; worker < threadCount; ++worker) {
+        futures[static_cast<std::size_t>(worker)] = std::async(
+            std::launch::async,
+            [&workspace, worker] { ParallelSearchWorker(workspace, worker); }
+        );
+    }
+    for (int worker = 0; worker < threadCount; ++worker) {
+        futures[static_cast<std::size_t>(worker)].get();
+    }
+
+    if (workspace.abortRequested.load(std::memory_order_acquire)) {
+        throw std::runtime_error(
+            "parallel IDDFS node arena exhausted; increase kParallelNodeCapacity instead of dropping branches");
+    }
+    return workspace.solutionFound.load(std::memory_order_acquire);
+}
+
 
 [[nodiscard]] bool DepthFirstSearch(
     SearchWorkspace& workspace,
@@ -341,8 +435,6 @@ void ResetDominance(SearchWorkspace& workspace) noexcept {
         return true;
     }
     if (currentState.players[0].hp <= 0 || depth >= depthLimit) return false;
-
-    if (depth > 0 && !AcceptByHpMpDominance(workspace, depth, currentState)) return false;
 
     std::array<std::uint16_t, kScenarioCommands.size()> candidates{};
     const std::size_t candidateCount = BuildCandidates(currentState, candidates);
@@ -405,9 +497,7 @@ void ResetDominance(SearchWorkspace& workspace) noexcept {
     workspace.solution.fill(0);
     workspace.solutionDepth = -1;
     workspace.visitedNodes = 0;
-    workspace.dominancePruned = 0;
-    workspace.maxDominanceRecords = 0;
-    workspace.dominanceOverflowIterations = 0;
+
 
     // The seed is fixed by the brute-force phase. Generate the cache once;
     // every branch is then determined by SearchState::position.
@@ -437,7 +527,6 @@ void ResetDominance(SearchWorkspace& workspace) noexcept {
     const int resultCapacity = kActionHistoryCapacity - knownTurns - 1;
     const int depthCap = std::max(0, std::min(kSearchPathCapacity, resultCapacity));
     for (int depthLimit = 1; depthLimit <= depthCap; ++depthLimit) {
-        ResetDominance(workspace);
         workspace.states[0] = workspace.root;
         if (!DepthFirstSearch(workspace, 0, depthLimit)) continue;
 
@@ -457,6 +546,78 @@ void ResetDominance(SearchWorkspace& workspace) noexcept {
         workspace.visitedNodes,
         std::numeric_limits<std::uint32_t>::max()));
     return ToGenome(workspace.root, knownTurns, 0, actions, workspace);
+}
+
+[[nodiscard]] Genome RunParallelIddfs(
+    const Player players[4],
+    const std::uint64_t seed,
+    const int knownTurns,
+    const int actions[kActionHistoryCapacity],
+    const int requestedThreads
+) {
+    const int threadCount = std::clamp(requestedThreads, 1, kMaxSearchThreads);
+    if (threadCount <= 1) return RunIddfs(players, seed, knownTurns, actions);
+
+    ParallelSearchWorkspace& parallel = gParallelWorkspace;
+    SearchWorkspace& output = gWorkspace;
+    gNodesUsed = 0;
+    output.solution.fill(0);
+    output.solutionDepth = -1;
+    output.visitedNodes = 0;
+
+    parallel.seed = seed;
+    lcg::init(seed, true);
+    if (!BattleEmulator::InitializeSearchState(&parallel.root, players, 2)) return {};
+
+    for (int index = 0; index < knownTurns; ++index) {
+        const int packed = actions[index];
+        if (packed <= 0) break;
+        if (!BattleEmulator::StepSearchStateInPlace(
+                &parallel.root,
+                {BattleEmulator::HeroActionId(packed), BattleEmulator::HeroTargetId(packed)})) {
+            return {};
+        }
+    }
+
+    if (BattleWon(parallel.root)) {
+        output.solutionDepth = 0;
+        output.visitedNodes = 1;
+        gNodesUsed = 1;
+        return ToGenome(parallel.root, knownTurns, 0, actions, output);
+    }
+
+    const int resultCapacity = kActionHistoryCapacity - knownTurns - 1;
+    const int depthCap = std::max(0, std::min(kSearchPathCapacity, resultCapacity));
+    for (int depthLimit = 1; depthLimit <= depthCap; ++depthLimit) {
+        const bool found = RunParallelDepth(parallel, depthLimit, threadCount);
+        for (int worker = 0; worker < threadCount; ++worker) {
+            output.visitedNodes += parallel.workerVisited[static_cast<std::size_t>(worker)];
+        }
+        if (!found) continue;
+
+        output.solution = parallel.solution;
+        output.solutionDepth = parallel.solutionDepth;
+        gNodesUsed = static_cast<std::uint32_t>(std::min<std::uint64_t>(
+            output.visitedNodes,
+            std::numeric_limits<std::uint32_t>::max()));
+        return ToGenome(
+            parallel.solutionState,
+            knownTurns,
+            parallel.solutionDepth,
+            actions,
+            output
+        );
+    }
+
+    if (resultCapacity > kSearchPathCapacity) {
+        throw std::runtime_error(
+            "parallel IDDFS search workspace exhausted without a win; increase kSearchPathCapacity instead of treating this as no solution");
+    }
+
+    gNodesUsed = static_cast<std::uint32_t>(std::min<std::uint64_t>(
+        output.visitedNodes,
+        std::numeric_limits<std::uint32_t>::max()));
+    return ToGenome(parallel.root, knownTurns, 0, actions, output);
 }
 
 } // namespace
@@ -485,9 +646,9 @@ std::pair<int, Genome> ActionOptimizer::RunAlgorithmAsync(
     const int numThreads,
     const bool dropbug
 ) {
-    (void)numThreads;
     (void)dropbug;
-    return {0, RunAlgorithm(players, seed, turns, maxGenerations, actions, 0)};
+    (void)maxGenerations;
+    return {0, RunParallelIddfs(players, seed, turns, actions, numThreads)};
 }
 
 void ActionOptimizer::updateCompromiseScore(Genome& genome) {
@@ -498,15 +659,15 @@ void ActionOptimizer::updateCompromiseScore(Genome& genome) {
 }
 
 uint64_t ActionOptimizer::getDominancePruned() {
-    return gWorkspace.dominancePruned;
+    return 0;
 }
 
 uint32_t ActionOptimizer::getDominanceRecordsMax() {
-    return gWorkspace.maxDominanceRecords;
+    return 0;
 }
 
 uint32_t ActionOptimizer::getDominanceOverflowIterations() {
-    return gWorkspace.dominanceOverflowIterations;
+    return 0;
 }
 
 std::uint32_t ActionOptimizer::getNodesUsed() {
