@@ -85,56 +85,50 @@ struct PresentationPath {
         if (node < unavailable.size()) unavailable[node] = true;
     }
     unavailable[start] = false;
-    std::array<bool, 81> open{};
-    std::array<bool, 81> closed{};
     std::array<std::uint8_t, 81> distance{};
     std::array<std::uint8_t, 81> parent{};
-    std::array<std::uint16_t, 81> insertionOrder{};
+    // Exact representation of the ROM open-list policy without rescanning all
+    // 81 nodes for every pop. All edges have cost 1, so open nodes can be
+    // partitioned by distance. Within one distance the ROM is newest-first;
+    // a singly-linked LIFO bucket is exactly the same order as list-head push.
+    std::array<std::uint8_t, 81> bucketHead{};
+    std::array<std::uint8_t, 81> nextInBucket{};
     distance.fill(0xff);
     parent.fill(kInvalidPresentationNode);
-    std::uint16_t nextInsertionOrder = 1;
+    bucketHead.fill(kInvalidPresentationNode);
+    nextInBucket.fill(kInvalidPresentationNode);
     distance[start] = 0;
-    open[start] = true;
-    insertionOrder[start] = nextInsertionOrder++;
+    bucketHead[0] = start;
 
-    for (std::size_t iteration = 0; iteration < 81; ++iteration) {
-        std::uint8_t current = kInvalidPresentationNode;
-        std::uint8_t bestDistance = 0xff;
-        std::uint16_t bestOrder = 0;
-        for (std::uint8_t node = 0; node < 81; ++node) {
-            if (!open[node]) continue;
-            if (distance[node] < bestDistance
-                || (distance[node] == bestDistance && insertionOrder[node] > bestOrder)) {
-                current = node;
-                bestDistance = distance[node];
-                bestOrder = insertionOrder[node];
-            }
-        }
-        if (current == kInvalidPresentationNode) return result;
-        open[current] = false;
-        closed[current] = true;
+    for (std::uint8_t currentDistance = 0; currentDistance < 81; ++currentDistance) {
+        while (bucketHead[currentDistance] != kInvalidPresentationNode) {
+            const std::uint8_t current = bucketHead[currentDistance];
+            bucketHead[currentDistance] = nextInBucket[current];
 
-        if (current == goal) {
-            std::uint8_t node = goal;
-            const std::uint8_t limit = maxRoute < kMaxPresentationRoute
-                ? maxRoute
-                : static_cast<std::uint8_t>(kMaxPresentationRoute);
-            while (result.count < limit && node != kInvalidPresentationNode) {
-                result.nodes[result.count++] = node;
-                node = parent[node];
+            if (current == goal) {
+                std::uint8_t node = goal;
+                const std::uint8_t limit = maxRoute < kMaxPresentationRoute
+                    ? maxRoute
+                    : static_cast<std::uint8_t>(kMaxPresentationRoute);
+                while (result.count < limit && node != kInvalidPresentationNode) {
+                    result.nodes[result.count++] = node;
+                    node = parent[node];
+                }
+                return result;
             }
-            return result;
-        }
-        for (const std::uint8_t next : PresentationNeighbors(current)) {
-            if (next == kInvalidPresentationNode || unavailable[next]) continue;
-            const std::uint8_t candidate = static_cast<std::uint8_t>(distance[current] + 1);
-            if ((open[next] || closed[next]) && candidate >= distance[next]) continue;
-            distance[next] = candidate;
-            parent[next] = current;
-            if (!open[next]) {
-                open[next] = true;
-                closed[next] = false;
-                insertionOrder[next] = nextInsertionOrder++;
+
+            const std::uint8_t nextDistance = static_cast<std::uint8_t>(currentDistance + 1);
+            if (nextDistance >= bucketHead.size()) continue;
+            for (const std::uint8_t next : PresentationNeighbors(current)) {
+                if (next == kInvalidPresentationNode || unavailable[next]) continue;
+                // With unit edge costs and nondecreasing distance buckets, first
+                // discovery is the shortest distance. The old implementation
+                // likewise kept the first equal-distance parent.
+                if (distance[next] != 0xff) continue;
+                distance[next] = nextDistance;
+                parent[next] = current;
+                nextInBucket[next] = bucketHead[nextDistance];
+                bucketHead[nextDistance] = next;
             }
         }
     }

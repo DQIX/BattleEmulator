@@ -1240,8 +1240,28 @@ bool BattleEmulator::StepSearchState(const SearchState& source, const SearchComm
                                      BattleResult* result, const bool traceBoundaries) {
     if (destination == nullptr || command.action <= 0) return false;
 
-    *destination = source;
-    return StepSearchStateInPlace(destination, command, result, traceBoundaries);
+    // Do not copy the full SearchState here. cameraRuntime is the largest part
+    // of the snapshot; copying it to destination and then immediately copying
+    // it again into the camera thread-local state is redundant. Restore the
+    // exact parent camera snapshot directly, copy only battle-core state, run
+    // one turn, then capture the exact child camera snapshot.
+    for (int i = 0; i < 4; ++i) destination->players[i] = source.players[i];
+    destination->position = source.position;
+    destination->nowState = source.nowState;
+    camera::RestoreRuntimeState(source.cameraRuntime);
+
+    BattleResult scratchResult;
+    BattleResult* output = result != nullptr ? result : &scratchResult;
+    *output = BattleResult{};
+
+    const int mode = result != nullptr ? -1 : -2;
+    const int packedAction = PackHeroAction(command.action, command.target);
+    Main(&destination->position, 1, nullptr, destination->players, output,
+         0, nullptr, nullptr, mode, &destination->nowState,
+         -1, traceBoundaries, packedAction, false);
+
+    destination->cameraRuntime = camera::CaptureRuntimeState();
+    return true;
 }
 
 bool BattleEmulator::StepSearchStateInPlace(SearchState* state, const SearchCommand command,

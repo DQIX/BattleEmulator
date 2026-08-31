@@ -348,9 +348,8 @@ void ResetDominance(SearchWorkspace& workspace) noexcept {
     const std::size_t candidateCount = BuildCandidates(currentState, candidates);
     for (std::size_t index = 0; index < candidateCount; ++index) {
         workspace.path[depth] = candidates[index];
-        workspace.states[depth + 1] = currentState;
-        if (!BattleEmulator::StepSearchStateInPlace(
-                &workspace.states[depth + 1], UnpackCommand(candidates[index]))) {
+        if (!BattleEmulator::StepSearchState(
+                currentState, UnpackCommand(candidates[index]), &workspace.states[depth + 1])) {
             continue;
         }
         if (DepthFirstSearch(workspace, depth + 1, depthLimit)) return true;
