@@ -341,33 +341,8 @@ bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aAct
 	lcg::init(seed);
 
 #if !defined(OPTIMIZE_MODE)
-
-    // --- TableA で探索 ---
-    EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableA);
-	Genome genomeA = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 10000, gene, 0);
-
-    // --- TableB で探索 ---
-    EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableB);
-    Genome genomeB = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 10000, gene, 0);
-
-    // --- TableC で探索 ---
-    EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableC);
-    Genome genomeC = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 10000, gene, 0);
-
-	// --- TableC で探索 ---
-	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableD);
-	Genome genomeD = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 10000, gene, 0);
-
-	// --- TableC で探索 ---
-	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableF);
-	Genome genomeF = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 10000, gene, 0);
-
-	// --- TableC で探索 ---
-	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableG);
-	Genome genomeG = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 6000, gene, 0);
-
-
-    BattleResult resultA, resultB, resultC, resultD, resultF, resultG;
+	Genome genome = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, -1, gene, 0);
+    BattleResult result;
 
 	auto runMain = [&](const Genome& g, BattleResult& res) -> RunResult {
 		Player players[4] = {copiedPlayers2[0], copiedPlayers2[1], copiedPlayers2[2], copiedPlayers2[3]};
@@ -375,7 +350,7 @@ bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aAct
 		uint64_t nowState = 0;
 		BattleEmulator::Main(&position, 100, g.actions, players, &res, seed, nullptr, nullptr, -1, &nowState);
 		#if defined(gerunikku)
-		bool win = players[2].hp <= 0;
+		bool win = players[1].hp <= 0 && players[2].hp <= 0 && players[3].hp <= 0;
 		return { win, players[2].hp, res.turn, res.position };
 		#else
 		bool win = players[1].hp <= 0;
@@ -383,77 +358,23 @@ bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aAct
 		#endif
 	};
 
-    auto rrA = runMain(genomeA, resultA);
-    auto rrB = runMain(genomeB, resultB);
-    auto rrC = runMain(genomeC, resultC);
-    auto rrD = runMain(genomeD, resultD);
-    auto rrF = runMain(genomeF, resultF);
-    auto rrG = runMain(genomeG, resultG);
+    const auto rr = runMain(genome, result);
+    if (!rr.win) return false;
 
-    if (!rrA.win && !rrB.win && !rrC.win && !rrD.win) {
-        return false;
-    }
-
-    // 勝利したもの同士でターン数→敵残HP（メモ化済み）で比較
-    // 負けたものは無条件で除外
-	auto isBetter = [](const RunResult& a, const RunResult& b) -> bool {
-		if (a.turn != b.turn) return a.turn < b.turn;
-		return a.position < b.position;  // 同ターンなら行動数が少ない方
-    };
-
-    const Genome* chosenGenome = nullptr;
-    const BattleResult* chosenResult = nullptr;
-    const RunResult* chosenRR = nullptr;
-
-    auto tryUpdate = [&](const RunResult& rr, const Genome& g, const BattleResult& r) {
-        if (!rr.win) return;  // 負けは無価値
-        if (chosenRR == nullptr || isBetter(rr, *chosenRR)) {
-            chosenGenome = &g;
-            chosenResult = &r;
-            chosenRR = &rr;
-        }
-    };
-
-	//A（ケース1）: ためる・すてみ → Multithrust のテンション蓄積戦法
-	//B（ケース3）: メラゾーマ反射しながら長期消耗戦
-	//C（ケース2）: 最短ルートでメラゾーマ反射 → 最速決着
-    tryUpdate(rrA, genomeA, resultA);
-    tryUpdate(rrB, genomeB, resultB);
-    tryUpdate(rrC, genomeC, resultC);
-    tryUpdate(rrD, genomeD, resultD);
-    tryUpdate(rrF, genomeF, resultF);
-    tryUpdate(rrG, genomeG, resultG);
-
-    ss << dumpTable(*chosenResult, chosenGenome->actions, startturn) << std::endl;
+    ss << dumpTable(result, genome.actions, startturn) << std::endl;
 
     ss << "0x" << std::hex << seed << std::dec << ": ";
 
 	for (auto i = 0; i < 100; ++i) {
-		if (chosenGenome->actions[i] == 0 || chosenGenome->actions[i] == -1) {
+		if (genome.actions[i] == 0 || genome.actions[i] == -1) {
 			break;
 		}
-		ss << chosenGenome->actions[i] << ", ";
+		ss << genome.actions[i] << ", ";
 	}
 	ss << std::endl;
-
-	// --- 各テーブルの結果をログ出力 ---
-	auto printRunResult = [&](const char* label, const RunResult& rr) {
-		ss << "[" << label << "] ";
-		if (rr.win) {
-			ss << "Win  turn=" << (rr.turn + 1) << " position=" << rr.position;
-		} else {
-			ss << "Lose";
-		}
-		ss << std::endl;
-	};
-	printRunResult("TableA", rrA);
-	printRunResult("TableB", rrB);
-	printRunResult("TableC", rrC);
-	printRunResult("TableD", rrD);
-	printRunResult("TableF", rrF);
-	printRunResult("TableG", rrG);
-
-
+    ss << "[IDDFS] Win turn=" << (rr.turn + 1)
+       << " position=" << rr.position
+       << " nodes=" << ActionOptimizer::getNodesUsed() << std::endl;
 #endif
 
 	//探索成功
@@ -926,11 +847,12 @@ int main(int argc, char* argv[]){
 	if (argc >= 5 && std::string_view(argv[1]) == "--trace-sequence") {
 		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
 		const int currentSeedPosition = std::stoi(argv[3], nullptr, 0);
-		Player tracePlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
-		int tracePosition = currentSeedPosition + 1;
-		uint64_t traceState = 0;
-		lcg::init(traceSeed);
-		bool initializeCameraBattle = true;
+		lcg::init(traceSeed, true);
+		BattleEmulator::SearchState traceState{};
+		if (!BattleEmulator::InitializeSearchState(&traceState, copiedPlayers,
+		                                          currentSeedPosition + 1)) {
+			throw std::runtime_error("failed to initialize trace search state");
+		}
 
 		for (int step = 0; step < argc - 4; ++step) {
 			const std::string_view token(argv[step + 4]);
@@ -944,21 +866,23 @@ int main(int argc, char* argv[]){
 			std::cout << "TRACE sequence-step=" << step
 			          << " action=" << action
 			          << " target=" << target
-			          << " startPosition=" << tracePosition << '\n';
-			BattleEmulator::Main(&tracePosition, 1, nullptr, tracePlayers, &traceResult,
-			                     traceSeed, nullptr, nullptr, -1, &traceState, target, true,
-			                     action, initializeCameraBattle);
-			initializeCameraBattle = false;
+			          << " startPosition=" << traceState.position << '\n';
+			BattleEmulator::SearchState nextState{};
+			if (!BattleEmulator::StepSearchState(traceState, {action, target}, &nextState,
+			                                     &traceResult, true)) {
+				throw std::runtime_error("failed to execute trace search step");
+			}
+			traceState = nextState;
 			std::cout << "TRACE sequence-state step=" << step
-			          << " position=" << tracePosition
-			          << " hp=" << tracePlayers[0].hp << ',' << tracePlayers[1].hp << ','
-			          << tracePlayers[2].hp << ',' << tracePlayers[3].hp
-			          << " heroMp=" << tracePlayers[0].mp
-			          << " mirror=" << tracePlayers[0].hasMagicMirror
-			          << " mirrorTurn=" << tracePlayers[0].MagicMirrorTurn
-			          << " buffLevel=" << tracePlayers[0].BuffLevel
-			          << " buffTurns=" << tracePlayers[0].BuffTurns
-			          << " tension=" << tracePlayers[0].TensionLevel << '\n';
+			          << " position=" << traceState.position
+			          << " hp=" << traceState.players[0].hp << ',' << traceState.players[1].hp << ','
+			          << traceState.players[2].hp << ',' << traceState.players[3].hp
+			          << " heroMp=" << traceState.players[0].mp
+			          << " mirror=" << traceState.players[0].hasMagicMirror
+			          << " mirrorTurn=" << traceState.players[0].MagicMirrorTurn
+			          << " buffLevel=" << traceState.players[0].BuffLevel
+			          << " buffTurns=" << traceState.players[0].BuffTurns
+			          << " tension=" << traceState.players[0].TensionLevel << '\n';
 			for (int i = 0; i < traceResult.position; ++i) {
 				std::cout << "TRACE sequence-record step=" << step
 				          << " record=" << i
@@ -967,8 +891,8 @@ int main(int argc, char* argv[]){
 				          << " damage=" << traceResult.damages[i]
 				          << " enemy=" << traceResult.isEnemy[i] << '\n';
 			}
-			if (tracePlayers[0].hp <= 0 ||
-			    (tracePlayers[1].hp <= 0 && tracePlayers[2].hp <= 0 && tracePlayers[3].hp <= 0)) {
+			if (traceState.players[0].hp <= 0 ||
+			    (traceState.players[1].hp <= 0 && traceState.players[2].hp <= 0 && traceState.players[3].hp <= 0)) {
 				break;
 			}
 		}

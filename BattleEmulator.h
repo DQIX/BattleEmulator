@@ -10,6 +10,7 @@
 #include <optional>
 #include "Player.h"
 #include "BattleResult.h"
+#include "camera.h"
 
 class BattleEmulator {
 public:
@@ -133,6 +134,51 @@ public:
 	static constexpr int CONFUSION_FAILED_ATTACK = 191;  // DQ9 0x00DE
 	static constexpr int CONFUSION_FAILED_FLEE = 192;    // DQ9 0x0396
 	static constexpr int CURE_CONFUSION = 193;           // DQ9 0x03AA
+
+    struct SearchCommand {
+        int action = -1;
+        int target = -1;
+    };
+
+    // Shared BattleEmulator ecosystem/common action IDs are currently below 200.
+    // Reserve 13 bits so IDs up to 8191 remain representable while leaving the
+    // upper bits available for compact per-command metadata.
+    static constexpr int HERO_ACTION_MASK = 0x1FFF;
+    static constexpr int HERO_TARGET_SHIFT = 13;
+    static constexpr int HERO_TARGET_MASK = 0x3;
+
+    [[nodiscard]] static constexpr int PackHeroAction(const int action, const int target = -1) noexcept {
+        if (action < 0) return -1;
+        const int encodedTarget = target >= 1 && target <= 3 ? target : 0;
+        return (action & HERO_ACTION_MASK) | (encodedTarget << HERO_TARGET_SHIFT);
+    }
+
+    [[nodiscard]] static constexpr int HeroActionId(const int packed) noexcept {
+        return packed < 0 ? packed : (packed & HERO_ACTION_MASK);
+    }
+
+    [[nodiscard]] static constexpr int HeroTargetId(const int packed) noexcept {
+        if (packed < 0) return -1;
+        const int target = (packed >> HERO_TARGET_SHIFT) & HERO_TARGET_MASK;
+        return target == 0 ? -1 : target;
+    }
+
+    struct SearchState {
+        Player players[4]{};
+        int position = 1;
+        uint64_t nowState = 0;
+        camera::RuntimeSnapshot cameraRuntime{};
+    };
+
+    static bool InitializeSearchState(SearchState* state, const Player initialPlayers[4],
+                                      int initialPosition = 1);
+    [[nodiscard]] static bool IsHeroCommandSelectable(const SearchState& state,
+                                                      SearchCommand command) noexcept;
+    static bool StepSearchStateInPlace(SearchState* state, SearchCommand command,
+                                       BattleResult* result = nullptr, bool traceBoundaries = false);
+    static bool StepSearchState(const SearchState& source, SearchCommand command,
+                                SearchState* destination,
+                                BattleResult* result = nullptr, bool traceBoundaries = false);
 
     static bool
     Main(int *position, int RunCount, const int32_t Gene[350], Player *players,

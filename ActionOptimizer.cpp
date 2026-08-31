@@ -1,490 +1,434 @@
-//
-// Flexible ActionOptimizer with Adaptive Constraint Management
-// Solves deadlock issues with longer predefined action sequences
-//
-
 #include "ActionOptimizer.h"
-#include <random>
-#include <unordered_set>
-#include <memory>
+
+#include <algorithm>
+#include <array>
+#include <cstdint>
+#include <limits>
 
 #include "BattleEmulator.h"
-#include "LinearIdPool.h"
-#include "Genome.h"
-#include "EnhancedHashCalculator.h"
-#include "EnhancedCostCalculator.h"
-#include "EnhancedHeapQueue.h"
 #include "lcg.h"
 
-struct ActionEntry{
-	int action;
-	bool (*condition)(const Genome&);
-	// 実行後、効果があったか（事後）
-	bool (*isEffective)(
-		const Genome& before,
-		const Genome& after
-	);
+namespace {
+
+constexpr int kActionHistoryCapacity = 350;
+constexpr int kMaxSearchDepth = kActionHistoryCapacity - 1;
+constexpr std::size_t kDominanceBucketCount = 8192;
+constexpr std::size_t kDominanceRecordCapacity = 32768;
+constexpr std::uint32_t kNoDominanceRecord = UINT32_MAX;
+
+static_assert((kDominanceBucketCount & (kDominanceBucketCount - 1)) == 0);
+
+// Scenario profile, not a heuristic. IDDFS explores every selectable command in
+// this explicit profile at every depth. The profile contains the known victory
+// backbone, instant-death attempts and practical RNG-adjustment commands.
+#if defined(gerunikku)
+constexpr std::array<BattleEmulator::SearchCommand, 34> kScenarioCommands{{
+    {BattleEmulator::MAGIC_MIRROR, -1},
+    {BattleEmulator::BUFF, -1},
+    {BattleEmulator::PSYCHE_UP_ALLY, -1},
+    {BattleEmulator::DOUBLE_UP, -1},
+    {BattleEmulator::MULTITHRUST, 2},
+
+    {BattleEmulator::ZAKI, 1},
+    {BattleEmulator::ZAKI, 3},
+    {BattleEmulator::ZARAKI, 1},
+    {BattleEmulator::ZARAKI, 3},
+
+    {BattleEmulator::ATTACK_ALLY, 1},
+    {BattleEmulator::ATTACK_ALLY, 2},
+    {BattleEmulator::ATTACK_ALLY, 3},
+    {BattleEmulator::THUNDER_THRUST, 1},
+    {BattleEmulator::THUNDER_THRUST, 2},
+    {BattleEmulator::THUNDER_THRUST, 3},
+    {BattleEmulator::BEAST_THRUST, 1},
+    {BattleEmulator::BEAST_THRUST, 2},
+    {BattleEmulator::BEAST_THRUST, 3},
+    {BattleEmulator::VITAL_POINT_THRUST, 1},
+    {BattleEmulator::VITAL_POINT_THRUST, 2},
+    {BattleEmulator::VITAL_POINT_THRUST, 3},
+    {BattleEmulator::MERCURIAL_THRUST, 1},
+    {BattleEmulator::MERCURIAL_THRUST, 2},
+    {BattleEmulator::MERCURIAL_THRUST, 3},
+
+    // Boss battles cannot actually escape here. In BattleEmulator this skips
+    // the hero pre-action path while turn-order/enemy/turn-end RNG still runs,
+    // making FLEE a useful RNG-adjustment command rather than a terminal state.
+    {BattleEmulator::FLEE_ALLY, -1},
+
+    {BattleEmulator::MIDHEAL, -1},
+    {BattleEmulator::MORE_HEAL, -1},
+    {BattleEmulator::FULLHEAL, -1},
+    {BattleEmulator::SPECIAL_MEDICINE, -1},
+    {BattleEmulator::MAGIC_WATER, -1},
+    {BattleEmulator::DEFENCE, -1},
+    {BattleEmulator::DEFENDING_CHAMPION, -1},
+    {BattleEmulator::INSULATE, -1},
+    {BattleEmulator::GOSPEL_SONG, -1},
+}};
+#else
+constexpr std::array<BattleEmulator::SearchCommand, 18> kScenarioCommands{{
+    {BattleEmulator::ATTACK_ALLY, 1},
+    {BattleEmulator::THUNDER_THRUST, 1},
+    {BattleEmulator::BEAST_THRUST, 1},
+    {BattleEmulator::VITAL_POINT_THRUST, 1},
+    {BattleEmulator::MERCURIAL_THRUST, 1},
+    {BattleEmulator::FLEE_ALLY, -1},
+    {BattleEmulator::MAGIC_MIRROR, -1},
+    {BattleEmulator::BUFF, -1},
+    {BattleEmulator::PSYCHE_UP_ALLY, -1},
+    {BattleEmulator::DOUBLE_UP, -1},
+    {BattleEmulator::MULTITHRUST, 1},
+    {BattleEmulator::MIDHEAL, -1},
+    {BattleEmulator::MORE_HEAL, -1},
+    {BattleEmulator::FULLHEAL, -1},
+    {BattleEmulator::SPECIAL_MEDICINE, -1},
+    {BattleEmulator::MAGIC_WATER, -1},
+    {BattleEmulator::DEFENCE, -1},
+    {BattleEmulator::DEFENDING_CHAMPION, -1},
+}};
+#endif
+
+struct DominanceRecord {
+    std::uint64_t key{};
+    std::uint32_t next{kNoDominanceRecord};
+    std::uint16_t depth{};
+    int allyHp{};
+    int allyMp{};
+    std::array<std::uint16_t, kMaxSearchDepth> path{};
 };
 
-// 1要素の検証
-constexpr bool isValid(const ActionEntry& e){
-	return e.condition != nullptr
-		&& e.isEffective != nullptr;
-}
-
-// テーブル全体の検証
-template <size_t N>
-constexpr bool validateActionTable(const ActionEntry (&table)[N]){
-	for(size_t i = 0; i < N; ++i){
-		if(!isValid(table[i])){
-			return false;
-		}
-	}
-	return true;
-}
-
-constexpr ActionEntry ACTION_TABLE[] = {
-	{
-		BattleEmulator::MIDHEAL, [](const Genome& g){
-			return g.AllyPlayer.mp >= 4;
-		},
-		[](const Genome&, const Genome&){ return true; }
-	},
-	{
-		BattleEmulator::DEFENDING_CHAMPION, [](const Genome& g){
-			return g.AllyPlayer.mp >= 2;
-		},
-		[](const Genome&, const Genome&){ return true; }
-	},
-	{
-		BattleEmulator::MAGIC_MIRROR, [](const Genome& g){
-			return g.AllyPlayer.mp >= 4;
-		},
-		[](const Genome&, const Genome&){ return true; }
-	},
-	{
-		BattleEmulator::MORE_HEAL, [](const Genome& g){
-			return g.AllyPlayer.mp >= 8;
-		},
-		[](const Genome&, const Genome&){ return true; }
-	},
-	{
-		BattleEmulator::FULLHEAL, [](const Genome& g){
-			return g.AllyPlayer.mp >= 24;
-		},
-		[](const Genome&, const Genome&){ return true; }
-	},
-	{
-		BattleEmulator::SPECIAL_MEDICINE, [](const Genome& g){
-			return g.AllyPlayer.SpecialMedicineCount > 0;
-		},
-		[](const Genome&, const Genome&){ return true; }
-	},
-	{
-		BattleEmulator::MAGIC_WATER, [](const Genome& g){
-			return g.AllyPlayer.MagicWaterCount > 0;
-		},
-		[](const Genome&, const Genome&){ return true; }
-	},
-	{
-		BattleEmulator::FLEE_ALLY, [](const Genome&){ return true; },
-		[](const Genome&, const Genome&){ return true; }
-	},
-	{
-		BattleEmulator::DOUBLE_UP,
-		[](const Genome&){ return true; },
-		[](const Genome&, const Genome&){ return true; }
-	},
-	{
-		BattleEmulator::PSYCHE_UP_ALLY,
-		[](const Genome&){ return true; },
-		[](const Genome& before, const Genome& after){
-			return after.AllyPlayer.TensionLevel > before.AllyPlayer.TensionLevel;
-		}
-		// 事後: テンションが上がったか
-
-	},
-	{
-		BattleEmulator::BUFF,
-		[](const Genome& g){ return g.AllyPlayer.mp >= 3; },
-		[](const Genome&, const Genome&){ return true; }
-	},
-	{
-		BattleEmulator::MULTITHRUST,
-		[](const Genome& g){ return g.AllyPlayer.mp >= 4; },
-		[](const Genome&, const Genome&){ return true; }
-	},
-	{
-		BattleEmulator::DEFENCE,
-		[](const Genome&){ return true; },
-		[](const Genome&, const Genome&){ return true; }
-	},
-	{
-		BattleEmulator::GOSPEL_SONG,
-		[](const Genome& g){ return g.AllyPlayer.specialChargeTurn >= 1; },
-		[](const Genome& b, const Genome& a){ return true; }
-	},
-	{
-		BattleEmulator::INSULATE,
-		[](const Genome& g){ return g.AllyPlayer.mp >= 4; },
-		[](const Genome& b, const Genome& a){ return true; }
-	},
+struct SearchWorkspace {
+    BattleEmulator::SearchState root{};
+    BattleEmulator::SearchState replayA{};
+    BattleEmulator::SearchState replayB{};
+    std::array<std::uint16_t, kMaxSearchDepth> path{};
+    std::array<std::uint16_t, kMaxSearchDepth> solution{};
+    int solutionDepth{-1};
+    std::uint64_t visitedNodes{};
+    bool dominanceOverflow{};
+    std::array<std::uint32_t, kDominanceBucketCount> bucketHeads{};
+    std::array<DominanceRecord, kDominanceRecordCapacity> records{};
+    std::uint32_t recordCount{};
 };
 
-// ★ ここが本体 ★
-static_assert(
-	validateActionTable(ACTION_TABLE),
-	"ACTION_TABLE contains null function pointer"
-);
+// One synchronous search owns one worker/WASM instance. Keep search memory fixed
+// and C++-owned: no per-node malloc, no 350-action Genome copies, no open set.
+SearchWorkspace gWorkspace{};
+std::uint32_t gNodesUsed{};
 
-static uint32_t Node_Used;
-
-uint32_t ActionOptimizer::getNodesUsed(){
-	return Node_Used;
+[[nodiscard]] constexpr std::uint16_t PackCommand(
+    const BattleEmulator::SearchCommand command
+) noexcept {
+    return static_cast<std::uint16_t>(
+        BattleEmulator::PackHeroAction(command.action, command.target));
 }
 
-// Flexible A* Algorithm Implementation
-Genome ActionOptimizer::RunAlgorithm(const Player players[4], uint64_t seed, int turns, int maxGenerations,
-                                     int actions[350], int seedOffset){
-	lcg::init(seed, true);
-	Node_Used = 0;
-	//std::mt19937 rng(seed + seedOffset);
-
-	// Cache enemy max HP (immutable value)
-	#if defined(gerunikku)
-	constexpr int primaryEnemyIndex = 2;
-	const auto enemyMaxHp = static_cast<double>(players[2].maxHp);
-	#else
-	constexpr int primaryEnemyIndex = 1;
-	const auto enemyMaxHp = static_cast<double>(players[1].maxHp);
-	#endif
-	const auto playerMaxHp = static_cast<double>(players[0].maxHp);
-	//const auto playerMaxMP = static_cast<double>(players[0].maxMp);
-
-	LinearIdPool<Genome, 50000> Pool{};
-
-	// Enhanced A* priority queue and visited set
-	EnhancedHeapQueue openSet{};
-	std::unordered_set<uint64_t> closedSet;
-
-	Player CopedPlayers[4] = {players[0], players[1], players[2], players[3]};
-	int position = 1;
-	uint64_t nowState = 0;
-
-	// Execute one turn
-	BattleEmulator::Main(&position, turns, actions, CopedPlayers,
-	                     nullptr, seed,
-	                     nullptr, nullptr, -2, &nowState);
-
-	// Initialize starting node
-	Genome initialGenome = {};
-	initialGenome.EnemyPlayer = CopedPlayers[primaryEnemyIndex];
-	#if defined(gerunikku)
-	initialGenome.IronKnightA = CopedPlayers[1];
-	initialGenome.IronKnightB = CopedPlayers[3];
-	#else
-	initialGenome.IronKnightA = {};
-	initialGenome.IronKnightB = {};
-	#endif
-	initialGenome.AllyPlayer = CopedPlayers[0];
-	initialGenome.EActions[0] = -1;
-	initialGenome.EActions[1] = -1;
-	initialGenome.Aactions = -1;
-	initialGenome.fitness = 0;
-	initialGenome.turn = turns + 1;
-	initialGenome.processed = 0;
-	initialGenome.Initialized = false;
-	initialGenome.processed = turns;
-	initialGenome.Visited = 0;
-	initialGenome.position = position;
-	initialGenome.state = nowState;
-
-	// Set initial action array
-	for(int i = 0; i < 350; ++i){
-		if(actions[i] == -1 || actions[i] == 0){
-			initialGenome.actions[i] = -1;
-			break;
-		}
-		else{
-			initialGenome.actions[i] = actions[i];
-		}
-	}
-
-	// Create initial node with enhanced cost calculation
-	EnhancedAStarNode initialNode{};
-	initialNode.gCost = 0;
-	initialNode.hCost = EnhancedCostCalculator::calculateHCost(initialGenome, enemyMaxHp, playerMaxHp, nowState);
-	initialNode.fCost = initialNode.gCost + initialNode.hCost;
-	initialNode.stateHash = EnhancedHashCalculator::computeStateHash(initialGenome);
-	initialNode.allyHP = initialGenome.AllyPlayer.hp;
-	initialNode.enemyHP = initialGenome.EnemyPlayer.hp;
-	initialNode.nodeId = Pool.alloc(initialGenome);
-	openSet.push(initialNode);
-
-	Genome bestSolution = {};
-	bestSolution.turn = INT32_MAX;
-	bool solutionFound = false;
-
-	int counter = 0;
-	double startT = turns + 40;
-	double lastBestFCost = 1000000.0;
-	auto percent = 0.0;
-	auto percenttmp = 0.0;
-
-	Player CopedPlayers3[4];
-
-	for(int i = 0; i < 1; ++i){
-		if(!solutionFound){
-			maxGenerations += 2000;
-		}
-		else{
-			break;
-		}
-		while(!openSet.empty() && (maxGenerations == -1 || counter < maxGenerations)){
-			// Get node with minimum f-cost
-			EnhancedAStarNode currentNode = openSet.top();
-			openSet.pop();
-
-			auto preGCost = currentNode.gCost;
-
-			//Progress reporting with constraint info
-			// if (counter % 10 == 0) {
-			//     percenttmp = counter / static_cast<double>(maxGenerations) * 100.0;
-			//     if (percenttmp != percent) {
-			//         std::cout << "[Node Info] " << percenttmp << "%"
-			//                   << " | turn=" << currentNode.genome.turn
-			//                   << " | hCost=" << currentNode.hCost
-			//                   << " | gCost=" << currentNode.gCost
-			//                   << " | enemyHP=" << currentNode.genome.EnemyPlayer.hp
-			//                   << " | bestTurn=" << (solutionFound ? bestSolution.turn - 1: -1)
-			//                   << std::endl;
-			//         percent = percenttmp;
-			//     }
-			// }
-
-
-			// if (counter % 1000000 == 0) {
-			//     for (int i = 0; i < 350; ++i) {
-			//         if (currentNode.genome.actions[i] == 0 || currentNode.genome.actions[i] == -1) {
-			//             break;
-			//         }
-			//         std::cout << currentNode.genome.actions[i];
-			//     }
-			//     std::cout << std::endl;
-			// }
-			//       }
-
-			// Skip already explored states
-			if(closedSet.count(currentNode.stateHash)){
-				continue;
-			}
-			closedSet.insert(currentNode.stateHash);
-
-			const Genome currentGenome = Pool.get(currentNode.nodeId);
-
-			if(currentGenome.turn > 30){
-				continue;
-			}
-
-			if(currentGenome.AllyPlayer.paralysis || currentGenome.AllyPlayer.sleeping || currentGenome.AllyPlayer.inactive){
-				Genome newGenome = currentGenome;
-				newGenome.actions[currentGenome.turn - 1] = BattleEmulator::ATTACK_ALLY;
-				newGenome.Initialized = true;
-
-				// Copy for battle emulator execution
-				CopedPlayers3[0] = currentGenome.AllyPlayer;
-				#if defined(gerunikku)
-				CopedPlayers3[1] = currentGenome.IronKnightA;
-				CopedPlayers3[2] = currentGenome.EnemyPlayer;
-				CopedPlayers3[3] = currentGenome.IronKnightB;
-				#else
-				CopedPlayers3[1] = currentGenome.EnemyPlayer;
-				CopedPlayers3[2] = {};
-				CopedPlayers3[3] = {};
-				#endif
-				position = currentGenome.position;
-				nowState = currentGenome.state;
-
-				// Execute one turn
-				BattleEmulator::Main(&position, newGenome.turn - newGenome.processed, newGenome.actions, CopedPlayers3,
-				                     nullptr, seed,
-				                     nullptr, nullptr, -2, &nowState);
-
-				if(CopedPlayers3[0].hp > 0){
-					// Update genome with results
-					newGenome.position = position;
-					newGenome.state = nowState;
-					newGenome.turn = currentGenome.turn + 1;
-					newGenome.processed = currentGenome.turn;
-					newGenome.AllyPlayer = CopedPlayers3[0];
-					#if defined(gerunikku)
-					newGenome.IronKnightA = CopedPlayers3[1];
-					newGenome.EnemyPlayer = CopedPlayers3[2];
-					newGenome.IronKnightB = CopedPlayers3[3];
-					#else
-					newGenome.EnemyPlayer = CopedPlayers3[1];
-					newGenome.IronKnightA = {};
-					newGenome.IronKnightB = {};
-					#endif
-
-					// Calculate enhanced state hash
-					uint64_t newStateHash = EnhancedHashCalculator::computeStateHash(newGenome);
-
-					// Skip already explored states
-					if(closedSet.count(newStateHash)){
-						continue;
-					}
-
-					// Create new node with enhanced cost calculation
-					EnhancedAStarNode newNode{};
-					newNode.gCost = EnhancedCostCalculator::calculateGCost(newGenome, BattleEmulator::ATTACK_ALLY, preGCost, nowState);
-					newNode.hCost = EnhancedCostCalculator::calculateHCost(newGenome, enemyMaxHp, playerMaxHp, nowState);
-					newNode.fCost = newNode.gCost + newNode.hCost;
-					newNode.stateHash = newStateHash;
-					newNode.allyHP = newGenome.AllyPlayer.hp;
-					newNode.enemyHP = newGenome.EnemyPlayer.hp;
-					newNode.nodeId = Pool.alloc(newGenome);
-
-					// Add to open set
-					openSet.push(newNode);
-				}
-				continue;
-			}
-
-			// Turn limit check
-			if(currentGenome.turn > startT){
-				continue;
-			}
-			if(solutionFound && currentGenome.turn > bestSolution.turn - 1){
-				continue;
-			}
-
-			if(currentGenome.EnemyPlayer.hp <= 0){
-				if(!solutionFound || currentGenome.turn < bestSolution.turn){
-					bestSolution = currentGenome;
-					solutionFound = true;
-				}
-				continue;
-			}
-
-			// Defeat condition check
-			if(currentGenome.AllyPlayer.hp <= 0){
-				continue;
-			}
-
-			// Skip if worse than existing solution
-			if(solutionFound && currentGenome.turn >= bestSolution.turn){
-				continue;
-			}
-
-			// Execute each action and generate new nodes
-			for(const auto& entry : ACTION_TABLE){
-				if(!entry.condition(currentGenome)){
-					continue;
-				}
-				// // Skip low-priority actions if we have many candidates
-				// if (actionCandidates.size() > 6 && candidate.priority < 0.5) {
-				//     continue;
-				// }
-				// if (rng() % 100 >= 80) {
-				//     continue;
-				// }
-
-				Genome newGenome = currentGenome;
-				newGenome.actions[currentGenome.turn - 1] = entry.action;
-				newGenome.Initialized = true;
-
-				// Copy for battle emulator execution
-				CopedPlayers3[0] = currentGenome.AllyPlayer;
-				#if defined(gerunikku)
-				CopedPlayers3[1] = currentGenome.IronKnightA;
-				CopedPlayers3[2] = currentGenome.EnemyPlayer;
-				CopedPlayers3[3] = currentGenome.IronKnightB;
-				#else
-				CopedPlayers3[1] = currentGenome.EnemyPlayer;
-				CopedPlayers3[2] = {};
-				CopedPlayers3[3] = {};
-				#endif
-				position = currentGenome.position;
-				nowState = currentGenome.state;
-
-				// Execute one turn
-				BattleEmulator::Main(&position, newGenome.turn - newGenome.processed, newGenome.actions, CopedPlayers3,
-				                     nullptr, seed,
-				                     nullptr, nullptr, -2, &nowState);
-
-				if(CopedPlayers3[0].hp > 0){
-					// Update genome with results
-					newGenome.position = position;
-					newGenome.state = nowState;
-					newGenome.turn = currentGenome.turn + 1;
-					newGenome.processed = currentGenome.turn;
-					newGenome.AllyPlayer = CopedPlayers3[0];
-					#if defined(gerunikku)
-					newGenome.IronKnightA = CopedPlayers3[1];
-					newGenome.EnemyPlayer = CopedPlayers3[2];
-					newGenome.IronKnightB = CopedPlayers3[3];
-					#else
-					newGenome.EnemyPlayer = CopedPlayers3[1];
-					newGenome.IronKnightA = {};
-					newGenome.IronKnightB = {};
-					#endif
-
-					// Calculate enhanced state hash
-					uint64_t newStateHash = EnhancedHashCalculator::computeStateHash(newGenome);
-
-					// Skip already explored states
-					if(closedSet.count(newStateHash)){
-						continue;
-					}
-
-					// Create new node with enhanced cost calculation
-					EnhancedAStarNode newNode{};
-					newNode.gCost = EnhancedCostCalculator::calculateGCost(newGenome, entry.action, preGCost, nowState);
-					newNode.hCost = EnhancedCostCalculator::calculateHCost(newGenome, enemyMaxHp, playerMaxHp, nowState);
-					newNode.fCost = newNode.gCost + newNode.hCost;
-					newNode.stateHash = newStateHash;
-					newNode.allyHP = newGenome.AllyPlayer.hp;
-					newNode.enemyHP = newGenome.EnemyPlayer.hp;
-					newNode.nodeId = Pool.alloc(newGenome);
-
-					// Add to open set
-					openSet.push(newNode);
-				}
-			}
-
-			counter++;
-
-			// Track best f-cost for progress monitoring
-			if(currentNode.fCost < lastBestFCost){
-				lastBestFCost = currentNode.fCost;
-			}
-		}
-	}
-
-	Node_Used = Pool.getSize();
-
-	if(solutionFound){
-		return bestSolution;
-	}
-
-	// Return best available node if no solution found
-	if(!openSet.empty()){
-		return Pool.get(openSet.top().nodeId);
-	}
-
-	return initialGenome;
+[[nodiscard]] constexpr BattleEmulator::SearchCommand UnpackCommand(
+    const std::uint16_t packed
+) noexcept {
+    return {
+        BattleEmulator::HeroActionId(static_cast<int>(packed)),
+        BattleEmulator::HeroTargetId(static_cast<int>(packed)),
+    };
 }
 
-void ActionOptimizer::updateCompromiseScore(Genome& genome){
-	// Enemy action penalty processing (unchanged)
+[[nodiscard]] bool BattleWon(const BattleEmulator::SearchState& state) noexcept {
+#if defined(gerunikku)
+    return state.players[1].hp <= 0 && state.players[2].hp <= 0 && state.players[3].hp <= 0;
+#else
+    return state.players[1].hp <= 0;
+#endif
 }
 
-std::pair<int, Genome> ActionOptimizer::RunAlgorithmAsync(const Player players[4], uint64_t seed, int turns,
-                                                          int maxGenerations, int actions[350], int numThreads,
-                                                          bool dropbug){
-	(void)numThreads;
-	(void)dropbug;
-	auto genome = RunAlgorithm(players, seed, turns, maxGenerations, actions, 0);
-	return {0, genome};
+[[nodiscard]] bool SameAllyExceptHpMp(const Player& lhs, const Player& rhs) noexcept {
+    Player left = lhs;
+    Player right = rhs;
+    left.hp = 0;
+    right.hp = 0;
+    left.mp = 0;
+    right.mp = 0;
+    return left == right;
+}
+
+[[nodiscard]] bool SameNonResourceState(
+    const BattleEmulator::SearchState& lhs,
+    const BattleEmulator::SearchState& rhs
+) noexcept {
+    return lhs.position == rhs.position
+        && lhs.nowState == rhs.nowState
+        && SameAllyExceptHpMp(lhs.players[0], rhs.players[0])
+        && lhs.players[1] == rhs.players[1]
+        && lhs.players[2] == rhs.players[2]
+        && lhs.players[3] == rhs.players[3]
+        && lhs.cameraRuntime == rhs.cameraRuntime;
+}
+
+[[nodiscard]] constexpr std::uint64_t Mix(
+    std::uint64_t hash,
+    const std::uint64_t value
+) noexcept {
+    return hash ^ (value + UINT64_C(0x9e3779b97f4a7c15) + (hash << 6) + (hash >> 2));
+}
+
+// Bucket key only. A key match is never used as proof of state equality.
+// SameNonResourceState() is mandatory before an HP/MP dominance prune.
+[[nodiscard]] std::uint64_t CoarseNonResourceKey(
+    const BattleEmulator::SearchState& state,
+    const int depth
+) noexcept {
+    std::uint64_t hash = UINT64_C(0xcbf29ce484222325);
+    hash = Mix(hash, static_cast<std::uint64_t>(depth));
+    hash = Mix(hash, static_cast<std::uint32_t>(state.position));
+    hash = Mix(hash, state.nowState);
+    hash = Mix(hash, static_cast<std::uint32_t>(state.players[1].hp));
+    hash = Mix(hash, static_cast<std::uint32_t>(state.players[2].hp));
+    hash = Mix(hash, static_cast<std::uint32_t>(state.players[3].hp));
+    hash = Mix(hash, static_cast<std::uint32_t>(state.players[0].BuffLevel));
+    hash = Mix(hash, static_cast<std::uint32_t>(state.players[0].AtkBuffLevel));
+    hash = Mix(hash, static_cast<std::uint32_t>(state.players[0].TensionLevel));
+    hash = Mix(hash, static_cast<std::uint32_t>(state.players[0].MagicMirrorTurn));
+    return hash;
+}
+
+void ResetDominance(SearchWorkspace& workspace) noexcept {
+    workspace.bucketHeads.fill(kNoDominanceRecord);
+    workspace.recordCount = 0;
+    workspace.dominanceOverflow = false;
+}
+
+[[nodiscard]] bool Replay(
+    SearchWorkspace& workspace,
+    const std::uint16_t* path,
+    const int depth,
+    BattleEmulator::SearchState* destination
+) {
+    *destination = workspace.root;
+    for (int index = 0; index < depth; ++index) {
+        if (!BattleEmulator::StepSearchStateInPlace(destination, UnpackCommand(path[index]))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] std::size_t BuildCandidates(
+    const BattleEmulator::SearchState& state,
+    std::array<std::uint16_t, kScenarioCommands.size()>& candidates
+) noexcept {
+    const Player& hero = state.players[0];
+
+    // These states do not present a normal hero command choice. The supplied
+    // action is only a placeholder; BattleEmulator replaces it with the real
+    // status action during the turn.
+    if (hero.paralysis || hero.sleeping || hero.inactive || hero.confused) {
+        candidates[0] = PackCommand({BattleEmulator::ATTACK_ALLY, -1});
+        return 1;
+    }
+
+    std::size_t count = 0;
+    for (const auto command : kScenarioCommands) {
+        if (!BattleEmulator::IsHeroCommandSelectable(state, command)) continue;
+        candidates[count++] = PackCommand(command);
+    }
+    return count;
+}
+
+[[nodiscard]] bool AcceptByHpMpDominance(
+    SearchWorkspace& workspace,
+    const int depth
+) {
+    if (!Replay(workspace, workspace.path.data(), depth, &workspace.replayB)) return true;
+
+    const int candidateHp = workspace.replayB.players[0].hp;
+    const int candidateMp = workspace.replayB.players[0].mp;
+    const std::uint64_t key = CoarseNonResourceKey(workspace.replayB, depth);
+    const std::size_t bucket = static_cast<std::size_t>(key) & (kDominanceBucketCount - 1);
+
+    for (std::uint32_t recordIndex = workspace.bucketHeads[bucket];
+         recordIndex != kNoDominanceRecord;
+         recordIndex = workspace.records[recordIndex].next) {
+        const DominanceRecord& record = workspace.records[recordIndex];
+        if (record.key != key || record.depth != depth) continue;
+        if (record.allyHp < candidateHp || record.allyMp < candidateMp) continue;
+        if (!Replay(workspace, record.path.data(), record.depth, &workspace.replayA)) continue;
+        if (!SameNonResourceState(workspace.replayA, workspace.replayB)) continue;
+
+        // Exact same future-affecting state, with no less HP and no less MP.
+        // The recorded path therefore has a superset of survival/command
+        // possibilities and safely dominates this one.
+        return false;
+    }
+
+    if (workspace.recordCount >= kDominanceRecordCapacity) {
+        // Capacity exhaustion must never become an approximate prune. Keep
+        // exploring; only stop adding new dominance records.
+        workspace.dominanceOverflow = true;
+        return true;
+    }
+
+    DominanceRecord& record = workspace.records[workspace.recordCount];
+    record.key = key;
+    record.depth = static_cast<std::uint16_t>(depth);
+    record.allyHp = candidateHp;
+    record.allyMp = candidateMp;
+    std::copy_n(workspace.path.begin(), depth, record.path.begin());
+    record.next = workspace.bucketHeads[bucket];
+    workspace.bucketHeads[bucket] = workspace.recordCount++;
+    return true;
+}
+
+[[nodiscard]] bool DepthFirstSearch(
+    SearchWorkspace& workspace,
+    const int depth,
+    const int depthLimit
+) {
+    ++workspace.visitedNodes;
+
+    if (!Replay(workspace, workspace.path.data(), depth, &workspace.replayA)) return false;
+    if (BattleWon(workspace.replayA)) {
+        workspace.solutionDepth = depth;
+        std::copy_n(workspace.path.begin(), depth, workspace.solution.begin());
+        return true;
+    }
+    if (workspace.replayA.players[0].hp <= 0 || depth >= depthLimit) return false;
+
+    if (depth > 0 && !AcceptByHpMpDominance(workspace, depth)) return false;
+
+    std::array<std::uint16_t, kScenarioCommands.size()> candidates{};
+    const std::size_t candidateCount = BuildCandidates(workspace.replayA, candidates);
+    for (std::size_t index = 0; index < candidateCount; ++index) {
+        workspace.path[depth] = candidates[index];
+        if (DepthFirstSearch(workspace, depth + 1, depthLimit)) return true;
+    }
+    return false;
+}
+
+[[nodiscard]] Genome ToGenome(
+    const BattleEmulator::SearchState& state,
+    const int knownTurns,
+    const int solutionDepth,
+    const int actions[kActionHistoryCapacity],
+    const SearchWorkspace& workspace
+) {
+    Genome result{};
+    result.AllyPlayer = state.players[0];
+#if defined(gerunikku)
+    result.IronKnightA = state.players[1];
+    result.EnemyPlayer = state.players[2];
+    result.IronKnightB = state.players[3];
+#else
+    result.EnemyPlayer = state.players[1];
+    result.IronKnightA = {};
+    result.IronKnightB = {};
+#endif
+    result.state = state.nowState;
+    result.position = state.position;
+    result.turn = knownTurns + solutionDepth + 1;
+    result.processed = knownTurns + solutionDepth;
+    result.Initialized = true;
+
+    std::fill(std::begin(result.actions), std::end(result.actions), -1);
+    for (int index = 0; index < knownTurns && index < kActionHistoryCapacity; ++index) {
+        result.actions[index] = actions[index];
+    }
+    for (int index = 0;
+         index < solutionDepth && knownTurns + index < kActionHistoryCapacity;
+         ++index) {
+        result.actions[knownTurns + index] = static_cast<int>(workspace.solution[index]);
+    }
+    return result;
+}
+
+[[nodiscard]] Genome RunIddfs(
+    const Player players[4],
+    const std::uint64_t seed,
+    const int knownTurns,
+    const int actions[kActionHistoryCapacity]
+) {
+    SearchWorkspace& workspace = gWorkspace;
+    workspace.path.fill(0);
+    workspace.solution.fill(0);
+    workspace.solutionDepth = -1;
+    workspace.visitedNodes = 0;
+
+    // The seed is fixed by the brute-force phase. Generate the cache once;
+    // every branch is then determined by SearchState::position.
+    lcg::init(seed, true);
+    if (!BattleEmulator::InitializeSearchState(&workspace.root, players, 1)) return {};
+
+    // Build the exact search root once by replaying the already-known prefix.
+    for (int index = 0; index < knownTurns; ++index) {
+        const int packed = actions[index];
+        if (packed <= 0) break;
+        if (!BattleEmulator::StepSearchStateInPlace(
+                &workspace.root,
+                {BattleEmulator::HeroActionId(packed), BattleEmulator::HeroTargetId(packed)})) {
+            return {};
+        }
+    }
+
+    if (BattleWon(workspace.root)) {
+        workspace.solutionDepth = 0;
+        gNodesUsed = 1;
+        return ToGenome(workspace.root, knownTurns, 0, actions, workspace);
+    }
+
+    const int depthCap = std::min(kMaxSearchDepth, kActionHistoryCapacity - knownTurns - 1);
+    for (int depthLimit = 1; depthLimit <= depthCap; ++depthLimit) {
+        ResetDominance(workspace);
+        if (!DepthFirstSearch(workspace, 0, depthLimit)) continue;
+
+        Replay(workspace, workspace.solution.data(), workspace.solutionDepth, &workspace.replayA);
+        gNodesUsed = static_cast<std::uint32_t>(std::min<std::uint64_t>(
+            workspace.visitedNodes,
+            std::numeric_limits<std::uint32_t>::max()));
+        return ToGenome(workspace.replayA, knownTurns, workspace.solutionDepth, actions, workspace);
+    }
+
+    gNodesUsed = static_cast<std::uint32_t>(std::min<std::uint64_t>(
+        workspace.visitedNodes,
+        std::numeric_limits<std::uint32_t>::max()));
+    return ToGenome(workspace.root, knownTurns, 0, actions, workspace);
+}
+
+} // namespace
+
+Genome ActionOptimizer::RunAlgorithm(
+    const Player players[4],
+    const std::uint64_t seed,
+    const int turns,
+    const int maxGenerations,
+    int actions[350],
+    const int seedOffset
+) {
+    // Legacy parameters remain in the public ABI only. Search order and pruning
+    // are independent of learned weights, generation counts and seed offsets.
+    (void)maxGenerations;
+    (void)seedOffset;
+    return RunIddfs(players, seed, turns, actions);
+}
+
+std::pair<int, Genome> ActionOptimizer::RunAlgorithmAsync(
+    const Player players[4],
+    const std::uint64_t seed,
+    const int turns,
+    const int maxGenerations,
+    int actions[350],
+    const int numThreads,
+    const bool dropbug
+) {
+    (void)numThreads;
+    (void)dropbug;
+    return {0, RunAlgorithm(players, seed, turns, maxGenerations, actions, 0)};
+}
+
+void ActionOptimizer::updateCompromiseScore(Genome& genome) {
+    // Compatibility no-op. The IDDFS implementation has no compromise score,
+    // learned cost, heuristic ranking or approximate branch elimination.
+    genome.compromiseScore = 0;
+    genome.isEliminated = false;
+}
+
+std::uint32_t ActionOptimizer::getNodesUsed() {
+    return gNodesUsed;
 }

@@ -51,6 +51,8 @@ struct Player {
     int confusionTurns = -1;
     int guardedBy = -1;
 
+    [[nodiscard]] constexpr bool operator==(const Player&) const = default;
+
     // 他のメンバー変数やメンバー関数を追加する可能性があります
 
     constexpr static bool isPlayerAlive(const Player &obj) {

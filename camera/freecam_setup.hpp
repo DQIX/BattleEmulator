@@ -197,6 +197,8 @@ struct PresentationActorState {
     std::int32_t worldX{};
     std::int32_t worldY{};
     std::int32_t worldZ{};
+
+    [[nodiscard]] constexpr bool operator==(const PresentationActorState&) const = default;
 };
 
 [[nodiscard]] constexpr PresentationActorInput PresentationRouteInput(

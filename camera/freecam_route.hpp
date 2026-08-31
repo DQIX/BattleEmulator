@@ -162,12 +162,16 @@ struct PresentationActorRoute {
     std::uint16_t actorId{kInvalidPresentationActor};
     std::array<std::uint8_t, kMaxPresentationRoute> nodes{};
     std::uint8_t count{};
+
+    [[nodiscard]] constexpr bool operator==(const PresentationActorRoute&) const = default;
 };
 
 struct PresentationTurnRoutes {
     std::array<PresentationActorRoute, kMaxPresentationActors> actors{};
     std::uint8_t actorCount{};
     bool valid{};
+
+    [[nodiscard]] constexpr bool operator==(const PresentationTurnRoutes&) const = default;
 };
 
 [[nodiscard]] constexpr const PresentationActorRoute* FindPresentationRoute(

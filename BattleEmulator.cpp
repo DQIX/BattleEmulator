@@ -737,16 +737,19 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 #endif
 
         int32_t actionTable = -1;
+        int packedHeroTargetOverride = -1;
 
         if (heroActionOverride > 0) {
-            actionTable = heroActionOverride;
+            actionTable = HeroActionId(heroActionOverride);
+            packedHeroTargetOverride = HeroTargetId(heroActionOverride);
         } else {
             if (genePosition != -1 && (Gene[genePosition] == 0 || Gene[genePosition] == -1)) {
                 genePosition = -1;
                 //throw std::invalid_argument("GenePosition is invalid");
             }
             if (genePosition != -1 && Gene[genePosition] != 0 && Gene[genePosition] != -1) {
-                actionTable = Gene[genePosition];
+                actionTable = HeroActionId(Gene[genePosition]);
+                packedHeroTargetOverride = HeroTargetId(Gene[genePosition]);
                 if (actionTable == TURN_SKIPPED || actionTable == SLEEPING || actionTable == CURE_SLEEPING || actionTable ==
                     CURE_PARALYSIS || actionTable == PARALYSIS) {
                     actionTable = ATTACK_ALLY;
@@ -783,9 +786,12 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         };
 
         auto primaryHeroTarget = [&]() noexcept {
-            if (heroTargetOverride >= 1 && heroTargetOverride <= 3 &&
-                Player::isPlayerAlive(players[heroTargetOverride])) {
-                return heroTargetOverride;
+            const int turnTargetOverride = packedHeroTargetOverride >= 1
+                ? packedHeroTargetOverride
+                : heroTargetOverride;
+            if (turnTargetOverride >= 1 && turnTargetOverride <= 3 &&
+                Player::isPlayerAlive(players[turnTargetOverride])) {
+                return turnTargetOverride;
             }
             if (Player::isPlayerAlive(players[2])) return 2;
             if (Player::isPlayerAlive(players[1])) return 1;
@@ -1164,6 +1170,94 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
     } else {
         return false;
     }
+}
+
+bool BattleEmulator::InitializeSearchState(SearchState* state, const Player initialPlayers[4],
+                                           const int initialPosition) {
+    if (state == nullptr || initialPlayers == nullptr || initialPosition < 1) return false;
+    for (int i = 0; i < 4; ++i) state->players[i] = initialPlayers[i];
+    state->position = initialPosition;
+    state->nowState = 0;
+
+#if defined(gerunikku)
+    InitializeBattleActorRefs();
+    if (!InitializeCameraBattle()) return false;
+#endif
+    state->cameraRuntime = camera::CaptureRuntimeState();
+    return true;
+}
+
+bool BattleEmulator::IsHeroCommandSelectable(const SearchState& state,
+                                             const SearchCommand command) noexcept {
+    const Player& hero = state.players[0];
+    if (hero.hp <= 0) return false;
+
+    if (command.target != -1) {
+        if (command.target < 1 || command.target > 3) return false;
+        if (state.players[command.target].hp <= 0) return false;
+    }
+
+    switch (command.action) {
+        case MIDHEAL:
+            return hero.mp >= 4;
+        case DEFENDING_CHAMPION:
+            return hero.mp >= 2;
+        case MAGIC_MIRROR:
+            return hero.mp >= 4;
+        case MORE_HEAL:
+            return hero.mp >= 8;
+        case FULLHEAL:
+            return hero.mp >= 24;
+        case SPECIAL_MEDICINE:
+            return hero.SpecialMedicineCount > 0;
+        case MAGIC_WATER:
+            return hero.MagicWaterCount > 0;
+        case BUFF:
+            return hero.mp >= 3;
+        case MULTITHRUST:
+            return hero.mp >= 4;
+        case GOSPEL_SONG:
+            return hero.specialChargeTurn >= 1;
+        case INSULATE:
+            return hero.mp >= 4;
+        case VITAL_POINT_THRUST:
+            return hero.mp >= 3;
+        case ZAKI:
+            return hero.mp >= 5;
+        case ZARAKI:
+            return hero.mp >= 10;
+        default:
+            return true;
+    }
+}
+
+bool BattleEmulator::StepSearchState(const SearchState& source, const SearchCommand command,
+                                     SearchState* destination,
+                                     BattleResult* result, const bool traceBoundaries) {
+    if (destination == nullptr || command.action <= 0) return false;
+
+    *destination = source;
+    return StepSearchStateInPlace(destination, command, result, traceBoundaries);
+}
+
+bool BattleEmulator::StepSearchStateInPlace(SearchState* state, const SearchCommand command,
+                                            BattleResult* result, const bool traceBoundaries) {
+    if (state == nullptr || command.action <= 0) return false;
+
+    camera::RestoreRuntimeState(state->cameraRuntime);
+
+    BattleResult scratchResult;
+    BattleResult* output = result != nullptr ? result : &scratchResult;
+    *output = BattleResult{};
+
+    const int mode = result != nullptr ? -1 : -2;
+    const int packedAction = PackHeroAction(command.action, command.target);
+    Main(&state->position, 1, nullptr, state->players, output,
+         0, nullptr, nullptr, mode, &state->nowState,
+         -1, traceBoundaries, packedAction, false);
+
+    state->cameraRuntime = camera::CaptureRuntimeState();
+    return true;
 }
 
 double BattleEmulator::FUN_021dbc04(int baseHp, double maxHp) {

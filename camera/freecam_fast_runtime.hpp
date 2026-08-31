@@ -448,6 +448,8 @@ struct ActionState {
     std::uint16_t dq9ActionId{};
     std::uint16_t actorId{kInvalidBattleActor};
     std::uint16_t targetId{kInvalidBattleActor};
+
+    [[nodiscard]] constexpr bool operator==(const ActionState&) const = default;
 };
 
 struct ActionRuntimeInput {
@@ -483,6 +485,8 @@ struct RuntimeState {
         std::uint8_t node{};
         detail::PresentationNodeSearchMode mode{detail::PresentationNodeSearchMode::optimized};
         bool valid{};
+
+        [[nodiscard]] constexpr bool operator==(const NearestNodeCache&) const = default;
     };
     std::array<NearestNodeCache, detail::kMaxPresentationActors> nearestNodeCache{};
     std::uint8_t presentationActorCount{};
@@ -496,6 +500,8 @@ struct RuntimeState {
     bool presentationGoalSetupActive{};
     detail::PresentationTurnRoutes currentRoutes{};
     int plannedActionIndex{-1};
+
+    [[nodiscard]] constexpr bool operator==(const RuntimeState&) const = default;
 };
 
 inline thread_local RuntimeState gRuntimeState{};
