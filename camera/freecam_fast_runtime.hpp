@@ -559,7 +559,6 @@ struct ActionRuntimeInput {
     std::uint16_t actorId{kInvalidBattleActor};
     std::uint16_t targetId{kInvalidBattleActor};
     std::uint16_t turnActionIndex{};
-    std::uint16_t currentActorId{kInvalidBattleActor};
     std::uint8_t targetPresentationSlot{0xff};
     bool actorAndTargetHaveGeometry{};
     std::int32_t actorTargetDistance{};
@@ -1133,11 +1132,17 @@ template <typename Action>
 
     if (actorRouteCount == 0 && ComputeSelectorSuppression(selectorProjection)) return {};
 
-    const bool targetIsCurrentActor = input.targetPresentationSlot != 0xff
-        && input.targetId == input.currentActorId;
+    // overlay_d_25:021626CC returns the previous action record when
+    // controller+0x57C8 > 0. 021DC394..021DC3C0 then resolves actor[0]
+    // from that previous record and compares it with the current target ID.
+    // It is not a comparison against the current acting actor.
+    const bool targetIsPreviousActionActor = input.turnActionIndex > 0
+        && state.hasPreviousAction
+        && input.targetPresentationSlot != 0xff
+        && input.targetId == state.previousAction.actorId;
     const bool actorsOverlap = input.actorAndTargetHaveGeometry
         && input.actorTargetDistance < ((input.actorRadius + input.targetRadius) >> 1);
-    const bool forceMode1Exception = anyRouteAbove4 || targetIsCurrentActor || actorsOverlap;
+    const bool forceMode1Exception = anyRouteAbove4 || targetIsPreviousActionActor || actorsOverlap;
     return {
         source,
         true,

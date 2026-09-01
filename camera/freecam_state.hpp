@@ -52,7 +52,7 @@ struct TriggerInput {
     // participant actor presentation route count (+0x34), not an opaque
     // camera mode.
     bool anyParticipantCameraStateAbove4{};
-    bool targetIsCurrentActor{};
+    bool targetIsPreviousActionActor{};
     bool actorsOverlap{};
 
     // overlay_d_25:021E03AC or another action-specific reset-only path.
@@ -93,7 +93,6 @@ struct TriggerDerivationInput {
     TriggerActionState current{};
     TriggerActionState previous{};
     std::uint16_t turnActionIndex{};
-    std::uint16_t currentActorId{kInvalidBattleActor};
     const FreeCameraFixedMetadata* fixedMetadata{};
     const FreeCameraActionMetadata* actionMetadata{};
     const FreeCameraMembershipMetadata* membershipMetadata{};
@@ -233,8 +232,11 @@ struct TriggerDerivationInput {
             break;
         }
     }
-    const bool targetIsCurrentActor = input.targetPresentationSlot != 0xff
-        && input.current.targetId == input.currentActorId;
+    // overlay_d_25:021626CC selects battle+0x821C+(index-1)*0x28,
+    // then 02161814(previousRecord, 0) resolves previous actor[0].
+    const bool targetIsPreviousActionActor = input.turnActionIndex > 0
+        && input.targetPresentationSlot != 0xff
+        && input.current.targetId == input.previous.actorId;
     const bool actorsOverlap = input.actorAndTargetHaveGeometry
         && input.actorTargetDistance < ((input.actorRadius + input.targetRadius) >> 1);
     return {
@@ -246,7 +248,7 @@ struct TriggerDerivationInput {
         actorRoute == nullptr ? std::uint8_t{0} : actorRoute->count,
         selectorProjection,
         anyRouteAbove4,
-        targetIsCurrentActor,
+        targetIsPreviousActionActor,
         actorsOverlap,
         ComputeConsecutiveAttackReset(input, targetRecord02161720ActorId),
     };
@@ -282,7 +284,7 @@ struct TriggerDecision {
     }
 
     const bool forceMode1Exception = input.anyParticipantCameraStateAbove4
-        || input.targetIsCurrentActor
+        || input.targetIsPreviousActionActor
         || input.actorsOverlap;
     const bool preemptiveMode = input.turnActionIndex == 0 || forceMode1Exception;
     return {source, true, preemptiveMode, false};

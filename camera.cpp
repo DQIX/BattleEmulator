@@ -241,7 +241,6 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                         .actorId = runtimeActorId,
                         .targetId = runtimeTargetId,
                         .turnActionIndex = static_cast<std::uint16_t>(i),
-                        .currentActorId = runtimeActorId,
                         .targetPresentationSlot = targetSlot < 0xff ? static_cast<std::uint8_t>(targetSlot) : std::uint8_t{0xff},
                     });
                     hasRuntimeDecision = true;

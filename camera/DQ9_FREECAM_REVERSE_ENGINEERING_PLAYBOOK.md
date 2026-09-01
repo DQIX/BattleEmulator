@@ -155,11 +155,87 @@ ZAKIのaction selector projectionは0x00050001。`ComputeSelectorSuppression()`�
 ZAKI route `[59,50]` の終点50を次turn startとして単純採用してはいけない。`zaki.dst`の1ターン終了時Hero実座標はnode68だった。
 実機routeログではZAKI freecam後、Heroに `route-write count=0, sourceFirst=68` が現れる。action routeの後にfallback/return position処理がある。
 実装は既存 `AssignActorFallbackPresentationGoal()` とroute plannerを通し、action route endpoint→fallback goal→fallback route endpointの順にpresentation stateをcommitする。`turn==1 ? node68`などの専用分岐を作らない。
+
+## `021DC1D4` later-action `param5=1` の正確な3条件
+`overlay_d_25:021DC1D4` はfree-cameraを呼ぶかと第5引数 `param5` を選ぶselector。mode1 call siteは `0x021DC5D4` (`0216FDA4` entry LR=`0x021DC5D8`)、mode0 call siteは `0x021DC620` (entry LR=`0x021DC624`)。
+
+later actionでmode1へ上げる条件は次の3系統で、`current target == current actor` ではない。
+
+1. turn participantのpresentation route countが1人でも `>4`。
+   `controller+0x57C8 != 0` のlater-action branchでparticipantを列挙し、`FUN_0204A264(actor)` の戻り値（presentation object `+0x34` route count）が5以上ならmode1側へ戻る。
+2. **現在actionのtarget ID == 直前action recordのactor[0] ID**。
+   - `0x021DC394`: `r0=controller`。
+   - `0x021DC398`: `BL 0x021626CC`。
+   - `FUN_021626CC` は `controller+0x57C8==0` なら0。1以上なら `[controller+0x218] + 0x821C + (index-1)*0x28`、つまり直前action recordを返す。
+   - `0x021DC3A8`: `BL 0x02161814(previousRecord, 0)` で直前recordのactor[0]を解決。
+   - `0x021DC3B4`: `LDRH r0,[actorRecord,#0x20]` でそのactor IDを読む。
+   - `0x021DC3B8`: `CMP r0,r11`。`r11` は現在actionのprimary target ID。
+   - `0x021DC3BC..0x021DC3C0`: equalならlocal force-mode1 flagを1にする。
+   したがってC++で `current target == current acting actor` と実装するのは誤り。fast runtimeでは `state.previousAction.actorId` と現在targetを比較する。
+3. 現在actorとtargetのworld geometryが重なる。
+   - `0x021DC3D0..0x021DC3E0`: current actor object `+0x44` のVector3をstackへコピー。
+   - `0x021DC3E4..0x021DC3F4`: target actor object `+0x44` のVector3をstackへコピー。
+   - `0x021DC3F8`: `BL 0x020C4AFC` でdistanceを求める。
+   - `0x021DC400`: current actorに `FUN_02037228`。
+   - `0x021DC40C`: target actorに `FUN_02037228`。
+   - `FUN_02037228` (`0x02037228`) は単純に actor object `+0x64` の値を返す。
+   - `0x021DC414`: radiusを加算。
+   - `0x021DC41C`: `CMP distance, (radiusA+radiusB) ASR #1`。
+   - `0x021DC420..0x021DC424`: `distance < (radiusA+radiusB)/2` ならforce-mode1 flagを1にする。
+
+### seed `0x42F3C` で見つかった実装バグ
+`battle.dst`, initial position 0, Hero normal attack→enemy:0 の1turnでROMとC++のbattle coreは一致したが、camera RNGだけずれた。
+
+ROM index3は action `1`, actor `0xC2`, target `0x00`。`0x021DC41C` のlive値は `distance=24141`, `radiusA+radiusB=11468`, threshold=`5734` なのでoverlapはfalse。route `>4` でもない。一方 `021626CC -> 02161814(previous,0)` は直前index2のactor `0x00` を返し、現在targetも `0x00` なので条件2だけがtrue。ROMは `LR=0x021DC5D8`, `param5=1` でfree-cameraへ入る。
+
+修正前C++は `.currentActorId = runtimeActorId` として `target == current actor` を比較していたため、このindex3を `param5=0` と誤判定していた。fast/reference runtimeの入力からこの曖昧なfieldを削除し、`turnActionIndex>0 && previousAction exists && currentTarget==previousAction.actorId` を直接判定する。
+
+## SKY_ATTACK 0ダメージ -> MERA_ZOMA の歴史的camera補正
+BattleEmulator内部 `SKY_ATTACK` はDQ9 action `540 (0x021C)`、`MERA_ZOMA` はDQ9 action `11 (0x000B)`。
+
+現在C++の `TiggerSkyAttack` は、物理攻撃処理の `kaihi` / `tate` 分岐ではなく通常damage計算側で `baseDamage==0` になった `SKY_ATTACK` のときだけ立つ。つまり「みかわし/盾ガードで0」ではなく、攻防計算・倍率適用後も0だったケースだけを区別している。turn末尾でこの値を `camera::Main(..., bakuti)` へ渡し、現行互換コードはそのSKY_ATTACKを見た後のMERA_ZOMAで `onFreeCameraMove(..., param5=1)` を強制する。
+
+このrare pathを `021E03AC` と同一視しない。`021E03AC` は現在/直前ともaction ID 1の連続通常攻撃専用reset判定で、MERA_ZOMAでは成立しないことがdecompileで確定している。
+
+静的に再現可能な位置情報は既にある。presentation nodeのworld X/Zは `overlay_d_00:02170F40..02170F54` のfloat定数から `PresentationNodeWorldPosition()` がconstexpr算出し、route commit時にactor stateの `worldX/worldZ` へ反映する。selector overlapが必要ならROM側の比較は上記 `0x021DC3F8..0x021DC424`。不足しているのはactor object `+0x64` radiusのROM静的供給元と、**0ダメージSKY_ATTACKのpresentation completionが通常hit/missとどの地点で分岐するか**の確定だけ。
+
+したがって、該当Stateを直接再現できるまでは `moture/TiggerSkyAttack` 互換分岐を消して推測のroute補正へ置き換えない。Stateが得られたら、SKY_ATTACK終了直前/次MERA_ZOMAの `021E0F48` route write、actor `+0x44` Vector3、`+0x64` radius、`021DC394..021DC424` の3例外を同時captureし、通常runtimeだけで同じ `param5=1` が出た時点で互換分岐を削除する。
+
+## Player profileの `2 / 6` をマジックナンバーにしないための算出根拠
+主人公のfree-camera actor membershipは `mp0206` を直接指定しない。`body item ID + primary weapon item ID -> ROM visual model code -> mp%02d%02d -> actor membership profile` の順で解決する。
+
+Ghidra上の根拠は `FUN_02073E2C` (`0x02073E2C`)。この関数は `getBattleActorPlayerData` (`0x02054FE4`) で得たplayerDataについて、次の2つのpresentation recordを読む。
+- `0x02073E6C`: `playerData + 0x294` を第2model（武器側）record slotとして保持。
+- `0x02073E70` / `0x02073E98`: `playerData + 0x194` を第1model（body側）record slotとして保持。
+- `0x02073E9C` -> `0x02073EA4`: 第1record pointerを辿り `[record+4]` を読む。
+- `0x02073EAC` (`LSL #12`) -> `0x02073EB4` (`LSR #24`): `([record+4] >> 12) & 0xff` を第1model codeにする。
+- `0x02073EC0` -> `0x02073EC4`: 第2record pointerを辿り `[record+4]` を読む。
+- `0x02073EC8` (`LSL #12`) -> `0x02073ECC` (`LSR #24`): 同じくbits 12..19を第2model codeにする。
+- `0x02073ED0` は `0x02073EE4` にあるpointerを読み、その先 `0x020F0DEC` のformat stringは `"mp%02d%02d"`。したがって第1=2、第2=6なら `mp0206` になる。
+
+現在の `battle.dst` 主人公については、`FirstPartyMemberPlayerData = 0x020F52B0`。`getBattleActorEquipmentState` (`0x020541E4`) はbattle actorの `+0x144` playerData pointerへ `+0x488` した装備stateを返す。現在の実RAMでは:
+- equipment state base = `0x020F52B0 + 0x488 = 0x020F5738`。
+- `0x020F5738 + 0x00` のu16 = `0x3382`。現在scenarioでbody item IDとして渡している値。
+- `0x020F5738 + 0x0E` (`equipmentState[7]`) のu16 = `0x5021`。現在scenarioでprimary weapon item IDとして渡している値。
+- `playerData+0x194 = 0x020F5444` は `0x020F5908` を指し、`0x020F590C = 0x180027F3`。`(0x180027F3 >> 12) & 0xff = 2`。
+- `playerData+0x294 = 0x020F5544` は `0x020F5A08` を指し、`0x020F5A0C = 0x18006000`。`(0x18006000 >> 12) & 0xff = 6`。
+このRAMアドレスは現在fixtureの具体例であり、一般実装では固定RAM pointerを使わずitem IDからROM静的表を引く。
+
+静的生成では `data/prm/itemdata_bod3.cn` と `data/prm/itemdata_wea3.cn` を展開する。両方とも、展開後 `u16[0]=count`、primary table開始 `0x0C`、stride `0x20`。primary recordの `+0x18` がstable item ID、`+0x00` がvisual indexで、`visualBase = 0x0C + count * 0x20`、`visual = visualBase + visualIndex * 0x20`、最終的なmodel codeは `u32(visual+0x04)` のbits 12..19である。
+
+現在fixtureを静的表から再計算すると:
+- body `0x3382`: `count=183`, `visualBase=0x16EC`, primary index `67` (`0x086C`), visual index `20`, visual offset `0x196C`, `u32(+4)=0x180027F3` -> model `2`。
+- weapon `0x5021`: `count=268`, `visualBase=0x218C`, primary index `173` (`0x15AC`), visual index `43`, visual offset `0x26EC`, `u32(+4)=0x18006000` -> model `6`。
+
+`build_freecam_membership_metadata.mjs` はこの関係をv3のsorted item->model tableへ生成し、C++は `ResolveBodyModelCode(itemId)` / `ResolveWeaponModelCode(itemId)` のconstexpr binary searchから `ResolvePlayerProfileFromEquipment(bodyItemId, primaryWeaponItemId)` へ進む。`2`、`6`、`mp0206`、generated profile indexをBattleEmulator本体へ直接書かないこと。装備が変わればitem IDだけscenario stateで変え、同じ算出経路を通す。
+
+位置については、X/Zそのものは既に静的算出可能です。02170F40..02170F54の定数→PresentationNodeWorldPosition()→route commitでworldX/worldZまで入っています。overlap判定もROMでは、
+
 ## Fast runtime接続順
 一般的なturn処理:
 1. battle開始時だけ`ResetBattle()`。
 2. roster全actorを`SetPresentationActor()`。actor IDは`Dq9ActorId()`。world座標からnodeを求める。
-3. membership profileが分かるactorは`SetPlayerMembershipProfile` / `SetMonsterMembershipProfile` / `SetSpecialActorMembershipProfile`を設定。
+3. membership profileが分かるactorはplayerなら`SetPlayerMembershipProfileFromEquipment`、monster/specialなら`SetMonsterMembershipProfile` / `SetSpecialActorMembershipProfile`を設定。
 4. turn開始時、action順の`BattleActorRef`を`BeginTurn()`へ渡す。
 5. `BeginPresentationGoalSetup()`。
 6. 各actionについてmapper bindingからROM `attackFormationMode`を取り、`AssignActorPresentationGoal(actor,target,actionActorIds,mode)`。

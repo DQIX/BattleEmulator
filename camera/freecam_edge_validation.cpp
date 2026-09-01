@@ -158,7 +158,6 @@ bool ValidateDecisionEdges() {
         .actorId = Dq9ActorId(actorRef),
         .targetId = Dq9ActorId(targetRef),
         .turnActionIndex = 0,
-        .currentActorId = Dq9ActorId(actorRef),
         .targetPresentationSlot = 1,
     });
     if (suppressed.callFreeCamera) return false;
@@ -170,7 +169,6 @@ bool ValidateDecisionEdges() {
         .actorId = Dq9ActorId(actorRef),
         .targetId = Dq9ActorId(targetRef),
         .turnActionIndex = 0,
-        .currentActorId = Dq9ActorId(actorRef),
         .targetPresentationSlot = 1,
     });
     if (!firstAction.callFreeCamera || !firstAction.param5) return false;
@@ -179,7 +177,6 @@ bool ValidateDecisionEdges() {
         .actorId = Dq9ActorId(actorRef),
         .targetId = Dq9ActorId(targetRef),
         .turnActionIndex = 1,
-        .currentActorId = Dq9ActorId(actorRef),
         .targetPresentationSlot = 1,
     });
     if (!laterAction.callFreeCamera || laterAction.param5) return false;
@@ -190,26 +187,29 @@ bool ValidateDecisionEdges() {
         .actorId = Dq9ActorId(actorRef),
         .targetId = Dq9ActorId(targetRef),
         .turnActionIndex = 1,
-        .currentActorId = Dq9ActorId(actorRef),
         .targetPresentationSlot = 1,
     });
     if (!longRoute.callFreeCamera || !longRoute.param5) return false;
     state.currentRoutes.actors[1].count = 0;
 
-    // Self-target and geometric overlap are the other force-mode1 exceptions.
-    const auto selfTarget = Decide<ZakiAction>({
+    // 021DC394..021DC3C0 compares the previous action's actor[0] with
+    // the current target ID. It does not compare against the current actor.
+    state.hasPreviousAction = true;
+    state.previousAction = {1, Dq9ActorId(targetRef), Dq9ActorId(actorRef)};
+    const auto previousActorTarget = Decide<ZakiAction>({
         .actorId = Dq9ActorId(actorRef),
-        .targetId = Dq9ActorId(actorRef),
+        .targetId = Dq9ActorId(targetRef),
         .turnActionIndex = 1,
-        .currentActorId = Dq9ActorId(actorRef),
-        .targetPresentationSlot = 0,
+        .targetPresentationSlot = 1,
     });
-    if (!selfTarget.param5) return false;
+    if (!previousActorTarget.param5) return false;
+
+    // Geometric overlap is the remaining force-mode1 exception.
+    state.previousAction.actorId = Dq9ActorId(actorRef);
     const auto overlap = Decide<ZakiAction>({
         .actorId = Dq9ActorId(actorRef),
         .targetId = Dq9ActorId(targetRef),
         .turnActionIndex = 1,
-        .currentActorId = Dq9ActorId(actorRef),
         .targetPresentationSlot = 1,
         .actorAndTargetHaveGeometry = true,
         .actorTargetDistance = 10,
@@ -258,7 +258,6 @@ bool ValidateConsecutiveAttackReset() {
         .actorId = Dq9ActorId(actorRef),
         .targetId = Dq9ActorId(targetRef),
         .turnActionIndex = 1,
-        .currentActorId = Dq9ActorId(actorRef),
         .targetPresentationSlot = 1,
     });
     return decision.resetOnly && !decision.callFreeCamera && decision.source == TriggerSource::reset_only;
