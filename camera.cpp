@@ -402,13 +402,13 @@ void camera::onFreeCameraMove(int *position, const int action, const int param5,
                 std::cout << "TRACE rng lr=0x0216fe68 max=" << (5 - counter)
                           << " consume=" << *position << '\n';
             }
-            auto ret = lcg::getPercent(position, 5 - counter);
+            auto ret = lcg::getPercent(position, 5 - counter); // lr=0x0216fe68
             if (ret == 0 || counter == 5) {
                 counter = 0;
                 if (traceBoundaries) {
                     std::cout << "TRACE rng lr=0x0216fff8 max=4 consume=" << *position << '\n';
                 }
-                (*position)++;//(void)lcg::getPercent(position, 4);
+                (*position)++;//lr=0x0216fff8 max=4　(void)lcg::getPercent(position, 4); // 「(void)lcg::」はアホの姿焼きなので、晒しておく
                 if (action == BattleEmulator::ATTACK_ALLY){
                     (*position)+=2;
                 }
@@ -419,12 +419,12 @@ void camera::onFreeCameraMove(int *position, const int action, const int param5,
             if (traceBoundaries) {
                 std::cout << "TRACE rng lr=0x0216fe40 max=100 consume=" << *position << '\n';
             }
-            (*position)++;//(void)lcg::getPercent(position, 100);
+            (*position)++;//lr=0x0216fe40 max=100 (void)lcg::getPercent(position, 100);
             if (counter == 0) {
                 if (traceBoundaries) {
                     std::cout << "TRACE rng lr=0x0216fff8 max=4 consume=" << *position << '\n';
                 }
-                (*position)++;//(void)lcg::getPercent(position, 4);//引数5が1なら強制的に実行
+                (*position)++;//lr=0x0216fff8 max=4 (void)lcg::getPercent(position, 4);//引数5が1なら強制的に実行
                 counter = 0;
                 if (action == BattleEmulator::ATTACK_ALLY){
                     (*position)+=2;
@@ -435,12 +435,12 @@ void camera::onFreeCameraMove(int *position, const int action, const int param5,
                 std::cout << "TRACE rng lr=0x0216fe68 max=" << (5 - counter)
                           << " consume=" << *position << '\n';
             }
-            (*position)++;//(void)lcg::getPercent(position, 5 - counter);
+            (*position)++;//lr=0x0216fe68 (void)lcg::getPercent(position, 5 - counter);
             counter = 0;
             if (traceBoundaries) {
                 std::cout << "TRACE rng lr=0x0216fff8 max=4 consume=" << *position << '\n';
             }
-            (*position)++;//(void)lcg::getPercent(position, 4);
+            (*position)++;//lr=0x0216fff8 max=4 (void)lcg::getPercent(position, 4);
             if (action == BattleEmulator::ATTACK_ALLY){
                 (*position)+=2;
             }
