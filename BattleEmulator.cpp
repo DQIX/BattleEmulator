@@ -23,6 +23,7 @@ thread_local dq9::freecam::fast::BattleActorRef actionTargets[8];
 thread_local dq9::freecam::fast::BattleActorRef battleActorRefs[4];
 thread_local int actionsPosition = 0;
 thread_local int preHP[4] = {0, 0, 0, 0};
+thread_local int multithrustDamageByTarget[4] = {0, 0, 0, 0};
 thread_local bool player0_has_initiative = false;
 thread_local bool TiggerSkyAttack = false;
 
@@ -1012,10 +1013,21 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             addResult(action, basedamage, false);
                             if (isHealingAction(action)) {
                                 Player::heal(players[0], basedamage);
+                            } else if (action == MULTITHRUST) {
+                                for (int enemy = 1; enemy <= 3; ++enemy) {
+                                    Player::reduceHp(players[enemy], multithrustDamageByTarget[enemy]);
+                                }
+                                if (mode != -1 && mode != -2) {
+                                    if (damages[exCounter] == -1) {
+                                        startTurn = counterJ - 1;
+                                        return true;
+                                    }
+                                    if (damages[exCounter++] != basedamage) return false;
+                                }
                             } else if (target >= 1 && target <= 3) {
                                 Player::reduceHp(players[target], basedamage);
                                 if (mode != -1 && mode != -2 &&
-                                    (action == MULTITHRUST || action == ATTACK_ALLY || action == MERCURIAL_THRUST)) {
+                                    (action == ATTACK_ALLY || action == MERCURIAL_THRUST)) {
                                     if (damages[exCounter] == -1) {
                                         startTurn = counterJ - 1;
                                         return true;
@@ -1340,6 +1352,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                                   uint64_t *NowState, const bool targetWasGuardRedirect) {
     for (int j = 0; j < 4; ++j) {
         preHP[j] = players[j].hp;
+        multithrustDamageByTarget[j] = 0;
     }
     actions[actionsPosition] = Id;
     actionActors[actionsPosition] = attacker >= 0 && attacker < 4 ? battleActorRefs[attacker] : dq9::freecam::fast::BattleActorRef{};
@@ -1936,9 +1949,29 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             players[attacker].mp -= 4;
             attackCount = lcg::intRangeRand(position, 3, 4);
             (*position)++;
-            (*position) += attackCount;
+            {
+                int aliveTargets[3]{};
+                int aliveTargetCount = 0;
+                for (int enemy = 1; enemy <= 3; ++enemy) {
+                    if (Player::isPlayerAlive(players[enemy])) {
+                        aliveTargets[aliveTargetCount++] = enemy;
+                    }
+                }
+                if (aliveTargetCount == 0) {
+                    resetCombo(NowState);
+                    return 0;
+                }
+
+                int hitTargets[4]{};
+                for (int hit = 0; hit < attackCount; ++hit) {
+                    // ROM lr=0x02155b24. All hit targets are selected before
+                    // the first damage calculation. The RandInt max is the
+                    // number of living enemies on the opposing side.
+                    hitTargets[hit] = aliveTargets[lcg::getPercent(position, aliveTargetCount)];
+                }
             hasKaisinn = false;
             for (int i = 0; i < attackCount; ++i) {
+                const int hitDefender = hitTargets[i];
                 kaihi = false;
                 kaisinn = false;
                 (*position)++; //0x021ec6f8 不明
@@ -1953,11 +1986,11 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                         hasKaisinn = true;
                     }
                 }
-                physicalAvoidance = ResolveHeroPhysicalAvoidance(position, defender);
+                physicalAvoidance = ResolveHeroPhysicalAvoidance(position, hitDefender);
                 kaihi = physicalAvoidance.avoided();
 
                 (*position)++; //ニセ回避 0x02157f58 100%
-                baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
+                baseDamage = FUN_0207564c(position, players[attacker].atk, players[hitDefender].def);
 
                 tmp = floor(baseDamage * 0.5);
                 if (kaisinn == true) {
@@ -1979,20 +2012,21 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
 
                 //ここの小数点以下は引き継がれる
-                tmp *= HeroSpearLightningMultiplier(attacker, defender);
+                tmp *= HeroSpearLightningMultiplier(attacker, hitDefender);
                 baseDamage = static_cast<int>((tmp));
 
                 if (!kaihi) {
-                    ProcessRage(position, baseDamage, players, defender);
+                    ProcessRage(position, baseDamage, players, hitDefender);
                     (*position)++; //目を覚ました
                     (*position)++; //不明 0x021e54fc
                 } else {
                     baseDamage = 0;
                 }
 
-                preHP[defender] = std::max(0, preHP[defender] - baseDamage);
+                preHP[hitDefender] = std::max(0, preHP[hitDefender] - baseDamage);
+                multithrustDamageByTarget[hitDefender] += baseDamage;
                 totalDamage += baseDamage;
-                if (preHP[defender] <= 0) {
+                if (preHP[1] <= 0 && preHP[2] <= 0 && preHP[3] <= 0) {
                     return totalDamage;
                 }
             }
@@ -2012,6 +2046,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             }
             resetCombo(NowState);
             return totalDamage;
+            }
         case MERA_ZOMA:
             (*position) += 2;
             (*position)++; //0x021ec6f8 不明
