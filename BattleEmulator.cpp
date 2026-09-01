@@ -1548,7 +1548,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 // exactly these six RNG calls while skipping 0x02158ac4/0x021e54fc.
                 for (int rageActor = 1; rageActor < 4; ++rageActor) {
                     (*position)++; // rage判定, max: 100, lr: 0x021eb8c8
-                    (void)lcg::intRangeRand(position, 2, 4); // max: 3, lr: 0x021eb8f0
+                    (*position)++;//(void)lcg::intRangeRand(position, 2, 4); // max: 3, lr: 0x021eb8f0
                 }
             }
             if (!players[attacker].specialCharge && lcg::getPercent(position, 100) < 1) {

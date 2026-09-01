@@ -132,7 +132,7 @@ uint8_t lcg::getSeed(int *position) {
     return result;
 }
 
-int32_t lcg::getTop32(int *position) {
+[[nodiscard]] int32_t lcg::getTop32(int *position) {
     assert(position != nullptr);
     assert((*position) < ARRAY_SIZE);
 
@@ -148,7 +148,7 @@ int32_t lcg::getTop32(int *position) {
     return result;
 }
 
-int lcg::getPercent(int *position, int max) {
+[[nodiscard]] int lcg::getPercent(int *position, int max) {
     assert(position != nullptr);
     assert((*position) < ARRAY_SIZE);
 
@@ -168,7 +168,7 @@ int lcg::getPercent(int *position, int max) {
     return roundedResult;
 }
 
-double lcg::floatRand(int *position, double min, double max) {
+[[nodiscard]] double lcg::floatRand(int *position, double min, double max) {
     assert(position != nullptr);
     assert((*position) < ARRAY_SIZE);
 
@@ -186,7 +186,7 @@ double lcg::floatRand(int *position, double min, double max) {
     return min + u * (max - min);
 }
 
-double lcg::floatRandAttack(int *position) {
+[[nodiscard]] double lcg::floatRandAttack(int *position) {
     assert(position != nullptr);
     assert((*position) < ARRAY_SIZE);
 
@@ -216,6 +216,6 @@ double lcg::floatRandAttack(int *position) {
  * @note 指定されたpositionはインクリメントされます。
  * @note minおよびmaxは端の値を含みます。
  */
-int lcg::intRangeRand(int *position, int min, int max) {
+[[nodiscard]] int lcg::intRangeRand(int *position, int min, int max) {
     return min + getPercent(position, max - min + 1);
 }
