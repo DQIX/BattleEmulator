@@ -110,6 +110,28 @@ inline void AssertCameraMapping(const int action) noexcept {
                 std::span<const std::uint16_t>(currentActionActorIds.data(), currentActionActorIds.size()),
                 currentAction.attackFormationMode)) return false;
     }
+
+    // overlay_d_25:021E08BC has a second, distinct loop after the current/future
+    // suffix pass. It revisits actor participants from action records strictly
+    // before the current action, sharing the same visited set. Each previous
+    // action rebuilds the occupancy map before its actor chain is examined.
+    // BattleEmulator action records currently expose one acting BattleActorRef
+    // per action, which is the head/only member of the ROM +0x10 actor chain.
+    for (int previousIndex = 0; previousIndex < actionIndex; ++previousIndex) {
+        if (!RebuildPresentationOccupancy()) return false;
+        if (actions[previousIndex] < 0
+            || !actors[previousIndex].valid()
+            || !targets[previousIndex].valid()) continue;
+
+        const std::uint16_t actorId = Dq9ActorId(actors[previousIndex]);
+        const std::size_t actorSlot = FindPresentationActorIndex(actorId);
+        if (actorSlot >= visited.size() || visited[actorSlot]) continue;
+        visited[actorSlot] = true;
+        if (!IsActorPresentationMovementEligible(actorSlot, currentTargetId)) continue;
+
+        const std::uint16_t primaryTargetId = Dq9ActorId(targets[previousIndex]);
+        if (!PreparePreviousActionPresentationParticipant(actorId, primaryTargetId)) return false;
+    }
     return PlanCurrentActionRoutes(actionIndex);
 }
 
@@ -194,6 +216,8 @@ void camera::UnbindRuntimeState() noexcept {
 }
 
 void camera::Main(int *position, const int32_t *actions, const BattleActorRef *actors, const BattleActorRef *targets,
+                  const std::uint8_t *slot1ChildCounts,
+                  const std::uint16_t *slot1LastChildActionIds,
                   const int actionCount, uint64_t *NowState, bool preemptive1, bool bakuti,
                   const bool traceBoundaries) {
     (void)preemptive1;
@@ -209,6 +233,96 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
 
     bool preemptive = true;
     auto moture = false;
+    auto processSlot1CleanupPresentationRecord = [&](const int sourceActionIndex,
+                                                     const std::uint16_t actorId) noexcept {
+        if (!runtimeReady || actorId == kInvalidBattleActor
+            || slot1ChildCounts == nullptr
+            || sourceActionIndex < 0 || sourceActionIndex >= actionCount
+            || slot1ChildCounts[sourceActionIndex] == 0) {
+            return;
+        }
+
+        using CleanupAction = FreeCamera<metadata::kSlot1CleanupPresentationActionId>;
+        const auto& beforeCleanup = ThreadContext();
+        const std::size_t actorSlot = FindPresentationActorIndex(actorId);
+        const std::uint8_t actorAuxiliaryNode = actorSlot < beforeCleanup.presentationActorCount
+            ? beforeCleanup.presentationActors[actorSlot].auxiliaryNode
+            : std::uint8_t{0xff};
+        const TriggerDecision cleanupDecision = Decide<CleanupAction>({
+            .actorId = actorId,
+            .targetId = actorId,
+            .turnActionIndex = static_cast<std::uint16_t>(beforeCleanup.presentationActionRecordIndex + 1),
+            .targetAuxiliaryNode = actorAuxiliaryNode,
+        });
+
+        DEBUG_TRACE_IF(traceBoundaries,
+                       std::cout << "TRACE presentation slot1-child sourceActionIndex=" << sourceActionIndex
+                                 << " count=" << static_cast<unsigned>(slot1ChildCounts[sourceActionIndex])
+                                 << " childAction="
+                                 << (slot1LastChildActionIds != nullptr
+                                         ? slot1LastChildActionIds[sourceActionIndex]
+                                         : UINT16_C(0xffff))
+                                 << " syntheticAction="
+                                 << metadata::kSlot1CleanupPresentationActionId
+                                 << " actor=0x" << std::hex << actorId << std::dec
+                                 << " call=" << cleanupDecision.callFreeCamera
+                                 << " param5=" << cleanupDecision.param5 << '\n');
+
+        if (cleanupDecision.callFreeCamera) {
+            onFreeCameraMove(position,
+                             -1,
+                             cleanupDecision.param5 ? 1 : 0,
+                             NowState,
+                             traceBoundaries);
+        }
+        constexpr std::uint8_t cleanupTrackingRngCount =
+            metadata::TrackingCameraOneRngCount(metadata::kSlot1CleanupPresentationActionId);
+        for (std::uint8_t trackingIndex = 0; trackingIndex < cleanupTrackingRngCount; ++trackingIndex) {
+            DEBUG_TRACE_IF(traceBoundaries,
+                           std::cout << "TRACE rng lr=0x0216f0e4 max=8 consume=" << *position << '\n');
+            (*position)++;
+        }
+
+        (void)AppendSlot1CleanupPresentationRecord(actorId);
+        (void)ApplyKnownRosterField4PostActionCompatibility(
+            metadata::PresentationType(metadata::kSlot1CleanupPresentationActionId)
+        );
+
+#if defined(gerunikku)
+        if (gCameraDebugCapture && gCameraDebugEventCount < gCameraDebugEvents.size()) {
+            auto& event = gCameraDebugEvents[gCameraDebugEventCount++];
+            event = {
+                .turnSerial = debugTurnSerial,
+                .actionIndex = sourceActionIndex,
+                .commonActionId = -1,
+                .dq9ActionId = metadata::kSlot1CleanupPresentationActionId,
+                .actorId = actorId,
+                .targetId = actorId,
+                .triggerSource = static_cast<std::uint8_t>(cleanupDecision.source),
+                .mapped = true,
+                .runtimeDecisionAvailable = true,
+                .runtimeCallFreeCamera = cleanupDecision.callFreeCamera,
+                .runtimeParam5 = cleanupDecision.param5,
+                .runtimeResetOnly = cleanupDecision.resetOnly,
+                .productionCalledFreeCamera = cleanupDecision.callFreeCamera,
+                .syntheticPresentationRecord = true,
+                .slot1ChildCount = slot1ChildCounts[sourceActionIndex],
+                .slot1LastChildActionId = static_cast<std::uint16_t>(
+                    slot1LastChildActionIds != nullptr
+                        ? slot1LastChildActionIds[sourceActionIndex]
+                        : UINT16_C(0xffff)
+                ),
+            };
+            const auto& state = ThreadContext();
+            event.presentationActorCount = state.presentationActorCount;
+            for (std::size_t index = 0;
+                 index < state.presentationActorCount && index < event.startNodesAfter.size(); ++index) {
+                event.startNodesBefore[index] = state.presentationActors[index].startNode;
+                event.startNodesAfter[index] = state.presentationActors[index].startNode;
+            }
+        }
+#endif
+    };
     for (int i = 0; i < actionCount; ++i) {
         const int32_t after = actions[i];
         if (after < 0) break;
@@ -244,7 +358,7 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                     runtimeDecision = binding->decide({
                         .actorId = runtimeActorId,
                         .targetId = runtimeTargetId,
-                        .turnActionIndex = static_cast<std::uint16_t>(i),
+                        .turnActionIndex = static_cast<std::uint16_t>(presentationState.presentationActionRecordIndex + 1),
                         .targetAuxiliaryNode = targetAuxiliaryNode,
                     });
                     hasRuntimeDecision = true;
@@ -290,6 +404,9 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                 .turnSerial = debugTurnSerial,
                 .actionIndex = i,
                 .commonActionId = after,
+                .dq9ActionId = actionMetadata != nullptr
+                    ? actionMetadata->dq9ActionId
+                    : metadata::kInvalidActionId,
                 .actorId = runtimeActorId,
                 .targetId = runtimeTargetId,
                 .actorRouteCount = actorRouteCount,
@@ -304,6 +421,15 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                 .runtimeResetOnly = runtimeDecision.resetOnly,
                 .manualRuleWouldCall = manualWouldCall,
                 .productionCalledFreeCamera = productionWouldCall,
+                .syntheticPresentationRecord = false,
+                .slot1ChildCount = static_cast<std::uint8_t>(
+                    slot1ChildCounts != nullptr ? slot1ChildCounts[i] : UINT8_C(0)
+                ),
+                .slot1LastChildActionId = static_cast<std::uint16_t>(
+                    slot1LastChildActionIds != nullptr
+                        ? slot1LastChildActionIds[i]
+                        : UINT16_C(0xffff)
+                ),
             };
             const auto& state = ThreadContext();
             debugEvent.presentationActorCount = state.presentationActorCount;
@@ -355,6 +481,7 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                 );
             }
             (void)CompleteActionPresentation(runtimeActorId, i);
+            processSlot1CleanupPresentationRecord(i, runtimeActorId);
             if (actionMetadata != nullptr) {
                 (void)ApplyKnownRosterField4PostActionCompatibility(actionMetadata->presentationType);
             }
@@ -398,6 +525,7 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
             );
             (void)CompleteActionPresentation(runtimeActorId, i);
             (void)ApplyKnownRosterField4PostActionCompatibility(actionMetadata->presentationType);
+            processSlot1CleanupPresentationRecord(i, runtimeActorId);
         }
 #if defined(gerunikku)
         finalizeDebugEvent();

@@ -937,6 +937,7 @@ int main(int argc, char* argv[]){
 				std::cout << "TRACE sequence-camera step=" << step
 				          << " actionIndex=" << event.actionIndex
 				          << " action=" << event.commonActionId
+				          << " dq9=" << event.dq9ActionId
 				          << " actor=0x" << std::hex << event.actorId
 				          << " target=0x" << event.targetId << std::dec
 				          << " route=" << static_cast<unsigned>(event.actorRouteCount)
@@ -951,6 +952,9 @@ int main(int argc, char* argv[]){
 				          << " reset=" << event.runtimeResetOnly
 				          << " manual=" << event.manualRuleWouldCall
 				          << " production=" << event.productionCalledFreeCamera
+				          << " synthetic=" << event.syntheticPresentationRecord
+				          << " slot1Count=" << static_cast<unsigned>(event.slot1ChildCount)
+				          << " slot1Child=" << event.slot1LastChildActionId
 				          << " nodesBefore=";
 				for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
 					if (actorIndex != 0) std::cout << ',';

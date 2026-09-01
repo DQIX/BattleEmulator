@@ -39,6 +39,7 @@ struct CameraDebugEvent {
     int turnSerial{};
     int actionIndex{};
     int commonActionId{};
+    std::uint16_t dq9ActionId{0xffff};
     std::uint16_t actorId{0xffff};
     std::uint16_t targetId{0xffff};
     std::uint8_t actorRouteCount{};
@@ -53,6 +54,9 @@ struct CameraDebugEvent {
     bool runtimeResetOnly{};
     bool manualRuleWouldCall{};
     bool productionCalledFreeCamera{};
+    bool syntheticPresentationRecord{};
+    std::uint8_t slot1ChildCount{};
+    std::uint16_t slot1LastChildActionId{0xffff};
     std::uint8_t presentationActorCount{};
     std::array<std::uint8_t, kMaxPresentationActors> startNodesBefore{};
     std::array<std::uint8_t, kMaxPresentationActors> startNodesAfter{};
@@ -71,6 +75,8 @@ public:
     static void Main(int *position, const int32_t *actions,
                      const dq9::freecam::fast::BattleActorRef *actors,
                      const dq9::freecam::fast::BattleActorRef *targets,
+                     const std::uint8_t *slot1ChildCounts,
+                     const std::uint16_t *slot1LastChildActionIds,
                      int actionCount, uint64_t *NowState, bool preemptive, bool bakuti,
                      bool traceBoundaries = false);
 

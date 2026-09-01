@@ -20,12 +20,25 @@
 thread_local int32_t actions[8];
 thread_local dq9::freecam::fast::BattleActorRef actionActors[8];
 thread_local dq9::freecam::fast::BattleActorRef actionTargets[8];
+thread_local std::uint8_t actionPresentationSlot1ChildCounts[8]{};
+thread_local std::uint16_t actionPresentationSlot1LastChildActionIds[8]{};
 thread_local dq9::freecam::fast::BattleActorRef battleActorRefs[4];
 thread_local int actionsPosition = 0;
 thread_local int preHP[4] = {0, 0, 0, 0};
 thread_local int multithrustDamageByTarget[4] = {0, 0, 0, 0};
 thread_local bool player0_has_initiative = false;
 thread_local bool TiggerSkyAttack = false;
+
+namespace {
+void AppendLastActionPresentationChildSlot1(const std::uint16_t dq9ActionId) noexcept {
+    if (actionsPosition <= 0 || actionsPosition > 8) return;
+    const std::size_t index = static_cast<std::size_t>(actionsPosition - 1);
+    if (actionPresentationSlot1ChildCounts[index] != UINT8_MAX) {
+        ++actionPresentationSlot1ChildCounts[index];
+    }
+    actionPresentationSlot1LastChildActionIds[index] = dq9ActionId;
+}
+}
 
 #if defined(gerunikku)
 namespace {
@@ -677,6 +690,10 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         // camera::Main() is given that exact count. Clearing the unused tail on
         // every searched turn only writes memory that cannot be observed.
         actionsPosition = 0;
+        std::fill(std::begin(actionPresentationSlot1ChildCounts),
+                  std::end(actionPresentationSlot1ChildCounts), UINT8_C(0));
+        std::fill(std::begin(actionPresentationSlot1LastChildActionIds),
+                  std::end(actionPresentationSlot1LastChildActionIds), UINT16_C(0xffff));
         double speed0 = Player::isPlayerAlive(players[0]) && players[0].speed > 0
             ? players[0].speed * lcg::floatRand(position, 0.51, 1.0) // float, lr: 0x0215efac
             : -1.0;
@@ -895,6 +912,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         players[actor].hasMagicMirror = false;
                         players[actor].MagicMirrorTurn = 0;
                         players[actor].MagicMirrorRecoveryTurn = 0;
+                        AppendLastActionPresentationChildSlot1(
+                            dq9::freecam::fast::metadata::kMagicMirrorRecoveryPresentationChildActionId
+                        );
                     }
                 }
             }
@@ -1069,6 +1089,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                                         players[0].hasMagicMirror = false;
                                         players[0].MagicMirrorTurn = 0;
                                         players[0].MagicMirrorRecoveryTurn = 0;
+                                        AppendLastActionPresentationChildSlot1(
+                                            dq9::freecam::fast::metadata::kMagicMirrorRecoveryPresentationChildActionId
+                                        );
                                     }
                                 }
 
@@ -1204,7 +1227,10 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                            std::cout << "TRACE rng lr=0x0215962c consume=" << *position << '\n');
             (*position)++; // max: 100, lr: 0x0215962c
         }
-        camera::Main(position, actions, actionActors, actionTargets, actionsPosition,
+        camera::Main(position, actions, actionActors, actionTargets,
+                     actionPresentationSlot1ChildCounts,
+                     actionPresentationSlot1LastChildActionIds,
+                     actionsPosition,
                      NowState, player0_has_initiative, TiggerSkyAttack, traceBoundaries);
     }
     if (mode != -1 && mode != -2) {
@@ -1357,6 +1383,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
     actions[actionsPosition] = Id;
     actionActors[actionsPosition] = attacker >= 0 && attacker < 4 ? battleActorRefs[attacker] : dq9::freecam::fast::BattleActorRef{};
     actionTargets[actionsPosition] = defender >= 0 && defender < 4 ? battleActorRefs[defender] : dq9::freecam::fast::BattleActorRef{};
+    actionPresentationSlot1ChildCounts[actionsPosition] = 0;
+    actionPresentationSlot1LastChildActionIds[actionsPosition] = UINT16_C(0xffff);
     ++actionsPosition;
     int baseDamage = 0;
     double tmp, tmp1 = 0;

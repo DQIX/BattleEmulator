@@ -175,6 +175,21 @@ struct ItemModelMapEntry {
     return generated::kActionMetadataBytes[kPresentationTypeOffset + actionId];
 }
 
+// Engine-internal presentation actions recovered from overlay code. Their
+// fixed action metadata is still read from the ROM-mined constexpr tables;
+// only the IDs themselves come from the documented code immediates.
+// - 451 / 0x01C3: literal loaded at overlay_d_25:0215A4F8 before
+//   FUN_02159C68(..., slot=1) on Magic-Mirror recovery.
+// - 944 / 0x03B0: stored at overlay_d_25:0215DB54 by FUN_0215DA50 when
+//   actorSnapshot[0x27] (slot-1 child count) is nonzero.
+inline constexpr std::uint16_t kMagicMirrorRecoveryPresentationChildActionId = UINT16_C(451);
+inline constexpr std::uint16_t kSlot1CleanupPresentationActionId = UINT16_C(944);
+
+static_assert(PresentationType(kMagicMirrorRecoveryPresentationChildActionId) == 2);
+static_assert(AttackFormationMode(kMagicMirrorRecoveryPresentationChildActionId) == 3);
+static_assert(PresentationType(kSlot1CleanupPresentationActionId) == 0);
+static_assert(AttackFormationMode(kSlot1CleanupPresentationActionId) == 0);
+
 [[nodiscard]] constexpr bool HasActionClassification(const std::uint16_t actionId) {
     return actionId < kActionCount && generated::kActionClassificationPresent[actionId] != 0;
 }
@@ -392,10 +407,10 @@ enum class TargetScope : std::uint8_t {
 // needed. The full ROM table is read only during constant evaluation; each
 // instantiated action retains only its own actor-membership column plus fixed
 // action/fallback values.
-template <std::uint16_t Dq9ActionId, int BattleEmulatorCommonId>
+template <std::uint16_t Dq9ActionId, int BattleEmulatorCommonId = -1>
 struct FreeCamera {
     static_assert(Dq9ActionId < metadata::kActionCount);
-    static_assert(BattleEmulatorCommonId >= 0);
+    static_assert(BattleEmulatorCommonId >= -1);
 
     static inline constexpr std::uint16_t dq9ActionId = Dq9ActionId;
     static inline constexpr int commonActionId = BattleEmulatorCommonId;
@@ -577,6 +592,11 @@ struct RuntimeState {
     std::uint8_t retryCounter{};
     int previousCommonActionId{};
     int previousActionIndex{-1};
+    // ROM controller+0x57C8 indexes the 0x28-byte presentation action-record
+    // array, which includes synthetic records such as 944. Keep that index
+    // separate from previousActionIndex, which validates the real
+    // BattleEmulator action array used by the route planner.
+    int presentationActionRecordIndex{-1};
     int currentTurnActionCount{};
     ActionState previousAction{};
     // Exact semantic name is intentionally not guessed. This remains the raw
@@ -648,6 +668,7 @@ inline void ResetBattle() noexcept {
     }
     state.battleActive = true;
     state.previousActionIndex = -1;
+    state.presentationActionRecordIndex = -1;
     state.currentTurnActionCount = static_cast<int>(actionOrder.size());
     state.currentTurnValid = true;
     state.turnActionActors.fill(detail::kInvalidPresentationActor);
@@ -987,6 +1008,63 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     return true;
 }
 
+[[nodiscard]] inline bool RebuildPresentationOccupancy() noexcept {
+    auto& state = ThreadContext();
+    if (!state.presentationGoalSetupActive
+        || state.presentationActorCount > state.presentationActors.size()) return false;
+    state.presentationOccupancy = detail::BuildPresentationOccupancy(
+        std::span<const detail::PresentationActorState>(
+            state.presentationActors.data(),
+            state.presentationActorCount
+        )
+    );
+    return true;
+}
+
+// Exact previous-action participant cleanup from overlay_d_25:021E0D74..
+// 021E0F20. For participants belonging to actions earlier than the current
+// presentation record, 021E08BC first tries to reuse presentation+0x1E as the
+// goal when that node is compatible with the actor class, otherwise it runs
+// the ordinary fallback-goal chooser. It then unconditionally clears +0x1E
+// through 0204A1FC(actor, 0xFF), and refreshes +0x1F from the participant's
+// resolved target goal. This is battle-engine state maintenance, not an
+// action- or monster-specific camera rule.
+[[nodiscard]] inline bool PreparePreviousActionPresentationParticipant(
+    const std::uint16_t actorId,
+    const std::uint16_t primaryTargetId
+) noexcept {
+    auto& state = ThreadContext();
+    if (!state.presentationGoalSetupActive) return false;
+    const std::size_t actorIndex = FindPresentationActorIndex(actorId);
+    if (actorIndex >= state.presentationActorCount) return false;
+
+    auto& actor = state.presentationActors[actorIndex];
+    const std::uint8_t auxiliary = actor.auxiliaryNode;
+    const std::uint8_t actorClass = detail::PresentationClassForActor(actor.actorId);
+    const bool canReuseAuxiliary = auxiliary < state.presentationOccupancy.size()
+        && (state.presentationOccupancy[auxiliary] < UINT8_C(0xf2)
+            || state.presentationOccupancy[auxiliary] == actorClass);
+    if (canReuseAuxiliary) {
+        actor.goalNode = auxiliary;
+    } else {
+        const detail::PresentationGoalDecision decision = detail::ChooseFallbackPresentationGoal(
+            actor,
+            state.presentationOccupancy
+        );
+        if (!decision.valid) return false;
+        actor.goalNode = decision.goalNode;
+    }
+
+    actor.auxiliaryNode = detail::kInvalidPresentationNode;
+
+    const std::uint16_t resolvedTargetId = detail::ResolvePresentationTarget(actor, primaryTargetId);
+    const std::size_t targetIndex = FindPresentationActorIndex(resolvedTargetId);
+    if (targetIndex < state.presentationActorCount) {
+        actor.targetNode = state.presentationActors[targetIndex].goalNode;
+    }
+    return true;
+}
+
 [[nodiscard]] inline bool PlanCurrentActionRoutes(const int actionIndex) noexcept {
     auto& state = ThreadContext();
     if (!state.currentTurnValid
@@ -1117,7 +1195,8 @@ template <typename Action>
     const std::size_t actorIndex = FindPresentationActorIndex(input.actorId);
     const bool actorPresentationFlag80 = actorIndex < state.presentationActorCount
         && (state.presentationActors[actorIndex].presentationFlags & detail::kPresentationFlag80) != 0;
-    const bool consecutiveAttackReset = input.turnActionIndex > 0
+    const bool hasPriorPresentationRecord = state.presentationActionRecordIndex >= 0;
+    const bool consecutiveAttackReset = hasPriorPresentationRecord
         && Action::dq9ActionId == 1
         && state.hasPreviousAction
         && state.previousAction.dq9ActionId == 1
@@ -1138,7 +1217,7 @@ template <typename Action>
     // controller+0x57C8 > 0. 021DC394..021DC3C0 then resolves actor[0]
     // from that previous record and compares it with the current target ID.
     // It is not a comparison against the current acting actor.
-    const bool targetIsPreviousActionActor = input.turnActionIndex > 0
+    const bool targetIsPreviousActionActor = hasPriorPresentationRecord
         && state.hasPreviousAction
         && input.targetAuxiliaryNode != 0xff
         && input.targetId == state.previousAction.actorId;
@@ -1148,7 +1227,7 @@ template <typename Action>
     return {
         source,
         true,
-        input.turnActionIndex == 0 || forceMode1Exception,
+        !hasPriorPresentationRecord || forceMode1Exception,
         false,
     };
 }
@@ -1174,7 +1253,44 @@ template <typename Action>
     state.hasPreviousAction = true;
     state.previousCommonActionId = commonActionId;
     state.previousActionIndex = actionIndex;
+    ++state.presentationActionRecordIndex;
     state.previousAction = {dq9ActionId, actorId, targetId};
+    state.targetRecord02161720ActorId = kInvalidBattleActor;
+    return true;
+}
+
+// FUN_0215DA50 creates one DQ9 action 944 self-record for an actor snapshot
+// when slot-1 child count (snapshot+0x27) is nonzero, then clears that count.
+// This updates only the presentation-record history; the real action index is
+// deliberately unchanged so route planning continues to index the original
+// BattleEmulator action list.
+[[nodiscard]] inline bool AppendSlot1CleanupPresentationRecord(
+    const std::uint16_t actorId
+) noexcept {
+    auto& state = ThreadContext();
+    if (!state.battleActive || !state.currentTurnValid) return false;
+    const std::size_t actorIndex = FindPresentationActorIndex(actorId);
+    if (actorIndex >= state.presentationActorCount) return false;
+
+    auto& actor = state.presentationActors[actorIndex];
+    // Live 0x03B0 records leave the return/start node intact and invalidate
+    // the transient goal/aux/target presentation bytes before the next real
+    // action. These fields correspond to the observed 0xFF values used by
+    // FUN_0204A20C and the next 021DC1D4 selector pass.
+    actor.goalNode = detail::kInvalidPresentationNode;
+    actor.auxiliaryNode = detail::kInvalidPresentationNode;
+    actor.targetNode = detail::kInvalidPresentationNode;
+    state.nearestNodeCache[actorIndex] = {};
+    InvalidateCurrentRoutes(state);
+
+    state.hasPreviousAction = true;
+    state.previousCommonActionId = -1;
+    ++state.presentationActionRecordIndex;
+    state.previousAction = {
+        metadata::kSlot1CleanupPresentationActionId,
+        actorId,
+        actorId,
+    };
     state.targetRecord02161720ActorId = kInvalidBattleActor;
     return true;
 }

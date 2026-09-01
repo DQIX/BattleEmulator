@@ -210,6 +210,58 @@ ROM index3は action `1`, actor `0xC2`, target `0x00`。`0x021DC41C` のlive値�
 
 修正前C++は `.currentActorId = runtimeActorId` として `target == current actor` を比較していたため、このindex3を `param5=0` と誤判定していた。fast/reference runtimeの入力からこの曖昧なfieldを削除し、`turnActionIndex>0 && previousAction exists && currentTarget==previousAction.actorId` を直接判定する。
 
+## presentation child 451 -> internal action 944 の算出・再演手順
+この経路はゲルニック専用ではない。ROMのpresentation child slotとsynthetic action-record生成器をそのまま再現する。
+
+### 固定action metadataはROMから生成する
+`C:\Users\owner\Documents\tunnelworkspace\BattleArrow\build_freecam_action_metadata.mjs` はROMの `data/prm/actdata_a.gp2` / `data/prm/actdata_b.gp2` を読み、`freecam-action-metadata.bin` を生成する。451/944もこの通常経路から取得すること。2026-09-01のJP ROMでの再生成結果:
+- DQ9 action 451 (`0x01C3`): `fallbackLookupActionId=451`, `presentationType=2`, `attackFormationMode=3`。
+- DQ9 action 944 (`0x03B0`): `fallbackLookupActionId=944`, `presentationType=0`, `attackFormationMode=0`。
+その後 `BattleEmulator/camera/build_freecam_fast_generated.mjs` を実行し、`freecam_fast_generated.hpp` 等へconstexpr化する。C++本体へpresentationType/formation値を直書きしない。
+
+451/944というaction ID自体はboss tableではなくoverlay engine codeの即値なので、アドレスを根拠にする:
+- `0x0215A4F8`: `FUN_02159D0C` のMagic-Mirror recovery成功経路が `0x01C3` をロードし、`FUN_02159C68`へ渡す。
+- `0x0215DB54`: `FUN_0215DA50` が新しい0x28-byte action recordへ `0x03B0` をstoreする。
+
+### child slot 1 count の生成
+`FUN_02159C68` はpresentation child recordを作り、`FUN_02161604(actorSnapshot, childRecord, 1)` を呼ぶ。`FUN_02161604 @ 0x02161604` のcount更新は:
+- `0x02161620`: count base = `actorSnapshot + 0x26`。
+- `0x02161624`: `actorSnapshot[0x26 + slot]`を読む。
+- `0x02161628`: +1。
+- `0x0216162C`: 同じbyteへstore。
+slot=1なので、944生成器が読む `actorSnapshot+0x27` は **presentation child slot-1 count**。live write-watchでもproducerは `PC=0x0216162C`, `LR=0x02159CA0`, value=1。`0x02001970`で見える1は後述944生成時のsnapshot memcpy、`0x0215DB70`はsource count clearなのでproducerと誤認しない。
+
+Magic Mirror recoveryについては、`FUN_02159D0C` の `combat+0x84` branchだけが今回観測したchild 451を生成した。`FUN_0215AFF4` はcombat `+0x14 & 0x200`を確認し、成功時 `FUN_02089210` がbit 0x200、`+0x61`、`+0x84`をclearする。BattleEmulatorの対応は `hasMagicMirror`, `MagicMirrorTurn`, `MagicMirrorRecoveryTurn`。したがってruntimeでは「しっぷうづき後」などaction名で944を決めず、**そのreal action snapshotへslot1 childが実際に追加されたか**を保持する。
+
+### 944 record poolと生成条件
+`FUN_0215DA50` はsource 0x28-byte action recordのactor snapshotsを走査し、各snapshotについて `snapshot+0x27 != 0` をboolean gateとして1件だけ944 self-actionを作る。count値ぶん944を複数作るわけではない。生成後source snapshotの `+0x27` は `0x0215DB70` で0へ戻る。
+
+別boss/別Stateでpool addressを再計算する場合:
+- actor snapshot allocator `FUN_02160098`: `battle + 0x20 + battle[0x8E00] * 0x34`, 上限0x48件。
+- action record allocator `FUN_02160158`: `battle + 0x821C + battle[0x8E24] * 0x28`, 上限0x48件。
+- action record -> actor snapshot resolve: `FUN_02161814`。
+- snapshotをaction recordへattach: `FUN_021617E8`。
+絶対RAMアドレスをfixtureからコピーしない。
+
+`FUN_0215DA50` の944生成では、new snapshotを確保してsource snapshotを0x34 bytesコピーし、source側では `+0x04=0`, `+0x27=0`, `+0x1C=0xFFFF`, `+0x1E=0` をclearする。new action recordは944、actor/targetはselfになる。実presentation処理後にはactorのtransient goal/aux/targetが無効化されることをlive route probeでも確認している。
+
+### C++ runtimeでreal action indexとpresentation record indexを混同しない
+BattleEmulatorの `actions[]` はbattle実処理のreal action列で、route setupのreal indexとして使う。一方ROM `controller+0x57C8` は944を含む0x28-byte presentation action-record列を数える。944を`actions[]`へ物理挿入してreal indexをずらしてはいけない。
+
+`freecam_fast_runtime.hpp`では:
+- `previousActionIndex`: real BattleEmulator actionの連続性確認専用。
+- `presentationActionRecordIndex`: synthetic 944も含むROM presentation record index。
+- `previousAction`: `FUN_021626CC(controller)`が返す直前presentation record相当。944をappendしたら `{dq9ActionId=944, actor=self, target=self}`へ更新する。
+これにより次のreal actionの `021DC394..021DC3C0` previous-actor条件、first/later `param5`判定がROMと同じ履歴を見る。
+
+### seed 0x04176 Turn6での確認fixture
+固定列: Mirror Shield -> 一閃づき(Geruniku) -> ためる -> ザキ(Tekkomajin A, 成功) -> さみだれづき -> しっぷうづき(Geruniku)。BattleEmulator internal IDsは最後が `MERCURIAL_THRUST=44`。**DQ9 action 69と内部69(けものづき)を混同しない**。
+
+Turn6ではHeroのMagic-Mirror recovery成功によりslot1 child 451が1件付き、その直後synthetic 944が生成される。944自身のfixed metadata/freecam判定もROM-mined constexpr経路を通し、このfixtureでは`callFreeCamera=false`。
+期待camera RNGは:
+`#488 0216F0E4 -> #489 0216FE40 -> #490 0216FE40 -> #491 0216FE68 -> #492 0216FFF8`。
+ROM consumed=492に対しC++ next position=493、HPは `Hero=148, A=0, Geruniku=1458, B=364`。synthetic debug eventは `dq9=944, synthetic=1, slot1Count=1, slot1Child=451, call=0`、直後のGeruniku action10は`param5=0`。final positionだけでなくこのLR順・damage/HP・synthetic eventを同時に確認する。
+
 ## SKY_ATTACK 0ダメージ -> MERA_ZOMA の歴史的camera補正
 BattleEmulator内部 `SKY_ATTACK` はDQ9 action `540 (0x021C)`、`MERA_ZOMA` はDQ9 action `11 (0x000B)`。
 
