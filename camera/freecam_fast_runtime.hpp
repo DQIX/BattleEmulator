@@ -559,8 +559,10 @@ struct ActionRuntimeInput {
     std::uint16_t actorId{kInvalidBattleActor};
     std::uint16_t targetId{kInvalidBattleActor};
     std::uint16_t turnActionIndex{};
-    // FUN_0204A20C(targetActor): presentation object +0x1E.
-    // This is not the actor's roster/presentation-array index.
+    // ROM path: current action record (0216268C) -> target ID -> 0200FCC4(actor)
+    // -> actor+0x13C presentation pointer -> FUN_0204A20C/0204A214 -> presentation+0x1E.
+    // PresentationActorState::auxiliaryNode mirrors that +0x1E byte. This is not
+    // a party/enemy index or the presentationActors[] array index.
     std::uint8_t targetAuxiliaryNode{0xff};
     bool actorAndTargetHaveGeometry{};
     std::int32_t actorTargetDistance{};

@@ -163,7 +163,11 @@ later actionでmode1へ上げる条件は次の3系統で、`current target == c
 
 1. turn participantのpresentation route countが1人でも `>4`。
    `controller+0x57C8 != 0` のlater-action branchでparticipantを列挙し、`FUN_0204A264(actor)` の戻り値（presentation object `+0x34` route count）が5以上ならmode1側へ戻る。
-2. **現在actionのtarget ID == 直前action recordのactor[0] ID**。
+2. **現在actionのtarget ID == 直前action recordのactor[0] ID**。ただし、この比較にはtarget presentation `+0x1E != 0xFF` のgateがある。
+   - current target IDの取得経路: `FUN_0216268C(controller)` (`0x0216268C`) でcurrent 0x28-byte action recordを得る。record `+0x14` のtarget referenceからtarget actor IDを得て、`getDynamicAllocatedMemIndexStartAddr()` -> `FUN_0200FCC4(heap,targetId)` でtarget battle actor objectを引く。
+   - `FUN_0204A20C(targetActor)` (`0x0204A20C`) がselectorで使うraw target presentation値を返す。実装は `0x0204A20C: LDR r0,[r0,#0x13C]` でactor object `+0x13C` のpresentation object pointerを読み、nullなら `0xFF`、非nullなら `0x0204A214: LDRBNE r0,[r0,#0x1E]` でpresentation object `+0x1E` を返す。
+   - C++の `PresentationActorState::auxiliaryNode` はこのpresentation object `+0x1E`を保持するfieldなので、`targetAuxiliaryNode = presentationActors[FindPresentationActorIndex(currentTargetId)].auxiliaryNode` と算出する。**presentation配列のindex、party index、enemy indexを代用してはいけない**。target actorがruntime presentation rosterに存在しない場合だけROMのnull経路に合わせて`0xFF`。
+   - `021DC1D4`では `FUN_0204A20C(targetActor) != 0xFF` のときだけ、以下のprevious-action actor一致判定へ進む。したがって別ボスで再演する場合も、固定値を持たず「current action record -> target ID -> actor object -> actor+0x13C presentation pointer -> presentation+0x1E」のpathから毎回算出する。
    - `0x021DC394`: `r0=controller`。
    - `0x021DC398`: `BL 0x021626CC`。
    - `FUN_021626CC` は `controller+0x57C8==0` なら0。1以上なら `[controller+0x218] + 0x821C + (index-1)*0x28`、つまり直前action recordを返す。
@@ -182,6 +186,22 @@ later actionでmode1へ上げる条件は次の3系統で、`current target == c
    - `0x021DC414`: radiusを加算。
    - `0x021DC41C`: `CMP distance, (radiusA+radiusB) ASR #1`。
    - `0x021DC420..0x021DC424`: `distance < (radiusA+radiusB)/2` ならforce-mode1 flagを1にする。
+
+## internal action `944 / 0x03B0` の生成規則
+`0x03B0`を特定の技IDへ手書きで結び付けてはいけない。ROMではaction record内のactor snapshotがpresentation child slot 1を持つと、後処理でcleanup用のinternal self-action `0x03B0` が追加される。
+
+再演に必要な構造とアドレスは次の通り。
+
+- action recordのactor snapshot列はlinked list。`FUN_021617E8(actionRecord, actorSnapshot)` (`0x021617E8`) は `actionRecord+0x10` から空linkを探し、次snapshot pointer `actorSnapshot+0x30` を辿って末尾へ追加し、`actionRecord+0x08` のactor snapshot countを1増やす。
+- snapshotをindexで読むのは `FUN_02161814(actionRecord,index)` (`0x02161814`)。`actionRecord+0x10` を先頭としてsnapshot `+0x30` をindex回辿る。したがって `+0x27` はbattle actor objectのfieldではなく、この **0x34-byte action actor snapshot** のfield。
+- snapshot poolは `FUN_02160098(battle)` (`0x02160098`) が算出する。countは `battle+0x8E00`、strideは`0x34`、先頭は`battle+0x20`、上限は`0x48`。よって `snapshot = battle + 0x20 + (battle[0x8E00] * 0x34)`。この式から算出し、fixtureの絶対RAMアドレスを固定値にしない。
+- action record poolは `FUN_02160158(battle)` (`0x02160158`) が算出する。action countは`battle+0x8E24`、strideは`0x28`、先頭は`battle+0x821C`、上限は`0x48`。よって `record = battle + 0x821C + (*(u32*)(battle+0x8E24) * 0x28)`。
+- presentation childをsnapshotへ追加する汎用関数は `FUN_02161604(snapshot, child, slot)` (`0x02161604`)。`0x02161604`で `snapshot + slot*4` のlinked-list headを選び、child `+0x20` をnext linkとして末尾へappendする。その後 `0x02161620`でcount base `snapshot+0x26` を作り、`0x02161624..0x0216162C` で `snapshot[0x26+slot]++`。
+- `FUN_02159C68` (`0x02159C68`) は `0x02159C98: MOV r2,#1` -> `0x02159C9C: BL 0x02161604` なので、ここを通るpresentation/status childは **slot=1**。したがってproducer側で増えるcount byteは `snapshot+0x27`。
+- `FUN_0215DA50` (`0x0215DA50`) がsource actionの各snapshotを `FUN_02161814` で列挙し、`0x0215DABC: LDRB r0,[r9,#0x27]` -> `0x0215DAC0: CMP r0,#0` でslot1 countを検査する。0なら何も追加しない。
+- 非0なら新action record/snapshotをpoolから確保し、`0x0215DB50: MOV r0,#0x3B0` -> `0x0215DB54: STRH r0,[r8]` でinternal action IDを生成する。元snapshotは0x34 bytesコピーされた後、`0x0215DB6C`でoriginal `+0x04=0`、`0x0215DB70`でoriginal `+0x27=0`、`0x0215DB74`でoriginal `+0x1C`をreset、`0x0215DB78`でoriginal `+0x1E=0`。新snapshotは `FUN_021617E8` で0x03B0 recordへattachされる。
+
+seed `0x04176` のdynamic write-watchでも、`snapshot+0x27=1`の真正なproducer PCは `0x0216162C`、LR=`0x02159CA0`（`FUN_02159C68`からslot=1で呼んだ戻り先）だった。`0x02001970`で見えるvalue=1は0x03B0生成時の0x34-byte `memcpy`による複製でproducerではなく、`0x0215DB70`はclear。後続AIはこのPC/LRと上記pool式から再演し、特定ボスのsnapshot絶対アドレスを保存しないこと。
 
 ### seed `0x42F3C` で見つかった実装バグ
 `battle.dst`, initial position 0, Hero normal attack→enemy:0 の1turnでROMとC++のbattle coreは一致したが、camera RNGだけずれた。
