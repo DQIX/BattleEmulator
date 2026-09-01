@@ -885,11 +885,16 @@ int main(int argc, char* argv[]){
 		                                          currentSeedPosition + 1)) {
 			throw std::runtime_error("failed to initialize trace search state");
 		}
-		camera::SetDebugCapture(true);
+		camera::SetDebugCapture(false);
 		camera::ClearDebugEvents();
 		std::size_t cameraEventOffset = 0;
 
 		for (int step = 0; step < argc - 4; ++step) {
+			if (step == argc - 5) {
+				camera::SetDebugCapture(true);
+				camera::ClearDebugEvents();
+				cameraEventOffset = 0;
+			}
 			const std::string_view token(argv[step + 4]);
 			const std::size_t separator = token.find(':');
 			const int action = std::stoi(std::string(token.substr(0, separator)), nullptr, 0);

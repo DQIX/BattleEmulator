@@ -158,7 +158,7 @@ bool ValidateDecisionEdges() {
         .actorId = Dq9ActorId(actorRef),
         .targetId = Dq9ActorId(targetRef),
         .turnActionIndex = 0,
-        .targetPresentationSlot = 1,
+        .targetAuxiliaryNode = 1,
     });
     if (suppressed.callFreeCamera) return false;
 
@@ -169,7 +169,7 @@ bool ValidateDecisionEdges() {
         .actorId = Dq9ActorId(actorRef),
         .targetId = Dq9ActorId(targetRef),
         .turnActionIndex = 0,
-        .targetPresentationSlot = 1,
+        .targetAuxiliaryNode = 1,
     });
     if (!firstAction.callFreeCamera || !firstAction.param5) return false;
 
@@ -177,7 +177,7 @@ bool ValidateDecisionEdges() {
         .actorId = Dq9ActorId(actorRef),
         .targetId = Dq9ActorId(targetRef),
         .turnActionIndex = 1,
-        .targetPresentationSlot = 1,
+        .targetAuxiliaryNode = 1,
     });
     if (!laterAction.callFreeCamera || laterAction.param5) return false;
 
@@ -187,7 +187,7 @@ bool ValidateDecisionEdges() {
         .actorId = Dq9ActorId(actorRef),
         .targetId = Dq9ActorId(targetRef),
         .turnActionIndex = 1,
-        .targetPresentationSlot = 1,
+        .targetAuxiliaryNode = 1,
     });
     if (!longRoute.callFreeCamera || !longRoute.param5) return false;
     state.currentRoutes.actors[1].count = 0;
@@ -200,7 +200,7 @@ bool ValidateDecisionEdges() {
         .actorId = Dq9ActorId(actorRef),
         .targetId = Dq9ActorId(targetRef),
         .turnActionIndex = 1,
-        .targetPresentationSlot = 1,
+        .targetAuxiliaryNode = 1,
     });
     if (!previousActorTarget.param5) return false;
 
@@ -210,7 +210,7 @@ bool ValidateDecisionEdges() {
         .actorId = Dq9ActorId(actorRef),
         .targetId = Dq9ActorId(targetRef),
         .turnActionIndex = 1,
-        .targetPresentationSlot = 1,
+        .targetAuxiliaryNode = 1,
         .actorAndTargetHaveGeometry = true,
         .actorTargetDistance = 10,
         .actorRadius = 20,
@@ -258,7 +258,7 @@ bool ValidateConsecutiveAttackReset() {
         .actorId = Dq9ActorId(actorRef),
         .targetId = Dq9ActorId(targetRef),
         .turnActionIndex = 1,
-        .targetPresentationSlot = 1,
+        .targetAuxiliaryNode = 1,
     });
     return decision.resetOnly && !decision.callFreeCamera && decision.source == TriggerSource::reset_only;
 }

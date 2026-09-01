@@ -559,7 +559,9 @@ struct ActionRuntimeInput {
     std::uint16_t actorId{kInvalidBattleActor};
     std::uint16_t targetId{kInvalidBattleActor};
     std::uint16_t turnActionIndex{};
-    std::uint8_t targetPresentationSlot{0xff};
+    // FUN_0204A20C(targetActor): presentation object +0x1E.
+    // This is not the actor's roster/presentation-array index.
+    std::uint8_t targetAuxiliaryNode{0xff};
     bool actorAndTargetHaveGeometry{};
     std::int32_t actorTargetDistance{};
     std::int32_t actorRadius{};
@@ -1136,7 +1138,7 @@ template <typename Action>
     // It is not a comparison against the current acting actor.
     const bool targetIsPreviousActionActor = input.turnActionIndex > 0
         && state.hasPreviousAction
-        && input.targetPresentationSlot != 0xff
+        && input.targetAuxiliaryNode != 0xff
         && input.targetId == state.previousAction.actorId;
     const bool actorsOverlap = input.actorAndTargetHaveGeometry
         && input.actorTargetDistance < ((input.actorRadius + input.targetRadius) >> 1);

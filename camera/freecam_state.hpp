@@ -103,7 +103,8 @@ struct TriggerDerivationInput {
 
     // Raw actor presentation state used by 021E03AC and 021DC1D4.
     bool actorPresentationFlag80{};
-    std::uint8_t targetPresentationSlot{0xff};
+    // FUN_0204A20C(targetActor): presentation object +0x1E.
+    std::uint8_t targetAuxiliaryNode{0xff};
 
     // Raw geometry used by the overlap exception in 021DC1D4.
     bool actorAndTargetHaveGeometry{};
@@ -235,7 +236,7 @@ struct TriggerDerivationInput {
     // overlay_d_25:021626CC selects battle+0x821C+(index-1)*0x28,
     // then 02161814(previousRecord, 0) resolves previous actor[0].
     const bool targetIsPreviousActionActor = input.turnActionIndex > 0
-        && input.targetPresentationSlot != 0xff
+        && input.targetAuxiliaryNode != 0xff
         && input.current.targetId == input.previous.actorId;
     const bool actorsOverlap = input.actorAndTargetHaveGeometry
         && input.actorTargetDistance < ((input.actorRadius + input.targetRadius) >> 1);

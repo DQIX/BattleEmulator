@@ -237,11 +237,15 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                 hasPresentationSetup = true;
                 if (binding != nullptr && binding->mapped()) {
                     const std::size_t targetSlot = FindPresentationActorIndex(runtimeTargetId);
+                    const auto& presentationState = ThreadContext();
+                    const std::uint8_t targetAuxiliaryNode = targetSlot < presentationState.presentationActorCount
+                        ? presentationState.presentationActors[targetSlot].auxiliaryNode
+                        : std::uint8_t{0xff};
                     runtimeDecision = binding->decide({
                         .actorId = runtimeActorId,
                         .targetId = runtimeTargetId,
                         .turnActionIndex = static_cast<std::uint16_t>(i),
-                        .targetPresentationSlot = targetSlot < 0xff ? static_cast<std::uint8_t>(targetSlot) : std::uint8_t{0xff},
+                        .targetAuxiliaryNode = targetAuxiliaryNode,
                     });
                     hasRuntimeDecision = true;
                 }
