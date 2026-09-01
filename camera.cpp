@@ -156,7 +156,11 @@ bool camera::ResetBattle(const CameraPresentationActor *actors, const std::size_
             })) return false;
         switch (source.membershipKind) {
             case CameraMembershipKind::player:
-                if (!SetPlayerMembershipProfile(index, source.membershipKeyA, source.membershipKeyB)) return false;
+                if (!SetPlayerMembershipProfileFromEquipment(
+                        index,
+                        source.membershipKeyA,
+                        source.membershipKeyB
+                    )) return false;
                 break;
             case CameraMembershipKind::monster:
                 if (!SetMonsterMembershipProfile(index, source.membershipKeyA)) return false;
@@ -269,6 +273,14 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
             const bool productionWouldCall = hasRuntimeDecision
                 ? runtimeDecision.callFreeCamera
                 : manualWouldCall;
+            const std::uint32_t membershipProfile =
+                PresentationMembershipProfileForActor(runtimeActorId);
+            const std::uint16_t actorMembershipCount = hasActionMetadata
+                ? DecodeMembershipCell(metadata::ActorMembershipPacked(
+                    membershipProfile,
+                    actionMetadata->dq9ActionId
+                )).count
+                : 0;
             debugEventIndex = gCameraDebugEventCount;
             auto& debugEvent = gCameraDebugEvents[gCameraDebugEventCount++];
             debugEvent = {
@@ -279,6 +291,8 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                 .targetId = runtimeTargetId,
                 .actorRouteCount = actorRouteCount,
                 .maxRouteCount = maxRouteCount,
+                .membershipProfile = membershipProfile,
+                .actorMembershipCount = actorMembershipCount,
                 .triggerSource = static_cast<std::uint8_t>(runtimeDecision.source),
                 .mapped = binding != nullptr && binding->mapped(),
                 .runtimeDecisionAvailable = hasRuntimeDecision,
@@ -406,9 +420,6 @@ void camera::onFreeCameraMove(int *position, const int action, const int param5,
                 DEBUG_TRACE_IF(traceBoundaries,
                                std::cout << "TRACE rng lr=0x0216fff8 max=4 consume=" << *position << '\n');
                 (*position)++;//lr=0x0216fff8 max=4　(void)lcg::getPercent(position, 4); // 「(void)lcg::」はアホの姿焼きなので、晒しておく
-                if (action == BattleEmulator::ATTACK_ALLY){
-                    (*position)+=2;
-                }
             } else {
                 counter++;
             }
@@ -421,9 +432,6 @@ void camera::onFreeCameraMove(int *position, const int action, const int param5,
                                std::cout << "TRACE rng lr=0x0216fff8 max=4 consume=" << *position << '\n');
                 (*position)++;//lr=0x0216fff8 max=4 (void)lcg::getPercent(position, 4);//引数5が1なら強制的に実行
                 counter = 0;
-                if (action == BattleEmulator::ATTACK_ALLY){
-                    (*position)+=2;
-                }
                 break;
             }
             DEBUG_TRACE_IF(traceBoundaries,
@@ -434,9 +442,6 @@ void camera::onFreeCameraMove(int *position, const int action, const int param5,
             DEBUG_TRACE_IF(traceBoundaries,
                            std::cout << "TRACE rng lr=0x0216fff8 max=4 consume=" << *position << '\n');
             (*position)++;//lr=0x0216fff8 max=4 (void)lcg::getPercent(position, 4);
-            if (action == BattleEmulator::ATTACK_ALLY){
-                (*position)+=2;
-            }
 
         }
     } while (false);

@@ -84,6 +84,7 @@ inline constexpr auto kFreeCameraActions = [] {
     actions[BattleEmulator::ZAKI] = Bind<BattleEmulator::ZAKI>();
     actions[BattleEmulator::ZARAKI] = Bind<BattleEmulator::ZARAKI>();
     actions[BattleEmulator::MEDICINAL_HERBS] = Bind<BattleEmulator::MEDICINAL_HERBS>();
+    actions[BattleEmulator::GERUNIKKU_MERAMI] = Bind<BattleEmulator::GERUNIKKU_MERAMI>();
     return actions;
 }();
 
@@ -140,6 +141,7 @@ static_assert(kFreeCameraActions[BattleEmulator::HELM_SPLITTER].dq9ActionId == 1
 static_assert(kFreeCameraActions[BattleEmulator::ZAKI].dq9ActionId == 24);
 static_assert(kFreeCameraActions[BattleEmulator::ZARAKI].dq9ActionId == 25);
 static_assert(kFreeCameraActions[BattleEmulator::MEDICINAL_HERBS].dq9ActionId == 255);
+static_assert(kFreeCameraActions[BattleEmulator::GERUNIKKU_MERAMI].dq9ActionId == 10);
 static_assert(kFreeCameraActions[BattleEmulator::MERA_ZOMA].dq9ActionId == 11);
 static_assert(kFreeCameraActions[BattleEmulator::SKY_ATTACK].dq9ActionId == 540);
 static_assert(kFreeCameraActions[BattleEmulator::MERCURIAL_THRUST].dq9ActionId == 69);

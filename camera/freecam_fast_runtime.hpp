@@ -800,14 +800,14 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     return {};
 }
 
-[[nodiscard]] inline bool SetPlayerMembershipProfile(
+[[nodiscard]] inline bool SetPlayerMembershipProfileFromEquipment(
     const std::size_t actorIndex,
-    const std::uint16_t firstModelCode,
-    const std::uint16_t secondModelCode
+    const std::uint16_t bodyItemId,
+    const std::uint16_t primaryWeaponItemId
 ) noexcept {
     auto& state = ThreadContext();
     if (actorIndex >= state.presentationActorCount) return false;
-    const std::uint32_t profile = ResolvePlayerProfile(firstModelCode, secondModelCode);
+    const std::uint32_t profile = ResolvePlayerProfileFromEquipment(bodyItemId, primaryWeaponItemId);
     if (profile == kInvalidMembershipProfile) return false;
     state.presentationMembershipProfiles[actorIndex] = profile;
     return true;

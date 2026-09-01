@@ -28,6 +28,9 @@ thread_local bool TiggerSkyAttack = false;
 
 #if defined(gerunikku)
 namespace {
+constexpr std::uint16_t kHeroBodyItemId = UINT16_C(0x3382);
+constexpr std::uint16_t kHeroPrimaryWeaponItemId = UINT16_C(0x5021);
+
 void InitializeBattleActorRefs() noexcept {
     using dq9::freecam::fast::BattleActorRef;
     using dq9::freecam::fast::BattleActorSide;
@@ -41,7 +44,8 @@ bool InitializeCameraBattle() noexcept {
     using dq9::freecam::fast::BattleActorRef;
     using dq9::freecam::fast::BattleActorSide;
     const CameraPresentationActor roster[] = {
-        {BattleActorRef{BattleActorSide::ally, 0}, 10641, 12868, 18432, 0x00000002, 0, true},
+        {BattleActorRef{BattleActorSide::ally, 0}, 10641, 12868, 18432, 0x00000002, 0, true,
+            CameraMembershipKind::player, kHeroBodyItemId, kHeroPrimaryWeaponItemId},
         {BattleActorRef{BattleActorSide::enemy, 0}, -5320, 0, -9216, 0x00000000, 0, true,
             CameraMembershipKind::monster, 0x00c1, 0, 0x0118},
         {BattleActorRef{BattleActorSide::enemy, 1}, 10641, 0, -18432, 0x00000080, 0, true,

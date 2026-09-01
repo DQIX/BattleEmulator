@@ -43,6 +43,8 @@ struct CameraDebugEvent {
     std::uint16_t targetId{0xffff};
     std::uint8_t actorRouteCount{};
     std::uint8_t maxRouteCount{};
+    std::uint32_t membershipProfile{dq9::freecam::fast::kInvalidMembershipProfile};
+    std::uint16_t actorMembershipCount{};
     std::uint8_t triggerSource{};
     bool mapped{};
     bool runtimeDecisionAvailable{};
