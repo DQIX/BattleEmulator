@@ -41,6 +41,19 @@
 #define DEBUG_COUT3(x)
 #endif
 
+// TRACE boundary/RNG diagnostics are available in debug builds only.
+// In NDEBUG/Release builds the macro expands to nothing, so the runtime
+// condition and stream expression are both removed by the preprocessor.
+#if !defined(NDEBUG)
+#define DEBUG_TRACE_BOUNDARIES 1
+#endif
+
+#ifdef DEBUG_TRACE_BOUNDARIES
+#define DEBUG_TRACE_IF(condition, statement) do { if (condition) { statement; } } while (false)
+#else
+#define DEBUG_TRACE_IF(condition, statement) do { } while (false)
+#endif
+
 
 class debug {
 

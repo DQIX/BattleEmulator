@@ -91,7 +91,7 @@ static_assert(generated::kCameraBehaviorCode.size() == kActionCount);
 static_assert(generated::kFreeCameraMapperAllowed.size() == kActionCount);
 
 static_assert(MagicIs(generated::kMembershipMetadataBytes, 'F', 'C', 'M', 'M'));
-static_assert(ReadU32(generated::kMembershipMetadataBytes, 4) == 2);
+static_assert(ReadU32(generated::kMembershipMetadataBytes, 4) == 3);
 static_assert(ReadU32(generated::kMembershipMetadataBytes, 8) == kActionCount);
 
 static_assert(generated::kMonsterPresentationMetadataBytes.size() == 20 + 1024);
@@ -109,11 +109,17 @@ inline constexpr std::size_t kMonsterProfileCount =
     ReadU32(generated::kMembershipMetadataBytes, 20);
 inline constexpr std::size_t kSpecialProfileCount =
     ReadU32(generated::kMembershipMetadataBytes, 24);
+inline constexpr std::size_t kBodyItemModelCount =
+    ReadU16(generated::kMembershipMetadataBytes, 28);
+inline constexpr std::size_t kWeaponItemModelCount =
+    ReadU16(generated::kMembershipMetadataBytes, 30);
 
 static_assert(kActorProfileCount == 617);
 static_assert(kPlayerProfileCount == 13);
 static_assert(kMonsterProfileCount == 438);
 static_assert(kSpecialProfileCount == 1);
+static_assert(kBodyItemModelCount == 183);
+static_assert(kWeaponItemModelCount == 268);
 
 struct PlayerProfileMapEntry {
     std::uint16_t firstModelCode{};
@@ -124,6 +130,11 @@ struct PlayerProfileMapEntry {
 struct ActorProfileMapEntry {
     std::uint16_t actorKey{};
     std::uint32_t profileIndex{kInvalidProfileIndex};
+};
+
+struct ItemModelMapEntry {
+    std::uint16_t itemId{};
+    std::uint8_t modelCode{};
 };
 
 [[nodiscard]] constexpr bool HasBact(const std::uint16_t actionId) {
@@ -291,13 +302,54 @@ template <std::uint16_t ActionId>
     return result;
 }
 
+[[nodiscard]] consteval auto BuildBodyItemModels() {
+    std::array<ItemModelMapEntry, kBodyItemModelCount> result{};
+    constexpr std::size_t offset0 = 32
+        + kActorProfileCount * kActionCount * 8
+        + kActionCount * 8
+        + kPlayerProfileCount * 8
+        + kMonsterProfileCount * 8
+        + kSpecialProfileCount * 8;
+    for (std::size_t index = 0; index < result.size(); ++index) {
+        const std::size_t offset = offset0 + index * 4;
+        result[index] = {
+            ReadU16(generated::kMembershipMetadataBytes, offset),
+            generated::kMembershipMetadataBytes[offset + 2],
+        };
+    }
+    return result;
+}
+
+[[nodiscard]] consteval auto BuildWeaponItemModels() {
+    std::array<ItemModelMapEntry, kWeaponItemModelCount> result{};
+    constexpr std::size_t offset0 = 32
+        + kActorProfileCount * kActionCount * 8
+        + kActionCount * 8
+        + kPlayerProfileCount * 8
+        + kMonsterProfileCount * 8
+        + kSpecialProfileCount * 8
+        + kBodyItemModelCount * 4;
+    for (std::size_t index = 0; index < result.size(); ++index) {
+        const std::size_t offset = offset0 + index * 4;
+        result[index] = {
+            ReadU16(generated::kMembershipMetadataBytes, offset),
+            generated::kMembershipMetadataBytes[offset + 2],
+        };
+    }
+    return result;
+}
+
 inline constexpr auto kPlayerProfiles = BuildPlayerProfiles();
 inline constexpr auto kMonsterProfiles = BuildMonsterProfiles();
 inline constexpr auto kSpecialProfiles = BuildSpecialProfiles();
+inline constexpr auto kBodyItemModels = BuildBodyItemModels();
+inline constexpr auto kWeaponItemModels = BuildWeaponItemModels();
 
 } // namespace metadata
 
 inline constexpr std::uint32_t kInvalidMembershipProfile = metadata::kInvalidProfileIndex;
+inline constexpr std::uint16_t kNoEquipmentItemId = UINT16_C(0xffff);
+inline constexpr std::uint16_t kInvalidPlayerModelCode = UINT16_C(0xffff);
 
 struct MembershipCell {
     std::uint32_t selectorProjection{};
@@ -401,6 +453,44 @@ struct FreeCamera {
     return entry.firstModelCode == firstModelCode && entry.secondModelCode == secondModelCode
         ? entry.profileIndex
         : kInvalidMembershipProfile;
+}
+
+template <std::size_t N>
+[[nodiscard]] constexpr std::uint16_t ResolveItemModelCode(
+    const std::array<metadata::ItemModelMapEntry, N>& entries,
+    const std::uint16_t itemId
+) noexcept {
+    std::size_t first = 0;
+    std::size_t last = N;
+    while (first < last) {
+        const std::size_t middle = first + (last - first) / 2;
+        if (entries[middle].itemId < itemId) first = middle + 1;
+        else last = middle;
+    }
+    return first < N && entries[first].itemId == itemId
+        ? entries[first].modelCode
+        : kInvalidPlayerModelCode;
+}
+
+[[nodiscard]] constexpr std::uint16_t ResolveBodyModelCode(const std::uint16_t itemId) noexcept {
+    return ResolveItemModelCode(metadata::kBodyItemModels, itemId);
+}
+
+[[nodiscard]] constexpr std::uint16_t ResolveWeaponModelCode(const std::uint16_t itemId) noexcept {
+    return ResolveItemModelCode(metadata::kWeaponItemModels, itemId);
+}
+
+[[nodiscard]] constexpr std::uint32_t ResolvePlayerProfileFromEquipment(
+    const std::uint16_t bodyItemId,
+    const std::uint16_t primaryWeaponItemId
+) noexcept {
+    const std::uint16_t firstModelCode = ResolveBodyModelCode(bodyItemId);
+    if (firstModelCode == kInvalidPlayerModelCode) return kInvalidMembershipProfile;
+    const std::uint16_t secondModelCode = primaryWeaponItemId == kNoEquipmentItemId
+        ? UINT16_C(0)
+        : ResolveWeaponModelCode(primaryWeaponItemId);
+    if (secondModelCode == kInvalidPlayerModelCode) return kInvalidMembershipProfile;
+    return ResolvePlayerProfile(firstModelCode, secondModelCode);
 }
 
 template <std::size_t N>

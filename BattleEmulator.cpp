@@ -880,9 +880,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         };
 
         auto traceBoundary = [&](const char *label) {
-            if (traceBoundaries) {
-                std::cout << "TRACE boundary " << label << " position=" << *position << '\n';
-            }
+            DEBUG_TRACE_IF(traceBoundaries,
+                           std::cout << "TRACE boundary " << label << " position=" << *position << '\n');
         };
 
         for (const int actor : order) {
@@ -1155,9 +1154,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         }
 
         if (Player::isPlayerAlive(players[0]) && anyEnemyAlive()) {
-            if (traceBoundaries) {
-                std::cout << "TRACE rng lr=0x0215962c consume=" << *position << '\n';
-            }
+            DEBUG_TRACE_IF(traceBoundaries,
+                           std::cout << "TRACE rng lr=0x0215962c consume=" << *position << '\n');
             (*position)++; // max: 100, lr: 0x0215962c
         }
         camera::Main(position, actions, actionActors, actionTargets, actionsPosition,
