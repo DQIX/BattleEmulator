@@ -1150,6 +1150,78 @@ inline void SetTargetRecord02161720ActorId(const std::uint16_t actorId) noexcept
     return true;
 }
 
+// Exact presentation-state side effect of main:0216964C -> 0204ACA8 /
+// 0204A904. 0204ACA8 first clears flag bits 0..1 and sets 0x20, then
+// 02049B10(actor, 0) chooses the new start node with the priority
+// auxiliary -> goal -> existing start, clears goal and auxiliary, and moves
+// the actor to the chosen presentation node. 0204A904 subsequently clears
+// flag bit 2. This reset is shared by multiple camera/presentation paths; it
+// is not an action-specific rule.
+[[nodiscard]] inline bool ResetAllPresentationActorsForCameraPlacement() noexcept {
+    auto& state = ThreadContext();
+    if (state.presentationActorCount > state.presentationActors.size()) return false;
+
+    for (std::size_t index = 0; index < state.presentationActorCount; ++index) {
+        auto& actor = state.presentationActors[index];
+        actor.presentationFlags = (actor.presentationFlags & ~UINT32_C(0x7)) | UINT32_C(0x20);
+
+        std::uint8_t newStart = actor.startNode;
+        if (actor.auxiliaryNode != detail::kInvalidPresentationNode) {
+            newStart = actor.auxiliaryNode;
+        } else if (actor.goalNode != detail::kInvalidPresentationNode) {
+            newStart = actor.goalNode;
+        }
+
+        if (newStart != detail::kInvalidPresentationNode) {
+            if (newStart >= detail::kPresentationNodePositions.size()) return false;
+            const auto position = detail::kPresentationNodePositions[newStart];
+            if (!position.valid) return false;
+            actor.startNode = newStart;
+            actor.worldX = position.x;
+            actor.worldZ = position.z;
+        }
+        actor.goalNode = detail::kInvalidPresentationNode;
+        actor.auxiliaryNode = detail::kInvalidPresentationNode;
+        state.nearestNodeCache[index] = {};
+    }
+
+    state.presentationGoalSetupActive = false;
+    InvalidateCurrentRoutes(state);
+    return true;
+}
+
+inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
+
+// Exact final bounds branch of overlay_d_00:0216F62C. The camera-placement
+// routine clamps X/Z to +/-0x6000. If either component changes, it runs the
+// global 0216964C actor reset first, then restores only the actor currently
+// being placed to the clamped world position.
+[[nodiscard]] inline bool ApplyCameraActorWorldBounds(const std::uint16_t actorId) noexcept {
+    auto& state = ThreadContext();
+    const std::size_t actorIndex = FindPresentationActorIndex(actorId);
+    if (actorIndex >= state.presentationActorCount) return false;
+
+    const auto clampComponent = [](const std::int32_t value) noexcept {
+        if (value > kCameraActorWorldBound) return kCameraActorWorldBound;
+        if (value < -kCameraActorWorldBound) return -kCameraActorWorldBound;
+        return value;
+    };
+
+    const std::int32_t clampedX = clampComponent(state.presentationActors[actorIndex].worldX);
+    const std::int32_t clampedZ = clampComponent(state.presentationActors[actorIndex].worldZ);
+    if (clampedX == state.presentationActors[actorIndex].worldX
+        && clampedZ == state.presentationActors[actorIndex].worldZ) {
+        return true;
+    }
+
+    if (!ResetAllPresentationActorsForCameraPlacement()) return false;
+    auto& actor = state.presentationActors[actorIndex];
+    actor.worldX = clampedX;
+    actor.worldZ = clampedZ;
+    state.nearestNodeCache[actorIndex] = {};
+    return true;
+}
+
 [[nodiscard]] inline bool CompleteActionPresentation(
     const std::uint16_t actorId,
     const int actionIndex
