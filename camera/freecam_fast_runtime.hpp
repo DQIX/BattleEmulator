@@ -64,9 +64,9 @@ inline constexpr std::size_t kActionCount = 1024;
 inline constexpr std::uint16_t kInvalidActionId = UINT16_C(0xffff);
 inline constexpr std::uint32_t kInvalidProfileIndex = UINT32_C(0xffffffff);
 
-static_assert(generated::kCameraMetadataBytes.size() == 5264);
+static_assert(generated::kCameraMetadataBytes.size() == 6288);
 static_assert(MagicIs(generated::kCameraMetadataBytes, 'F', 'C', 'M', '1'));
-static_assert(ReadU32(generated::kCameraMetadataBytes, 4) == 2);
+static_assert(ReadU32(generated::kCameraMetadataBytes, 4) == 3);
 static_assert(ReadU32(generated::kCameraMetadataBytes, 8) == kActionCount);
 
 static_assert(generated::kActionMetadataBytes.size() == 4116);
@@ -156,6 +156,16 @@ struct ItemModelMapEntry {
     constexpr std::size_t offset = 16 + 128 + kActionCount * 4;
     return generated::kCameraMetadataBytes[offset + actionId];
 }
+
+// ROM-mined BACT opcode 0x0C camera-placement command order, packed as
+// four 2-bit entries: 1=action actor (command type 5/0x0D),
+// 2=action target (command type 6/0x0E), 0=end/unused.
+[[nodiscard]] constexpr std::uint8_t CameraPlacementSequence(const std::uint16_t actionId) {
+    if (actionId >= kActionCount) return 0;
+    constexpr std::size_t offset = 16 + 128 + kActionCount * 4 + kActionCount;
+    return generated::kCameraMetadataBytes[offset + actionId];
+}
+static_assert(CameraPlacementSequence(UINT16_C(24)) == UINT8_C(0x19));
 
 [[nodiscard]] constexpr std::uint16_t FallbackLookupActionId(const std::uint16_t actionId) {
     if (actionId >= kActionCount) return kInvalidActionId;

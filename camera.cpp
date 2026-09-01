@@ -135,6 +135,26 @@ inline void AssertCameraMapping(const int action) noexcept {
     return PlanCurrentActionRoutes(actionIndex);
 }
 
+[[nodiscard]] bool ApplyMinedCameraPlacementBounds(
+    const std::uint16_t dq9ActionId,
+    const std::uint16_t actorId,
+    const std::uint16_t targetId
+) noexcept {
+    using namespace dq9::freecam::fast;
+    std::uint8_t sequence = metadata::CameraPlacementSequence(dq9ActionId);
+    for (unsigned index = 0; index < 4; ++index) {
+        const std::uint8_t placement = sequence & UINT8_C(0x3);
+        if (placement == 0) break;
+        if (placement > 2) return false;
+        const std::uint16_t placedActorId = placement == 1 ? actorId : targetId;
+        if (placedActorId == kInvalidBattleActor || !ApplyCameraActorWorldBounds(placedActorId)) {
+            return false;
+        }
+        sequence >>= 2;
+    }
+    return true;
+}
+
 } // namespace
 
 #if defined(gerunikku)
@@ -471,6 +491,13 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                                  traceBoundaries);
             }
             if (hasPresentationSetup && actionMetadata != nullptr) {
+                (void)ApplyMinedCameraPlacementBounds(
+                    actionMetadata->dq9ActionId,
+                    runtimeActorId,
+                    runtimeTargetId
+                );
+            }
+            if (hasPresentationSetup && actionMetadata != nullptr) {
                 (void)CommitActionProgressRaw(
                     i,
                     actionCount,
@@ -500,6 +527,13 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
         } else if (rule != CameraRule::none) {
             AssertCameraMapping(after);
             onFreeCameraMove(position, after, preemptive ? 1 : 0, NowState, traceBoundaries);
+        }
+        if (hasPresentationSetup && actionMetadata != nullptr) {
+            (void)ApplyMinedCameraPlacementBounds(
+                actionMetadata->dq9ActionId,
+                runtimeActorId,
+                runtimeTargetId
+            );
         }
         // ROM presentation order: optional free-camera selector/retry runs before
         // the action's tracking-camera setup. FUN_0216F038 consumes RandInt(8)
