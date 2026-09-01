@@ -360,13 +360,6 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
 #endif
             continue;
         }
-        for (std::uint16_t trackingIndex = 0;
-             trackingIndex < trackingCameraDecision.rngCount;
-             ++trackingIndex) {
-            DEBUG_TRACE_IF(traceBoundaries,
-                           std::cout << "TRACE rng lr=0x0216f0e4 max=8 consume=" << *position << '\n');
-            (*position)++; // lr: 0x0216f0e4, max: 8
-        }
         if (hasRuntimeDecision) {
             if (runtimeDecision.callFreeCamera) {
                 AssertCameraMapping(after);
@@ -376,6 +369,16 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
         } else if (rule != CameraRule::none) {
             AssertCameraMapping(after);
             onFreeCameraMove(position, after, preemptive ? 1 : 0, NowState, traceBoundaries);
+        }
+        // ROM presentation order: optional free-camera selector/retry runs before
+        // the action's tracking-camera setup. FUN_0216F038 consumes RandInt(8)
+        // at 0x0216F0E0 (return/LR observation 0x0216F0E4).
+        for (std::uint16_t trackingIndex = 0;
+             trackingIndex < trackingCameraDecision.rngCount;
+             ++trackingIndex) {
+            DEBUG_TRACE_IF(traceBoundaries,
+                           std::cout << "TRACE rng lr=0x0216f0e4 max=8 consume=" << *position << '\n');
+            (*position)++; // lr: 0x0216f0e4, max: 8
         }
         if (after != BattleEmulator::ATTACK_ALLY) {//味方の攻撃→上空だとフリーカメラが特異点の挙動する
             preemptive = false;

@@ -54,7 +54,7 @@ template <std::uint16_t Dq9ActionId>
 }
 
 inline constexpr auto kActions = [] {
-    std::array<ActionMetadata, BattleEmulator::CURE_CONFUSION + 1> actions{};
+    std::array<ActionMetadata, BattleEmulator::MAX_COMMON_ACTION_ID + 1> actions{};
 
     actions[BattleEmulator::ATTACK_ENEMY] = Describe<1>();
     actions[BattleEmulator::ATTACK_ALLY] = Describe<1>();
@@ -76,7 +76,8 @@ inline constexpr auto kActions = [] {
     actions[BattleEmulator::GERUNIKKU_BAGIMA] = Describe<19>();
     actions[BattleEmulator::GERUNIKKU_BAGIMA_STRONG] = Describe<463>();
     actions[BattleEmulator::EERIE_LIGHT] = Describe<155>();
-    actions[BattleEmulator::MAGIC_MIRROR] = Describe<55>();
+    actions[BattleEmulator::MAGIC_MIRROR] = Describe<137>();
+    actions[BattleEmulator::GERUNIKKU_MAGIC_MIRROR] = Describe<55>();
     actions[BattleEmulator::INACTIVE_ENEMY] = Describe<503>();
     actions[BattleEmulator::GERUNIKKU_MEDAPANI] = Describe<912>();
     actions[BattleEmulator::WHIPPING_BOY] = Describe<929>();

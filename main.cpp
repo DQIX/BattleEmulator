@@ -945,7 +945,18 @@ int main(int argc, char* argv[]){
 				          << " param5=" << event.runtimeParam5
 				          << " reset=" << event.runtimeResetOnly
 				          << " manual=" << event.manualRuleWouldCall
-				          << " production=" << event.productionCalledFreeCamera << '\n';
+				          << " production=" << event.productionCalledFreeCamera
+				          << " nodesBefore=";
+				for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
+					if (actorIndex != 0) std::cout << ',';
+					std::cout << static_cast<unsigned>(event.startNodesBefore[actorIndex]);
+				}
+				std::cout << " nodesAfter=";
+				for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
+					if (actorIndex != 0) std::cout << ',';
+					std::cout << static_cast<unsigned>(event.startNodesAfter[actorIndex]);
+				}
+				std::cout << '\n';
 			}
 			if (traceState.players[0].hp <= 0 ||
 			    (traceState.players[1].hp <= 0 && traceState.players[2].hp <= 0 && traceState.players[3].hp <= 0)) {
@@ -1225,7 +1236,7 @@ int main(int argc, char* argv[]){
 			}
 		}
 
-		constexpr std::size_t kCommonActionCapacity = BattleEmulator::CURE_CONFUSION + 1;
+		constexpr std::size_t kCommonActionCapacity = BattleEmulator::MAX_COMMON_ACTION_ID + 1;
 		std::array<std::uint64_t, kCommonActionCapacity> occurrenceCounts{};
 		std::array<int, kCommonActionCapacity> emittedCounts{};
 		std::array<int, kCommonActionCapacity> bestRecord{};

@@ -185,7 +185,7 @@ inline bool resolveGerunikuSlot(int slot, int *position, Player players[4], Enem
             return true;
         case 3: // マホカンタ, handler 47
             if (boss.hasMagicMirror || !gerunikuHasMp(boss, 4)) return false;
-            selection = {BattleEmulator::MAGIC_MIRROR, 2, slot};
+            selection = {BattleEmulator::GERUNIKKU_MAGIC_MIRROR, 2, slot};
             return true;
         case 4: // メダパニ, handler 152
             if (!Player::isPlayerAlive(players[0]) || players[0].confused || players[0].hasMagicMirror || !gerunikuHasMp(boss, 5)) return false;
@@ -519,6 +519,7 @@ std::string BattleEmulator::getActionName(int actionId) {
             return "Defence";
 
         case BattleEmulator::MAGIC_MIRROR:
+        case BattleEmulator::GERUNIKKU_MAGIC_MIRROR:
             return "magic mirror";
 
         case BattleEmulator::LIGHTNING_STORM:
@@ -874,8 +875,27 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         };
 
         auto postEnemyAction = [&](const int actor) {
+            const bool mirrorRecoveryWasActive = players[actor].hasMagicMirror &&
+                                                 players[actor].MagicMirrorRecoveryTurn > 0;
+            if (players[actor].hasMagicMirror && players[actor].MagicMirrorTurn > 0) {
+                --players[actor].MagicMirrorTurn; // FUN_0215b174: combat +0x61
+                if (players[actor].MagicMirrorTurn == 0) {
+                    players[actor].MagicMirrorRecoveryTurn = 4; // combat +0x84
+                }
+            }
             if (Player::isPlayerAlive(players[0]) && anyEnemyAlive()) {
                 (*position)++; // max: 100, lr: 0x02159d40
+                if (mirrorRecoveryWasActive && players[actor].hasMagicMirror) {
+                    --players[actor].MagicMirrorRecoveryTurn;
+                    constexpr int probability[4] = {100, 87, 75, 62};
+                    const int probability1 = probability[players[actor].MagicMirrorRecoveryTurn];
+                    const int probability2 = lcg::getPercent(position, 100); // lr: 0x0215a050
+                    if (probability1 >= probability2 + (probability1 == 75 ? 1 : 0)) {
+                        players[actor].hasMagicMirror = false;
+                        players[actor].MagicMirrorTurn = 0;
+                        players[actor].MagicMirrorRecoveryTurn = 0;
+                    }
+                }
             }
             if (players[actor].rage) {
                 --players[actor].rageTurns;
@@ -1018,15 +1038,25 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             // buff-duration logic; only the enemy-alive predicate is widened
                             // from the old one-enemy build to all three encounter actors.
                             if (Player::isPlayerAlive(players[0]) && anyEnemyAlive()) {
+                                const bool mirrorRecoveryWasActive = players[0].hasMagicMirror &&
+                                                                     players[0].MagicMirrorRecoveryTurn > 0;
+                                if (players[0].hasMagicMirror && players[0].MagicMirrorTurn > 0) {
+                                    --players[0].MagicMirrorTurn; // FUN_0215b174: combat +0x61
+                                    if (players[0].MagicMirrorTurn == 0) {
+                                        players[0].MagicMirrorRecoveryTurn = 4; // combat +0x84
+                                    }
+                                }
                                 (*position)++; // max: 100, lr: 0x02159d40
 
-                                --players[0].MagicMirrorTurn;
-                                if (players[0].hasMagicMirror && players[0].MagicMirrorTurn <= 0) {
-                                    constexpr int probability[4] = {62, 75, 87, 100};
-                                    const int probability1 = probability[std::abs(players[0].MagicMirrorTurn)];
+                                if (mirrorRecoveryWasActive && players[0].hasMagicMirror) {
+                                    --players[0].MagicMirrorRecoveryTurn;
+                                    constexpr int probability[4] = {100, 87, 75, 62};
+                                    const int probability1 = probability[players[0].MagicMirrorRecoveryTurn];
                                     const int probability2 = lcg::getPercent(position, 100); // lr: 0x0215a050
                                     if (probability1 >= probability2 + (probability1 == 75 ? 1 : 0)) {
                                         players[0].hasMagicMirror = false;
+                                        players[0].MagicMirrorTurn = 0;
+                                        players[0].MagicMirrorRecoveryTurn = 0;
                                     }
                                 }
 
@@ -1771,6 +1801,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
 
             players[0].hasMagicMirror = false;
             players[0].MagicMirrorTurn = -1;
+            players[0].MagicMirrorRecoveryTurn = 0;
             players[0].AtkBuffLevel = 0;
             players[0].AtkBuffTurn = -1;
             players[0].BuffLevel = 0;
@@ -2201,6 +2232,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             resetCombo(NowState);
             break;
         case BattleEmulator::MAGIC_MIRROR:
+        case BattleEmulator::GERUNIKKU_MAGIC_MIRROR:
             if (players[attacker].mp != 255) {
                 players[attacker].mp = std::max(0, players[attacker].mp - 4);
             }
@@ -2221,7 +2253,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             }
             // Real ROM: Mirror Shield sets live combat status +0x14 bit 0x200.
             players[attacker].hasMagicMirror = true;
-            players[attacker].MagicMirrorTurn = 6;
+            players[attacker].MagicMirrorTurn = 5; // FUN_020891f0: combat +0x61
+            players[attacker].MagicMirrorRecoveryTurn = 0; // combat +0x84
             resetCombo(NowState);
             baseDamage = 0;
             break;

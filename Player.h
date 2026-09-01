@@ -50,6 +50,9 @@ struct Player {
     bool confused = false;
     int confusionTurns = -1;
     int guardedBy = -1;
+    // Keep new state fields at the end: legacy fixtures use positional aggregate
+    // initialization for Player and must retain their existing field ordering.
+    int MagicMirrorRecoveryTurn = 0;
 
     [[nodiscard]] constexpr bool operator==(const Player&) const = default;
 

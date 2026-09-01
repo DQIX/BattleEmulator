@@ -1072,10 +1072,8 @@ inline void SetTargetRecord02161720ActorId(const std::uint16_t actorId) noexcept
     const std::uint16_t actorId,
     const int actionIndex
 ) noexcept {
-    if (!CommitAllCurrentRouteEnds()) return false;
-    if (!BeginPresentationGoalSetup()) return false;
-    if (!AssignActorFallbackPresentationGoal(actorId)) return false;
-    if (!PlanCurrentActionRoutes(actionIndex)) return false;
+    (void)actorId;
+    (void)actionIndex;
     return CommitAllCurrentRouteEnds();
 }
 

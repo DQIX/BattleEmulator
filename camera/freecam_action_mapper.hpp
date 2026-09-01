@@ -68,7 +68,7 @@ template <int CommonActionId>
 }
 
 inline constexpr auto kFreeCameraActions = [] {
-    std::array<ActionBinding, BattleEmulator::CURE_CONFUSION + 1> actions{};
+    std::array<ActionBinding, BattleEmulator::MAX_COMMON_ACTION_ID + 1> actions{};
 
     //C:\Users\owner\Documents\tunnelworkspace\battle_harness\dq9-action-target-classification.csv
     //mapperの謎のintはすでにデータマイニング済みだぞ何してんの？本当に何を四天王

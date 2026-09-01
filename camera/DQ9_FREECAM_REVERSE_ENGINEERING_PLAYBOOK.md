@@ -229,6 +229,15 @@ Ghidra上の根拠は `FUN_02073E2C` (`0x02073E2C`)。この関数は `getBattle
 
 `build_freecam_membership_metadata.mjs` はこの関係をv3のsorted item->model tableへ生成し、C++は `ResolveBodyModelCode(itemId)` / `ResolveWeaponModelCode(itemId)` のconstexpr binary searchから `ResolvePlayerProfileFromEquipment(bodyItemId, primaryWeaponItemId)` へ進む。`2`、`6`、`mp0206`、generated profile indexをBattleEmulator本体へ直接書かないこと。装備が変わればitem IDだけscenario stateで変え、同じ算出経路を通す。
 
+## ミラーシールド137とマホカンタ55を同じpresentation actionにしない
+DQ9 action IDは別物。
+- `137 (0x0089)` = ミラーシールド。実ROM skill menuでも `skill:137` として取得される。
+- `55 (0x0037)` = マホカンタ。ゲルニックAI側のspell action。
+
+BattleEmulatorでは状態効果が同じため、長く内部 `MAGIC_MIRROR=31` を主人公とゲルニック双方で共用していた。このためcamera mapperまで `31 -> DQ9 55` に固定され、主人公ミラーシールドのpresentation identityが誤っていた。
+
+修正後は主人公側 `MAGIC_MIRROR=31 -> DQ9 137`、ゲルニック側は別common ID `GERUNIKKU_MAGIC_MIRROR -> DQ9 55` とする。状態効果処理（MP、`hasMagicMirror`, `MagicMirrorTurn`）は同じswitch bodyを共用してよいが、DQ9 action identityは共用しない。
+
 位置については、X/Zそのものは既に静的算出可能です。02170F40..02170F54の定数→PresentationNodeWorldPosition()→route commitでworldX/worldZまで入っています。overlap判定もROMでは、
 
 ## Fast runtime接続順

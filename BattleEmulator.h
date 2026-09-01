@@ -134,6 +134,8 @@ public:
 	static constexpr int CONFUSION_FAILED_ATTACK = 191;  // DQ9 0x00DE
 	static constexpr int CONFUSION_FAILED_FLEE = 192;    // DQ9 0x0396
 	static constexpr int CURE_CONFUSION = 193;           // DQ9 0x03AA
+	static constexpr int GERUNIKKU_MAGIC_MIRROR = 194;  // マホカンタ / DQ9 0x0037
+	static constexpr int MAX_COMMON_ACTION_ID = GERUNIKKU_MAGIC_MIRROR;
 
     struct SearchCommand {
         int action = -1;
