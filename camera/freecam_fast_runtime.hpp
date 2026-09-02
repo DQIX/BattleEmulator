@@ -69,9 +69,9 @@ static_assert(MagicIs(generated::kCameraMetadataBytes, 'F', 'C', 'M', '1'));
 static_assert(ReadU32(generated::kCameraMetadataBytes, 4) == 3);
 static_assert(ReadU32(generated::kCameraMetadataBytes, 8) == kActionCount);
 
-static_assert(generated::kActionMetadataBytes.size() == 4116);
+static_assert(generated::kActionMetadataBytes.size() == 6164);
 static_assert(MagicIs(generated::kActionMetadataBytes, 'F', 'C', 'M', 'A'));
-static_assert(ReadU32(generated::kActionMetadataBytes, 4) == 3);
+static_assert(ReadU32(generated::kActionMetadataBytes, 4) == 4);
 static_assert(ReadU32(generated::kActionMetadataBytes, 8) == kActionCount);
 inline constexpr std::size_t kFormationModeOffset = ReadU32(generated::kActionMetadataBytes, 12);
 inline constexpr std::size_t kPresentationTypeOffset = ReadU32(generated::kActionMetadataBytes, 16);

@@ -465,8 +465,8 @@ const targetCsv = await readFile(path.join(root, targetCsvName), "utf8");
 const classification = parseActionClassification(targetCsv);
 const {
   present,
-  targetSide,
-  targetScope,
+  targetSide: targetSideFromCsv,
+  targetScope: targetScopeFromCsv,
   repeatMode,
   operationType,
   resourceCost,
@@ -476,9 +476,26 @@ const {
   mappedRows,
 } = classification;
 const actionMetadata = inputBytes.get("freecam-action-metadata.bin");
+if (actionMetadata.subarray(0, 4).toString("ascii") !== "FCMA" || actionMetadata.readUInt32LE(4) !== 4) {
+  throw new Error("freecam-action-metadata.bin must be FCMA v4");
+}
 const presentationTypeOffset = actionMetadata.readUInt32LE(16);
 if (presentationTypeOffset + actionCount > actionMetadata.length) {
   throw new Error("freecam-action-metadata.bin presentation-type table is truncated");
+}
+const targetSideOffset = presentationTypeOffset + actionCount;
+const targetScopeOffset = targetSideOffset + actionCount;
+if (targetScopeOffset + actionCount > actionMetadata.length) {
+  throw new Error("freecam-action-metadata.bin ROM target tables are truncated");
+}
+const targetSide = actionMetadata.subarray(targetSideOffset, targetSideOffset + actionCount);
+const targetScope = actionMetadata.subarray(targetScopeOffset, targetScopeOffset + actionCount);
+for (let actionId = 0; actionId < actionCount; ++actionId) {
+  if (present[actionId] !== 0
+      && (targetSide[actionId] !== targetSideFromCsv[actionId]
+          || targetScope[actionId] !== targetScopeFromCsv[actionId])) {
+    throw new Error(`ROM/CSV target classification mismatch for action ${actionId}`);
+  }
 }
 const psycheUpPresentationType = actionMetadata[presentationTypeOffset + psycheUpActionId];
 const psycheUpPresentationTypeActionIds = [];

@@ -68,6 +68,18 @@ inline void AssertCameraMapping(const int action) noexcept {
     using namespace dq9::freecam::fast;
     if (!BeginPresentationGoalSetup()) return false;
 
+    const auto presentationRecordTargetId = [](const int commonActionId,
+                                               const std::uint16_t actorId,
+                                               const std::uint16_t rawTargetId) noexcept {
+        const auto* metadata = dq9::freecam::actions::Find(commonActionId);
+        return metadata != nullptr && metadata->mapped()
+            && metadata->targetScope == TargetScope::self
+            ? actorId
+            : rawTargetId;
+    };
+    const std::uint16_t currentPresentationTargetId =
+        currentAction.targetScope == TargetScope::self ? currentActorId : currentTargetId;
+
     const std::array<std::uint16_t, 1> currentActionActorIds{currentActorId};
     std::array<bool, dq9::freecam::detail::kMaxPresentationActors> visited{};
     for (int futureIndex = actionIndex; futureIndex < actionCount; ++futureIndex) {
@@ -79,12 +91,12 @@ inline void AssertCameraMapping(const int action) noexcept {
         // movement-eligibility test, so later actions by the same actor do not
         // get a second chance in this setup pass.
         visited[actorSlot] = true;
-        if (!IsActorPresentationMovementEligible(actorSlot, currentTargetId)) continue;
+        if (!IsActorPresentationMovementEligible(actorSlot, currentPresentationTargetId)) continue;
 
         if (futureIndex == actionIndex) {
             if (!AssignActorPresentationGoal(
                     actorId,
-                    currentTargetId,
+                    currentPresentationTargetId,
                     std::span<const std::uint16_t>(currentActionActorIds.data(), currentActionActorIds.size()),
                     currentAction.attackFormationMode)) return false;
             continue;
@@ -99,7 +111,11 @@ inline void AssertCameraMapping(const int action) noexcept {
             continue;
         }
         if (!targets[futureIndex].valid()) continue;
-        const std::uint16_t primaryTargetId = Dq9ActorId(targets[futureIndex]);
+        const std::uint16_t primaryTargetId = presentationRecordTargetId(
+            actions[futureIndex],
+            actorId,
+            Dq9ActorId(targets[futureIndex])
+        );
         const std::uint16_t resolvedTargetId = ResolveActorPresentationTarget(actorSlot, primaryTargetId);
         if (resolvedTargetId == kInvalidBattleActor) continue;
         // Live 021E0D34..021E0D5C passes the current action record to
@@ -127,9 +143,13 @@ inline void AssertCameraMapping(const int action) noexcept {
         const std::size_t actorSlot = FindPresentationActorIndex(actorId);
         if (actorSlot >= visited.size() || visited[actorSlot]) continue;
         visited[actorSlot] = true;
-        if (!IsActorPresentationMovementEligible(actorSlot, currentTargetId)) continue;
+        if (!IsActorPresentationMovementEligible(actorSlot, currentPresentationTargetId)) continue;
 
-        const std::uint16_t primaryTargetId = Dq9ActorId(targets[previousIndex]);
+        const std::uint16_t primaryTargetId = presentationRecordTargetId(
+            actions[previousIndex],
+            actorId,
+            Dq9ActorId(targets[previousIndex])
+        );
         if (!PreparePreviousActionPresentationParticipant(actorId, primaryTargetId)) return false;
     }
     return PlanCurrentActionRoutes(actionIndex);
