@@ -197,9 +197,24 @@ struct PresentationActorState {
     std::int32_t worldX{};
     std::int32_t worldY{};
     std::int32_t worldZ{};
+    // Live battle actor transform at actor+0x44/+0x48/+0x4C. Keep this
+    // separate from presentation+0x10/+0x14/+0x18 above: 021E1E50 uses the
+    // former for nearest-node selection.
+    bool battleWorldKnown{};
+    std::int32_t battleWorldX{};
+    std::int32_t battleWorldY{};
+    std::int32_t battleWorldZ{};
 
     [[nodiscard]] constexpr bool operator==(const PresentationActorState&) const = default;
 };
+
+[[nodiscard]] constexpr std::int32_t BattleWorldX(const PresentationActorState& actor) noexcept {
+    return actor.battleWorldKnown ? actor.battleWorldX : actor.worldX;
+}
+
+[[nodiscard]] constexpr std::int32_t BattleWorldZ(const PresentationActorState& actor) noexcept {
+    return actor.battleWorldKnown ? actor.battleWorldZ : actor.worldZ;
+}
 
 [[nodiscard]] constexpr PresentationActorInput PresentationRouteInput(
     const PresentationActorState& actor
@@ -569,9 +584,13 @@ constexpr void InvalidateGoalNeighborConflicts(
     }
     std::uint8_t pivot = target.auxiliaryNode;
     if (actorIsInAction) {
+        // overlay_d_25:021E1E50 resolves the battle actor and reads
+        // actor+0x44/+0x4C. It does not read presentation+0x10/+0x18.
+        const std::int32_t targetWorldX = BattleWorldX(target);
+        const std::int32_t targetWorldZ = BattleWorldZ(target);
         pivot = searchMode == PresentationNodeSearchMode::optimized
-            ? NearestPresentationNodeFast(target.worldX, target.worldZ)
-            : NearestPresentationNodeSimple(target.worldX, target.worldZ);
+            ? NearestPresentationNodeFast(targetWorldX, targetWorldZ)
+            : NearestPresentationNodeSimple(targetWorldX, targetWorldZ);
     } else {
         if (pivot == kInvalidPresentationNode) pivot = target.goalNode;
         if (pivot == kInvalidPresentationNode) pivot = target.startNode;

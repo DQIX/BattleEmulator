@@ -824,7 +824,10 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     }
     if (previous.actorId != actor.actorId
         || previous.worldX != actor.worldX
-        || previous.worldZ != actor.worldZ) {
+        || previous.worldZ != actor.worldZ
+        || previous.battleWorldKnown != actor.battleWorldKnown
+        || previous.battleWorldX != actor.battleWorldX
+        || previous.battleWorldZ != actor.battleWorldZ) {
         state.nearestNodeCache[index] = {};
     }
     const bool routeInputChanged = previous.actorId != actor.actorId
@@ -966,16 +969,18 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     if (index >= state.presentationActorCount) return false;
     auto& actor = state.presentationActors[index];
     if (actor.startNode != actor.auxiliaryNode) return true;
+    const std::int32_t battleWorldX = detail::BattleWorldX(actor);
+    const std::int32_t battleWorldZ = detail::BattleWorldZ(actor);
     auto& cache = state.nearestNodeCache[index];
     if (!cache.valid
-        || cache.worldX != actor.worldX
-        || cache.worldZ != actor.worldZ
+        || cache.worldX != battleWorldX
+        || cache.worldZ != battleWorldZ
         || cache.mode != mode) {
-        cache.worldX = actor.worldX;
-        cache.worldZ = actor.worldZ;
+        cache.worldX = battleWorldX;
+        cache.worldZ = battleWorldZ;
         cache.node = mode == detail::PresentationNodeSearchMode::optimized
-            ? detail::NearestPresentationNodeFast(actor.worldX, actor.worldZ)
-            : detail::NearestPresentationNodeSimple(actor.worldX, actor.worldZ);
+            ? detail::NearestPresentationNodeFast(battleWorldX, battleWorldZ)
+            : detail::NearestPresentationNodeSimple(battleWorldX, battleWorldZ);
         cache.mode = mode;
         cache.valid = true;
     }
@@ -1186,6 +1191,11 @@ inline void SetTargetRecord02161720ActorId(const std::uint16_t actorId) noexcept
     actor.goalNode = node;
     actor.worldX = position.x;
     actor.worldZ = position.z;
+    // The fast path commits the completed ROM route atomically. At route end
+    // the battle actor transform has reached the same presentation node.
+    actor.battleWorldKnown = true;
+    actor.battleWorldX = position.x;
+    actor.battleWorldZ = position.z;
     state.nearestNodeCache[actorIndex] = {};
     InvalidateCurrentRoutes(state);
     return true;
@@ -1216,6 +1226,9 @@ inline void SetTargetRecord02161720ActorId(const std::uint16_t actorId) noexcept
         actor.goalNode = node;
         actor.worldX = position.x;
         actor.worldZ = position.z;
+        actor.battleWorldKnown = true;
+        actor.battleWorldX = position.x;
+        actor.battleWorldZ = position.z;
         state.nearestNodeCache[actorIndex] = {};
         changed = true;
     }
@@ -1252,6 +1265,12 @@ inline void SetTargetRecord02161720ActorId(const std::uint16_t actorId) noexcept
             actor.startNode = newStart;
             actor.worldX = position.x;
             actor.worldZ = position.z;
+            // 02049B10 writes presentation+0x10/+0x18 through 0204A9F4;
+            // 0216964C has set flag 0x20, so it also copies that position to
+            // battle actor +0x44/+0x4C.
+            actor.battleWorldKnown = true;
+            actor.battleWorldX = position.x;
+            actor.battleWorldZ = position.z;
         }
         actor.goalNode = detail::kInvalidPresentationNode;
         actor.auxiliaryNode = detail::kInvalidPresentationNode;
@@ -1280,17 +1299,22 @@ inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
         return value;
     };
 
-    const std::int32_t clampedX = clampComponent(state.presentationActors[actorIndex].worldX);
-    const std::int32_t clampedZ = clampComponent(state.presentationActors[actorIndex].worldZ);
-    if (clampedX == state.presentationActors[actorIndex].worldX
-        && clampedZ == state.presentationActors[actorIndex].worldZ) {
+    const auto& currentActor = state.presentationActors[actorIndex];
+    const std::int32_t originalX = detail::BattleWorldX(currentActor);
+    const std::int32_t originalZ = detail::BattleWorldZ(currentActor);
+    const std::int32_t clampedX = clampComponent(originalX);
+    const std::int32_t clampedZ = clampComponent(originalZ);
+    if (clampedX == originalX && clampedZ == originalZ) {
         return true;
     }
 
     if (!ResetAllPresentationActorsForCameraPlacement()) return false;
     auto& actor = state.presentationActors[actorIndex];
-    actor.worldX = clampedX;
-    actor.worldZ = clampedZ;
+    // 0216F62C restores only the battle actor transform after the global
+    // presentation reset (02013920(actor+0x44, ...)).
+    actor.battleWorldKnown = true;
+    actor.battleWorldX = clampedX;
+    actor.battleWorldZ = clampedZ;
     state.nearestNodeCache[actorIndex] = {};
     return true;
 }

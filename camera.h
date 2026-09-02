@@ -31,6 +31,13 @@ struct CameraPresentationActor {
     std::uint16_t membershipKeyA{};
     std::uint16_t membershipKeyB{};
     std::uint16_t battleMonsterId{0xffff};
+    // Battle actor transform (actor object +0x44/+0x48/+0x4C). This is a
+    // different coordinate source from presentation+0x10/+0x14/+0x18.
+    // overlay_d_25:021E1E50 and overlay_d_00:0216F62C read this transform.
+    bool battleWorldKnown{};
+    std::int32_t battleWorldX{};
+    std::int32_t battleWorldY{};
+    std::int32_t battleWorldZ{};
 };
 
 #if defined(gerunikku)

@@ -216,6 +216,10 @@ bool camera::ResetBattle(const CameraPresentationActor *actors, const std::size_
                 .worldX = source.worldX,
                 .worldY = source.worldY,
                 .worldZ = source.worldZ,
+                .battleWorldKnown = source.battleWorldKnown,
+                .battleWorldX = source.battleWorldX,
+                .battleWorldY = source.battleWorldY,
+                .battleWorldZ = source.battleWorldZ,
             })) return false;
         switch (source.membershipKind) {
             case CameraMembershipKind::player:

@@ -58,14 +58,38 @@ bool InitializeCameraBattle() noexcept {
     using dq9::freecam::fast::BattleActorRef;
     using dq9::freecam::fast::BattleActorSide;
     const CameraPresentationActor roster[] = {
-        {BattleActorRef{BattleActorSide::ally, 0}, 10641, 12868, 18432, 0x00000002, 0, true,
-            CameraMembershipKind::player, kHeroBodyItemId, kHeroPrimaryWeaponItemId},
-        {BattleActorRef{BattleActorSide::enemy, 0}, -5320, 0, -9216, 0x00000000, 0, true,
-            CameraMembershipKind::monster, 0x00c1, 0, 0x0118},
-        {BattleActorRef{BattleActorSide::enemy, 1}, 10641, 0, -18432, 0x00000080, 0, true,
-            CameraMembershipKind::monster, 0x013a, 0, 0x013a},
-        {BattleActorRef{BattleActorSide::enemy, 2}, 26604, 0, -9216, 0x00000000, 0, true,
-            CameraMembershipKind::monster, 0x00c1, 0, 0x0118},
+        {
+            .actor = BattleActorRef{BattleActorSide::ally, 0},
+            .worldX = 10641, .worldY = 12868, .worldZ = 18432,
+            .presentationFlags = 0x00000002, .occupancyExpansionDepth = 0, .movementEnabled = true,
+            .membershipKind = CameraMembershipKind::player,
+            .membershipKeyA = kHeroBodyItemId, .membershipKeyB = kHeroPrimaryWeaponItemId,
+            .battleWorldKnown = true, .battleWorldX = 0, .battleWorldY = 204, .battleWorldZ = 10240,
+        },
+        {
+            .actor = BattleActorRef{BattleActorSide::enemy, 0},
+            .worldX = -5320, .worldY = 0, .worldZ = -9216,
+            .presentationFlags = 0x00000000, .occupancyExpansionDepth = 0, .movementEnabled = true,
+            .membershipKind = CameraMembershipKind::monster,
+            .membershipKeyA = 0x00c1, .battleMonsterId = 0x0118,
+            .battleWorldKnown = true, .battleWorldX = -9009, .battleWorldY = 204, .battleWorldZ = -10240,
+        },
+        {
+            .actor = BattleActorRef{BattleActorSide::enemy, 1},
+            .worldX = 10641, .worldY = 0, .worldZ = -18432,
+            .presentationFlags = 0x00000080, .occupancyExpansionDepth = 0, .movementEnabled = true,
+            .membershipKind = CameraMembershipKind::monster,
+            .membershipKeyA = 0x013a, .battleMonsterId = 0x013a,
+            .battleWorldKnown = true, .battleWorldX = 0, .battleWorldY = 204, .battleWorldZ = -10240,
+        },
+        {
+            .actor = BattleActorRef{BattleActorSide::enemy, 2},
+            .worldX = 26604, .worldY = 0, .worldZ = -9216,
+            .presentationFlags = 0x00000000, .occupancyExpansionDepth = 0, .movementEnabled = true,
+            .membershipKind = CameraMembershipKind::monster,
+            .membershipKeyA = 0x00c1, .battleMonsterId = 0x0118,
+            .battleWorldKnown = true, .battleWorldX = 9009, .battleWorldY = 204, .battleWorldZ = -10240,
+        },
     };
     return camera::ResetBattle(roster, sizeof(roster) / sizeof(roster[0]));
 }

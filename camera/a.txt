@@ -492,3 +492,412 @@ C++側のseed 0x17 は、route>4の正体まで見えました。2ターン目 a
 差は本物っぽいです。C++の余分な1回は3ターン目 actionIndex=3（通常攻撃、param5=1）の 0x0216FFF8 / RandInt(4)。実ROMは RandInt(100) のposition=237までは一致し、その次のRandInt(4)を消費していません。ここをcamera条件の分岐まで追います。
 
 原因候補がかなり絞れました。production側には「participant route が1本でも>4なら、later actionでもparam5=1を強制」という明示ルールがあります。seed 0x17では前ターンのかぶと割りがちょうどmaxRoute=5なので、この状態が次ターンへ残ってparam5を誤って1にしている疑いが強いです。実ROMの 0x0216FDA4 入口でparam5を直接取って確定します。
+
+
+了解。ここは「929を追加」ではなく、type15に埋め込まれていたHUD renderer residue生成を独立したlifecycleへ引き剥がして、既知の0x020515EC → 0x02051880 → 0x02050BD0 footprintを共通処理としてC++へ入れます。assertはその共通処理が入るまでのガードとして使い、入れた直後にseed 0x13 をCLionで再実行します。
+
+既知部分から先に入れます。まず名前と責務を直します。kTensionHudRenderer... を FUN_020515EC由来のkBattleHudRenderer... に改名し、row+4 footprint生成を ApplyBattleHudRendererResidueCompatibility() として独立させます。その上でtype15と、実ROMで同じcall chainを確認済みのDQ9 929の両方から同じ共通処理へ接続します。
+
+generatorのsummary側に旧変数名が残って即エラーになったので、そこも今直します。これは生成物不整合を防ぐための単純な追従漏れで、runtimeロジックとは別です。直したら即再生成→CLion実行へ進みます。
+
+共通化を入れて生成物まで再生成しました。generator出力でも battleHudRenderer: font=8, glyph=8x8, nibble=15, residueMask=15 がROM metadataから再確認できています。今からCLionでまずedge validationとseed 0x13 を実行し、assertが消えてTurn1 index2のC0 30→21 が復活するかを見ます。
+
+実装はもう入っていて、生成物も更新済みです。ここからは止めずにC++実行へ移ります。まずseed 0x13 を通し、WHIPPING_BOY assertが消えるだけでなく、Turn1 index2のC0が30→21へ戻るか／Turn2のmaxRoute=5が消えるかまで確認します。
+
+assertは消えましたが、まだ直っていません。Turn1 index2はC0が30のまま、Turn2 index3も maxRoute=5 / param5=1 のままです。つまり「929後にmask=15を置く」だけではタイミングかslot対応が違う。ここで成功扱いせず、詳細traceで929後のrow4が実際に次setupへどう渡っているかを直ちに見ます。
+
+詳細traceで次が分かりました。type15の共通helper自体は動いていて、後続では row4=1,1,1,1 まで見えます。それでもTurn1 C0が動かないので、問題は「maskが入らない」ではなくmaskをpresentation actor indexとして保持しているのに、ROMのrow+4は021E1958が作る物理work-row順序で消費する点が濃いです。ここをコード上のconsumerで確認してすぐ直します。
+
+consumerまで確定しました。camera.cpp はfuture participantを処理するとき RosterField4IsKnown(actorSlot) としていて、物理row番号ではなくpresentation actor slotで引いています。ROMの021E1958 row+4は物理work-row順なので、ここが構造的に違う。次に既存のroster build実装を見て、row順を同じ関数で復元してconsumerをrow index参照へ直します。
+
+重要な訂正です。mask=1111なのでactor-slot/row-slotの違いだけでは説明できません。Turn1 index2でROMが動かすC0はfuture participantではなく、直前index1=929のprevious participantです。つまり今見るべきconsumerはfuture loopではなく、021E08BC後半のprevious-action loopです。C++側のそのループがrow+4 residueを参照していない可能性を確認します。
+
+ROM側 0x021E2664 を再確認すると、previous loopでも渡されるのはactorではなく12-byte roster rowそのもので、param_1+4 を直接見ています。C++の PreparePreviousActionPresentationParticipant(actorId, targetId) はactor IDしか受け取っておらず、row+4を渡せない設計です。ここが今の直接欠落です。関数をrow4 known/nonzero付きに拡張し、ROM 021E2664 と同じfallback gateへ接続します。
+
+0x021E2664 の条件をC++と突き合わせると、もう1つ実装漏れが確定しました。ROMは row+4 != 0 なら「近傍が4個以上空いているから現状維持」というearly returnを無効化し、さらに候補比較も強制成立させます。C++の ChooseFallbackPresentationGoal() は conflictInvalidated しかそのforce条件に使っていません。row+4 nonzeroを実際のforce引数として渡すよう、future/previous両経路を今直します。
+
+force条件は効き、C0はついに動きました。ただしROM [30→21] に対してC++は [30→29]。つまり次の差は021E2664 fallback chooser内部です。row+4 lifecycleはもう入口まで通っています。ここからはROMの近傍列挙順 0x02170F58 とC++ PresentationNeighbors() のtie-breakを比較します。equal-countなら列挙順1個で21/29が分かれるため、ここはすぐ確認できます。
+
+C++詳細ではC0 routeが [30,29] と確定しました。ROMは [30,21]。row4=1111も正しく次setupへ届いています。次は実ROMの 0x021E2664 入口で、C0 row pointer・start/goal/aux・occupancy近傍を直接取り、C++ chooserの入力差かtie-break差かを分離します。既存のfallback probeを流用します。
+
+実ROM側はまだskill選択画面に残っていて、さっきのA tapは確定として受理されていませんでした。probe結果0件はそのためです。ここは入力を推測せず、battle_command_mcp.js の confirmOption でミラーシールドを正式確定し、その後frame-stepで0x021E2664を踏ませます。
+
+実ROM 0x021E2664 の入力が取れました。C0 rowは field4=0x02392920、start=30、gridをROMそのままC++のchooser式へ入れると正しく21が選ばれます。つまりtie-break実装は合っています。C++が29を選ぶ原因は、021E2664へ相当する時点のoccupancy gridがROMと違うことです。次はそのgrid差をC++側で直接出し、最初に違うnode/classをproducerへ戻します。
+
+occupancy差も7 nodeだけに縮みました。ROMだけ 0xFF なのは 39,40,47,49,50,57,58。他74 nodeは一致しています。特に49/50/58はHero node59の近傍、39/40はC0 node30の近傍です。つまりfallback chooserではなく、直前の 0x021E1A1C occupancy rebuildが置く予約/衝突0xFF markerをC++が一部作っていません。次はその関数をROMと照合します。
+
+根因まで出ました。ROM 0x021E1A1C はoccupancy再構築時に「全部0へ初期化」ではなく、既存 0xFF markerだけ保存して他を0へ戻す実装です。C++のBuildPresentationOccupancy()自体はその仕様を持つのに、RebuildPresentationOccupancy()が毎回空mapから呼んでせっかく作った0xFF markerを全消去していました。ROMだけに残る7 nodeがちょうどこれです。ここは1行のproducer/lifecycle修正で直せます。
+
+preserve修正でROMと同じ49/50/58の0xFFは残るようになりましたが、C++はさらに 60/67/68まで余計に0xFF にしています。一方ROMだけに残るのは39/40/47/57。コードを見るとC++はcurrent actorなら無条件でInvalidatePresentationConflicts(PresentationNeighbors(pivot))していますが、ROM 0x021E08BC の 0x021E2904 呼び出しにはaction ID 9..11限定gateがあります。seed13 current actionはDQ9=1なので、この無条件invalidatorは怪しい。xrefで別callがないか確認してからgateを正します。
+
+0x021E2904 自体は渡されたnodeを全部0xFFにするので、C++の「6近傍全部FF」はその瞬間だけなら正しいです。なのにROMのC0 fallback時にはそのうち60/67/68が0へ戻っている。したがって差は2904のgateではなく、2904後〜previous C0 fallback前のどこかで一部markerを再構築/上書きする処理です。0x021E1FD8 内部のgrid copy/paintと、次の0x021E1A1Cまでを追います。
+
+ROMとC++の差が「2904で何をFFにしたか」に見えてきたので、ここは推測しません。seed13実ROMで 0x021E20F8 → 0x021E2904 の実node list と、その直後gridを直接取ります。これで60/67/68が最初から対象外なのか、後段で戻されるのかを一発で分けます。
+
+決定打です。実ROMの0x021E2904へ渡された6 nodeは [57,58,47,49,39,40]。これはnode 48 の近傍です。C++はHeroのpresentation start=59をそのままworld座標へ置いてnearest=59としていたので、[67,68,58,60,49,50]を潰していました。つまり次の本丸はfallbackではなく、targetの実world position→nearest nodeがROM48 / C++59になっている初期world座標差です。0x021E1E50 のproducerを確認して初期化を直します。
+
+ここはさらに一段大事です。初期Heroは実ROMでもworld→node59で合っています。ところがTurn1 index2の0x021E1E50(Hero)はnode48を返しているので、action0/1の間にHeroのworldX/Zだけが動き、presentation startNode=59は据え置かれている。C++はそのworld placement lifecycleを持っていないためnearestだけ59のままです。既存のcamera placement採掘経路を確認し、137/929のどちらがHero worldを動かすか実ROMで取ります。
+
+初期値は合っています。C++もROM fixtureもHeroは (10641,12868,18432) → node59 から開始しています。したがって48化は初期化ミスではなく、Turn1 action0/1中のworld-position lifecycle欠落です。ここはproductionへ「node48固定」など絶対入れず、実ROMでHero +0x44/+0x4C の変化点とwriter PCを既存camera-placement probeから取ります。
+
+実装をすぐ `BattleEmulator` 側へ入れ、さらにseed `0x13` をC++/実ROMで突き合わせました。
+
+まずHUD residueはpresentation type 15専用から切り離しました。generator側の名前も
+
+```cpp
+kTensionHudRendererResiduePrefixMask
+```
+
+から
+
+```cpp
+kBattleHudRendererResiduePrefixMask
+```
+
+へ一般化し、ROM-mined metadataから再生成済みです。値は引き続き、
+
+```text
+fontKind=8
+glyph=8x8
+drawNibble=15
+residuePrefixMask=15
+```
+
+です。
+
+runtimeには独立した
+
+```cpp
+ApplyBattleHudRendererResidueCompatibility()
+```
+
+を追加しました。type15はこの共通renderer lifecycleへdelegateし、実ROMで同じcall chainを確認済みのDQ9 929も同じ処理を使います。
+
+```text
+0x020515EC
+ → 0x02051880
+ → 0x02050678
+ → 0x02050BD0
+ → 0x0204F284 / 0x0204F2F8
+```
+
+以前の929偽assertは撤去し、共通renderer residue適用自体が失敗した場合だけassertするように変更しました。
+
+さらに実装後、CLionでseed `0x13` を即実行しました。assertは消えましたが、それだけではROMと一致しなかったのでそのままデバッグを継続しています。
+
+そこで次のproductionバグも2つ修正済みです。
+
+1つ目は`FUN_021E2664`のrow+4 gateです。ROMでは `row+4 != 0` ならfallback chooserの通常early-returnを無効化します。C++はこれを`conflictInvalidated`でしか扱っていなかったので、
+
+```cpp
+ChooseFallbackPresentationGoal(..., bool rosterField4Nonzero)
+```
+
+へ一般化し、future/previous participantの両方からrow+4状態を渡すよう変更しました。
+
+2つ目は`0x021E1A1C` occupancy rebuildです。ROMは再構築時、
+
+```text
+0xFF は保存
+その他だけ0へ戻す
+```
+
+のに、C++は毎回empty mapから再構築していました。そこで、
+
+```cpp
+BuildPresentationOccupancy(actors, state.presentationOccupancy)
+```
+
+として既存`0xFF` markerを継承するよう修正しました。
+
+ただしseed `0x13` はまだ完全一致ではありません。実ROMをさらに直接測った結果、かなり本質的な次の差が出ています。
+
+実ROMのC0 fallback:
+
+```text
+0x021E2664
+rowActor = C0
+row+4    = 0x02392920
+start     = 30
+next      = 21
+```
+
+ROM occupancy gridをC++のchooserへそのまま入れると、C++アルゴリズムでも正しく**21**が選ばれます。つまりfallback chooser本体は合っています。
+
+そして実ROMの `0x021E2904` を直接probeしたところ、Turn1 actionIndex=2で渡されるnode listは、
+
+```text
+[57, 58, 47, 49, 39, 40]
+```
+
+でした。
+
+これは**node 48の6近傍**です。
+
+対してC++はHeroをnode59として、
+
+```text
+[67, 68, 58, 60, 49, 50]
+```
+
+をinvalidateしていました。
+
+ここが現在の直接原因です。
+
+重要なのは、初期Hero座標はROM/C++とも一致していることです。
+
+```text
+Hero initial world=(10641,12868,18432)
+nearest node=59
+```
+
+ところがTurn1 actionIndex=2時点の実ROM `0x021E1E50(Hero)` は**node48**を返します。
+
+つまり、
+
+**action0/1の途中でHeroのworldX/worldZが変化しているが、C++がそのworld-position lifecycleを再現していない**
+
+ところまで絞れました。
+
+これはstartNodeとは別です。ROMでもpresentation startは59のままなのに、実actor world positionから計算したnearestだけ48になっています。
+
+今追っているROM PCは、
+
+```text
+0x0216F62C  camera actor placement
+0x0216F948  camera placement/clamp commit
+0x0216964C  presentation actor reset
+```
+
+です。
+
+既存 `freecam_aux_write_probe_mcp.js` をfreshな実ROM laneへ載せ、seed `0x13`・ミラーシールドを選択した状態からこのworld-position producerを捕まえるところまでセット済みです。最後のツール実行時点ではprobeを装着してemulatorをresumeしたところです。
+
+なので、今回productionへ入った修正は「929だけmask=15」のような局所解ではなく、
+
+* `FUN_020515EC` HUD renderer residueの独立化
+* `021E2664 row+4 != 0` の一般fallback semantics
+* `021E1A1C` の永続`0xFF` occupancy lifecycle
+
+までです。
+
+残っている本丸は **Hero world positionが59相当→48相当へ変わるproducerを `0x0216F62C / 0x0216F948 / 0x0216964C` 周辺で確定し、そのworld-placement lifecycleをC++へ実装すること**です。ここに固定node48を入れるような修正はしていません。
+
+
+了解。producerデバッグは一旦その場で止めずに保持しつつ、overlay_jp.js のoverlay判定を見て、polling/heuristicで見ている部分をexec breakpointで確定判定できるなら移植します。まず現行実装と既存のoverlayロード/アンロード関数を読んで、最小差分で入れます。
+
+今のAPIを見ると、memory.registerexec/registerwrite はもう停止しっぱなしのbreakpointではなく、自動resumeするnon-stopping trace hookになっています。なので overlay_jp.js の手動 trace(...finally resume) は旧仕様の残骸です。さらに60frameごとのslot pollingも要らないので、LOADED_OVERLAY_TABLE の6byteを write breakpointで直接監視する形へ寄せるのがいちばん素直です。loader/unloader固定PCだけに依存しないので、こっちで移植します。
+
+実装方針は「write breakpointを主判定、pollingはStateロード後の再同期だけ」にします。registerwrite の hit.value を使うので、loader/unloaderの関数アドレスに依存しません。なお registerexec は現APIでは自動resumeなので、旧 finally resume も削除対象です。
+
+移植しました。overlayの通常変化は今後 0x01FFD384..389 のwrite breakpoint が主判定です。0x020A36B8/0x020A392C 固定PC依存と、callback内の手動resumeは撤去しました。Stateロードだけはguest writeを通らないので、そこだけ600frameごとの疎な再同期を残しています。次にsyntaxと実ROMでload/unloadログが出ることを確認します。
+
+overlay_jp.js は移植でき、実機側で 6本のwrite breakpoint（0x01FFD384..0x01FFD389） が登録されたことまで確認しました。初期slotも [0,11,17,26,32,33] を正常に読めています。ここから元のedge debugへ戻り、0x0204F284 probeはUI操作を邪魔しないよう最終A押下後の戦闘処理だけに掛けます。
+
+決定打が出ました。exact residue [0x02392920,0x02392920,8,15] を作った FUN_0204F284 呼び出しは caller PC 0x02050BD0 です。929のphase1でもphase3でも同じ呼び出しが繰り返し成立しています。つまりproducerは曖昧なrenderer群ではなく、FUN_02050678 内の 0x02050BD0 callsite まで絞れました。ここからそのbranch条件と引数をROM静的解析でC++へ落とします。
+
+0x02050BD0 の実引数も取れています。exact producer時は FUN_0204F284(..., param5=8, param6=0xF0, param7=0x0F)。つまりC++へ入れるべきものは「929だから1100」ではなく、その時点で走った文字rendererのformat/glyph branchが残すstack footprintです。次は FUN_02050678 の呼び出し元を実ROMで取って、どのbattle UI描画がこれを発生させているかまで固定します。
+
+renderer-50678-caller は付けるのが遅く、今のrunでは0件でした。ここは仮説ではなく再現タイミングの問題なので、battle.dstへ戻して renderer breakpointなしでミラーシールド選択 → 最終A → 即 0x02050678/0x0204F284 hook装着 の順でfresh再生します。
+
+overlay_jp.js のwrite breakpoint移植で、State再読込後のrunが nativeFault になりました。これは見逃せないので、いったんoverlay scriptを止めてproducer再現を続行しつつ、後でwrite breakpoint方式そのものがDeSmuME側で安全か確認します。移植コードは残しますが、実運用OKとはまだ判定しません。
+
+overlay breakpoint自体は実ROMで正常に働いていました。実際に slot3: 26→24→25→26 を writer PC 0x020A3A94 / 0x020A38D0 / 0x020A397C / 0x020A3774 付きで捕捉できています。いまの nativeFault はoverlay script停止後も再現するので別件です。lane自体がfault状態を保持している可能性が高く、同じisolationをfresh再生成してedge debugを続けます。
+
+nativeFault はfreecam/overlay probeを全部外しても残りました。なのでprobe由来ではありません。以前もstate再読込後にbattle-commandの入力状態だけ壊れたことがあったので、battle_command_mcp.js / Ctable_jp.js をstateに対して再登録してから再試行します。
+
+state再登録でも nativeFault が残るので、同じChrome lane自体が壊れています。ここで入力ハーネスをいじるのはXYなのでやめます。別DeSmuME laneを新規に立てて同じ battle.dst を使うのが正攻法です。CLion/C++側は問題なしなので、ROM laneだけ切り替えます。
+
+callerまで取れました。exact residueを作る 0x02050678 invocationのcallerは 0x02051880 (FUN_020515EC) です。引数は r0=0x02392920, x=52, y=60, text=0x020F0336, format系stack=[8,15,...]。つまり929固有処理ではなく、FUN_020515EC が2-byte SJIS文字列 81 5E 00 を描くUI pathがstackを汚しています。次はこのfunctionのbranch条件を静的に割ります。
+
+ここで設計上のズレも見えました。C++には既に presentation type 15だけ FUN_020515EC renderer residueをmask=15として入れる経路があります。でも実ROMではtype0のDQ9 929でも同じ 0x02051880 → 0x02050678 → 0x02050BD0 → 0x0204F284 が走っています。つまり「type15だからrenderer residue」は局所化しすぎで、HUD rendererのdirty lifecycleをpresentation typeとは独立にモデル化すべきです。まず FUN_020515EC を誰が929中に呼ぶかを取ります。
+
+0x020F0336 はCP932で 「／」 でした。FUN_020515EC は2つの数値を X／Y 形式で描くrendererです。これは「929固有presentation」より、戦闘UIのページ/カウンタ描画が直前のコマンド操作でdirtyになり、後続presentationのstackへ残る可能性が高いです。C++ traceも並行して、929がTurn1の何番目で、UI操作からどれだけ後に来るかを確認します。
+
+assertもC++で正常発火し続けています。ここではassertを外さず、ROM側のFUN_020515EC callerをfresh runで取ります。見るPCは 0x0204D6F8 vs 0x0204D9B4。前者なら通常HUD update (param2=1)、後者ならfull redraw (param2=0) です。これで「929固有」か「UI dirty lifecycle」かを分けられます。
+やった。`C:\Users\owner\Documents\tunnelworkspace\BattleArrow\overlay_jp.js` は、overlay判定をbreakpoint主体へ移植済みです。
+
+変更点はこうです。
+
+* `0x01FFD384..0x01FFD389` の6 slotへ `memory.registerwrite` を登録
+* 通常のoverlay load/unload判定は、60frame pollingではなく**loaded-overlay tableへのwrite breakpoint**で即時判定
+* 旧 `0x020A36B8 / 0x020A392C` の固定exec hook依存を撤去
+* 旧API向けの `finally { resume }` も撤去。現APIの`registerwrite/registerexec`はnon-stopping trace hookなので不要
+* Stateロードはguest writeを発生させないため、そこからの復帰用だけ600frameごとの疎なresyncを残した
+* Node `--check` はpass
+
+しかも実ROMで動作確認までできました。実際のoverlay遷移をbreakpointだけで、
+
+```text
+slot 3: 26 → unload
+writer PC = 0x020A3A94
+
+slot 3: → 24
+writer PC = 0x020A38D0
+
+slot 3: 24 → unload
+writer PC = 0x020A3A94
+
+slot 3: → 25
+writer PC = 0x020A38D0
+
+slot 3: 25 → unload
+writer PC = 0x020A397C
+
+slot 3: → 26
+writer PC = 0x020A3774
+```
+
+まで捕捉しています。なので「breakpoint使えるなら」の部分は、**使えるし実ROMで実証済み**です。
+
+ついでにエッジケースdebugもかなり進みました。追跡中のROM PCを明記すると、
+
+```text
+0x020515EC
+  ↓
+0x02051880  call FUN_02050678
+  ↓
+0x02050BD0  call FUN_0204F284
+  ↓
+0x0204F2E8 / 0x0204F2F8 / 0x0204F308
+```
+
+です。
+
+seed `0x13` の `[0x02392920, 0x02392920, 8, 15]` を**実際に生成するcallsite**は、
+
+```text
+0x02050BD0
+```
+
+まで実ROMで確定しました。
+
+その時の `FUN_0204F284` 引数は、
+
+```text
+param1 = 0x02392920
+param5 = 8
+param6 = 0xF0
+param7 = 0x0F
+```
+
+です。
+
+さらに親まで動的に取れて、
+
+```text
+FUN_02050678 caller = 0x02051880
+function             = FUN_020515EC
+text pointer         = 0x020F0336
+text bytes           = 81 5E 00
+CP932                 = "／"
+```
+
+でした。
+
+つまりこれ、929固有の謎データではなく、**`X／Y` を描画するHUD rendererのstack residue**です。
+
+ここはC++側にも重要で、現在すでにpresentation type 15だけ、
+
+```cpp
+kTensionHudRendererResiduePrefixMask = 15
+```
+
+を使って同じ`FUN_020515EC` residueをモデル化しています。
+
+しかし実ROMでは**presentation type 0のDQ9 929中にも同じrenderer pathが走る**ことを今回証明しました。したがって、
+
+```text
+presentation type 15 → residue
+```
+
+という現在のC++モデルは局所化しすぎです。
+
+次に見るべきROM PCも絞ってあります。
+
+```text
+0x0204D6F8 → FUN_020515EC(param2=1)
+0x0204D9B4 → FUN_020515EC(param2=0)
+```
+
+`FUN_020515EC` 自体の条件もGhidraで読めており、`context+0xD8` のdirty bitsに依存しています。なので本修正は**presentation typeから切り離してHUD dirty/render lifecycleとして実装する**方向が濃厚です。
+
+ここだけ未完です。fresh seed `0x13` で上記2 callerのどちらがexact residueを作ったかを動的取得する直前まで来ました。C++の偽assertは残してあり、`--trace-sequence 0x13 1 31` で意図どおりexit 3になって、未モデル化経路を黙殺しない状態です。
+
+
+
+-----------------
+続けます。固定nodeは入れず、実ROMでHeroのworld座標がいつ・誰により59相当→48相当へ変わるかを先に確定し、そのproducerの意味だけC++へ移します。今のfresh laneに載せてあるplacement probeから、そのまま結果を回収します。
+
+laneが死んでいたので、同じbattle.dstからfresh laneを再生成します。ここで挙動を変えるコードはいじりません。battle_command_mcp.js / Ctable_jp.js / 既存placement probeだけを再登録して、seed 0x13 の同じTurn1を再現します。
+
+fresh laneは復旧し、3本とも登録済みです。今度はprobeを最終確定直前でresetして余計な初期化イベントを切り、ミラーシールド確定後からactionIndex2到達までのplacement/resetだけ取ります。
+
+probeはかなり効きました。action137直後に0x0216F62C(actorId=Hero)が実際に走り、929ではC0へ走っています。ただし既存probeのoriginalX/Zはactor本体+0x44/+0x4Cで、今回必要なpresentation object +0x10/+0x18とは別物です。ここを混同せず、0216F62Cの実処理とpresentation world writerをGhidraで確定します。
+
+0216F62C自体はpresentation worldを書いていません。これはcamera target/actor本体座標のclamp経路で、今回のpresentation+0x10/+0x18 producerとは別です。なので次は実ROMのHero presentation objectそのものへwrite breakpointを置き、X/Z 8 bytesのwriter PCを直接取ります。これなら中間関数を当てずにproducerへ飛べます。
+
+最終確定だけgatewayの11秒退避に乗りました。これは失敗扱いではなく、同じ入力処理が裏で継続中です。二重Aを入れず、まずその1件の完了だけ回収してからworld writeログを読みます。
+
+ここで前提を1つ修正できます。write breakpointではHeroのpresentation+0x10/+0x18は一度も変わっていません。ずっと (10641,18432) のままです。
+
+Ghidraを読み直すとFUN_021E1E50がnearest計算に使うのはpresentation objectではなく、read_data_limit_e9_1(actorId)で得た**battle actor本体の+0x44/+0x4C**でした。既存probeではaction137時にHero本体が実際に (0,10240)。つまりC++がnearest計算へpresentation worldを流していること自体がモデル違いの可能性が高いです。まず (0,10240) → node48 をC++の同じnearest関数で確認します。
+
+(0,10240) をC++と同じnode座標へ当てると、48と49が完全tieで、ROM/C++のstrict-improvement規則によりlower node 48になります。これで 021E2904 のnode48中心は説明できました。
+
+つまりバグは「48を知らない」ではなく、C++が021E1E50へ別の座標系を渡していることです。次はHero本体+0x44/+0x4Cへwrite breakpointを置き、(0,10240)が初期値なのか、137で作られるのか、いつ (10641,18432)へ戻るのかをwriter PC付きで確定します。
+
+actor本体write breakpointはpresentation側と違ってUI待機中にも当たり、battle-commandが一瞬のmemoryBreakpointを拾いました。write hook自体はtrace用途なので、入力を変えずにresumeして同じ選択を続けます。これで捕捉イベントは保持されています。
+
+write breakpointでUIを邪魔する必要はもうないので外します。次は0x021E1E50入口だけをnon-stoppingで踏み、各action setupが実際にどのbattle-actor X/Zをnearestへ渡したかを全件取ります。これでphysical座標をC++にどう持続させるべきかまで決めます。
+
+non-stopping probeで確定しました。seed13の問題のsetupで021E1E50は**1回だけ、Heroに対して (0,204,10240)**を読んでいます。これがnode48の唯一の入力です。presentation (10641,12868,18432) は無関係でした。
+
+ここからC++を直すには全actorのbattle-object transform初期値も別状態として持たせる必要があるので、同じbattle.dstから4体分を一括snapshotしてから構造を分離します。
+
+4体のbattle-object初期座標も確定しました。
+
+Hero  (0,    204,  10240)
+C0    (-9009,204, -10240)
+C1    (0,    204, -10240)
+C2    (9009, 204, -10240)
+
+presentation初期座標とは明確に別です。なので今からstateを二重化します。021E1E50だけbattle-object座標を使い、既存のpresentation route/goal/selector用途は今のpresentation座標を維持します。まずroute commitがどちらを更新すべきかを既存コードとROM関数対応から確認して、最小差分で入れます。
+
+分離すると、同じ構造バグがもう1箇所見えます。ApplyCameraActorWorldBounds()も現在presentation worldX/Zをclampしていますが、ROM 0216F62Cが±0x6000でclampするのはbattle actor +0x44/+0x4Cです。ここも同じ混同です。
+
+なので単にnearestだけ差し替えるのではなく、ROM対応が明確な2箇所（021E1E50と0216F62C）をbattle-worldへ切り替えます。reset時にどちらの座標が同期されるかだけ0204A9F4まで確認します。
+
+ROM側の分離は確定しました。02049B10はpresentation +0x10/+0x18をnode座標へ更新し、flag 0x20が立っていれば同時にbattle actor +0x44も同期します。一方0216F62Cのclamp後restoreはbattle actor側だけです。
+
+この対応をそのままC++へ入れます。既存のroute commitは高速化上「移動完了」を一括commitしているので、そこでは両座標を同じroute endへ同期、camera clamp restoreだけbattle-worldのみ更新にします。変更前にgit statusだけ見て、他作業者差分は触りません。
+
+
+構造分離を入れました。初期presentation位置は従来値のまま、実ROMで読んだbattle-object位置を別フィールドへ保持します。021E1E50/RefreshPresentationStartNode/0216F62C clampはbattle-world参照へ変更、presentation resetだけROMどおり両者を同期します。
+
+ここで即seed 0x13を実行します。狙いはまずTurn1 C0 30→21 の復活、その結果として後続route/maxRouteがROM側へ収束するかです。
+
+一段進みました。狙っていたC0は30→21までROM一致しました。なのでbattle-world分離は正解です。
+
+ただし新しい差が露出しました。ROMでは同じsetupでC2が33→42だったのに、C++は33→41になっています。つまりnode48 pivotまでは合ったが、021E1FD8のcurrent actor goal selectionにまだ1差があります。ここを詳細traceでgoal/aux/gridまで見て、次のズレだけ潰します。
+
+C++のcurrent actor C2は、pivot48から goal=41 / aux=50 / route=[33,32,41] を選んでいます。ROMの最終start=42との差はここです。
+
+既存freecam_setup_probe_mcp.jsにはsetStart/setGoal/setAuxとroute writeまで揃っているので、新しいprobeを増やさずこれを使います。fresh seed13を1ターンだけ再生して、ROMがC2へ何をgoal/auxとして書いたかを直接取ります。
+
+ROM側current actorは完全に取れました。
+
+C2 start=33
+pivot=48
+invalidate=[57,58,47,49,39,40]
+goal=42
+aux=51
+targetNode=59
+
+C++は同じpivotから goal=41 / aux=50。つまり差はもう021E1FD8内部のcandidate選択だけです。ここはGhidra assemblyとC++後半を1対1で突き合わせます。
+
+候補選択部で怪しい箇所が1つあります。C++ ChooseNearestPresentationCandidate() は「actor.startNodeの中心」から候補距離を測っています。ROM assemblyでは複数候補時に021E1D90へactor objectを渡しているので、ここもstart nodeではなくlive battle-worldを使っている可能性があります。021E1D90を即確認します。
+
+021E1D90自体はC++どおり「startNode中心→candidate node中心」の距離でした。なので距離式ではありません。差はcandidate集合そのものです。
+
+ここは内部stackを推測せず、ROMの021E1D90入口で param1=startNode, candidates[], count を直接取ります。C2のgoal42を選んだ候補列が分かれば、C++のdistance-layer生成のどこが違うか一発で絞れます。
