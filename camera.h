@@ -71,6 +71,7 @@ struct CameraDebugEvent {
     std::array<std::uint8_t, kMaxPresentationActors> auxiliaryNodes{};
     std::array<bool, kMaxPresentationActors> rosterField4Known{};
     std::array<bool, kMaxPresentationActors> rosterField4Nonzero{};
+    std::array<std::uint8_t, 81> presentationOccupancy{};
 };
 #endif
 

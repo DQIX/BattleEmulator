@@ -764,6 +764,20 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     return true;
 }
 
+// Stack compatibility for the battle HUD page-counter renderer:
+//   020515EC -> 02051880 -> 02050678 -> 02050BD0 -> 0204F284/0204F2F8.
+// The stale 021E1958 row+4 words are an ABI side effect of that renderer, not
+// a presentation-type property.  The mask itself is ROM-mined from the ARM9
+// call immediates plus font_lv5.gp2 metrics by build_freecam_renderer_metadata.mjs.
+[[nodiscard]] inline bool ApplyBattleHudRendererResidueCompatibility() noexcept {
+    std::array<bool, 4> prefix{};
+    for (std::size_t index = 0; index < prefix.size(); ++index) {
+        prefix[index] =
+            ((generated::kBattleHudRendererResiduePrefixMask >> index) & UINT8_C(1)) != 0;
+    }
+    return SetRosterField4CompatibilityPrefix(prefix);
+}
+
 [[nodiscard]] inline bool ApplyKnownRosterField4PostActionCompatibility(
     const std::uint8_t presentationType
 ) noexcept {
@@ -784,17 +798,9 @@ inline void InvalidateRosterField4Compatibility() noexcept {
             }
             break;
         case generated::kTensionGainPresentationType: {
-            // Tension-gain presentation actions dirty the battle HUD. The
-            // FUN_020515EC text renderer leaves the F2F8 ABI footprint
-            // over the next 021E1958 row+4 slots. The prefix mask is generated
-            // from the ROM's ARM9 draw-call immediates plus font_lv5.gp2 font
-            // metrics; it is not a presentation-type-specific hand table.
-            std::array<bool, 4> prefix{};
-            for (std::size_t index = 0; index < prefix.size(); ++index) {
-                prefix[index] =
-                    ((generated::kTensionHudRendererResiduePrefixMask >> index) & UINT8_C(1)) != 0;
-            }
-            return SetRosterField4CompatibilityPrefix(prefix);
+            // This presentation path is one known trigger of the independent
+            // FUN_020515EC battle-HUD renderer lifecycle.
+            return ApplyBattleHudRendererResidueCompatibility();
         }
         default:
             InvalidateRosterField4Compatibility();
@@ -1052,7 +1058,10 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     return true;
 }
 
-[[nodiscard]] inline bool AssignActorFallbackPresentationGoal(const std::uint16_t actorId) noexcept {
+[[nodiscard]] inline bool AssignActorFallbackPresentationGoal(
+    const std::uint16_t actorId,
+    const bool rosterField4Nonzero = false
+) noexcept {
     auto& state = ThreadContext();
     if (!state.presentationGoalSetupActive) return false;
     const std::size_t actorIndex = FindPresentationActorIndex(actorId);
@@ -1060,7 +1069,8 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     auto& actor = state.presentationActors[actorIndex];
     const detail::PresentationGoalDecision decision = detail::ChooseFallbackPresentationGoal(
         actor,
-        state.presentationOccupancy
+        state.presentationOccupancy,
+        rosterField4Nonzero
     );
     if (!decision.valid) return false;
     actor.goalNode = decision.goalNode;
@@ -1076,7 +1086,8 @@ inline void InvalidateRosterField4Compatibility() noexcept {
         std::span<const detail::PresentationActorState>(
             state.presentationActors.data(),
             state.presentationActorCount
-        )
+        ),
+        state.presentationOccupancy
     );
     return true;
 }
@@ -1091,7 +1102,8 @@ inline void InvalidateRosterField4Compatibility() noexcept {
 // action- or monster-specific camera rule.
 [[nodiscard]] inline bool PreparePreviousActionPresentationParticipant(
     const std::uint16_t actorId,
-    const std::uint16_t primaryTargetId
+    const std::uint16_t primaryTargetId,
+    const bool rosterField4Nonzero = false
 ) noexcept {
     auto& state = ThreadContext();
     if (!state.presentationGoalSetupActive) return false;
@@ -1109,7 +1121,8 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     } else {
         const detail::PresentationGoalDecision decision = detail::ChooseFallbackPresentationGoal(
             actor,
-            state.presentationOccupancy
+            state.presentationOccupancy,
+            rosterField4Nonzero
         );
         if (!decision.valid) return false;
         actor.goalNode = decision.goalNode;

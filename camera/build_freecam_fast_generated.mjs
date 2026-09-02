@@ -514,14 +514,14 @@ if (rendererMetadata.length !== 12 || rendererMetadata.subarray(0, 4).toString("
 if (rendererMetadata.readUInt32LE(4) !== 1) {
   throw new Error("freecam-renderer-metadata.bin has an unsupported version");
 }
-const tensionHudRendererFontKind = rendererMetadata[8];
-const tensionHudRendererGlyphWidth = rendererMetadata[9];
-const tensionHudRendererGlyphHeight = rendererMetadata[10];
-const tensionHudRendererDrawNibble = rendererMetadata[11];
-const tensionHudRendererResiduePrefixMask =
+const battleHudRendererFontKind = rendererMetadata[8];
+const battleHudRendererGlyphWidth = rendererMetadata[9];
+const battleHudRendererGlyphHeight = rendererMetadata[10];
+const battleHudRendererDrawNibble = rendererMetadata[11];
+const battleHudRendererResiduePrefixMask =
   0x03
-  | (tensionHudRendererGlyphWidth !== 0 ? 0x04 : 0)
-  | (tensionHudRendererDrawNibble !== 0 ? 0x08 : 0);
+  | (battleHudRendererGlyphWidth !== 0 ? 0x04 : 0)
+  | (battleHudRendererDrawNibble !== 0 ? 0x08 : 0);
 const hasAnyMinedFreeCameraTriggerSource = buildHasAnyMinedFreeCameraTriggerSource(
   inputBytes.get("freecam-camera-metadata.bin"),
   inputBytes.get("freecam-action-metadata.bin"),
@@ -554,11 +554,11 @@ chunks.push(formatBytes(operationType));
 chunks.push("};", "");
 chunks.push(`inline constexpr std::uint16_t kPsycheUpActionId = UINT16_C(${psycheUpActionId});`);
 chunks.push(`inline constexpr std::uint8_t kTensionGainPresentationType = UINT8_C(${tensionGainPresentationType});`);
-chunks.push(`inline constexpr std::uint8_t kTensionHudRendererFontKind = UINT8_C(${tensionHudRendererFontKind});`);
-chunks.push(`inline constexpr std::uint8_t kTensionHudRendererGlyphWidth = UINT8_C(${tensionHudRendererGlyphWidth});`);
-chunks.push(`inline constexpr std::uint8_t kTensionHudRendererGlyphHeight = UINT8_C(${tensionHudRendererGlyphHeight});`);
-chunks.push(`inline constexpr std::uint8_t kTensionHudRendererDrawNibble = UINT8_C(${tensionHudRendererDrawNibble});`);
-chunks.push(`inline constexpr std::uint8_t kTensionHudRendererResiduePrefixMask = UINT8_C(${tensionHudRendererResiduePrefixMask});`);
+chunks.push(`inline constexpr std::uint8_t kBattleHudRendererFontKind = UINT8_C(${battleHudRendererFontKind});`);
+chunks.push(`inline constexpr std::uint8_t kBattleHudRendererGlyphWidth = UINT8_C(${battleHudRendererGlyphWidth});`);
+chunks.push(`inline constexpr std::uint8_t kBattleHudRendererGlyphHeight = UINT8_C(${battleHudRendererGlyphHeight});`);
+chunks.push(`inline constexpr std::uint8_t kBattleHudRendererDrawNibble = UINT8_C(${battleHudRendererDrawNibble});`);
+chunks.push(`inline constexpr std::uint8_t kBattleHudRendererResiduePrefixMask = UINT8_C(${battleHudRendererResiduePrefixMask});`);
 chunks.push("");
 chunks.push(`inline constexpr std::array<std::uint8_t, ${actionCount}> kResourceCost = {`);
 chunks.push(formatBytes(resourceCost));
@@ -613,12 +613,12 @@ console.log(JSON.stringify({
     psycheUpActionId,
     tensionGainPresentationType,
     tensionGainPresentationTypeActionIds,
-    tensionHudRenderer: {
-      fontKind: tensionHudRendererFontKind,
-      glyphWidth: tensionHudRendererGlyphWidth,
-      glyphHeight: tensionHudRendererGlyphHeight,
-      drawNibble: tensionHudRendererDrawNibble,
-      residuePrefixMask: tensionHudRendererResiduePrefixMask,
+    battleHudRenderer: {
+      fontKind: battleHudRendererFontKind,
+      glyphWidth: battleHudRendererGlyphWidth,
+      glyphHeight: battleHudRendererGlyphHeight,
+      drawNibble: battleHudRendererDrawNibble,
+      residuePrefixMask: battleHudRendererResiduePrefixMask,
     },
   },
   triggerTable: { file: triggerTablePath, rows: triggerRows },

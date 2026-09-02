@@ -422,7 +422,8 @@ struct PresentationGoalDecision {
 
 [[nodiscard]] constexpr PresentationGoalDecision ChooseFallbackPresentationGoal(
     const PresentationActorState& actor,
-    PresentationOccupancyMap& occupancy
+    PresentationOccupancyMap& occupancy,
+    const bool rosterField4Nonzero = false
 ) noexcept {
     PresentationGoalDecision result{
         actor.goalNode,
@@ -436,7 +437,11 @@ struct PresentationGoalDecision {
     for (const std::uint8_t node : neighbors) {
         if (node != kInvalidPresentationNode && occupancy[node] < 0xf2) ++freeNeighborCount;
     }
-    if (!actor.conflictInvalidated && freeNeighborCount >= 4) return result;
+    // overlay_d_25:021E2664 reads the physical 12-byte work row at +4.
+    // A nonzero stale/working value bypasses the ordinary "four free
+    // neighbours is good enough" early return just like conflict invalidation.
+    const bool forceFallback = actor.conflictInvalidated || rosterField4Nonzero;
+    if (!forceFallback && freeNeighborCount >= 4) return result;
 
     std::uint8_t bestSecondRingCount = 0;
     std::uint8_t bestNode = kInvalidPresentationNode;
@@ -453,7 +458,7 @@ struct PresentationGoalDecision {
         }
     }
     if (bestNode < occupancy.size()
-        && (freeNeighborCount < bestSecondRingCount || actor.conflictInvalidated)) {
+        && (freeNeighborCount < bestSecondRingCount || forceFallback)) {
         ClearPresentationClass(occupancy, PresentationClassForActor(actor.actorId));
         RestorePresentationActorFootprint(occupancy, actor);
         result.goalNode = bestNode;

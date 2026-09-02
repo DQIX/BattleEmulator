@@ -320,16 +320,20 @@ bool ValidateRosterField4Compatibility() {
         if (RosterField4IsZero(index) == expectedNonzero) return false;
     }
 
-    if (!ApplyKnownRosterField4PostActionCompatibility(generated::kTensionGainPresentationType)) return false;
+    if (!ApplyBattleHudRendererResidueCompatibility()) return false;
     for (std::size_t index = 0; index < roster.size(); ++index) {
         if (index < 4) {
             const bool expectedNonzero =
-                ((generated::kTensionHudRendererResiduePrefixMask >> index) & UINT8_C(1)) != 0;
+                ((generated::kBattleHudRendererResiduePrefixMask >> index) & UINT8_C(1)) != 0;
             if (!RosterField4IsKnown(index) || RosterField4IsZero(index) == expectedNonzero) return false;
         } else if (RosterField4IsKnown(index)) {
             return false;
         }
     }
+
+    // Presentation type 15 remains a known trigger, but it must delegate to
+    // the same renderer lifecycle rather than owning a separate hand-coded mask.
+    if (!ApplyKnownRosterField4PostActionCompatibility(generated::kTensionGainPresentationType)) return false;
 
     if (ApplyKnownRosterField4PostActionCompatibility(0) || HasRosterField4Compatibility()) return false;
 

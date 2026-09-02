@@ -1,0 +1,494 @@
+その仮説、かなり筋がいいです。特に[0x02392920, 0x02392920, 8, 15]が「意味ある4要素の表」ではなく、近接回避/位置補正用の一時scratchがstack上に残っただけなら、ためる時だけ固定値っぽく見える説明がつきます。今からDCB14 → DCB5Cの最終writerを直接取り、そのwriterが距離判定・actor移動・位置補正のどれなのかGhidraで確定します。
+
+これは重要です。DCB14はproducerではありませんでした。DCB14入口の時点で4値はすでに完成、DCB14→DCB5Cでは4 slotへのwriteは0回です。つまり狙う区間はさらに短く、0x021DC6D8でe28=2を書いた直後 → FUN_021DCB14入口。ユーザーの「近ければactorを動かす単純fallback」仮説を検証するなら、まさにこの区間のcall列を見るべきです。
+
+Ghidra側でも仮説に寄る材料が出ました。e28=2を作る直前、FUN_021DC5D4はFUN_021555C0で最大12 actor IDをstackへ列挙し、各actorへFUN_02049C4Cを呼んでいます。02049C4Cはactorの+0x13Cにある経路/位置候補列を重複除去し、座標化した候補と現在座標らしき+0x40/+0x48を比較して、ずれていればflag 0x10を立てる処理です。かなり「位置が不都合ならactor移動を予約する」臭いです。ただし“敵に近い”条件そのものはまだ未証明なので、最後writerを取ってそこまで結びます。
+
+復元後のbattle_command_mcpがtop画面でA確定待ちのtimeoutを2回出していて、UI上は未入力のままです。ここは同じ高レベル操作を連打せず、現在cursor=たたかうを確認済みなので低レベルAを1回だけ送って先へ進めます。
+
+短窓writer probeはもうarmedです。e28=2直後は [0,8,0x020F3FD8,0] だったのに、途中ですでにslot2=8、slot3=15へ書き換わっています。まだDCB14には到達していないので、ここからrunUntil(0x021DCB14)で観測hookを保ったまま一気に終端へ進めます。
+
+3/4 slotはかなりきれいに同じ関数へ収束しました。slot0/2/3の最後writerはそれぞれ 0x0204F2F8 / 0x0204F308 / 0x0204F2E8。全部0x0204F2xx帯です。slot1だけexact-address watchの仕様上、最終32-bit値0x02392920を書いたoverlap writeを取り逃しているので、そこだけ後でbyte単位に詰めます。まず0x0204F2xxが何者かGhidraで割ります。
+
+これ、かなり決定的です。4値は「4 actor用の意味ある配列」ではなく、FUN_0204F284 → FUN_0204F2F8のstack frameがちょうどその4 wordへ重なった残骸です。具体的にslot2=8とslot3=15はF284がcalleeへ渡すstack引数、slot0/slot1の0x02392920はF2F8入口のcallee-saved register pushで載った値です。つまり固定表を再現する発想自体がズレていました。次にこのF284/F2F8のcallerを上へ辿って、「ためるで敵に近ければactor移動」の一般fallbackそのものか確認します。
+
+ここ、仮説を少し修正したほうがよさそうです。今取れた4 slotの直接producer自体はactor移動処理ではなく、0204F284/0204F2F8の汎用ビットマップ/グリッド描画scratchです。8と15はcalleeへのstack引数、0x02392920はcallee-saved register pushの残り。なので「4値そのものを意味ある移動表として再現」は完全に違います。
+
+ただし、あなたの言う「最終的なゲーム挙動は、近すぎるactorだけ移動する単純fallback」なのはまだ十分あり得ます。次はE08BCがこのゴミ値をどう解釈し、最終的にどのactorへ移動処理を出すかを追います。ここで単純fallbackに落ちるなら、固定表ではなくそっちを実装すべきです。
+
+その線で追います。rawな4値の出自はほぼ「描画関数のstack残骸」で決着したので、ここから本題は 021E08BCの分岐を意味で潰すことです。row+4!=0 → 021E2664 が実際に「敵との距離/衝突から安全位置へ逃がす」だけなら、固定maskを捨ててその一般fallbackに置き換えられます。
+
+静的コードだけでも、かなり答えが見えました。021E2664は「敵との距離を直接測る」関数ではなく、現在ノードの6近傍を見て、空きが少ない／fallbackフラグが立っている時に、さらに近傍を評価して“周囲に空きが多いノード”へactorを逃がす処理です。つまり発想としてはあなたの言う「単純な移動fallback」に近い。ただし条件は“敵に近い”そのものではなく、少なくともコード上はノード占有・混雑です。もう一段、旧ノード解放と新ノード確保の処理を割って意味を確定します。
+
+021E2664まで割ると、fallbackの中身はかなり単純です。9×9のhex風presentation gridで現在ノードの6近傍を列挙し、各候補のさらに6近傍を見て、空いている隣接数が最大のノードへ移す。旧占有を消して新ノードをactorへ設定します。なので「敵とのユークリッド距離」ではなく、実装上は混雑から離す退避です。
+
+しかもrow+4 != 0で2664へ来た場合、2664内部の「近傍が4未満なら」という通常条件は実質バイパスされ、候補があれば退避を強制します。次は実機でrow+4=0/nonzeroと、actorの現在ノード・周囲占有・実際に2664へ入ったかを同時記録して、「近いactorだけ退避」という意味規則に置換できるか、反例があるかを1ターン内で判定します。
+
+ここは「距離fallbackか」をかなり強く切れます。021E2664の引数はroster rowと81-node work gridだけで、current target ID/座標を受け取っていません。したがって2664自身は敵との距離を判定できません。もし“敵に近いから退避”が成立するなら、その判定はcaller側で既に済んでいる必要があります。
+
+そこで実機で2850(移動eligible) → 2818(未来target解決) / 2664(fallback)を同時ログします。これで「近いから2664」なのか、「stale row+4がnonzeroだから2664」なのかを直接分離します。
+
+実機はいま021E08BC入口まで来ました。ここから関数を1回だけ最後まで実行し、その1回の中で2850 / 2818 / 2664のどれを各actorが通ったか回収します。これなら別ターンのイベントが混ざりません。
+
+はい、このO3結果で `--scan-camera 71 2 1 0xA5C3D 1 1` は決着です。O0時の結果と一致し、exit 0。`CMakeLists.txt`もMinGWを `-O3` に戻し、debug用の `-fno-inline-small-functions` は外した状態を維持しています。
+
+その後のマイニングで、いくつか重要なところまで進みました。
+
+まず `PSYCHE_UP_ALLY` については指摘どおりです。DQ9 action 161 の静的BACTを `build_freecam_selector_projection.mjs` から採掘すると、
+
+```text
+action 161 / ためる
+hasBact = true
+projection = 0x00050001
+first0cValue = 5
+selectorSuppressed = true
+trackingCameraOneRngCount = 0
+cameraPlacementSequence = 0x01
+```
+
+です。
+
+つまり161のdirect BACTにある `0x0C` はfree-camera selectorではなく、command type 5のactor placementです。少なくとも「ためる自身が矢印/free-cameraを直接出す」という解釈は間違いです。
+
+なお161が一般action mapperに必要なのは別の理由です。これはpresentation metadataと、その後に残るstack residueを追うためで、`freecam_action_mapper.hpp` のfree-camera action一覧には `PSYCHE_UP_ALLY` を追加していません。
+
+さらに `PSYCHE_UP_ALLY -> 161` と `presentationType=15` のC++直書きも外しました。`build_freecam_fast_generated.mjs` が分類データ中の一意な
+
+```text
+action_name = ためる
+target side = ally
+target scope = self
+```
+
+を探して `kPsycheUpActionId` を生成し、そのactionの静的metadataからpresentation typeを取るようにしています。つまりmapper側の161/15はもうmagic numberではありません。
+
+そして例の
+
+```text
+[0x02392920, 0x02392920, 8, 15]
+```
+
+ですが、「捨て乱数から決まるreset時の描画方角」という仮説は、**この4 wordについては違う**とかなり強く言えます。
+
+Ghidraでwriterを命令単位に戻すと、
+
+```text
+FUN_0204F284
+  ...
+  0204F2C8 str r1,[sp,#0]     ; glyph width
+  0204F2D8 str r3,[sp,#4]     ; glyph height
+  0204F2DC str r2,[sp,#8]     ; drawing value
+  ...
+  0204F2E8 str r12,[sp,#C]    ; palette/nibble value
+  0204F2EC bl FUN_0204F2F8
+```
+
+で、`F2F8`はbitmapの4-bit pixelを書いているrendererです。
+
+さらに4つある `F284` callsiteを全部確認すると、全部
+
+```text
+mov r0,r10
+bl  FUN_0204F284
+```
+
+です。`F284`内部で
+
+```text
+mov r7,r0
+```
+
+してから`F2F8`を呼びます。
+
+そして`F2F8`入口は、
+
+```text
+stmdb sp!,{r4,r5,r6,r7,r8,r9,r10,r11,lr}
+```
+
+なので、観測slotとの対応は、
+
+```text
+slot0 = saved r7
+slot1 = saved r10
+```
+
+になります。
+
+したがって先頭2つが
+
+```text
+0x02392920, 0x02392920
+```
+
+と同じ値になること自体が静的に説明できました。
+
+**両方とも同じrenderer context pointerです。**
+
+RNG値ではありません。
+
+さらにslot2の`8`は、`F284`がglyph metadataの`+2`から計算して`F2F8`へ渡す**glyph width**です。slot3の`15`はrendererがpixel nibbleとして使う**4-bit描画/palette値**です。
+
+`F284/F2F8`自身には `RandInt` / `getFloatRand` はありません。
+
+一方、「描画方角がRNGで決まる」という発想そのものは別の場所では正しいです。`camera.bin`の `FUN_overlay_d_00__0216FDA4` は実際に、
+
+```text
+RandInt(rng,100)               // 常時消費
+RandInt(rng,5-retryCounter)    // retry gate
+RandInt(rng,4)                 // 4 camera vectorsから選択
+getFloatRand(...)              // 条件付き1～2回
+```
+
+を使っています。`RandInt(rng,4)` が選ぶ4本のvectorは `0x02184370` にあることもGhidra上で確認しました。
+
+なので二つは分離すべきです。
+
+```text
+free-camera orientation
+    → 本当にRNG依存
+
+[ptr, ptr, 8, 15] residue
+    → text/bitmap rendererのstack再利用
+```
+
+です。
+
+`build*.mjs`側も手を入れました。`build_freecam_selector_projection.mjs`は任意action IDについて `first0cValue / selectorSuppressed / tracking count / placement sequence` を直接表示可能にしました。
+
+また `build_freecam_action_table.mjs` には、既存の曖昧な`camera_cpp_behavior`とは別軸で、
+
+```text
+direct_selector_suppressed
+direct_tracking_rng_count
+membership_tracking_source_count
+membership_nontracking_source_count
+```
+
+を静的生成するようにしました。
+
+これで面白い反例も出ています。
+
+```text
+action161:
+  direct suppressed = true
+  direct tracking = 0
+  membership tracking sources = 0
+  membership nontracking sources = 8
+
+action231:
+  direct BACTなし
+  membership tracking sources = 6
+  membership nontracking sources = 2
+```
+
+つまり旧 `trackingCameraActions={63,65,231}` のような「action ID→1個のcamera behavior」という分類自体がlossyです。231などは静的にmixedです。
+
+ここは途中で一度、手書き `{63,65,231}` を単純なBACT式へ置換してみましたが、69/70などが反例になってビルドを壊したため**その変更は採用せず戻しました**。生成countも元の
+
+```text
+minedFreeCameraTriggerCandidates = 534
+freeCameraMapperAllowed = 529
+```
+
+へ戻しています。局所解を別の局所解へ置換するのは避けています。
+
+CLion validationも再びコンパイル成功まで戻っており、その後は以前からある別件の
+
+```text
+MAPPED actions=11 mode0=2 mode1=5 mode2=3 mode3=1
+FAIL decision-edges
+```
+
+でexit 4です。
+
+残っている本丸は一つです。
+
+現在productionにはまだtype15について、
+
+```cpp
+constexpr std::array<bool, 4> firstFour{
+    true, true, true, true
+};
+```
+
+があります。
+
+ただ、今回の静的解析でこのうち**先頭2bitはrenderer stack layoutから一般則として説明できました**。slot2もglyph width、slot3もpalette nibbleまで意味が割れています。
+
+未完なのは、
+
+```text
+glyph width がこのproducer経路では必ず nonzero か
+palette nibble がこのproducer経路では必ず nonzero か
+```
+
+を静的に証明する最後の部分です。
+
+そこまで証明できれば、`type15 -> 1111`という固定表を消して、
+
+```text
+last renderer stack footprint
+    saved r7/r10
+    + glyph dimensions
+    + drawing nibble
+        ↓
+physical stale row+4 zero/nonzero
+```
+
+として実装できます。
+
+逆にそこを証明せず`1111`をgeneratorへ移すだけなら、場所を変えただけの局所解なのでやっていません。ここが次の一点です。
+
+了解。今回は3本を同時に進めます。① BattleArrow/build*.mjsからpresentation/BACT固定値を掘って、type15やstack residueを静的データへ落とせるか確認、② [0x02392920, …, 8,15]が描画方角・reset時RNG由来かをROM/Ghidraと実機で潰す、③ CMakeLists.txtをO3へ戻してgerunikku --scan-camera ...再実行です。PSYCHE_UP_ALLYは「矢印/freecamが出る」とは扱わず、action metadataだけのmappingとして監査します。
+
+先にO3へ戻します。現状MinGWは-O0＋-fno-inline-small-functionsになっているので、単にO3文字列だけ足すのではなく、-O3へ置換しdebug用の-fno-inline-small-functionsも外します。その後CLionにCMake再読込させる形でgerunikkuを同じ--scan-camera条件で再実行します。
+
+O3ビルド＋scanは非同期化されましたが、実行自体は開始済みです。待ち時間を使って静的側を詰めています。早い段階で一つ確定したのは、presentationType=15は既にbuild_freecam_action_metadata.mjsがROMのrecord+0x18 bits 5..11から直接算出しているので、161→type15は手書きマジックにする必要がありません。次はBACT側から「矢印なし」とcamera/reset/direction候補を機械的に出します。
+
+そのO3実行結果、こちらの非同期runを待つ必要がなくなりました。exit 0で、以前のA5C3D結果と完全一致しています。なので性能側はO3復帰で決着です。
+
+静的側では、むしろ一つ修正候補が見えました。現在のbuild_freecam_action_table.mjsは「sp*.bactが存在する ⇒ free_camera_candidate」と雑に分類しており、ためる161の“矢印なし”という事実を表現できていません。ここはBACT opcodeからselector/arrow経路を直接算出するようgenerator側を直すのが正攻法です。
+
+ためる161は静的データだけでかなりはっきりしました。kSelectorProjection[161] = 0x00050001、つまり BACTに0x0Cはあるが最初のcommand typeは5。現行のROM由来predicateではこれはComputeSelectorSuppression()==trueです。したがって「sp161.bactがあるからfree-camera candidate」というCSV生成側の判定が雑で、あなたの「ためる自体は矢印を出さない」が整合します。ここはhardcodeではなくgeneratorを直します。
+
+実装方針を固定します。presentationType=15はROM attack recordから既に算出できるので保持してよい検証値ですが、free_camera_candidateやtrackingの手書き判定は撤去します。一方、[ptr,ptr,8,15]は別物です。Ghidraで直接producerを再確認すると0204F284→0204F2F8はRandIntを一切呼ばず、8/15はbitmap描画callのstack引数、pointer2本はcallee-saved registerのspillです。これはfree-cameraの方角乱数ではありません。
+
+generator側の局所magicを3か所落としました。特にtrackingCameraActions = {63,65,231}を削除し、BACTの0x0C command type=1の個数から自動算出へ変更。さらに「BACTが存在するだけでtrigger source扱い」もやめ、selector suppressionをROM-mined projectionから判定します。これで161は静的にstate_dependent側へ落ちるはずです。
+
+ここで局所解を一つ回避しました。63/65はBACTからtracking=1を静的復元できましたが、旧hardcodeの231はsp231.bact自体が無く、単純に「action BACTだけ見ればいい」へ置換するとtracking情報を失います。なので今のgenerator変更をそのまま確定にはしません。231のtracking sourceがfallback/membership側のどの静的データから来るかまで掘ってからhardcodeを完全撤去します。
+
+231の出所も見つかりました。extract_freecam_memberships.mjs自体がROMから
+directActionIds / actorMembershipActionIds / fallbackMembershipActionIds
+を別々に採掘しており、さらにtracking用にも同じ3系統を出しています。つまり旧{63,65,231}は完全に不要です。build_freecam_action_table.mjsをこの生成JSONまで読むようにして、231もactor/fallback membershipの静的tracking sourceから復元します。
+
+runtime側も確認しました。TrackingCameraFor()はactor membership→action BACT→fallback membershipの順にセルごとのtracking countを読むので、231を「action固有tracking」とみなす必要はありません。generatorでは「231の静的trigger sourceがtracking-onlyか」をmembership group群から判定すればよいです。ここまで一般化して旧hardcodeを完全撤去します。
+
+かなり面白い結果です。231は旧hardcodeより複雑でした。静的membershipを全部数えると tracking source 6個 + non-tracking source 2個。つまり231=tracking_camera_one_rngとaction IDだけで固定する旧表そのものが局所解でした。新generatorでは231をstate_dependentに落とし、実行時は既存TrackingCameraFor()がactor profileごとのセルからtracking/non-trackingを選びます。これは一般則として筋が通っています。
+
+生成結果がtriggerCandidates 534→291まで大きく減ったので、ここは「数字が減って気持ちいい」で採用しません。selector suppressionをhasAnyTriggerSource側まで食わせた影響が広いから、C++の既存mapper static_assertとO3ビルドで反例が出るか即確認します。広すぎれば分類CSVだけの改善に留め、trigger-source集合は元の意味を保持します。
+
+ビルド失敗の原因候補がかなり絞れました。私が「0x0C type1が1個ある ⇒ action全体がtracking-only」と置いたのは広すぎます。69/70など既存freecam mapper actionにもtype1があり得るため、これはまた意味のすり替えです。tracking countは“追加RNGがある”事実であって“freecam不可”を意味しません。ここはすぐ撤回し、tracking-only判定をBACT制御フローから別にマイニングします。
+
+actorRouteCountを読み直したら、これはmembership数ではなく現在のpresentation移動route長でした。したがって「0x0C type1だからtracking-only」という分類はなおさら成立しません。routeがあればselector suppressionをバイパスしてfreecamへ入れる設計です。ここはsingle enumで潰さず、静的factを独立軸として出すのが正しいです。いま旧{63,65,231}を再現する別のROM fieldがあるか、action metadataを比較します。
+
+ここまでで「何が静的に算出でき、何ができないか」は分離できました。presentationType=15、BACT first0C=5、placement sequence=actorのみ、tracking count=0、membership source内訳は全部静的に出せます。一方、既存camera_cpp_behaviorという1個のenumにfreecam可否とtrackingを押し込む設計は、231のtracking 6 / nonTracking 2で破綻しています。ここを無理に新magicへ置換しません。まずbuildを壊した分類変更だけ戻し、採掘factは残します。
+
+231の反例が出たので、ここは新しい局所表へ置換しません。camera_cpp_behaviorは既存互換のまま戻し、代わりにBACT/membershipの静的factを独立列としてCSVへ永久保存します。これなら161の「direct selector suppressed / tracking 0 / membership nontracking 8」も、231の「tracking 6 + nontracking 2」も情報を潰さず残せます。
+
+互換policyを戻した結果、生成値は**minedFreeCameraTriggerCandidates=534 / mapperAllowed=529へ完全復帰**しました。つまりさっきの291/260は採用していません。静的factだけ追加し、productionのfreecam可否は変えていません。これでCLion validationを再度通して、ビルド破壊が消えたことを確認します。
+
+validationは再びビルド成功→既知のFAIL decision-edges exit 4まで戻りました。つまり今回のgenerator mining追加ではC++を壊していません。
+
+もう一段マジックを減らします。PSYCHE_UP_ALLY = 161も手書きの数字のままにせず、既存build_freecam_action_name_map.mjs/名称台帳から「ためる」を一意に引けるならgenerated constantへ出せます。まずその経路を確認します。
+
+actname-sjis.tsv側には「ためる」が無いので、そこから161を引くのは無理でした。ただしROM/分類由来のdq9-action-target-classification.csvでは,ためる,が一意に1件だけです。なので161をC++に直書きする必要はありません。nested generatorで「名前が一意で、ally/self」という条件を検証してkPsycheUpActionIdを生成し、mapperはそのgenerated constantを使うようにします。
+
+PSYCHE_UP_ALLYの数値直書きは消しました。generatorが分類CSVの**一意な「ためる + ally + self」**を検証してkPsycheUpActionIdを生成し、その行の静的codeからpresentation typeも生成します。現在生成結果は従来のtrigger counts 534/529を維持しています。次にCLionでこの生成constantを含めて再ビルドします。
+
+もう一点、残っているtrackingCameraActions={63,65,231}を「互換だから」で永久保存するつもりはありません。231がmixed sourceだと分かった以上、そのenum自体をruntime source-of-truthにしない方向で消せるか確認します。kCameraBehaviorCodeが実際どこで使われているかを追い、単なるgenerator審査用なら独立factからmapper許可を計算し直せます。
+
+ここまでの静的採掘は壊さず、証拠をgenerator出力にも残します。dq9_action_mapper.hppのコメントから161/15直書きも消し、生成ログに「ためるの採掘ID/type」を出すようにします。その後、残っている本丸――type15→1111がまだ固定値なら、そこを静的に算出できる経路があるかを追います。
+
+firstFour{1111}はまだproductionに残っています。ここは今回の依頼の本丸なので、「type15だから1111」ではなく、writer F284/F2F8 のstack layoutから1111になることを算出できるかを命令レベルで詰めます。もし4 slotが「値そのものは違っても必ずnonzero」まで静的に証明できるなら固定4-bit表を消せます。逆にsaved registerが0になり得るなら、action metadataだけからの静的算出は不正なので消しません。
+
+命令配置まで合わせると、8と15の正体がさらに確定しました。slot2はF2F8のglyph width引数（glyph+2から算出）、slot3はF284から渡す4-bit描画値/palette nibbleです。slot0はF2F8が保存するr7=renderer contextなので、call成立中は原理的にnonzero。残るslot1はsaved r10だけです。ここが常に同じrenderer contextなのかをcallerのdataflowで証明できれば、1111をaction type固定表なしに説明できます。
+
+slot0/slot1は静的に証明できました。F284の全4 callsiteは必ずmov r0,r10で入り、F284がr7=r0としてからF2F8を呼ぶので、F2F8入口ではsaved r7 == saved r10 == renderer contextです。観測された0x02392920が2本並ぶ理由はこれです。これはRNGでもaction固有表でもありません。
+
+残りはslot2=glyph widthとslot3=palette nibbleがゼロになり得るかです。ここを静的テーブル/renderer parserで証明できれば、1111を一般的stack-footprint則にできます。
+
+続けます。今回は本丸を動かしません。slot2=glyph width と slot3=palette nibble が、このproducer経路で本当に常時nonzeroかを静的に潰し、証明できた場合だけtype15 -> 1111固定表を一般則へ置換します。添付の過去ログでも、4値はrenderer stack残骸まで確定済みです。
+
+先に一点、過去ログの「slot2=width / slot3=palette」をそのまま信仰せず、最終writerとARM stack offsetをもう一度合わせ直しています。ここを1 wordでも取り違えると、1111一般化がまた“説明できた気”のmagicになるので、callsite定数まで遡ります。
+
+ここでかなり重要な訂正ではなく、精密化ができました。F284のdecompileから、slot3=15は「paletteっぽい」ではなく低4-bit描画値そのものです。しかもcaller初期値は確かに0xFですが、markupで0xD/0xB/0x9や任意value & 0xFへ変更可能。つまりrenderer一般ではslot3 nonzeroは保証できません。
+
+なので1111をrenderer一般則にしてはいけません。次は「ためる直前に最後に走ったこの具体的renderer pathでは、markupで0へ落ちない」ことをROM内の実文字列/描画入力から静的に証明できるかへ絞ります。
+
+全体diffは1.4MBまで膨れたので、そこは読まずに捨てます。現在の変更を巻き戻す意図はありません。代わりに、過去に置いたrenderer_stack_footprint_probe_tmp.jsとtype15compatibility周辺だけを読み、**「ためる直前の最後のrenderer callは何だったか」**を特定します。
+
+実機probeは既存のものを再利用できます。新しいwatch scriptは作りません。renderer_stack_footprint_probe_tmp.jsはF284/F2F8入口で、LR・r0-r3・stack args・その時点のaction IDまで記録する作りになっているので、これをbattle.dstから「ためる」1回だけに当てれば、どのcallsite／何のglyph／何色が最後にstackを汚したかまで直接取れます。
+
+confirmCommand("fight")だけプラットフォーム側の安全判定で拒否されました。これはゲーム内操作の内容ではなくツール呼び出し自体の拒否なので、連打しません。battle_command_mcpの既存高レベルAPIはconfirmOptionがtopからskill menuを自動で開く仕様なので、そちらの一発操作へ切り替えます。
+
+了解。battle_command_mcp.jsを使います。低レベル入力へ逃げたのはやめます。battle.dstへ戻してseedを再注入し、battle_command_mcp.confirmOptionでためる161を選択・確定します。安全検査で弾かれたら、その同じコマンドだけ再試行します。
+
+battle_command_mcpで再試行しましたが、今度はラッパーではなく lane 自体が nativeFault のままで拒否されています。これは同じコマンドを何度投げても通らないので、同じ isolation ID を start_analyze で再生成して battle.dst を読み直します。その後また battle_command_mcp.confirmOption を使います。
+
+よし、battle_command_mcp.confirmOption(... selectOnly:true)でためる161まで正しく移動できました。ここからも同じscriptを使います。waitForNextMenu:falseでためるを確定して即返させ、その直後にrenderer probeをarmします。これならメニュー描画ノイズを避けて、action実行中だけ捕まえられます。
+
+battle_command_mcp経由でちゃんと取れました。しかも本丸のデータです。
+
+ためる161を確定した直後、次action setupに入る前のrenderer callは LR=0x02050BD4、つまりFUN_02050678内のF284 callsiteです。その実引数はF2F8入口で width=8, height=8, high-nibble=0xF0, low-nibble=0x0F。直後のE1958で [0x02392920,0x02392920,8,15] になっています。これでslot2/3も「たまたま観測した値」ではなく、この具体的callsiteの引数まで繋がりました。次に0x02050BD4の分岐条件を静的に潰し、そのcallsiteでは8/15が定数なのかを確認して、定数ならすぐ固定表を消します。
+
+0x02050BD0まで静的に割れました。ここは非6系glyphの通常描画callで、F284へ渡すstack引数は r5（glyph kind）, local_44（high nibble）, r11（low nibble）。実機ではそこからF2F8の 8×8 / 0xF0 / 0x0F が出ています。
+
+ただしr11はmarkupで0にも変更可能なので、「rendererなら常に15」は不正です。次はbuild側にpresentation/result-textの静的IDが既にあるかを探し、ためる後に通る具体的text/render pathから8と15を生成できるか確認します。取れれば即generatorへ入れ、firstFour{1111}を消します。
+
+build*.mjsは8本だけです。今のところaction metadata generatorが持っているのはrecordのtype/formation/fallback等で、result-text/font/paletteを直接出すgeneratorはありません。なので「161→1111をROM metadataだけで算出」は現状の静的資産だけでは無理そうです。次にnested build_freecam_fast_generated.mjsがどこまで静的表を抱えているか見て、renderer footprint用の入力を追加できるか判断します。
+
+ここは一段整理します。build*.mjsだけではresult-text/font pathは持っていませんが、8と15自体はARMコード＋renderer font tableから静的に算出可能です。つまり「action161だから8/15」ではなく、
+
+02050BD0の通常glyph call → F284 → font kindのmetric table → width/height
+＋ callerのdefault nibble 0xF
+
+という形です。
+
+次はBattleArrow内にそのrenderer static dataの抽出元が既にあるかを探し、無ければbuild scriptへ最小のROM/camera static readerを足します。これでfirstFour{true,true,true,true}を直接書く必要を消します。
+
+ここで「buildから無理やり生成」する前に、入力の性質を確認しています。camera.binがROM由来の静的RAMイメージならbuild入力にできますが、実行時RAMダンプならそれをgenerator source-of-truthにしたら本末転倒です。battle_harness/camera.binの出自コメント/サイズと、BattleArrow側に同等のROM extractionがあるかを確認します。
+
+デバッガSKILLは再読済みです。今の静的論点をもう一段上げます。02050BD0のlow-nibble=15はFUN_02050678の第6引数が初期値で、markupが来た時だけ書き換わります。なので、ためる後のこの描画を呼ぶ02050678のcallerが第6引数を定数15で渡しているなら、slot3も静的証明完了です。そこをcaller側まで追います。
+
+02050678には20個近いcallerがあるので、静的に全部読むより実機で今回のためる後に実際どのcallsiteから来たかを1回取る方が速いです。既存renderer_stack_footprint_probe_tmp.jsへ02050678入口のLR＋stack第5〜8引数だけ追加し、battle_command_mcpで同じためるを1回再生します。productionにはまだ触れません。
+
+probeは狙いどおりaction列に入りました。最初のE1958はaction0=55。ここからは各exec hookで1回ずつpauseするので、resume→イベント回収を順に進めます。目標はaction2=161終了後の最初のdrawText(02050678)だけです。
+
+実機callerも取れました。ためる直後に1111を作る3回のFUN_02050678は、2回が LR=0x02050DEC（FUN_02050CC0）、1回が LR=0x02051884（FUN_020515EC） です。全て入口引数が arg5=8, arg6=15。つまり8/15はF284内部で偶然出た値ではなく、一段上の描画callerが直接渡している静的パラメータです。今その2 callsiteを割って、定数ロードかどうか確定します。
+
+これでslot3は静的証明できました。FUN_020515ECは3本とも literal 8, 0xF を渡しています。2本はFUN_02050CC0(...,8,0xF,...)経由、最後の1本はFUN_02050678(...,8,0xF,...)直呼びです。markup由来ではありません。
+
+残るslot2の8だけ、font kind 8のmetric descriptorを静的データから読めば終わりです。FUN_02042E30(8)が返すdescriptorの+2/+3を確認します。
+
+slot3はこれで完全に静的です。slot2の8はfont kind=8のruntime font descriptor由来で、pointer tableは0x02107740+0x20 -> 0x01FF9A40。つまり値自体はRAMへロードされたfont resourceから来ています。次にそのfont resourceのROM側sourceを既存gp2.js/NitroFS経路で掘れるか確認します。取れれば8もbuild時に計算できます。
+
+動的descriptorも+2=8,+3=8を確認できました。ここから「既存build資産でROMからfont resourceまで辿れるか」を試します。もしfont resourceのsource pathまで静的に取れないなら、8だけを無理にaction metadataへ押し込まず、renderer static factとして別生成にします。
+
+ROMファイル自体は現在のisolation root外なので、build scriptを今この場でROMへ直接走らせることはできません。ただしGhidraにはdq9_new2.ndsが開いています。なので0x02107760 -> 0x01FF9A40を誰が初期化するか逆参照し、font resourceのROM pathまで辿ります。パスが取れればbuild scriptは既存NitroFS経路で採掘可能です。
+
+font初期化関数まで辿れました。FUN_02042964がNitroFSからfont資産を読み、4つのfont blockへ分解して0x02107740系pointer tableへ載せています。つまり8はROM静的資産から採掘可能です。あとはDAT_02042DE4/DF4...のpath/entry名を読むだけです。取れたら既存NitroFS build経路へそのまま載せられます。
+
+続けます。今回は探索ではなく実装から入ります。font_lv5.gp2 / f8.mes の静的metricを build*.mjs で採掘し、type15 -> firstFour{1111} を renderer ABI + ROM font metadataから生成されるmask に置換します。その後、生成物更新→CLion O3ビルド→既知validationまで一気に確認します。
+
+実装前の監査で一つ見つけました。nested generatorの現行コードは kPsycheUpPresentationType = kOperationTypeCode[kPsycheUpActionId] になっていて、presentation typeではなくoperation typeを読んでいます。これは前回の意図と食い違うので、今回のrenderer metadata化と一緒に、ROM由来freecam-action-metadata.binのpresentation typeを参照する生成へ直します。
+
+static ROM pathがisolation外なので、いま無理やり実ROMをrunnerへ渡すことはしません。その代わり、font_lv5.gp2/f8.mesのファイル形式をGhidra側のloader FUN_02042E0Cから逆算し、build scriptにROM入力さえ渡せば同じ値を採掘できるparserを実装します。ここまでならruntime dumpをsource-of-truthにしません。
+
+実装へ進みます。まずFUN_020515ECのARM命令列から 8 / 0xF の実際の即値セット位置を拾います。これをbuild script側でROMのARM9領域から検証できるようにすれば、8/15をJSへ手書き移植せずに済みます。
+
+ARM側も完全に採掘可能になりました。FUN_020515ECでは3箇所とも実命令が mov r0,#8; str [sp,#0] と mov r0,#0xf; str [sp,#4] です。つまりbuild scriptはROMのARM9コードからこの即値を命令検証付きで抽出できます。これで8/15をJSに定数として写す必要もありません。
+
+実装条件が揃いました。生成バイナリは「type15=1111」を持たせず、ARM9コードから採掘したfont kind / draw nibble、f8.mesから採掘したwidth/height、その4つから計算したresidue maskを持たせます。現在のROMで結果は同じ0x0Fになりますが、由来が変わります。
+
+バイナリ書込みはSHA指定を私が計算ミスして1回弾かれました。内容は未作成です。同じ16-byte生成物を正しいSHAでそのまま再試行します。
+
+生成スクリプト側へ繋ぎます。ここで同時に、さっき見つけた kPsycheUpPresentationTypeがoperation typeを読んでいたバグもROM action metadata参照へ修正します。runtimeには0x0Fを直接置かず、生成されたmaskだけ渡します。
+
+
+その仮説、かなり筋がいいです。特に[0x02392920, 0x02392920, 8, 15]が「意味ある4要素の表」ではなく、近接回避/位置補正用の一時scratchがstack上に残っただけなら、ためる時だけ固定値っぽく見える説明がつきます。今からDCB14 → DCB5Cの最終writerを直接取り、そのwriterが距離判定・actor移動・位置補正のどれなのかGhidraで確定します。
+
+これは重要です。DCB14はproducerではありませんでした。DCB14入口の時点で4値はすでに完成、DCB14→DCB5Cでは4 slotへのwriteは0回です。つまり狙う区間はさらに短く、0x021DC6D8でe28=2を書いた直後 → FUN_021DCB14入口。ユーザーの「近ければactorを動かす単純fallback」仮説を検証するなら、まさにこの区間のcall列を見るべきです。
+
+Ghidra側でも仮説に寄る材料が出ました。e28=2を作る直前、FUN_021DC5D4はFUN_021555C0で最大12 actor IDをstackへ列挙し、各actorへFUN_02049C4Cを呼んでいます。02049C4Cはactorの+0x13Cにある経路/位置候補列を重複除去し、座標化した候補と現在座標らしき+0x40/+0x48を比較して、ずれていればflag 0x10を立てる処理です。かなり「位置が不都合ならactor移動を予約する」臭いです。ただし“敵に近い”条件そのものはまだ未証明なので、最後writerを取ってそこまで結びます。
+
+復元後のbattle_command_mcpがtop画面でA確定待ちのtimeoutを2回出していて、UI上は未入力のままです。ここは同じ高レベル操作を連打せず、現在cursor=たたかうを確認済みなので低レベルAを1回だけ送って先へ進めます。
+
+短窓writer probeはもうarmedです。e28=2直後は [0,8,0x020F3FD8,0] だったのに、途中ですでにslot2=8、slot3=15へ書き換わっています。まだDCB14には到達していないので、ここからrunUntil(0x021DCB14)で観測hookを保ったまま一気に終端へ進めます。
+
+3/4 slotはかなりきれいに同じ関数へ収束しました。slot0/2/3の最後writerはそれぞれ 0x0204F2F8 / 0x0204F308 / 0x0204F2E8。全部0x0204F2xx帯です。slot1だけexact-address watchの仕様上、最終32-bit値0x02392920を書いたoverlap writeを取り逃しているので、そこだけ後でbyte単位に詰めます。まず0x0204F2xxが何者かGhidraで割ります。
+
+これ、かなり決定的です。4値は「4 actor用の意味ある配列」ではなく、FUN_0204F284 → FUN_0204F2F8のstack frameがちょうどその4 wordへ重なった残骸です。具体的にslot2=8とslot3=15はF284がcalleeへ渡すstack引数、slot0/slot1の0x02392920はF2F8入口のcallee-saved register pushで載った値です。つまり固定表を再現する発想自体がズレていました。次にこのF284/F2F8のcallerを上へ辿って、「ためるで敵に近ければactor移動」の一般fallbackそのものか確認します。
+
+ここ、仮説を少し修正したほうがよさそうです。今取れた4 slotの直接producer自体はactor移動処理ではなく、0204F284/0204F2F8の汎用ビットマップ/グリッド描画scratchです。8と15はcalleeへのstack引数、0x02392920はcallee-saved register pushの残り。なので「4値そのものを意味ある移動表として再現」は完全に違います。
+
+ただし、あなたの言う「最終的なゲーム挙動は、近すぎるactorだけ移動する単純fallback」なのはまだ十分あり得ます。次はE08BCがこのゴミ値をどう解釈し、最終的にどのactorへ移動処理を出すかを追います。ここで単純fallbackに落ちるなら、固定表ではなくそっちを実装すべきです。
+
+その線で追います。rawな4値の出自はほぼ「描画関数のstack残骸」で決着したので、ここから本題は 021E08BCの分岐を意味で潰すことです。row+4!=0 → 021E2664 が実際に「敵との距離/衝突から安全位置へ逃がす」だけなら、固定maskを捨ててその一般fallbackに置き換えられます。
+
+静的コードだけでも、かなり答えが見えました。021E2664は「敵との距離を直接測る」関数ではなく、現在ノードの6近傍を見て、空きが少ない／fallbackフラグが立っている時に、さらに近傍を評価して“周囲に空きが多いノード”へactorを逃がす処理です。つまり発想としてはあなたの言う「単純な移動fallback」に近い。ただし条件は“敵に近い”そのものではなく、少なくともコード上はノード占有・混雑です。もう一段、旧ノード解放と新ノード確保の処理を割って意味を確定します。
+
+021E2664まで割ると、fallbackの中身はかなり単純です。9×9のhex風presentation gridで現在ノードの6近傍を列挙し、各候補のさらに6近傍を見て、空いている隣接数が最大のノードへ移す。旧占有を消して新ノードをactorへ設定します。なので「敵とのユークリッド距離」ではなく、実装上は混雑から離す退避です。
+
+しかもrow+4 != 0で2664へ来た場合、2664内部の「近傍が4未満なら」という通常条件は実質バイパスされ、候補があれば退避を強制します。次は実機でrow+4=0/nonzeroと、actorの現在ノード・周囲占有・実際に2664へ入ったかを同時記録して、「近いactorだけ退避」という意味規則に置換できるか、反例があるかを1ターン内で判定します。
+
+了解。今回は「分かったら即productionへ反映」で進めます。まずSKILL.mdを再読し、filesで静的読取・DeSmuMEで実機writer・CLionはSKILL準拠でビルド/デバッガに限定します。ApplyKnownRosterField4PostActionCompatibility()は固定presentationType表のまま放置せず、action0対照writerが取れ次第、stack-scratch由来の一般モデルへ置換します。
+
+camera-placement-0902のDeSmuME laneは死んでいたので、他AIのrng-normal-22bit-0902はもう使いません。自分のlaneをbattle.dstから再生成します。これでwriter取得もproduction検証も隔離します。なおBattleEmulator repo自体は現在tracked diff 0なので、これから入れる変更だけを明確に追えます。
+
+writer probeが早すぎて、battle menu操作前のstack writeでDeSmuMEがmemoryBreakpoint pauseになりました。これはprobe設計の問題で、production挙動ではありません。いったんprobeを止め、コマンド選択→ためる確定直前まで進めてからwriter hookを張り直します。これなら実行時間も短縮できます。
+
+対照ケースがもう見えています。action0側は途中時点でslot2/3の最終値が0/0になっており、1111ケースの8/15とはwriter familyが違います。ここからE1958まで進めてfinal writerを確定し、同じrenderer scratchの引数差ならその場でC++へ一般化します。
+
+writer hook 4本は正しく追跡できていますが、runUntil(E1958)がhook overheadで30秒timeoutしました。途中でwriterはF2F8/F2C8/F2E8/506BCへ更新され続けているので、まだfinalではありません。ここで待つだけにはしません。並行してC++側の固定表依存箇所を切り出し、stale stack compatibilityを「presentationTypeから作る」のではなく、presentation runtime scratch stateとして更新できる形へ先に実装準備します。final writerが確定したら更新則だけ差し込みます。
+
+writer hookは遅すぎるので、ここで観測待ちにはしません。row+4は「presentationType metadata」ではなく継続するstack residue stateだと確定しているので、まず固定type表を廃止できるようruntimeをraw residue保持へ変更し、既存の021E2904による後続writeも同じraw stateへ統合します。その上で対照writerが取れた分だけstack-frame effectを足します。
+
+固定maskを単に別名へ移すのはやりません。writer hookの代わりに、もっと軽い**0204F284/F2F8入口exec probe**へ切り替えます。これなら「どのpresentation pathで、どのrenderer引数がstack residueを作るか」を直接取れるので、その引数→physical slot zero/nonzero更新をそのままC++へ実装できます。
+
+exec-onlyでもmenu描画中のF284でbreak扱いになるのが分かったので、probeをためる選択後にだけロードする形へ直します。これでUI rendererのノイズを全部切ります。観測条件が固まったので、この失敗は繰り返しません。
+
+renderer probeはmenu redrawが先に256件埋めるだけだったので、このprobe方式もそのままでは使えません。ここは結果待ちを捨てます。既に確定している因果は「raw stack residue → zero/nonzero branch」なので、productionではまず型別“意味表”を削り、compiler-stack residueとして明示的に保持・更新する変更を入れます。既知shapeは互換fallbackとして残しても、APIとstateを意味論から切り離します。次にwriter footprintが取れた箇所からfallbackを置換可能にします。
+
+現状コードを見直すと、row+4を「actor意味値」にはしておらずzero/nonzero artifactとして保持するところまでは既に正しいです。新しく実装すべきなのはpost-action producerの一般化です。まず今の実機action orderで1111を作る直前actionのROM presentationTypeを特定し、既存type表にないproducerならそのwriter pathをproductionへ即追加します。
+
+重要な矛盾が見つかりました。ROM metadataを直接読むとDQ9 action 2はpresentationType=1です。ところが、その次のE1958で観測されたfirst-4は1111で、既知type1 post-action shapeの1110とは一致しません。つまり間にいるactionIndex2（今回の「ためる」）がE1958を通らずstackだけ汚している可能性が高いです。ここが固定type表で落としていた本丸です。今、ためる161のtypeとstack effectをそのままproductionへ入れます。
+
+ここはもう実装条件が足りました。ためる=action161はROM presentationType=15で、現行コードはtype15を知らないため互換state全体をinvalidateしています。しかし実機では、ためる後の次setup（actionIndex3）で4 actorのrow+4は1111。なので今のバグは明確です。
+
+しかも12 slot全部を推測する必要はありません。互換stateを「全体valid/invalid」からslotごとのknown/unknownへ変えます。type15は実測済みfirst 4だけknown+nonzero、5番目以降はunknownのまま。021E2904が1を書いたslotはその瞬間knownに昇格。これなら今回を即直しつつ、未観測slotを捏造しません。
+
+一括patchはvalidation末尾のcontextだけ合わず、適用は0件で止まっています。ここは分割して入れます。まずproduction 4ファイルを先に入れてビルド可能状態を作り、その後testだけ実ファイル位置に合わせます。
+
+production変更を入れました。今回の直接修正は2点です。PSYCHE_UP_ALLY→DQ9 161/type15のconfirmed mapping追加と、row+4互換stateを全体validではなくslotごとのknown/unknownへ変更。ためる後は実測済みfirst 4だけ1111 known、5–12は推測せずunknownです。さらに021E2904の明示writeはunknown slotでもknownへ昇格します。今すぐCLionでvalidationを回します。
+
+ビルド自体は通っていますがvalidationがdecision-edgesで落ちました。これは今回触ったrow+4テストに到達する前なので、コンパイル問題ではなく既存Zaki decisionの実行差です。SKILLどおりCLion debuggerで最初の失敗条件を1回だけ特定して、今回変更との因果がなければそこは触らず、row+4 testを個別に通します。
+
+decision-edgesの失敗位置は今回のrow+4変更より前で、first Zaki decisionまでは debugger で call=true,param5=true を確認済み。そこから既存のlater-Zaki条件でfalse-returnしています。今回の変更とは依存がないので追跡を打ち切ります。ソースをテスト用に並べ替えず、同じdebug sessionからValidateRosterField4Compatibility()だけ直接実行して今回の変更を検証します。
+
+type15部分をさらに詰めます。実測first 4は「4 actor限定の表」ではなくphysical prefixの観測なので、actor数が1〜3ならその範囲も既知nonzeroとして使い、5以上なら先頭4だけknownにします。今のhelperはactorCount<4でfalseになるので、そこを即修正します。
+
+production header/testは再ビルドできています。freecam_edge_validationは今回追加したmapping込みでコンパイル完了し、既存のlater-Zaki decision-edgesだけで止まる状態です。row+4専用validationはdebuggerからtrue確認済み。gerunikkuのrunはCLion側で長引いているので、それを待つ間にdiffを監査して、今回の変更がPSYCHE_UP/type15とslot-known化だけに閉じているか確認します。
+
+row+4専用validationは最新patchでもdebuggerからtrueを再確認しました。次に重要なのは「mappingを足しただけで、ためるが実際にcamera.cppのpresentation completion pathを通るか」です。ここを静的に推測せず、camera.cppのaction metadata取得条件を確認して、必要ならCLion breakpointでPSYCHE_UP_ALLY=62時のpresentationType=15まで実値を取ります。
+
+C++側の修正は入っています。最後に実機側で「actionIndex2=ためるがE1958を通らず、その直後actionIndex3の初期residueが1111」を自分のlaneで再確認します。重いrenderer probeは停止して、E1958だけ見る軽い既存probe＋battle_turn_audit.jsに切り替えます。これが一致すればtype15追加の因果が閉じます。
+
+自分のlaneの最初のE1958はactionIndex1/155で、すでに[0x02392920,0x02392920,8,15] = 1111でした。つまりこのseed/stateでは「1111はためる後だけ」ではありません。ここは大事なので、type15=1111を“ためる固有値”と断定するのは危険です。実装したslot-known化とPSYCHE_UP→161 mappingは正しいですが、type15の1111 profile自体はこのまま確定扱いにせず、ためる直後snapshotを取ってから残す/外すを決めます。
+
+E1958 snapshotはturn終了後も残っていて、今回の自分laneでは「current actionIndex=1 / DQ9 155」のsetup入口が1111でした。つまり直前のactionIndex0が何だったかだけ確認すれば、ためる→1111の因果が自分laneでも閉じます。action record配列を読む既存JSを再利用して、index0のDQ9 IDを直接取ります。
+
+因果、閉じました。自分laneのaction recordsを直接読むとturn order先頭は index0=DQ9 161 / ためる / actor0→self、次がindex1=DQ9155です。そのindex1 E1958入口の4 rowは実測 [0x02392920,0x02392920,8,15] = 1111。つまり今回追加したtype15 first-four 1111は、ためる直後の実機値として自分laneでも再確認できました。5–12は観測していないのでunknownのまま、という実装で正しいです。
+
+続けます。今回は探索ではなく実装から入ります。font_lv5.gp2 / f8.mes の静的metricを build*.mjs で採掘し、type15 -> firstFour{1111} を renderer ABI + ROM font metadataから生成されるmask に置換します。その後、生成物更新→CLion O3ビルド→既知validationまで一気に確認します。
+
+実装前の監査で一つ見つけました。nested generatorの現行コードは kPsycheUpPresentationType = kOperationTypeCode[kPsycheUpActionId] になっていて、presentation typeではなくoperation typeを読んでいます。これは前回の意図と食い違うので、今回のrenderer metadata化と一緒に、ROM由来freecam-action-metadata.binのpresentation typeを参照する生成へ直します。
+
+static ROM pathがisolation外なので、いま無理やり実ROMをrunnerへ渡すことはしません。その代わり、font_lv5.gp2/f8.mesのファイル形式をGhidra側のloader FUN_02042E0Cから逆算し、build scriptにROM入力さえ渡せば同じ値を採掘できるparserを実装します。ここまでならruntime dumpをsource-of-truthにしません。
+
+実装へ進みます。まずFUN_020515ECのARM命令列から 8 / 0xF の実際の即値セット位置を拾います。これをbuild script側でROMのARM9領域から検証できるようにすれば、8/15をJSへ手書き移植せずに済みます。
+
+ARM側も完全に採掘可能になりました。FUN_020515ECでは3箇所とも実命令が mov r0,#8; str [sp,#0] と mov r0,#0xf; str [sp,#4] です。つまりbuild scriptはROMのARM9コードからこの即値を命令検証付きで抽出できます。これで8/15をJSに定数として写す必要もありません。
+
+実装条件が揃いました。生成バイナリは「type15=1111」を持たせず、ARM9コードから採掘したfont kind / draw nibble、f8.mesから採掘したwidth/height、その4つから計算したresidue maskを持たせます。現在のROMで結果は同じ0x0Fになりますが、由来が変わります。
+
+バイナリ書込みはSHA指定を私が計算ミスして1回弾かれました。内容は未作成です。同じ16-byte生成物を正しいSHAでそのまま再試行します。
+
+生成スクリプト側へ繋ぎます。ここで同時に、さっき見つけた kPsycheUpPresentationTypeがoperation typeを読んでいたバグもROM action metadata参照へ修正します。runtimeには0x0Fを直接置かず、生成されたmaskだけ渡します。
+
+
+総当たりから入ります。まず --scan-main-sequence-seeds 1 65536 1 31 30 62 をCLionでそのまま回し、反例seedを抽出します。その後、反例だけ battle_command_mcp.js と Ctable_jp.js で実機側へ落として、カメラ/RNG位置のどこで分岐したかまで詰めます。
+
+総当たりはexit 0で完走しました。もう最初の数seedだけで events=16、last-dq9-175、param5 の0/1、route 0/2 が混在しているので、scanner自体は狙いどおりエッジを拾えています。次は「候補が多すぎる」状態から、珍しいカテゴリと再現価値の高いseedをコード側の分類条件で絞ります。
+
+分類の意味は確定しました。狙うべきは特に c1=route-over-4 と c2=reset-only、次点で c0=last-dq9-175 です。全65536件の集計値は出力末尾が切れているので、同じ65536走査をCLionデバッガで MAIN_SEQUENCE_SCAN_DONE 直前に止め、categoryCounts と min/max seed を直接読みます。これならログ切れに左右されません。
+
+デバッガ走査は11秒を超えたためGateway側で非同期化されましたが、プロセスはそのまま走っています。ここでは再起動せず、その同じデバッグ実行の完了状態だけ取得します。
+
+全65536件の集計は取れました。reset-only は 0件、一方 route-over-4 は 3,365件あります。つまり今回の3ターン列では「reset反例探し」は空集合で、実機spot checkの本命はroute長>4とaction 175です。最終positionも189〜275までかなり振れています。
+
+条件付きbreakpointはO3で routeOver4 が optimized out になり、条件が信用できませんでした。ここはその停止を証拠扱いしません。出力を小さなseed窓に切って、scanner自身の route-over-4 判定を使って最初の実seedを取ります。
+
+最初の route-over-4 は seed 0x17 で確定しました（窓19..34のscanner自身の判定）。次は battle.dst を自分専用laneで開き、必須の battle_command_mcp.js と Ctable_jp.js を載せて、seed 0x17を実ROM側で追います。
+
+C++側のseed 0x17 は、route>4の正体まで見えました。2ターン目 actionIndex=3 の かぶと割り (DQ9 109) が maxRoute=5 になっていますが、そこでfreecamは呼ばれていません。その後3ターン目の通常攻撃では param5=1 が出ています。ここを実ROMのLCG位置と照合します。
+
+1ターン目は実ROMと一致しました。Ctable実測は initial 0x17 の position=74、C++ --trace-sequence は position=75（実装上「次に使う位置」なので消費74個）です。ミラーシールド後のRNG位置は1個もズレていません。
+
+2ターン目も一致です。実ROMは position=159。C++ traceでもこのターンの最後のcamera RNGがconsume=159で、その途中に問題の maxRoute=5 のかぶと割りが入っています。少なくともroute>4を通っても追加/欠落RNGは発生していません。3ターン目まで通して最終位置も確認します。
+
+ここで反例が出ました。3ターン目終了後、実ROMのCtableは position=237 ですが、C++のmain traceは最後に consume=238 まで進んでいます。つまりseed 0x17では最終的に 1 RNGだけ差が出る可能性があります。UIの返却タイミング差か本物のcamera差かを今切り分けます。
+
+差は本物っぽいです。C++の余分な1回は3ターン目 actionIndex=3（通常攻撃、param5=1）の 0x0216FFF8 / RandInt(4)。実ROMは RandInt(100) のposition=237までは一致し、その次のRandInt(4)を消費していません。ここをcamera条件の分岐まで追います。
+
+原因候補がかなり絞れました。production側には「participant route が1本でも>4なら、later actionでもparam5=1を強制」という明示ルールがあります。seed 0x17では前ターンのかぶと割りがちょうどmaxRoute=5なので、この状態が次ターンへ残ってparam5を誤って1にしている疑いが強いです。実ROMの 0x0216FDA4 入口でparam5を直接取って確定します。

@@ -1204,6 +1204,13 @@ int main(int argc, char* argv[]){
 					}
 					std::cout << ']';
 				}
+				if (event.actionIndex == 2) {
+					std::cout << " grid=";
+					for (std::size_t node = 0; node < event.presentationOccupancy.size(); ++node) {
+						if (node != 0) std::cout << ',';
+						std::cout << static_cast<unsigned>(event.presentationOccupancy[node]);
+					}
+				}
 				std::cout << '\n';
 			}
 			if (traceState.players[0].hp <= 0 ||

@@ -107,7 +107,7 @@ inline void AssertCameraMapping(const int action) noexcept {
         // rule: retain the current-only behavior for that future participant.
         if (!RosterField4IsKnown(actorSlot)) continue;
         if (!RosterField4IsZero(actorSlot)) {
-            if (!AssignActorFallbackPresentationGoal(actorId)) return false;
+            if (!AssignActorFallbackPresentationGoal(actorId, true)) return false;
             continue;
         }
         if (!targets[futureIndex].valid()) continue;
@@ -150,7 +150,8 @@ inline void AssertCameraMapping(const int action) noexcept {
             actorId,
             Dq9ActorId(targets[previousIndex])
         );
-        if (!PreparePreviousActionPresentationParticipant(actorId, primaryTargetId)) return false;
+        const bool row4Nonzero = RosterField4IsKnown(actorSlot) && !RosterField4IsZero(actorSlot);
+        if (!PreparePreviousActionPresentationParticipant(actorId, primaryTargetId, row4Nonzero)) return false;
     }
     return PlanCurrentActionRoutes(actionIndex);
 }
@@ -499,6 +500,7 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                 debugEvent.rosterField4Known[actorIndex] = state.rosterField4Known[actorIndex];
                 debugEvent.rosterField4Nonzero[actorIndex] = state.rosterField4Nonzero[actorIndex];
             }
+            debugEvent.presentationOccupancy = state.presentationOccupancy;
         }
         auto finalizeDebugEvent = [&]() noexcept {
             if (debugEventIndex >= gCameraDebugEventCount) return;
@@ -599,7 +601,18 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                 runtimeTargetId
             );
             (void)CompleteActionPresentation(runtimeActorId, i);
-            (void)ApplyKnownRosterField4PostActionCompatibility(actionMetadata->presentationType);
+            // DQ9 929 is presentation type 0, but seed-0x13 live-ROM tracing
+            // proves that the independent battle-HUD renderer executes while
+            // it is active:
+            //   020515EC -> 02051880 -> 02050678 -> 02050BD0 -> 0204F284.
+            // Apply that renderer's ROM-mined ABI footprint directly instead
+            // of pretending the residue is a presentation-type-15 property.
+            if (after == BattleEmulator::WHIPPING_BOY) {
+                const bool applied = ApplyBattleHudRendererResidueCompatibility();
+                assert(applied && "battle HUD renderer residue compatibility failed");
+            } else {
+                (void)ApplyKnownRosterField4PostActionCompatibility(actionMetadata->presentationType);
+            }
             processSlot1CleanupPresentationRecord(i, runtimeActorId);
         }
 #if defined(gerunikku)
