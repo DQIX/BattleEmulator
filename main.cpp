@@ -936,6 +936,149 @@ int main(int argc, char* argv[]){
 		return 0;
 	}
 
+	if (argc >= 6 && std::string_view(argv[1]) == "--scan-main-sequence-seeds") {
+		const uint64_t startSeed = std::stoull(argv[2], nullptr, 0);
+		const uint64_t count = std::stoull(argv[3], nullptr, 0);
+		const int currentSeedPosition = std::stoi(argv[4], nullptr, 0);
+		const int traceTurns = argc - 5;
+		if (traceTurns < 1 || traceTurns > 349) {
+			throw std::invalid_argument("scan main sequence turns must be 1..349");
+		}
+
+		int32_t traceGene[350] = {};
+		for (int step = 0; step < traceTurns; ++step) {
+			const std::string_view token(argv[step + 5]);
+			const std::size_t separator = token.find(':');
+			const int action = std::stoi(std::string(token.substr(0, separator)), nullptr, 0);
+			const int target = separator == std::string_view::npos
+				? -1
+				: std::stoi(std::string(token.substr(separator + 1)), nullptr, 0);
+			traceGene[step] = BattleEmulator::PackHeroAction(action, target);
+		}
+		traceGene[traceTurns] = -1;
+
+		std::array<std::uint64_t, 7> categoryCounts{};
+		std::array<int, 7> emittedCounts{};
+		std::array<std::uint64_t, 1024> lastDq9Counts{};
+		std::array<std::uint64_t, 1024> firstLastDq9Seed{};
+		int minFinalPosition = std::numeric_limits<int>::max();
+		int maxFinalPosition = std::numeric_limits<int>::min();
+		uint64_t minFinalPositionSeed = 0;
+		uint64_t maxFinalPositionSeed = 0;
+
+		auto emitCandidate = [&](const char* category, const int categoryIndex,
+		                         const uint64_t seed, const int finalPosition,
+		                         const uint64_t finalState, const std::size_t eventCount,
+		                         const CameraDebugEvent* lastEvent) {
+			++categoryCounts[categoryIndex];
+			if (emittedCounts[categoryIndex] >= 12) return;
+			++emittedCounts[categoryIndex];
+			std::cout << "MAIN_SEQUENCE_CANDIDATE category=" << category
+			          << " seed=0x" << std::hex << seed << std::dec
+			          << " position=" << finalPosition
+			          << " state=0x" << std::hex << finalState << std::dec
+			          << " events=" << eventCount;
+			if (lastEvent != nullptr) {
+				std::cout << " lastTurn=" << lastEvent->turnSerial + 1
+				          << " lastIndex=" << lastEvent->actionIndex
+				          << " lastAction=" << lastEvent->commonActionId
+				          << " lastDq9=" << lastEvent->dq9ActionId
+				          << " lastActor=0x" << std::hex << lastEvent->actorId
+				          << " lastTarget=0x" << lastEvent->targetId << std::dec
+				          << " lastRoute=" << static_cast<unsigned>(lastEvent->actorRouteCount)
+				          << " lastMaxRoute=" << static_cast<unsigned>(lastEvent->maxRouteCount)
+				          << " lastSource=" << static_cast<unsigned>(lastEvent->triggerSource)
+				          << " lastCall=" << lastEvent->runtimeCallFreeCamera
+				          << " lastParam5=" << lastEvent->runtimeParam5
+				          << " lastReset=" << lastEvent->runtimeResetOnly;
+			}
+			std::cout << '\n';
+		};
+
+		camera::SetDebugCapture(true);
+		for (uint64_t offset = 0; offset < count; ++offset) {
+			const uint64_t seed = startSeed + offset;
+			if (seed == 0) continue;
+			Player tracePlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
+			BattleResult traceResult;
+			int tracePosition = currentSeedPosition + 1;
+			uint64_t traceState = 0;
+			lcg::init(seed);
+			camera::ClearDebugEvents();
+			BattleEmulator::Main(&tracePosition, traceTurns, traceGene, tracePlayers, &traceResult,
+			                     seed, nullptr, nullptr, -1, &traceState, -1);
+
+			if (tracePosition < minFinalPosition) {
+				minFinalPosition = tracePosition;
+				minFinalPositionSeed = seed;
+			}
+			if (tracePosition > maxFinalPosition) {
+				maxFinalPosition = tracePosition;
+				maxFinalPositionSeed = seed;
+			}
+
+			const std::size_t eventCount = camera::DebugEventCount();
+			CameraDebugEvent lastEvent{};
+			const CameraDebugEvent* lastEventPtr = nullptr;
+			if (eventCount != 0) {
+				lastEvent = camera::DebugEventAt(eventCount - 1);
+				lastEventPtr = &lastEvent;
+				if (lastEvent.dq9ActionId < lastDq9Counts.size()) {
+					if (lastDq9Counts[lastEvent.dq9ActionId] == 0) {
+						firstLastDq9Seed[lastEvent.dq9ActionId] = seed;
+					}
+					++lastDq9Counts[lastEvent.dq9ActionId];
+				}
+			}
+
+			bool routeOver4 = false;
+			bool resetOnly = false;
+			bool callParam5Zero = false;
+			bool callParam5One = false;
+			for (std::size_t eventIndex = 0; eventIndex < eventCount; ++eventIndex) {
+				const CameraDebugEvent event = camera::DebugEventAt(eventIndex);
+				routeOver4 |= event.maxRouteCount > 4;
+				resetOnly |= event.runtimeResetOnly;
+				callParam5Zero |= event.runtimeCallFreeCamera && !event.runtimeParam5;
+				callParam5One |= event.runtimeCallFreeCamera && event.runtimeParam5;
+			}
+
+			if (lastEventPtr != nullptr && lastEvent.dq9ActionId == 175) {
+				emitCandidate("last-dq9-175", 0, seed, tracePosition, traceState, eventCount, lastEventPtr);
+			}
+			if (routeOver4) emitCandidate("route-over-4", 1, seed, tracePosition, traceState, eventCount, lastEventPtr);
+			if (resetOnly) emitCandidate("reset-only", 2, seed, tracePosition, traceState, eventCount, lastEventPtr);
+			if (callParam5Zero) emitCandidate("freecam-param5-0", 3, seed, tracePosition, traceState, eventCount, lastEventPtr);
+			if (callParam5One) emitCandidate("freecam-param5-1", 4, seed, tracePosition, traceState, eventCount, lastEventPtr);
+			if (eventCount != static_cast<std::size_t>(traceTurns * 5)) {
+				emitCandidate("event-count-not-5-per-turn", 5, seed, tracePosition, traceState, eventCount, lastEventPtr);
+			}
+			if (lastEventPtr != nullptr && lastEvent.runtimeCallFreeCamera) {
+				emitCandidate("last-event-freecam", 6, seed, tracePosition, traceState, eventCount, lastEventPtr);
+			}
+		}
+		camera::SetDebugCapture(false);
+
+		std::cout << "MAIN_SEQUENCE_SCAN_DONE seeds=" << count
+		          << " currentSeedPosition=" << currentSeedPosition
+		          << " turns=" << traceTurns
+		          << " minPosition=" << minFinalPosition
+		          << " minSeed=0x" << std::hex << minFinalPositionSeed << std::dec
+		          << " maxPosition=" << maxFinalPosition
+		          << " maxSeed=0x" << std::hex << maxFinalPositionSeed << std::dec;
+		for (std::size_t index = 0; index < categoryCounts.size(); ++index) {
+			std::cout << " c" << index << '=' << categoryCounts[index];
+		}
+		std::cout << '\n';
+		for (std::size_t dq9ActionId = 0; dq9ActionId < lastDq9Counts.size(); ++dq9ActionId) {
+			if (lastDq9Counts[dq9ActionId] == 0) continue;
+			std::cout << "MAIN_SEQUENCE_LAST_DQ9 dq9=" << dq9ActionId
+			          << " count=" << lastDq9Counts[dq9ActionId]
+			          << " firstSeed=0x" << std::hex << firstLastDq9Seed[dq9ActionId] << std::dec << '\n';
+		}
+		return 0;
+	}
+
 	if (argc >= 5 && std::string_view(argv[1]) == "--trace-sequence") {
 		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
 		const int currentSeedPosition = std::stoi(argv[3], nullptr, 0);
