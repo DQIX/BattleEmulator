@@ -783,14 +783,18 @@ inline void InvalidateRosterField4Compatibility() noexcept {
                 if (index < pattern.size()) pattern[index] = true;
             }
             break;
-        case 15: {
-            // Live 2026-09-02 Psyche Up / ためる evidence: the next 021E1958
-            // setup has four physical rows and sees 1111. The producer is
-            // renderer/compiler-stack reuse, not actor metadata. Only these
-            // four rows were present, so rows 4..11 deliberately remain
-            // unknown instead of extrapolating the observed prefix.
-            constexpr std::array<bool, 4> firstFour{true, true, true, true};
-            return SetRosterField4CompatibilityPrefix(firstFour);
+        case generated::kTensionGainPresentationType: {
+            // Tension-gain presentation actions dirty the battle HUD. The
+            // FUN_020515EC text renderer leaves the F2F8 ABI footprint
+            // over the next 021E1958 row+4 slots. The prefix mask is generated
+            // from the ROM's ARM9 draw-call immediates plus font_lv5.gp2 font
+            // metrics; it is not a presentation-type-specific hand table.
+            std::array<bool, 4> prefix{};
+            for (std::size_t index = 0; index < prefix.size(); ++index) {
+                prefix[index] =
+                    ((generated::kTensionHudRendererResiduePrefixMask >> index) & UINT8_C(1)) != 0;
+            }
+            return SetRosterField4CompatibilityPrefix(prefix);
         }
         default:
             InvalidateRosterField4Compatibility();

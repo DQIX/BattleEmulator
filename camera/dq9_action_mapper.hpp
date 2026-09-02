@@ -111,7 +111,7 @@ static_assert(kActions[BattleEmulator::HELM_SPLITTER].dq9ActionId == 109);
 static_assert(kActions[BattleEmulator::INACTIVE_ENEMY].dq9ActionId == 503);
 static_assert(kActions[BattleEmulator::PSYCHE_UP_ALLY].dq9ActionId == generated::kPsycheUpActionId);
 static_assert(
-    kActions[BattleEmulator::PSYCHE_UP_ALLY].presentationType == generated::kPsycheUpPresentationType
+    kActions[BattleEmulator::PSYCHE_UP_ALLY].presentationType == generated::kTensionGainPresentationType
 );
 
 } // namespace dq9::freecam::actions

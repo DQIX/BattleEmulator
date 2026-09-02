@@ -19,6 +19,7 @@ const inputs = [
   ["kActionMetadataBytes", "freecam-action-metadata.bin"],
   ["kMembershipMetadataBytes", "freecam-membership-metadata.bin"],
   ["kMonsterPresentationMetadataBytes", "freecam-monster-presentation-metadata.bin"],
+  ["kRendererMetadataBytes", "freecam-renderer-metadata.bin"],
 ];
 
 function formatBytes(bytes) {
@@ -474,6 +475,36 @@ const {
   psycheUpActionId,
   mappedRows,
 } = classification;
+const actionMetadata = inputBytes.get("freecam-action-metadata.bin");
+const presentationTypeOffset = actionMetadata.readUInt32LE(16);
+if (presentationTypeOffset + actionCount > actionMetadata.length) {
+  throw new Error("freecam-action-metadata.bin presentation-type table is truncated");
+}
+const psycheUpPresentationType = actionMetadata[presentationTypeOffset + psycheUpActionId];
+const psycheUpPresentationTypeActionIds = [];
+for (let actionId = 0; actionId < actionCount; ++actionId) {
+  if (actionMetadata[presentationTypeOffset + actionId] === psycheUpPresentationType) {
+    psycheUpPresentationTypeActionIds.push(actionId);
+  }
+}
+const tensionGainPresentationType = psycheUpPresentationType;
+const tensionGainPresentationTypeActionIds = psycheUpPresentationTypeActionIds;
+
+const rendererMetadata = inputBytes.get("freecam-renderer-metadata.bin");
+if (rendererMetadata.length !== 12 || rendererMetadata.subarray(0, 4).toString("ascii") !== "FCMR") {
+  throw new Error("freecam-renderer-metadata.bin has an invalid header");
+}
+if (rendererMetadata.readUInt32LE(4) !== 1) {
+  throw new Error("freecam-renderer-metadata.bin has an unsupported version");
+}
+const tensionHudRendererFontKind = rendererMetadata[8];
+const tensionHudRendererGlyphWidth = rendererMetadata[9];
+const tensionHudRendererGlyphHeight = rendererMetadata[10];
+const tensionHudRendererDrawNibble = rendererMetadata[11];
+const tensionHudRendererResiduePrefixMask =
+  0x03
+  | (tensionHudRendererGlyphWidth !== 0 ? 0x04 : 0)
+  | (tensionHudRendererDrawNibble !== 0 ? 0x08 : 0);
 const hasAnyMinedFreeCameraTriggerSource = buildHasAnyMinedFreeCameraTriggerSource(
   inputBytes.get("freecam-camera-metadata.bin"),
   inputBytes.get("freecam-action-metadata.bin"),
@@ -505,7 +536,12 @@ chunks.push(`inline constexpr std::array<std::uint8_t, ${actionCount}> kOperatio
 chunks.push(formatBytes(operationType));
 chunks.push("};", "");
 chunks.push(`inline constexpr std::uint16_t kPsycheUpActionId = UINT16_C(${psycheUpActionId});`);
-chunks.push(`inline constexpr std::uint8_t kPsycheUpPresentationType = kOperationTypeCode[kPsycheUpActionId];`);
+chunks.push(`inline constexpr std::uint8_t kTensionGainPresentationType = UINT8_C(${tensionGainPresentationType});`);
+chunks.push(`inline constexpr std::uint8_t kTensionHudRendererFontKind = UINT8_C(${tensionHudRendererFontKind});`);
+chunks.push(`inline constexpr std::uint8_t kTensionHudRendererGlyphWidth = UINT8_C(${tensionHudRendererGlyphWidth});`);
+chunks.push(`inline constexpr std::uint8_t kTensionHudRendererGlyphHeight = UINT8_C(${tensionHudRendererGlyphHeight});`);
+chunks.push(`inline constexpr std::uint8_t kTensionHudRendererDrawNibble = UINT8_C(${tensionHudRendererDrawNibble});`);
+chunks.push(`inline constexpr std::uint8_t kTensionHudRendererResiduePrefixMask = UINT8_C(${tensionHudRendererResiduePrefixMask});`);
 chunks.push("");
 chunks.push(`inline constexpr std::array<std::uint8_t, ${actionCount}> kResourceCost = {`);
 chunks.push(formatBytes(resourceCost));
@@ -558,7 +594,15 @@ console.log(JSON.stringify({
     mappedRows,
     actionCount,
     psycheUpActionId,
-    psycheUpPresentationType: operationType[psycheUpActionId],
+    tensionGainPresentationType,
+    tensionGainPresentationTypeActionIds,
+    tensionHudRenderer: {
+      fontKind: tensionHudRendererFontKind,
+      glyphWidth: tensionHudRendererGlyphWidth,
+      glyphHeight: tensionHudRendererGlyphHeight,
+      drawNibble: tensionHudRendererDrawNibble,
+      residuePrefixMask: tensionHudRendererResiduePrefixMask,
+    },
   },
   triggerTable: { file: triggerTablePath, rows: triggerRows },
   minedFreeCameraTriggerCandidates: hasAnyMinedFreeCameraTriggerSource.reduce((sum, value) => sum + value, 0),

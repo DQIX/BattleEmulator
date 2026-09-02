@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <iostream>
 #include <span>
+#include <string_view>
 
 #include "../BattleEmulator.h"
 #include "freecam_action_mapper.hpp"
@@ -319,10 +320,12 @@ bool ValidateRosterField4Compatibility() {
         if (RosterField4IsZero(index) == expectedNonzero) return false;
     }
 
-    if (!ApplyKnownRosterField4PostActionCompatibility(15)) return false;
+    if (!ApplyKnownRosterField4PostActionCompatibility(generated::kTensionGainPresentationType)) return false;
     for (std::size_t index = 0; index < roster.size(); ++index) {
         if (index < 4) {
-            if (!RosterField4IsKnown(index) || RosterField4IsZero(index)) return false;
+            const bool expectedNonzero =
+                ((generated::kTensionHudRendererResiduePrefixMask >> index) & UINT8_C(1)) != 0;
+            if (!RosterField4IsKnown(index) || RosterField4IsZero(index) == expectedNonzero) return false;
         } else if (RosterField4IsKnown(index)) {
             return false;
         }
@@ -357,7 +360,14 @@ bool ValidateRosterField4Compatibility() {
 
 } // namespace
 
-int main() {
+int main(const int argc, const char* const* argv) {
+    if (argc == 2 && std::string_view(argv[1]) == "--roster-field4-only") {
+        if (!ValidateRosterField4Compatibility()) {
+            std::cerr << "FAIL roster-field4-compatibility\n";
+            return 6;
+        }
+        return 0;
+    }
     if (!ValidateActorIdGeneralization()) {
         std::cerr << "FAIL actor-id-generalization\n";
         return 1;
