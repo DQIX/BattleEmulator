@@ -69,6 +69,11 @@ inline constexpr auto kActions = [] {
     actions[BattleEmulator::ZAKI] = Describe<24>();
     actions[BattleEmulator::ZARAKI] = Describe<25>();
     actions[BattleEmulator::MEDICINAL_HERBS] = Describe<255>();
+    // スカラ. Live 021E08BC action records and the ROM actdata row both
+    // identify BattleEmulator::BUFF as DQ9 action 41. Keep it in the general
+    // presentation mapper so an index-0 スカラ record participates in the
+    // same action-record lifecycle as every other mapped action.
+    actions[BattleEmulator::BUFF] = Describe<41>();
     // Ally Psyche Up / ためる. The DQ9 action ID and presentation type are
     // generated from the unique ally/self ためる row in the mined action
     // classification data. Its presentation path matters here because it
@@ -109,6 +114,7 @@ template <int CommonActionId>
 static_assert(kActions[BattleEmulator::WHIPPING_BOY].dq9ActionId == 929);
 static_assert(kActions[BattleEmulator::HELM_SPLITTER].dq9ActionId == 109);
 static_assert(kActions[BattleEmulator::INACTIVE_ENEMY].dq9ActionId == 503);
+static_assert(kActions[BattleEmulator::BUFF].dq9ActionId == 41);
 static_assert(kActions[BattleEmulator::PSYCHE_UP_ALLY].dq9ActionId == generated::kPsycheUpActionId);
 static_assert(
     kActions[BattleEmulator::PSYCHE_UP_ALLY].presentationType == generated::kTensionGainPresentationType

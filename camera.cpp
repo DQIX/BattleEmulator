@@ -447,6 +447,9 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                 .dq9ActionId = actionMetadata != nullptr
                     ? actionMetadata->dq9ActionId
                     : metadata::kInvalidActionId,
+                .presentationType = actionMetadata != nullptr
+                    ? actionMetadata->presentationType
+                    : UINT8_C(0xff),
                 .actorId = runtimeActorId,
                 .targetId = runtimeTargetId,
                 .actorRouteCount = actorRouteCount,
@@ -473,10 +476,28 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
             };
             const auto& state = ThreadContext();
             debugEvent.presentationActorCount = state.presentationActorCount;
+            debugEvent.routeActorCount = state.currentRoutes.actorCount;
+            for (std::size_t routeIndex = 0;
+                 routeIndex < state.currentRoutes.actorCount && routeIndex < debugEvent.routeActorIds.size();
+                 ++routeIndex) {
+                const auto& route = state.currentRoutes.actors[routeIndex];
+                debugEvent.routeActorIds[routeIndex] = route.actorId;
+                debugEvent.routeCounts[routeIndex] = route.count;
+                for (std::size_t nodeIndex = 0;
+                     nodeIndex < route.count && nodeIndex < debugEvent.routeNodes[routeIndex].size();
+                     ++nodeIndex) {
+                    debugEvent.routeNodes[routeIndex][nodeIndex] = route.nodes[nodeIndex];
+                }
+            }
             for (std::size_t actorIndex = 0;
                  actorIndex < state.presentationActorCount && actorIndex < debugEvent.startNodesBefore.size();
                  ++actorIndex) {
                 debugEvent.startNodesBefore[actorIndex] = state.presentationActors[actorIndex].startNode;
+                debugEvent.goalNodes[actorIndex] = state.presentationActors[actorIndex].goalNode;
+                debugEvent.targetNodes[actorIndex] = state.presentationActors[actorIndex].targetNode;
+                debugEvent.auxiliaryNodes[actorIndex] = state.presentationActors[actorIndex].auxiliaryNode;
+                debugEvent.rosterField4Known[actorIndex] = state.rosterField4Known[actorIndex];
+                debugEvent.rosterField4Nonzero[actorIndex] = state.rosterField4Nonzero[actorIndex];
             }
         }
         auto finalizeDebugEvent = [&]() noexcept {

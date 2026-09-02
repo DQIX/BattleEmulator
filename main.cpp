@@ -1141,6 +1141,7 @@ int main(int argc, char* argv[]){
 				          << " actionIndex=" << event.actionIndex
 				          << " action=" << event.commonActionId
 				          << " dq9=" << event.dq9ActionId
+				          << " type=" << static_cast<unsigned>(event.presentationType)
 				          << " actor=0x" << std::hex << event.actorId
 				          << " target=0x" << event.targetId << std::dec
 				          << " route=" << static_cast<unsigned>(event.actorRouteCount)
@@ -1167,6 +1168,41 @@ int main(int argc, char* argv[]){
 				for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
 					if (actorIndex != 0) std::cout << ',';
 					std::cout << static_cast<unsigned>(event.startNodesAfter[actorIndex]);
+				}
+				std::cout << " goals=";
+				for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
+					if (actorIndex != 0) std::cout << ',';
+					std::cout << static_cast<unsigned>(event.goalNodes[actorIndex]);
+				}
+				std::cout << " targets=";
+				for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
+					if (actorIndex != 0) std::cout << ',';
+					std::cout << static_cast<unsigned>(event.targetNodes[actorIndex]);
+				}
+				std::cout << " aux=";
+				for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
+					if (actorIndex != 0) std::cout << ',';
+					std::cout << static_cast<unsigned>(event.auxiliaryNodes[actorIndex]);
+				}
+				std::cout << " row4=";
+				for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
+					if (actorIndex != 0) std::cout << ',';
+					if (!event.rosterField4Known[actorIndex]) {
+						std::cout << '?';
+					} else {
+						std::cout << (event.rosterField4Nonzero[actorIndex] ? '1' : '0');
+					}
+				}
+				std::cout << " routes=";
+				for (std::size_t routeIndex = 0; routeIndex < event.routeActorCount; ++routeIndex) {
+					if (routeIndex != 0) std::cout << ';';
+					std::cout << "0x" << std::hex << event.routeActorIds[routeIndex] << std::dec
+					          << ':' << static_cast<unsigned>(event.routeCounts[routeIndex]) << '[';
+					for (std::size_t nodeIndex = 0; nodeIndex < event.routeCounts[routeIndex]; ++nodeIndex) {
+						if (nodeIndex != 0) std::cout << ',';
+						std::cout << static_cast<unsigned>(event.routeNodes[routeIndex][nodeIndex]);
+					}
+					std::cout << ']';
 				}
 				std::cout << '\n';
 			}

@@ -36,14 +36,20 @@ struct CameraPresentationActor {
 #if defined(gerunikku)
 struct CameraDebugEvent {
     static constexpr std::size_t kMaxPresentationActors = 12;
+    static constexpr std::size_t kMaxRouteNodes = 16;
     int turnSerial{};
     int actionIndex{};
     int commonActionId{};
     std::uint16_t dq9ActionId{0xffff};
+    std::uint8_t presentationType{};
     std::uint16_t actorId{0xffff};
     std::uint16_t targetId{0xffff};
     std::uint8_t actorRouteCount{};
     std::uint8_t maxRouteCount{};
+    std::uint8_t routeActorCount{};
+    std::array<std::uint16_t, kMaxPresentationActors> routeActorIds{};
+    std::array<std::uint8_t, kMaxPresentationActors> routeCounts{};
+    std::array<std::array<std::uint8_t, kMaxRouteNodes>, kMaxPresentationActors> routeNodes{};
     std::uint32_t membershipProfile{dq9::freecam::fast::kInvalidMembershipProfile};
     std::uint16_t actorMembershipCount{};
     std::uint8_t triggerSource{};
@@ -60,6 +66,11 @@ struct CameraDebugEvent {
     std::uint8_t presentationActorCount{};
     std::array<std::uint8_t, kMaxPresentationActors> startNodesBefore{};
     std::array<std::uint8_t, kMaxPresentationActors> startNodesAfter{};
+    std::array<std::uint8_t, kMaxPresentationActors> goalNodes{};
+    std::array<std::uint8_t, kMaxPresentationActors> targetNodes{};
+    std::array<std::uint8_t, kMaxPresentationActors> auxiliaryNodes{};
+    std::array<bool, kMaxPresentationActors> rosterField4Known{};
+    std::array<bool, kMaxPresentationActors> rosterField4Nonzero{};
 };
 #endif
 
