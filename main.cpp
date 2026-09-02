@@ -876,6 +876,66 @@ int main(int argc, char* argv[]){
 		return 0;
 	}
 
+	if (argc >= 5 && std::string_view(argv[1]) == "--trace-main-sequence") {
+		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
+		const int currentSeedPosition = std::stoi(argv[3], nullptr, 0);
+		const int traceTurns = argc - 4;
+		if (traceTurns < 1 || traceTurns > 349) {
+			throw std::invalid_argument("trace main sequence turns must be 1..349");
+		}
+		int32_t traceGene[350] = {};
+		for (int step = 0; step < traceTurns; ++step) {
+			const std::string_view token(argv[step + 4]);
+			const std::size_t separator = token.find(':');
+			const int action = std::stoi(std::string(token.substr(0, separator)), nullptr, 0);
+			const int target = separator == std::string_view::npos
+				? -1
+				: std::stoi(std::string(token.substr(separator + 1)), nullptr, 0);
+			traceGene[step] = BattleEmulator::PackHeroAction(action, target);
+		}
+		traceGene[traceTurns] = -1;
+		Player tracePlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
+		BattleResult traceResult;
+		int tracePosition = currentSeedPosition + 1;
+		uint64_t traceState = 0;
+		lcg::init(traceSeed);
+		camera::SetDebugCapture(true);
+		camera::ClearDebugEvents();
+		BattleEmulator::Main(&tracePosition, traceTurns, traceGene, tracePlayers, &traceResult,
+		                     traceSeed, nullptr, nullptr, -1, &traceState, -1, true);
+		printTrace(traceSeed, tracePosition, tracePlayers, traceResult);
+		for (std::size_t eventIndex = 0; eventIndex < camera::DebugEventCount(); ++eventIndex) {
+			const CameraDebugEvent event = camera::DebugEventAt(eventIndex);
+			std::cout << "TRACE main-camera turn=" << event.turnSerial + 1
+			          << " actionIndex=" << event.actionIndex
+			          << " action=" << event.commonActionId
+			          << " dq9=" << event.dq9ActionId
+			          << " actor=0x" << std::hex << event.actorId
+			          << " target=0x" << event.targetId << std::dec
+			          << " route=" << static_cast<unsigned>(event.actorRouteCount)
+			          << " maxRoute=" << static_cast<unsigned>(event.maxRouteCount)
+			          << " source=" << static_cast<unsigned>(event.triggerSource)
+			          << " call=" << event.runtimeCallFreeCamera
+			          << " param5=" << event.runtimeParam5
+			          << " reset=" << event.runtimeResetOnly
+			          << " slot1Count=" << static_cast<unsigned>(event.slot1ChildCount)
+			          << " slot1Child=" << event.slot1LastChildActionId;
+			std::cout << " starts=";
+			for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
+				if (actorIndex != 0) std::cout << ',';
+				std::cout << static_cast<unsigned>(event.startNodesBefore[actorIndex]);
+			}
+			std::cout << "->";
+			for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
+				if (actorIndex != 0) std::cout << ',';
+				std::cout << static_cast<unsigned>(event.startNodesAfter[actorIndex]);
+			}
+			std::cout << '\n';
+		}
+		camera::SetDebugCapture(false);
+		return 0;
+	}
+
 	if (argc >= 5 && std::string_view(argv[1]) == "--trace-sequence") {
 		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
 		const int currentSeedPosition = std::stoi(argv[3], nullptr, 0);
