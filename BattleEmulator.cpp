@@ -630,6 +630,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         if (!InitializeCameraBattle()) return false;
     }
 #endif
+    assert(position != nullptr);
+    assert(*position != 0);//positionは1始まりなので守ってね
     int genePosition = 0;
     int exCounter = 0;
     int exCounter1 = 0;

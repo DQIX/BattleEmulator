@@ -1447,6 +1447,10 @@ int main(int argc, char* argv[]){
 		          << " count=" << count << " turns=" << searchTurns << '\n';
 		return 0;
 	}
+
+	std::cout << "option missing" << std::endl;
+	return 1;
+
 #endif
 
 #if defined(OPTIMIZE_MODE)

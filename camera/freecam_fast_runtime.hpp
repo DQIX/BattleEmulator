@@ -165,7 +165,7 @@ struct ItemModelMapEntry {
     constexpr std::size_t offset = 16 + 128 + kActionCount * 4 + kActionCount;
     return generated::kCameraMetadataBytes[offset + actionId];
 }
-static_assert(CameraPlacementSequence(UINT16_C(24)) == UINT8_C(0x19));
+static_assert(CameraPlacementSequence(UINT16_C(24)) == UINT8_C(0x09));
 
 [[nodiscard]] constexpr std::uint16_t FallbackLookupActionId(const std::uint16_t actionId) {
     if (actionId >= kActionCount) return kInvalidActionId;
