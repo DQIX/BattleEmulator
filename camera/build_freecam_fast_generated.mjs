@@ -34,6 +34,7 @@ function parseActionClassification(csv) {
   const lines = csv.trimEnd().split(/\r?\n/);
   const header = lines[0].split(",");
   const actionIndex = header.indexOf("action_id_decimal");
+  const actionNameIndex = header.indexOf("action_name");
   const sideIndex = header.indexOf("target_side_code");
   const scopeIndex = header.indexOf("target_scope_code");
   const repeatModeIndex = header.indexOf("repeat_mode_code");
@@ -42,7 +43,7 @@ function parseActionClassification(csv) {
   const judgment1Index = header.indexOf("target_handler_judgment1");
   const judgment2Index = header.indexOf("target_handler_judgment2");
   if ([
-    actionIndex, sideIndex, scopeIndex, repeatModeIndex, operationTypeIndex,
+    actionIndex, actionNameIndex, sideIndex, scopeIndex, repeatModeIndex, operationTypeIndex,
     resourceCostIndex, judgment1Index, judgment2Index,
   ].some((index) => index < 0)) {
     throw new Error("dq9-action-target-classification.csv is missing required columns");
@@ -56,12 +57,14 @@ function parseActionClassification(csv) {
   const resourceCost = new Uint8Array(actionCount);
   const targetHandlerJudgment1 = new Uint16Array(actionCount);
   const targetHandlerJudgment2 = new Uint16Array(actionCount);
+  const psycheUpMatches = [];
   let mappedRows = 0;
 
   for (let lineIndex = 1; lineIndex < lines.length; ++lineIndex) {
     if (!lines[lineIndex]) continue;
     const fields = lines[lineIndex].split(",");
     const actionId = Number(fields[actionIndex]);
+    const actionName = fields[actionNameIndex];
     const side = Number(fields[sideIndex]);
     const scope = Number(fields[scopeIndex]);
     const repeat = Number(fields[repeatModeIndex]);
@@ -97,7 +100,14 @@ function parseActionClassification(csv) {
     resourceCost[actionId] = cost;
     targetHandlerJudgment1[actionId] = judgment1;
     targetHandlerJudgment2[actionId] = judgment2;
+    if (actionName === "ためる" && side === 2 && scope === 1) {
+      psycheUpMatches.push(actionId);
+    }
     ++mappedRows;
+  }
+
+  if (psycheUpMatches.length !== 1) {
+    throw new Error(`expected exactly one ally/self ためる action, found ${psycheUpMatches.length}`);
   }
 
   return {
@@ -109,6 +119,7 @@ function parseActionClassification(csv) {
     resourceCost,
     targetHandlerJudgment1,
     targetHandlerJudgment2,
+    psycheUpActionId: psycheUpMatches[0],
     mappedRows,
   };
 }
@@ -398,6 +409,7 @@ function buildHasAnyMinedFreeCameraTriggerSource(cameraMetadata, actionMetadata,
 
   const hasBact = (actionId) =>
     ((cameraMetadata[16 + (actionId >> 3)] >> (actionId & 7)) & 1) !== 0;
+
   const fallbackLookupActionId = (actionId) =>
     actionMetadata.readUInt16LE(20 + actionId * 2);
   const membershipPresentAt = (offset) => membershipMetadata.readUInt16LE(offset + 4) !== 0;
@@ -459,6 +471,7 @@ const {
   resourceCost,
   targetHandlerJudgment1,
   targetHandlerJudgment2,
+  psycheUpActionId,
   mappedRows,
 } = classification;
 const hasAnyMinedFreeCameraTriggerSource = buildHasAnyMinedFreeCameraTriggerSource(
@@ -491,6 +504,9 @@ chunks.push("};", "");
 chunks.push(`inline constexpr std::array<std::uint8_t, ${actionCount}> kOperationTypeCode = {`);
 chunks.push(formatBytes(operationType));
 chunks.push("};", "");
+chunks.push(`inline constexpr std::uint16_t kPsycheUpActionId = UINT16_C(${psycheUpActionId});`);
+chunks.push(`inline constexpr std::uint8_t kPsycheUpPresentationType = kOperationTypeCode[kPsycheUpActionId];`);
+chunks.push("");
 chunks.push(`inline constexpr std::array<std::uint8_t, ${actionCount}> kResourceCost = {`);
 chunks.push(formatBytes(resourceCost));
 chunks.push("};", "");
@@ -537,7 +553,13 @@ console.log(JSON.stringify({
     expansionDepths: paintDepths,
   },
   inputs: summary,
-  actionClassification: { file: targetCsvName, mappedRows, actionCount },
+  actionClassification: {
+    file: targetCsvName,
+    mappedRows,
+    actionCount,
+    psycheUpActionId,
+    psycheUpPresentationType: operationType[psycheUpActionId],
+  },
   triggerTable: { file: triggerTablePath, rows: triggerRows },
   minedFreeCameraTriggerCandidates: hasAnyMinedFreeCameraTriggerSource.reduce((sum, value) => sum + value, 0),
   freeCameraMapperAllowed: freeCameraMapperAllowed.reduce((sum, value) => sum + value, 0),

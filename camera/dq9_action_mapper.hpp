@@ -69,10 +69,11 @@ inline constexpr auto kActions = [] {
     actions[BattleEmulator::ZAKI] = Describe<24>();
     actions[BattleEmulator::ZARAKI] = Describe<25>();
     actions[BattleEmulator::MEDICINAL_HERBS] = Describe<255>();
-    // Ally Psyche Up / ためる. Live ROM action 161 is self-target and uses
-    // presentation type 15. Its presentation path matters here because it
+    // Ally Psyche Up / ためる. The DQ9 action ID and presentation type are
+    // generated from the unique ally/self ためる row in the mined action
+    // classification data. Its presentation path matters here because it
     // leaves compiler-stack residue consumed by overlay_d_25:021E08BC.
-    actions[BattleEmulator::PSYCHE_UP_ALLY] = Describe<161>();
+    actions[BattleEmulator::PSYCHE_UP_ALLY] = Describe<generated::kPsycheUpActionId>();
 
     // Gerunikku battle actions already implemented by BattleEmulator. These
     // mappings are presentation metadata, not declarations that freecam runs.
@@ -108,7 +109,9 @@ template <int CommonActionId>
 static_assert(kActions[BattleEmulator::WHIPPING_BOY].dq9ActionId == 929);
 static_assert(kActions[BattleEmulator::HELM_SPLITTER].dq9ActionId == 109);
 static_assert(kActions[BattleEmulator::INACTIVE_ENEMY].dq9ActionId == 503);
-static_assert(kActions[BattleEmulator::PSYCHE_UP_ALLY].dq9ActionId == 161);
-static_assert(kActions[BattleEmulator::PSYCHE_UP_ALLY].presentationType == 15);
+static_assert(kActions[BattleEmulator::PSYCHE_UP_ALLY].dq9ActionId == generated::kPsycheUpActionId);
+static_assert(
+    kActions[BattleEmulator::PSYCHE_UP_ALLY].presentationType == generated::kPsycheUpPresentationType
+);
 
 } // namespace dq9::freecam::actions
