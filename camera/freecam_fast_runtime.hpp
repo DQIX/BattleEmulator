@@ -631,6 +631,9 @@ struct RuntimeState {
     // consumes only its zero/nonzero state. Keep that compiler-stack artifact
     // explicit instead of inventing an actor/action semantic for it.
     std::array<bool, detail::kMaxPresentationActors> rosterField4Nonzero{};
+    // Knowledge is per physical row. A live-confirmed four-row encounter must
+    // not invent residue for rows 4..11 in a larger encounter.
+    std::array<bool, detail::kMaxPresentationActors> rosterField4Known{};
     bool rosterField4CompatibilityValid{};
     detail::PresentationOccupancyMap presentationOccupancy{};
     bool presentationGoalSetupActive{};
@@ -667,6 +670,7 @@ inline void ResetBattle() noexcept {
     state.turnActionActors.fill(detail::kInvalidPresentationActor);
     state.presentationMembershipProfiles.fill(kInvalidMembershipProfile);
     state.rosterField4Nonzero.fill(false);
+    state.rosterField4Known.fill(false);
 }
 
 [[nodiscard]] inline bool BeginTurn(const std::span<const BattleActorRef> actionOrder) noexcept {
@@ -684,6 +688,7 @@ inline void ResetBattle() noexcept {
     state.turnActionActors.fill(detail::kInvalidPresentationActor);
     state.targetRecord02161720ActorId = kInvalidBattleActor;
     state.rosterField4CompatibilityValid = false;
+    state.rosterField4Known.fill(false);
     state.presentationGoalSetupActive = false;
     InvalidateCurrentRoutes(state);
     for (std::size_t index = 0; index < actionOrder.size(); ++index) {
@@ -693,7 +698,9 @@ inline void ResetBattle() noexcept {
 }
 
 inline void InvalidateRosterField4Compatibility() noexcept {
-    ThreadContext().rosterField4CompatibilityValid = false;
+    auto& state = ThreadContext();
+    state.rosterField4CompatibilityValid = false;
+    state.rosterField4Known.fill(false);
 }
 
 [[nodiscard]] inline bool SetRosterField4Compatibility(
@@ -702,8 +709,28 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     auto& state = ThreadContext();
     if (nonzero.size() != state.presentationActorCount) return false;
     state.rosterField4Nonzero.fill(false);
+    state.rosterField4Known.fill(false);
     for (std::size_t index = 0; index < nonzero.size(); ++index) {
         state.rosterField4Nonzero[index] = nonzero[index];
+        state.rosterField4Known[index] = true;
+    }
+    state.rosterField4CompatibilityValid = true;
+    return true;
+}
+
+[[nodiscard]] inline bool SetRosterField4CompatibilityPrefix(
+    const std::span<const bool> nonzero
+) noexcept {
+    auto& state = ThreadContext();
+    if (nonzero.empty() || state.presentationActorCount == 0) return false;
+    state.rosterField4Nonzero.fill(false);
+    state.rosterField4Known.fill(false);
+    const std::size_t count = nonzero.size() < state.presentationActorCount
+        ? nonzero.size()
+        : state.presentationActorCount;
+    for (std::size_t index = 0; index < count; ++index) {
+        state.rosterField4Nonzero[index] = nonzero[index];
+        state.rosterField4Known[index] = true;
     }
     state.rosterField4CompatibilityValid = true;
     return true;
@@ -713,10 +740,15 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     return ThreadContext().rosterField4CompatibilityValid;
 }
 
+[[nodiscard]] inline bool RosterField4IsKnown(const std::size_t index) noexcept {
+    const auto& state = ThreadContext();
+    return index < state.presentationActorCount && state.rosterField4Known[index];
+}
+
 [[nodiscard]] inline bool RosterField4IsZero(const std::size_t index) noexcept {
     const auto& state = ThreadContext();
-    return state.rosterField4CompatibilityValid
-        && index < state.presentationActorCount
+    return index < state.presentationActorCount
+        && state.rosterField4Known[index]
         && !state.rosterField4Nonzero[index];
 }
 
@@ -725,8 +757,10 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     const bool nonzero
 ) noexcept {
     auto& state = ThreadContext();
-    if (!state.rosterField4CompatibilityValid || index >= state.presentationActorCount) return false;
+    if (index >= state.presentationActorCount) return false;
     state.rosterField4Nonzero[index] = nonzero;
+    state.rosterField4Known[index] = true;
+    state.rosterField4CompatibilityValid = true;
     return true;
 }
 
@@ -749,6 +783,15 @@ inline void InvalidateRosterField4Compatibility() noexcept {
                 if (index < pattern.size()) pattern[index] = true;
             }
             break;
+        case 15: {
+            // Live 2026-09-02 Psyche Up / ためる evidence: the next 021E1958
+            // setup has four physical rows and sees 1111. The producer is
+            // renderer/compiler-stack reuse, not actor metadata. Only these
+            // four rows were present, so rows 4..11 deliberately remain
+            // unknown instead of extrapolating the observed prefix.
+            constexpr std::array<bool, 4> firstFour{true, true, true, true};
+            return SetRosterField4CompatibilityPrefix(firstFour);
+        }
         default:
             InvalidateRosterField4Compatibility();
             return false;
@@ -995,6 +1038,9 @@ inline void InvalidateRosterField4Compatibility() noexcept {
         mode,
         state.rosterField4CompatibilityValid
             ? std::span<bool>(state.rosterField4Nonzero.data(), state.presentationActorCount)
+            : std::span<bool>{},
+        state.rosterField4CompatibilityValid
+            ? std::span<bool>(state.rosterField4Known.data(), state.presentationActorCount)
             : std::span<bool>{}
     );
     if (!decision.valid) return false;

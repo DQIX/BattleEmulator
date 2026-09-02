@@ -319,6 +319,15 @@ bool ValidateRosterField4Compatibility() {
         if (RosterField4IsZero(index) == expectedNonzero) return false;
     }
 
+    if (!ApplyKnownRosterField4PostActionCompatibility(15)) return false;
+    for (std::size_t index = 0; index < roster.size(); ++index) {
+        if (index < 4) {
+            if (!RosterField4IsKnown(index) || RosterField4IsZero(index)) return false;
+        } else if (RosterField4IsKnown(index)) {
+            return false;
+        }
+    }
+
     if (ApplyKnownRosterField4PostActionCompatibility(0) || HasRosterField4Compatibility()) return false;
 
     std::array<PresentationActorState, 3> actors{
@@ -329,6 +338,7 @@ bool ValidateRosterField4Compatibility() {
     actors[2].auxiliaryNode = 31;
     auto occupancy = BuildPresentationOccupancy(std::span<const PresentationActorState>(actors.data(), actors.size()));
     std::array<bool, 3> compatibility{};
+    std::array<bool, 3> compatibilityKnown{};
     constexpr std::array<std::uint8_t, 1> conflictNodes{31};
     InvalidatePresentationConflicts(
         conflictNodes,
@@ -336,9 +346,11 @@ bool ValidateRosterField4Compatibility() {
         actors[0].actorId,
         actors[1].actorId,
         actors,
-        compatibility
+        compatibility,
+        compatibilityKnown
     );
     return compatibility[2]
+        && compatibilityKnown[2]
         && actors[2].conflictInvalidated
         && actors[2].auxiliaryNode == kInvalidPresentationNode;
 }

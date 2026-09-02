@@ -93,7 +93,7 @@ inline void AssertCameraMapping(const int action) noexcept {
         // The entry value is compiler-stack residue. If its producer has not
         // been reproduced for this action path yet, do not invent a fallback
         // rule: retain the current-only behavior for that future participant.
-        if (!HasRosterField4Compatibility()) continue;
+        if (!RosterField4IsKnown(actorSlot)) continue;
         if (!RosterField4IsZero(actorSlot)) {
             if (!AssignActorFallbackPresentationGoal(actorId)) return false;
             continue;

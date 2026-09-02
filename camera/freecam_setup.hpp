@@ -386,7 +386,8 @@ constexpr void InvalidatePresentationConflicts(
     const std::uint16_t excludedActorId,
     const std::uint16_t excludedTargetId,
     const std::span<PresentationActorState> actors,
-    const std::span<bool> rosterField4Nonzero = {}
+    const std::span<bool> rosterField4Nonzero = {},
+    const std::span<bool> rosterField4Known = {}
 ) noexcept {
     for (const std::uint8_t node : nodes) {
         if (node >= occupancy.size()) continue;
@@ -403,6 +404,7 @@ constexpr void InvalidatePresentationConflicts(
                 // non-current/non-target actor. The row starts as stale stack
                 // data, but from this point onward it is deliberate work state.
                 if (actorIndex < rosterField4Nonzero.size()) rosterField4Nonzero[actorIndex] = true;
+                if (actorIndex < rosterField4Known.size()) rosterField4Known[actorIndex] = true;
                 actor.conflictInvalidated = true;
                 actor.auxiliaryNode = kInvalidPresentationNode;
             }
@@ -503,7 +505,8 @@ constexpr void InvalidateGoalNeighborConflicts(
     const std::uint8_t maximumLayer,
     const std::size_t currentActorIndex,
     const std::span<PresentationActorState> actors,
-    const std::span<bool> rosterField4Nonzero = {}
+    const std::span<bool> rosterField4Nonzero = {},
+    const std::span<bool> rosterField4Known = {}
 ) noexcept {
     std::array<std::uint8_t, 6> conflictNodes{};
     std::size_t count = 0;
@@ -523,7 +526,8 @@ constexpr void InvalidateGoalNeighborConflicts(
         currentActorId,
         kInvalidPresentationActor,
         actors,
-        rosterField4Nonzero
+        rosterField4Nonzero,
+        rosterField4Known
     );
 }
 
@@ -538,7 +542,8 @@ constexpr void InvalidateGoalNeighborConflicts(
     const std::span<const std::uint16_t> actionActorIds,
     const std::uint8_t attackFormationMode,
     const PresentationNodeSearchMode searchMode = PresentationNodeSearchMode::optimized,
-    const std::span<bool> rosterField4Nonzero = {}
+    const std::span<bool> rosterField4Nonzero = {},
+    const std::span<bool> rosterField4Known = {}
 ) noexcept {
     if (actorIndex >= actors.size() || targetIndex >= actors.size()) return {};
     PresentationActorState& actor = actors[actorIndex];
@@ -574,7 +579,8 @@ constexpr void InvalidateGoalNeighborConflicts(
             actor.actorId,
             target.actorId,
             actors,
-            rosterField4Nonzero
+            rosterField4Nonzero,
+            rosterField4Known
         );
     }
 
@@ -641,7 +647,8 @@ constexpr void InvalidateGoalNeighborConflicts(
                 maximumLayer,
                 actorIndex,
                 actors,
-                rosterField4Nonzero
+                rosterField4Nonzero,
+                rosterField4Known
             );
         }
         actor.targetNode = target.goalNode;
@@ -705,7 +712,8 @@ constexpr void InvalidateGoalNeighborConflicts(
             maximumLayer,
             actorIndex,
             actors,
-            rosterField4Nonzero
+            rosterField4Nonzero,
+            rosterField4Known
         );
     }
     actor.cachedTargetId = static_cast<std::uint8_t>(target.actorId);
