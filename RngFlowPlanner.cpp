@@ -2541,10 +2541,10 @@ namespace rngflow {
                             StaticOptimisticDamageUpperForHorizon(lightState, remainingTurns);
                         const int shortfall = state.players[1].hp - damageUpper;
                         if (shortfall > 0 &&
-                            (result.closestRejectedShortfall < 0 ||
-                             shortfall < result.closestRejectedShortfall ||
-                             (shortfall == result.closestRejectedShortfall &&
-                              depth > result.closestRejectedDepth))) {
+                            (depth > result.closestRejectedDepth ||
+                             (depth == result.closestRejectedDepth &&
+                              (result.closestRejectedShortfall < 0 ||
+                               shortfall < result.closestRejectedShortfall)))) {
                             result.closestRejectedDepth = depth;
                             result.closestRejectedEnemyHp = state.players[1].hp;
                             result.closestRejectedHeroHp = state.players[0].hp;
