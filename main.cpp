@@ -10,7 +10,7 @@
 #include "lcg.h"
 #include "BattleEmulator.h"
 #include "debug.h"
-#include "ActionOptimizer.h"
+#include "Genome.h"
 #include "RngFlowPlanner.h"
 #include "setting.h"
 
@@ -631,9 +631,8 @@ namespace {
         if (foundTurn != 0) {
             turns = foundTurn + foundTurnOffset;
         }
-
-        auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 100000, gene, numThreads);
+        //auto genome =
+        //        ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 100000, gene, numThreads);
 
         auto turnProcessed = BattleEmulator::getTurnProcessed();
         BattleResult result1;
@@ -644,14 +643,14 @@ namespace {
         auto *position = new int(1);
         auto *nowState = new uint64_t(0);
 
-        BattleEmulator::Main(position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
-                             nowState);
+        //BattleEmulator::Main(position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
+        //                     nowState);
 
         delete position;
         delete nowState;
 
 #if defined(MINGW_BUILD)
-        dumpTableMain(result1, genome, seed, 0);
+        //dumpTableMain(result1, genome, seed, 0);
 #else
         dumpTableMain(result1, genome, seed, turns);
 #endif
@@ -1097,12 +1096,12 @@ namespace {
             gene[349] = -1;
         }
 
-        auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 100000, gene, 0);
+        //auto genome =
+        //        ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 100000, gene, 0);
 
-        if (genome.turn >= 100) {
-            return "SearchRequest failed: turn limit reached.";
-        }
+        //if (genome.turn >= 100) {
+        //    return "SearchRequest failed: turn limit reached.";
+        //}
 
         BattleResult result1;
         result1 = BattleResult();
@@ -1111,22 +1110,22 @@ namespace {
         auto *position = new int(1);
         auto *nowState = new uint64_t(0);
 
-        BattleEmulator::Main(position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
-                             nowState);
+        //BattleEmulator::Main(position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
+        //                     nowState);
 
         delete position;
         delete nowState;
 
         std::stringstream ss;
-        ss << dumpTable(result1, genome.actions, foundTurn + foundTurnOffset) << "\n";
+        //ss << dumpTable(result1, genome.actions, foundTurn + foundTurnOffset) << "\n";
         ss << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
         ss << "0x" << std::hex << seed << std::dec << "\n" << "actions: ";
-        for (auto i = 0; i < 100; ++i) {
+        /*for (auto i = 0; i < 100; ++i) {
             if (genome.actions[i] == 0 || genome.actions[i] == -1) {
                 break;
             }
             ss << genome.actions[i] << ", ";
-        }
+        }*/
         ss << "\n";
         return ss.str();
     }

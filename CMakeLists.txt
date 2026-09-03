@@ -47,14 +47,6 @@ set(SOURCES
         Genome.h
         RngFlowPlanner.cpp
         RngFlowPlanner.h
-        ActionOptimizer.cpp
-        ActionOptimizer.h
-        EnhancedCostCalculator.cpp
-        EnhancedCostCalculator.h
-        EnhancedHashCalculator.cpp
-        EnhancedHashCalculator.h
-        EnhancedHeapQueue.cpp
-        EnhancedHeapQueue.h
         SimpleParameterOptimizer.cpp
         SimpleParameterOptimizer.h
 )
