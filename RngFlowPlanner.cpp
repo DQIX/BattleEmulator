@@ -1877,24 +1877,108 @@ private:
 
 [[nodiscard]] std::size_t BuildBattleProofCandidates(
     const BattleEmulator::SearchState& state, std::array<int, 8>& out) noexcept {
-    // Keep this mechanically identical to IsHeroCommandSelectable() for these
-    // eight supported commands, but avoid eight cross-TU function calls for
-    // every frontier state.  ATTACK/DRAGON/DEFENCE/FLEE are the switch default
-    // and therefore always selectable while the hero is alive.
-    const Player& hero = state.players[0];
-    if (hero.hp <= 0) return 0;
+    static constexpr std::array<int, 8> candidates{{
+        BattleEmulator::ATTACK_ALLY,
+        BattleEmulator::DRAGON_SLASH,
+        BattleEmulator::DEFENCE,
+        BattleEmulator::FLEE_ALLY,
+        BattleEmulator::MEDICINAL_HERBS,
+        BattleEmulator::HEAL,
+        BattleEmulator::CRACK_ALLY,
+        BattleEmulator::ACROBATIC_STAR,
+    }};
     std::size_t count = 0;
-    out[count++] = BattleEmulator::ATTACK_ALLY;
-    out[count++] = BattleEmulator::DRAGON_SLASH;
-    out[count++] = BattleEmulator::DEFENCE;
-    out[count++] = BattleEmulator::FLEE_ALLY;
-    if (hero.medicinal_herbs_count >= 1) out[count++] = BattleEmulator::MEDICINAL_HERBS;
-    if (hero.mp >= 2) out[count++] = BattleEmulator::HEAL;
-    if (hero.mp >= 3) out[count++] = BattleEmulator::CRACK_ALLY;
-    if (hero.specialCharge && hero.specialChargeTurn != 0 && !hero.acrobaticStar) {
-        out[count++] = BattleEmulator::ACROBATIC_STAR;
+    for (const int action : candidates) {
+        if (BattleEmulator::IsHeroCommandSelectable(state, {action})) {
+            out[count++] = action;
+        }
     }
     return count;
+}
+
+struct BattleWitnessCandidate {
+    BattleEmulator::SearchState state{};
+    int action = -1;
+    int optimisticKillTurns = kMaxPlanTurns + 1;
+};
+
+bool FindBattleWitnessDfs(
+    const BattleEmulator::SearchState& state,
+    const int remainingTurns,
+    const int depth,
+    const std::chrono::steady_clock::time_point deadline,
+    ExactKillDecisionResult& result) {
+    if (state.players[1].hp <= 0) {
+        result.killReachable = true;
+        result.firstKillTurn = depth;
+        result.actionCount = depth;
+        return true;
+    }
+    if (remainingTurns <= 0 || state.players[0].hp <= 0) return false;
+    if (StaticOptimisticKillTurns(FromSearchState(state), remainingTurns) > remainingTurns) {
+        return false;
+    }
+    if ((result.generatedStates & UINT64_C(0xffff)) == 0 &&
+        std::chrono::steady_clock::now() >= deadline) {
+        result.complete = false;
+        return false;
+    }
+
+    ++result.expandedStates;
+    std::array<int, 8> actions{};
+    const std::size_t actionCount = BuildBattleProofCandidates(state, actions);
+    std::array<BattleWitnessCandidate, 8> candidates{};
+    std::size_t candidateCount = 0;
+
+    for (std::size_t i = 0; i < actionCount; ++i) {
+        BattleEmulator::SearchState child{};
+        if (!BattleEmulator::StepSearchState(state, {actions[i]}, &child)) {
+            result.complete = false;
+            return false;
+        }
+        ++result.generatedStates;
+        if (child.players[0].hp <= 0) continue;
+        if (child.players[1].hp <= 0) {
+            result.actions[depth] = actions[i];
+            result.actionCount = depth + 1;
+            result.firstKillTurn = depth + 1;
+            result.killReachable = true;
+            return true;
+        }
+        if (remainingTurns <= 1) continue;
+
+        const int childOptimisticTurns =
+            StaticOptimisticKillTurns(FromSearchState(child), remainingTurns - 1);
+        if (childOptimisticTurns > remainingTurns - 1) continue;
+        candidates[candidateCount++] = {child, actions[i], childOptimisticTurns};
+    }
+
+    // G changes only visitation order. It never removes a branch and therefore
+    // cannot turn a real SAT branch into UNSAT. Lower admissible kill-turn bound
+    // first, then lower exact enemy HP; remaining ties prefer more hero HP.
+    std::sort(candidates.begin(), candidates.begin() + candidateCount,
+              [](const BattleWitnessCandidate& a, const BattleWitnessCandidate& b) {
+                  if (a.optimisticKillTurns != b.optimisticKillTurns) {
+                      return a.optimisticKillTurns < b.optimisticKillTurns;
+                  }
+                  if (a.state.players[1].hp != b.state.players[1].hp) {
+                      return a.state.players[1].hp < b.state.players[1].hp;
+                  }
+                  if (a.state.players[0].hp != b.state.players[0].hp) {
+                      return a.state.players[0].hp > b.state.players[0].hp;
+                  }
+                  return a.action < b.action;
+              });
+
+    for (std::size_t i = 0; i < candidateCount; ++i) {
+        result.actions[depth] = candidates[i].action;
+        if (FindBattleWitnessDfs(candidates[i].state, remainingTurns - 1, depth + 1,
+                                 deadline, result)) {
+            return true;
+        }
+        if (!result.complete) return false;
+    }
+    return false;
 }
 
 void RadixSortPackedStates(std::vector<std::uint64_t>& values,
@@ -2194,6 +2278,100 @@ ExactKillDecisionResult FindShortestKillBattleExact(
     const BattleEmulator::SearchState& root, const int maxTurns,
     const int timeLimitMs) {
     return DecideBattleExactImpl(root, maxTurns, timeLimitMs, false);
+}
+
+ExactKillDecisionResult FindKillWitnessBattleExact(
+    const BattleEmulator::SearchState& root, const int maxTurns,
+    const int timeLimitMs) {
+    ExactKillDecisionResult result{};
+    const int turns = std::clamp(maxTurns, 0, kMaxPlanTurns);
+    const auto deadline = timeLimitMs > 0
+        ? std::chrono::steady_clock::now() + std::chrono::milliseconds(timeLimitMs)
+        : std::chrono::steady_clock::time_point::max();
+    FindBattleWitnessDfs(root, turns, 0, deadline, result);
+    return result;
+}
+
+ExactKillDecisionResult SolveShortestKillBattleExact(
+    const BattleEmulator::SearchState& root, const int maxTurns,
+    const int timeLimitMs) {
+    ExactKillDecisionResult result{};
+    const auto started = std::chrono::steady_clock::now();
+    const auto remainingBudgetMs = [&]() -> int {
+        if (timeLimitMs <= 0) return 0;
+        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - started).count();
+        if (elapsed >= timeLimitMs) return -1;
+        return std::max(1, timeLimitMs - static_cast<int>(elapsed));
+    };
+
+    int budget = remainingBudgetMs();
+    if (budget < 0) {
+        result.complete = false;
+        return result;
+    }
+    ExactKillDecisionResult witness = FindKillWitnessBattleExact(root, maxTurns, budget);
+    result.witnessExpandedStates = witness.expandedStates;
+    result.witnessGeneratedStates = witness.generatedStates;
+    if (!witness.complete) {
+        result.complete = false;
+        return result;
+    }
+    if (!witness.killReachable) {
+        // The witness DFS is itself exhaustive when it returns complete=true.
+        // No incumbent exists inside this horizon.
+        result.complete = true;
+        return result;
+    }
+
+    result.killReachable = true;
+    result.firstKillTurn = witness.firstKillTurn;
+    result.actionCount = witness.actionCount;
+    result.actions = witness.actions;
+    if (witness.firstKillTurn <= 0) return result;
+
+    budget = remainingBudgetMs();
+    if (budget < 0) {
+        result.complete = false;
+        return result;
+    }
+    ExactKillDecisionResult proof = DecideBattleExactImpl(
+        root, witness.firstKillTurn - 1, budget, false);
+    result.expandedStates = proof.expandedStates;
+    result.generatedStates = proof.generatedStates;
+    result.duplicateStates = proof.duplicateStates;
+    result.dominatedStates = proof.dominatedStates;
+    result.peakFrontier = proof.peakFrontier;
+    if (!proof.complete) {
+        result.complete = false;
+        return result;
+    }
+    if (!proof.killReachable) {
+        // E(U)=true is witnessed above and the exact frontier proved E(U-1)=false.
+        return result;
+    }
+
+    // The frontier found a shorter T after exhausting every depth below it.
+    // That already proves E(T-1)=false; only an authoritative witness at T is
+    // still needed for the final certificate.
+    budget = remainingBudgetMs();
+    if (budget < 0) {
+        result.complete = false;
+        return result;
+    }
+    ExactKillDecisionResult shorterWitness = FindKillWitnessBattleExact(
+        root, proof.firstKillTurn, budget);
+    result.witnessExpandedStates += shorterWitness.expandedStates;
+    result.witnessGeneratedStates += shorterWitness.generatedStates;
+    if (!shorterWitness.complete || !shorterWitness.killReachable ||
+        shorterWitness.firstKillTurn != proof.firstKillTurn) {
+        result.complete = false;
+        return result;
+    }
+    result.firstKillTurn = shorterWitness.firstKillTurn;
+    result.actionCount = shorterWitness.actionCount;
+    result.actions = shorterWitness.actions;
+    return result;
 }
 
 

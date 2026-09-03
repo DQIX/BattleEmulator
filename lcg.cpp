@@ -16,12 +16,14 @@ thread_local uint32_t precalcTop32[ARRAY_SIZE]; // 固定メモリ
 thread_local int nowCounter = 1;
 thread_local uint64_t now_seed = 0;      // 現在のシード（逐次 or ジャンプ後）
 thread_local bool init_mode;         // true = 初期一括生成モード
+thread_local uint64_t generation_counter = 0;
 #else
 const int ARRAY_SIZE = 5000;
 uint32_t precalcTop32[ARRAY_SIZE]; // 固定メモリ
 int nowCounter = 1;
 uint64_t now_seed;      // 現在のシード（逐次 or ジャンプ後）
 bool init_mode;         // true = 初期一括生成モード
+uint64_t generation_counter = 0;
 #endif
 
 
@@ -38,10 +40,28 @@ void lcg::init(uint64_t seed, bool init) {
     now_seed    = seed;
     nowCounter  = 0;
     init_mode   = init;
+    ++generation_counter;
 
     if (init) {
         GenerateifNeed(ARRAY_SIZE - 3);
     }
+}
+
+uint32_t lcg::peekTop32(const int position) {
+    assert(position >= 0);
+    assert(position < ARRAY_SIZE);
+    GenerateifNeed(position);
+    return precalcTop32[position];
+}
+
+int lcg::peekPercent(const int position, const int max) {
+    assert(max >= 0);
+    const uint64_t mul = static_cast<uint64_t>(peekTop32(position)) * max;
+    return static_cast<int>(mul >> 32);
+}
+
+uint64_t lcg::generation() {
+    return generation_counter;
 }
 
 /**

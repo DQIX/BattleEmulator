@@ -19,6 +19,17 @@ private:
 public:
     static void init(uint64_t seed, bool init = false);
 
+    // Read-only access for exact proof helpers.  This never advances the
+    // caller's RNG position; it only ensures the existing precalc table has
+    // been generated far enough.
+    static uint32_t peekTop32(int position);
+
+    static int peekPercent(int position, int max);
+
+    // Changes once per init(), allowing read-only caches to invalidate
+    // themselves when the input seed changes.
+    static uint64_t generation();
+
     static int getPercent(int *position, int max);
 
     static double floatRand(int *position, double min, double max);

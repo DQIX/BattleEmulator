@@ -103,11 +103,15 @@ struct ExactKillDecisionResult {
     bool killReachable = false;
     bool complete = true;
     int firstKillTurn = -1;
+    int actionCount = 0;
+    std::array<int, kMaxPlanTurns> actions{};
     std::uint64_t expandedStates = 0;
     std::uint64_t generatedStates = 0;
     std::uint64_t duplicateStates = 0;
     std::uint64_t dominatedStates = 0;
     std::uint64_t peakFrontier = 0;
+    std::uint64_t witnessExpandedStates = 0;
+    std::uint64_t witnessGeneratedStates = 0;
 };
 
 
@@ -203,6 +207,19 @@ struct ExactKillDecisionResult {
 // reversible state, so SAT is real as well as UNSAT.  Because frontiers are
 // exhausted strictly by depth, firstKillTurn=T implies E(T-1)=false.
 [[nodiscard]] ExactKillDecisionResult FindShortestKillBattleExact(
+    const BattleEmulator::SearchState& root, int maxTurns, int timeLimitMs = 0);
+
+// Find one real executable witness using only authoritative battle transitions.
+// Ordering is heuristic-only: every legal branch remains in the DFS, and the
+// proof-safe optimistic lower bound is the only pruning rule.
+[[nodiscard]] ExactKillDecisionResult FindKillWitnessBattleExact(
+    const BattleEmulator::SearchState& root, int maxTurns, int timeLimitMs = 0);
+
+// End-to-end shortest-kill solver. First obtains an incumbent witness U, then
+// proves E(U-1) with the exact reversible-frontier solver. If that proof itself
+// finds a shorter T, a real witness is recovered inside horizon T; the completed
+// depth frontier already proves E(T-1)=false.
+[[nodiscard]] ExactKillDecisionResult SolveShortestKillBattleExact(
     const BattleEmulator::SearchState& root, int maxTurns, int timeLimitMs = 0);
 
 

@@ -16,6 +16,16 @@
 
 class BattleEmulator {
 public:
+    struct SearchCommand {
+        int action = -1;
+    };
+
+    struct SearchState {
+        Player players[2]{};
+        int position = 1;
+        uint64_t nowState = 0;
+    };
+
     static constexpr int TYPE_2A = 0;
     static constexpr int TYPE_2B = 1;
     static constexpr int TYPE_2C = 2;
@@ -125,7 +135,15 @@ public:
     static bool
     Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
         BattleResult* result, uint64_t seed, const int eActions[350], const int damages[350], int mode,
-         uint64_t *NowState, bool logicalTurnStart = false);
+         uint64_t *NowState, bool logicalTurnStart = false, int forcedHeroAction = -1);
+
+    static bool InitializeSearchState(SearchState* state, const Player initialPlayers[2], int initialPosition = 1);
+
+    static bool IsHeroCommandSelectable(const SearchState& state, SearchCommand command) noexcept;
+
+    static bool StepSearchState(const SearchState& source, SearchCommand command, SearchState* destination);
+
+    static bool StepSearchStateInPlace(SearchState* state, SearchCommand command);
 
     static const char *getActionName(int actionid);
 

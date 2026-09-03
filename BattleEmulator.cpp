@@ -248,7 +248,7 @@ inline void BattleEmulator::processTurn() {
 bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
                           BattleResult* result,
                           uint64_t seed, const int eActions[350], const int damages[350], int mode,
-                          uint64_t *NowState, bool logicalTurnStart) {
+                          uint64_t *NowState, bool logicalTurnStart, int forcedHeroAction) {
     bool player0_has_initiative = false;
     int genePosition = 0;
     int exCounter = 0;
@@ -307,39 +307,43 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
         int32_t actionTable = -1;
 
-        if (genePosition == -1 || Gene[genePosition] == 0 || Gene[genePosition] == -1) {
-            genePosition = -1;
-            //throw std::invalid_argument("GenePosition is invalid");
-        }
-        if (genePosition != -1 && Gene[genePosition] != 0 && Gene[genePosition] != -1 && Gene[genePosition] != -10) {
-            actionTable = Gene[genePosition] & 0x3ff;
-            if (actionTable == HEAL && players[0].mp <= 0) {
-                if (players[0].medicinal_herbs_count >= 1) {
-                    actionTable = MEDICINAL_HERBS;
-                } else {
-                    actionTable = ATTACK_ALLY;
-                }
-            }
-            //麻痺ったときに不正な防御しないように
-            if (actionTable == INACTIVE_ALLY || actionTable == PARALYSIS) {
-                actionTable = ATTACK_ALLY;
-            }
+        if (forcedHeroAction > 0) {
+            actionTable = forcedHeroAction & 0x3ff;
         } else {
-            //assert(false);
-            if (players[0].hp >= 35) {
-                actionTable = ATTACK_ALLY;
-            } else {
-                if (players[0].mp >= 2) {
-                    actionTable = HEAL;
-                } else if (players[0].medicinal_herbs_count >= 1) {
-                    actionTable = MEDICINAL_HERBS;
-                } else {
+            if (genePosition == -1 || Gene == nullptr || Gene[genePosition] == 0 || Gene[genePosition] == -1) {
+                genePosition = -1;
+                //throw std::invalid_argument("GenePosition is invalid");
+            }
+            if (genePosition != -1 && Gene[genePosition] != 0 && Gene[genePosition] != -1 && Gene[genePosition] != -10) {
+                actionTable = Gene[genePosition] & 0x3ff;
+                if (actionTable == HEAL && players[0].mp <= 0) {
+                    if (players[0].medicinal_herbs_count >= 1) {
+                        actionTable = MEDICINAL_HERBS;
+                    } else {
+                        actionTable = ATTACK_ALLY;
+                    }
+                }
+                //麻痺ったときに不正な防御しないように
+                if (actionTable == INACTIVE_ALLY || actionTable == PARALYSIS) {
                     actionTable = ATTACK_ALLY;
                 }
-            }
-            if (players[0].hp >= 30) {
-                if (!players[0].acrobaticStar && players[0].specialCharge && players[0].specialChargeTurn >= 0) {
-                    actionTable = ACROBATIC_STAR;
+            } else {
+                //assert(false);
+                if (players[0].hp >= 35) {
+                    actionTable = ATTACK_ALLY;
+                } else {
+                    if (players[0].mp >= 2) {
+                        actionTable = HEAL;
+                    } else if (players[0].medicinal_herbs_count >= 1) {
+                        actionTable = MEDICINAL_HERBS;
+                    } else {
+                        actionTable = ATTACK_ALLY;
+                    }
+                }
+                if (players[0].hp >= 30) {
+                    if (!players[0].acrobaticStar && players[0].specialCharge && players[0].specialChargeTurn >= 0) {
+                        actionTable = ACROBATIC_STAR;
+                    }
                 }
             }
         }
@@ -621,6 +625,50 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
     } else {
         return false;
     }
+}
+
+bool BattleEmulator::InitializeSearchState(SearchState* state, const Player initialPlayers[2],
+                                           const int initialPosition) {
+    if (state == nullptr || initialPlayers == nullptr || initialPosition < 1) return false;
+    state->players[0] = initialPlayers[0];
+    state->players[1] = initialPlayers[1];
+    state->position = initialPosition;
+    state->nowState = 0;
+    return true;
+}
+
+bool BattleEmulator::IsHeroCommandSelectable(const SearchState& state,
+                                             const SearchCommand command) noexcept {
+    const Player& hero = state.players[0];
+    if (hero.hp <= 0) return false;
+    switch (command.action) {
+        case MEDICINAL_HERBS:
+            return hero.medicinal_herbs_count >= 1;
+        case HEAL:
+            return hero.mp >= 2;
+        case CRACK_ALLY:
+            return hero.mp >= 3;
+        case ACROBATIC_STAR:
+            return hero.specialCharge && hero.specialChargeTurn != 0 && !hero.acrobaticStar;
+        default:
+            return true;
+    }
+}
+
+bool BattleEmulator::StepSearchState(const SearchState& source, const SearchCommand command,
+                                     SearchState* destination) {
+    if (destination == nullptr || command.action <= 0) return false;
+    *destination = source;
+    Main(&destination->position, 1, nullptr, destination->players, nullptr,
+         0, nullptr, nullptr, -2, &destination->nowState, false, command.action);
+    return true;
+}
+
+bool BattleEmulator::StepSearchStateInPlace(SearchState* state, const SearchCommand command) {
+    if (state == nullptr || command.action <= 0) return false;
+    Main(&state->position, 1, nullptr, state->players, nullptr,
+         0, nullptr, nullptr, -2, &state->nowState, false, command.action);
+    return true;
 }
 
 double BattleEmulator::FUN_021dbc04(int baseHp, double maxHp) {
