@@ -2507,6 +2507,26 @@ namespace rngflow {
         return DecideBattleExactImpl(root, maxTurns, timeLimitMs, true, true);
     }
 
+    bool ReplayBattleWitnessExact(
+        const BattleEmulator::SearchState &root,
+        const std::array<int, kMaxPlanTurns> &actions,
+        const int actionCount) {
+        if (actionCount < 0 || actionCount > kMaxPlanTurns) return false;
+        BattleEmulator::SearchState state = root;
+        for (int i = 0; i < actionCount; ++i) {
+            if (state.players[0].hp <= 0 || state.players[1].hp <= 0) return false;
+            const BattleEmulator::SearchCommand command{actions[i]};
+            if (!BattleEmulator::IsHeroCommandSelectable(state, command)) return false;
+            BattleEmulator::SearchState child{};
+            if (!BattleEmulator::StepSearchState(
+                    state, command, &child, i + 1 == actionCount)) {
+                return false;
+            }
+            state = child;
+        }
+        return state.players[0].hp > 0 && state.players[1].hp <= 0;
+    }
+
     ExactKillDecisionResult SolveShortestKillBattleExact(
         const BattleEmulator::SearchState &root, const int maxTurns,
         const int timeLimitMs) {

@@ -226,6 +226,13 @@ struct ExactKillDecisionResult {
 [[nodiscard]] ExactKillDecisionResult FindKillWitnessBattleRelaxed(
     const BattleEmulator::SearchState& root, int maxTurns, int timeLimitMs = 0);
 
+// Replay one candidate action sequence on the authoritative, non-relaxed battle
+// state.  This is the acceptance gate for any witness produced by a relaxation.
+[[nodiscard]] bool ReplayBattleWitnessExact(
+    const BattleEmulator::SearchState& root,
+    const std::array<int, kMaxPlanTurns>& actions,
+    int actionCount);
+
 // End-to-end shortest-kill solver. First obtains an incumbent witness U, then
 // proves E(U-1) with the exact reversible-frontier solver. If that proof itself
 // finds a shorter T, a real witness is recovered inside horizon T; the completed

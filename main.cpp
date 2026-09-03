@@ -976,6 +976,11 @@ int main(int argc, char *argv[]) {
                 std::cout << proof.actions[i];
             }
             std::cout << std::endl;
+            if (std::strcmp(argv[1], "--find-witness-relaxed") == 0) {
+                std::cout << "witness.exactReplay="
+                          << (rngflow::ReplayBattleWitnessExact(root, proof.actions, proof.actionCount) ? 1 : 0)
+                          << std::endl;
+            }
         }
         return proof.complete && proof.killReachable ? 0 : 3;
     }
