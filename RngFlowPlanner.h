@@ -129,6 +129,9 @@ struct ExactKillDecisionResult {
     int closestRejectedShortfall = -1;
     int diagnosticActionCount = 0;
     std::array<int, kMaxPlanTurns> diagnosticActions{};
+    int diagnosticFinalEnemyHp = -1;
+    int diagnosticFinalHeroHp = -1;
+    int diagnosticFinalPosition = -1;
 };
 
 
