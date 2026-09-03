@@ -248,7 +248,8 @@ inline void BattleEmulator::processTurn() {
 bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
                           BattleResult* result,
                           uint64_t seed, const int eActions[350], const int damages[350], int mode,
-                          uint64_t *NowState, bool logicalTurnStart, int forcedHeroAction) {
+                          uint64_t *NowState, bool logicalTurnStart, int forcedHeroAction,
+                          bool stopBeforePresentationTail) {
     bool player0_has_initiative = false;
     int genePosition = 0;
     int exCounter = 0;
@@ -600,6 +601,14 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         }
         //--------end_FUN_021594bc-------
 
+        // Exact E(t) checks on the final horizon only need the post-action HP
+        // outcome.  The code below can only advance RNG / presentation state:
+        // camera::Main has no Player access.  Skipping it cannot change whether
+        // either combatant was killed during this turn.
+        if (stopBeforePresentationTail) {
+            return false;
+        }
+
         if (Player::isPlayerAlive(players[0]) && Player::isPlayerAlive(players[1])) {
             (*position) += 1;
         }
@@ -656,11 +665,13 @@ bool BattleEmulator::IsHeroCommandSelectable(const SearchState& state,
 }
 
 bool BattleEmulator::StepSearchState(const SearchState& source, const SearchCommand command,
-                                     SearchState* destination) {
+                                     SearchState* destination,
+                                     const bool stopBeforePresentationTail) {
     if (destination == nullptr || command.action <= 0) return false;
     *destination = source;
     Main(&destination->position, 1, nullptr, destination->players, nullptr,
-         0, nullptr, nullptr, -2, &destination->nowState, false, command.action);
+         0, nullptr, nullptr, -2, &destination->nowState, false, command.action,
+         stopBeforePresentationTail);
     return true;
 }
 

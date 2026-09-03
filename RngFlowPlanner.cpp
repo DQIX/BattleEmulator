@@ -1932,7 +1932,8 @@ bool FindBattleWitnessDfs(
 
     for (std::size_t i = 0; i < actionCount; ++i) {
         BattleEmulator::SearchState child{};
-        if (!BattleEmulator::StepSearchState(state, {actions[i]}, &child)) {
+        if (!BattleEmulator::StepSearchState(
+                state, {actions[i]}, &child, remainingTurns <= 1)) {
             result.complete = false;
             return false;
         }
@@ -2214,7 +2215,7 @@ static ExactKillDecisionResult DecideBattleExactImpl(
                     return result;
                 }
                 BattleEmulator::SearchState child{};
-                if (!BattleEmulator::StepSearchState(state, {actions[i]}, &child)) {
+                if (!BattleEmulator::StepSearchState(state, {actions[i]}, &child, finalLayer)) {
                     result.complete = false;
                     return result;
                 }
