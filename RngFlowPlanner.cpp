@@ -2139,9 +2139,51 @@ namespace rngflow {
             pass(scratch, values, 48);
         }
 
+        void RadixSortPackedStatesWithParents(std::vector<std::uint64_t> &values,
+                                              std::vector<std::uint64_t> &parents,
+                                              std::vector<std::uint64_t> &scratchValues,
+                                              std::vector<std::uint64_t> &scratchParents) {
+            assert(values.size() == parents.size());
+            if (values.size() < 2) return;
+            scratchValues.resize(values.size());
+            scratchParents.resize(values.size());
+            static thread_local std::array<std::uint32_t, 1u << 16> counts{};
+
+            const auto pass = [&](const std::vector<std::uint64_t> &srcValues,
+                                  const std::vector<std::uint64_t> &srcParents,
+                                  std::vector<std::uint64_t> &dstValues,
+                                  std::vector<std::uint64_t> &dstParents,
+                                  const int shift) {
+                counts.fill(0);
+                for (const std::uint64_t value: srcValues) {
+                    ++counts[static_cast<std::uint16_t>(value >> shift)];
+                }
+                std::size_t offset = 0;
+                for (std::uint32_t &count: counts) {
+                    const std::uint32_t bucketSize = count;
+                    count = static_cast<std::uint32_t>(offset);
+                    offset += bucketSize;
+                }
+                for (std::size_t i = 0; i < srcValues.size(); ++i) {
+                    const std::uint64_t value = srcValues[i];
+                    const auto bucket = static_cast<std::uint16_t>(value >> shift);
+                    const std::size_t write = counts[bucket]++;
+                    dstValues[write] = value;
+                    dstParents[write] = srcParents[i];
+                }
+            };
+
+            pass(values, parents, scratchValues, scratchParents, 0);
+            pass(scratchValues, scratchParents, values, parents, 16);
+            pass(values, parents, scratchValues, scratchParents, 32);
+            pass(scratchValues, scratchParents, values, parents, 48);
+        }
+
         void ParetoPruneHpMpHerbs(std::vector<std::uint64_t> &states,
-                                  ExactKillDecisionResult &result) {
+                                  ExactKillDecisionResult &result,
+                                  std::vector<std::uint64_t> *const parents = nullptr) {
             if (states.empty()) return;
+            assert(parents == nullptr || parents->size() == states.size());
 
             // Low 15 bits are [mp:5, herbs:3, hp:7].  For an otherwise identical
             // reachable turn-boundary state, larger HP/MP/herb counts can execute every
@@ -2172,7 +2214,9 @@ namespace rngflow {
                         continue;
                     }
 
-                    states[write++] = key;
+                    states[write] = key;
+                    if (parents != nullptr) (*parents)[write] = (*parents)[i];
+                    ++write;
                     const std::uint32_t bit = UINT32_C(1) << mp;
                     for (unsigned h = 0; h <= herbs; ++h) {
                         seenMpAtLeastHerbs[h] |= bit;
@@ -2181,6 +2225,7 @@ namespace rngflow {
                 begin = end;
             }
             states.resize(write);
+            if (parents != nullptr) parents->resize(write);
         }
     } // namespace
 
@@ -2292,7 +2337,8 @@ namespace rngflow {
 
     static ExactKillDecisionResult DecideBattleExactImpl(
         const BattleEmulator::SearchState &root, const int maxTurns,
-        const int timeLimitMs, const bool relaxHeroHp) {
+        const int timeLimitMs, const bool relaxHeroHp,
+        const bool captureWitness = false) {
         ExactKillDecisionResult result{};
         const auto started = std::chrono::steady_clock::now();
         const auto deadline = timeLimitMs > 0
@@ -2315,18 +2361,43 @@ namespace rngflow {
 
         std::vector<std::uint64_t> frontier{rootKey};
         std::vector<std::uint64_t> next;
+        std::vector<std::uint64_t> nextParents;
+        std::vector<std::uint64_t> scratchParents;
+        std::array<std::vector<std::uint64_t>, kMaxPlanTurns + 1> parentHistory{};
         result.peakFrontier = 1;
+
+        constexpr std::uint64_t kParentActionBits = 10;
+        constexpr std::uint64_t kParentActionMask = (UINT64_C(1) << kParentActionBits) - 1;
+        const auto packParent = [](const std::size_t parentIndex, const int action) {
+            assert(action >= 0 && action <= static_cast<int>(kParentActionMask));
+            return (static_cast<std::uint64_t>(parentIndex) << kParentActionBits) |
+                   static_cast<std::uint64_t>(action);
+        };
+        const auto restoreWitness = [&](const int depth, std::size_t parentIndex, const int finalAction) {
+            result.firstKillTurn = depth + 1;
+            result.actionCount = depth + 1;
+            result.actions[depth] = finalAction;
+            for (int level = depth; level > 0; --level) {
+                assert(parentIndex < parentHistory[level].size());
+                const std::uint64_t parentInfo = parentHistory[level][parentIndex];
+                result.actions[level - 1] = static_cast<int>(parentInfo & kParentActionMask);
+                parentIndex = static_cast<std::size_t>(parentInfo >> kParentActionBits);
+            }
+        };
 
         for (int depth = 0; depth < turns && !frontier.empty(); ++depth) {
             const bool finalLayer = depth + 1 == turns;
             result.peakFrontier = std::max<std::uint64_t>(result.peakFrontier, frontier.size());
             result.expandedStates += frontier.size();
             next.clear();
+            if (captureWitness) nextParents.clear();
             if (!finalLayer && frontier.size() <= std::numeric_limits<std::size_t>::max() / 4) {
                 next.reserve(frontier.size() * 4);
+                if (captureWitness) nextParents.reserve(frontier.size() * 4);
             }
 
-            for (const std::uint64_t packed: frontier) {
+            for (std::size_t parentIndex = 0; parentIndex < frontier.size(); ++parentIndex) {
+                const std::uint64_t packed = frontier[parentIndex];
                 const BattleEmulator::SearchState state = codec.Unpack(packed);
                 const int remainingTurns = turns - depth;
                 if (StaticOptimisticKillTurns(FromSearchState(state), remainingTurns) > remainingTurns) {
@@ -2349,7 +2420,8 @@ namespace rngflow {
                     if (child.players[0].hp <= 0) continue;
                     if (child.players[1].hp <= 0) {
                         result.killReachable = true;
-                        result.firstKillTurn = depth + 1;
+                        if (captureWitness) restoreWitness(depth, parentIndex, actions[i]);
+                        else result.firstKillTurn = depth + 1;
                         return result;
                     }
                     if (finalLayer) continue;
@@ -2365,6 +2437,7 @@ namespace rngflow {
                         return result;
                     }
                     next.push_back(childKey);
+                    if (captureWitness) nextParents.push_back(packParent(parentIndex, actions[i]));
                 }
             }
 
@@ -2372,12 +2445,29 @@ namespace rngflow {
                 result.completedNoKillDepth = depth + 1;
                 return result;
             }
-            RadixSortPackedStates(next, frontier);
-            const auto uniqueEnd = std::unique(next.begin(), next.end());
-            result.duplicateStates += static_cast<std::uint64_t>(next.end() - uniqueEnd);
-            next.erase(uniqueEnd, next.end());
-
-            ParetoPruneHpMpHerbs(next, result);
+            if (captureWitness) {
+                RadixSortPackedStatesWithParents(next, nextParents, frontier, scratchParents);
+                std::size_t write = 0;
+                for (std::size_t read = 0; read < next.size(); ++read) {
+                    if (write != 0 && next[read] == next[write - 1]) {
+                        ++result.duplicateStates;
+                        continue;
+                    }
+                    next[write] = next[read];
+                    nextParents[write] = nextParents[read];
+                    ++write;
+                }
+                next.resize(write);
+                nextParents.resize(write);
+                ParetoPruneHpMpHerbs(next, result, &nextParents);
+                parentHistory[depth + 1] = nextParents;
+            } else {
+                RadixSortPackedStates(next, frontier);
+                const auto uniqueEnd = std::unique(next.begin(), next.end());
+                result.duplicateStates += static_cast<std::uint64_t>(next.end() - uniqueEnd);
+                next.erase(uniqueEnd, next.end());
+                ParetoPruneHpMpHerbs(next, result);
+            }
             frontier.swap(next);
             result.completedNoKillDepth = depth + 1;
         }
@@ -2414,17 +2504,7 @@ namespace rngflow {
     ExactKillDecisionResult FindKillWitnessBattleRelaxed(
         const BattleEmulator::SearchState &root, const int maxTurns,
         const int timeLimitMs) {
-        ExactKillDecisionResult result{};
-        const int turns = std::clamp(maxTurns, 0, kMaxPlanTurns);
-        const auto deadline = timeLimitMs > 0
-                                  ? std::chrono::steady_clock::now() + std::chrono::milliseconds(timeLimitMs)
-                                  : std::chrono::steady_clock::time_point::max();
-        BattleEmulator::SearchState relaxedRoot = root;
-        relaxedRoot.players[0].hp = relaxedRoot.players[0].maxHp;
-        ExactBattleStateCodec codec(relaxedRoot, true);
-        std::array<std::unordered_set<std::uint64_t>, kMaxPlanTurns + 1> deadMemo{};
-        FindBattleWitnessDfs(relaxedRoot, turns, 0, deadline, result, codec, deadMemo, true);
-        return result;
+        return DecideBattleExactImpl(root, maxTurns, timeLimitMs, true, true);
     }
 
     ExactKillDecisionResult SolveShortestKillBattleExact(
