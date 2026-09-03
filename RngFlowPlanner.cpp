@@ -3185,11 +3185,45 @@ namespace rngflow {
         }
 
         std::vector<std::uint64_t> frontier{rootKey};
-        std::vector<std::uint64_t> frontierHp{static_cast<std::uint64_t>(root.players[0].hp)};
         std::vector<std::uint64_t> next;
-        std::vector<std::uint64_t> nextHp;
-        std::vector<std::uint64_t> scratchHp;
+        std::vector<std::uint64_t> nextParents;
+        std::vector<std::uint64_t> scratchParents;
+        std::array<std::vector<std::uint64_t>, kMaxPlanTurns + 1> parentHistory{};
         result.peakFrontier = 1;
+
+        const auto restoreWitness = [&](const int depth, std::size_t parentIndex, const int finalAction) {
+            result.firstKillTurn = depth + 1;
+            result.actionCount = depth + 1;
+            result.actions[depth] = finalAction;
+            for (int level = depth; level > 0; --level) {
+                assert(parentIndex < parentHistory[level].size());
+                const std::uint64_t parentInfo = parentHistory[level][parentIndex];
+                result.actions[level - 1] = DominantParentAction(parentInfo);
+                parentIndex = DominantParentIndex(parentInfo);
+            }
+        };
+
+        // This target keeps one process-global LCG tape. BuildProductionProofContexts
+        // has already called init(seed, true), so reads below the precomputed prefix
+        // are immutable and can be shared by proof workers. OPTIMIZE_MODE uses a
+        // thread_local tape, so keep that build single-threaded unless every worker
+        // gets its own initialized tape.
+        constexpr int kPrecomputedLcgLastPosition = 4997;
+        constexpr int kProofTransitionPositionUpper = 64;
+        const bool immutableTape =
+            root.position + turns * kProofTransitionPositionUpper < kPrecomputedLcgLastPosition;
+        constexpr unsigned kMaxProofWorkers = 8;
+
+        struct WorkerOutput {
+            std::vector<std::uint64_t> next{};
+            std::vector<std::uint64_t> nextParents{};
+            std::uint64_t generated = 0;
+            std::uint64_t deltaMask = 0;
+            bool complete = true;
+            bool killReachable = false;
+            std::size_t killParentIndex = 0;
+            int killAction = -1;
+        };
 
         for (int depth = 0; depth < turns && !frontier.empty(); ++depth) {
             const bool finalLayer = depth + 1 == turns;
@@ -3215,115 +3249,183 @@ namespace rngflow {
             result.peakFrontier = std::max<std::uint64_t>(result.peakFrontier, frontier.size());
             result.expandedStates += frontier.size();
             next.clear();
-            nextHp.clear();
+            nextParents.clear();
             const std::uint64_t generatedBefore = result.generatedStates;
             const std::uint64_t duplicatesBefore = result.duplicateStates;
             const std::uint64_t dominatedBefore = result.dominatedStates;
-            if (!finalLayer && frontier.size() <= std::numeric_limits<std::size_t>::max() / 4) {
-                next.reserve(frontier.size() * 4);
-                nextHp.reserve(frontier.size() * 4);
+
+            unsigned workerCount = 1;
+#if !defined(OPTIMIZE_MODE)
+            if (immutableTape && frontier.size() >= 4096) {
+                const unsigned hardware = std::max(1u, std::thread::hardware_concurrency());
+                workerCount = std::min<unsigned>(kMaxProofWorkers, hardware);
+                workerCount = std::min<unsigned>(workerCount, static_cast<unsigned>(frontier.size()));
             }
-
-            for (std::size_t parentIndex = 0; parentIndex < frontier.size(); ++parentIndex) {
-                BattleEmulator::SearchState state = codec.Unpack(frontier[parentIndex]);
-                state.players[0].hp = static_cast<int>(frontierHp[parentIndex]);
-                const int remainingTurns = turns - depth;
-                const State plannerState = FromSearchState(state);
-                if (StaticOptimisticKillTurns(plannerState, remainingTurns) > remainingTurns) {
-                    continue;
+#endif
+            std::vector<WorkerOutput> workers(workerCount);
+            std::atomic<bool> stop{false};
+            const auto expandRange = [&](const unsigned workerIndex,
+                                         const std::size_t begin,
+                                         const std::size_t end) {
+                WorkerOutput &out = workers[workerIndex];
+                if (!finalLayer && end - begin <= std::numeric_limits<std::size_t>::max() / 4) {
+                    out.next.reserve((end - begin) * 4);
+                    out.nextParents.reserve((end - begin) * 4);
                 }
-
-                std::array<int, 8> actions{};
-                const std::size_t count = BuildBattleProofCandidates(state, actions);
-                const int noDirectDamageUpper = StaticOptimisticDamageUpperForHorizon(
-                    plannerState, remainingTurns, true);
-                int activateStarDamageUpper = -1;
-                for (std::size_t i = 0; i < count; ++i) {
-                    const int action = actions[i];
-                    if (HasNoDirectEnemyDamageFromSelectedHeroAction(action) &&
-                        noDirectDamageUpper < state.players[1].hp) {
-                        continue;
-                    }
-                    if (action == BattleEmulator::ACROBATIC_STAR) {
-                        if (activateStarDamageUpper < 0) {
-                            State activatedStarState = plannerState;
-                            activatedStarState.players[0].acrobaticStar = true;
-                            activatedStarState.players[0].acrobaticStarTurn = 6;
-                            activateStarDamageUpper = StaticOptimisticDamageUpperForHorizon(
-                                activatedStarState, remainingTurns, true);
+                std::uint64_t parentsSinceDeadlineCheck = 0;
+                for (std::size_t parentIndex = begin; parentIndex < end; ++parentIndex) {
+                    if ((parentsSinceDeadlineCheck++ & UINT64_C(0x03ff)) == 0) {
+                        if (stop.load(std::memory_order_relaxed)) return;
+                        if (std::chrono::steady_clock::now() >= deadline) {
+                            out.complete = false;
+                            stop.store(true, std::memory_order_relaxed);
+                            return;
                         }
-                        if (activateStarDamageUpper < state.players[1].hp) continue;
                     }
-                    if ((result.generatedStates & UINT64_C(0x0fff)) == 0 &&
-                        std::chrono::steady_clock::now() >= deadline) {
-                        result.complete = false;
-                        return result;
-                    }
-                    BattleEmulator::SearchState child{};
-                    if (!BattleEmulator::StepSearchState(state, {action}, &child, finalLayer)) {
-                        result.complete = false;
-                        return result;
-                    }
-                    ++result.generatedStates;
-                    if (child.players[0].hp <= 0) continue;
-                    if (child.players[1].hp <= 0) {
-                        result.killReachable = true;
-                        result.firstKillTurn = depth + 1;
-                        return result;
-                    }
-                    if (finalLayer) continue;
 
-                    const int childRemainingTurns = remainingTurns - 1;
-                    if (StaticOptimisticKillTurns(
-                            FromSearchState(child), childRemainingTurns) > childRemainingTurns) {
+                    BattleEmulator::SearchState state = codec.Unpack(frontier[parentIndex]);
+                    state.players[0].hp = depth == 0
+                                              ? root.players[0].hp
+                                              : DominantParentHp(parentHistory[depth][parentIndex]);
+                    const int remainingTurns = turns - depth;
+                    const State plannerState = FromSearchState(state);
+                    if (StaticOptimisticKillTurns(plannerState, remainingTurns) > remainingTurns) {
                         continue;
                     }
 
-                    const int transitionDelta = child.position - state.position;
-                    if (transitionDelta >= 0 && transitionDelta < 64) {
-                        result.observedLiveTransitionDeltaMask |= UINT64_C(1) << transitionDelta;
-                    }
+                    std::array<int, 8> actions{};
+                    const std::size_t count = BuildBattleProofCandidates(state, actions);
+                    const int noDirectDamageUpper = StaticOptimisticDamageUpperForHorizon(
+                        plannerState, remainingTurns, true);
+                    int activateStarDamageUpper = -1;
+                    for (std::size_t i = 0; i < count; ++i) {
+                        const int action = actions[i];
+                        if (HasNoDirectEnemyDamageFromSelectedHeroAction(action) &&
+                            noDirectDamageUpper < state.players[1].hp) {
+                            continue;
+                        }
+                        if (action == BattleEmulator::ACROBATIC_STAR) {
+                            if (activateStarDamageUpper < 0) {
+                                State activatedStarState = plannerState;
+                                activatedStarState.players[0].acrobaticStar = true;
+                                activatedStarState.players[0].acrobaticStarTurn = 6;
+                                activateStarDamageUpper = StaticOptimisticDamageUpperForHorizon(
+                                    activatedStarState, remainingTurns, true);
+                            }
+                            if (activateStarDamageUpper < state.players[1].hp) continue;
+                        }
 
-                    std::uint64_t childKey = 0;
-                    if (!codec.Pack(child, childKey)) {
-                        result.complete = false;
-                        return result;
+                        BattleEmulator::SearchState child{};
+                        if (!BattleEmulator::StepSearchState(state, {action}, &child, finalLayer)) {
+                            out.complete = false;
+                            stop.store(true, std::memory_order_relaxed);
+                            return;
+                        }
+                        ++out.generated;
+                        if (child.players[0].hp <= 0) continue;
+                        if (child.players[1].hp <= 0) {
+                            out.killReachable = true;
+                            out.killParentIndex = parentIndex;
+                            out.killAction = action;
+                            stop.store(true, std::memory_order_relaxed);
+                            return;
+                        }
+                        if (finalLayer) continue;
+
+                        const int childRemainingTurns = remainingTurns - 1;
+                        if (StaticOptimisticKillTurns(
+                                FromSearchState(child), childRemainingTurns) > childRemainingTurns) {
+                            continue;
+                        }
+
+                        const int transitionDelta = child.position - state.position;
+                        if (transitionDelta >= 0 && transitionDelta < 64) {
+                            out.deltaMask |= UINT64_C(1) << transitionDelta;
+                        }
+
+                        std::uint64_t childKey = 0;
+                        if (!codec.Pack(child, childKey)) {
+                            out.complete = false;
+                            stop.store(true, std::memory_order_relaxed);
+                            return;
+                        }
+                        out.next.push_back(childKey);
+                        out.nextParents.push_back(
+                            PackDominantParent(parentIndex, action, child.players[0].hp));
                     }
-                    next.push_back(childKey);
-                    nextHp.push_back(static_cast<std::uint64_t>(child.players[0].hp));
                 }
+            };
+
+            std::vector<std::thread> threads;
+            if (workerCount > 1) threads.reserve(workerCount - 1);
+            for (unsigned worker = 1; worker < workerCount; ++worker) {
+                const std::size_t begin = frontier.size() * worker / workerCount;
+                const std::size_t end = frontier.size() * (worker + 1) / workerCount;
+                threads.emplace_back(expandRange, worker, begin, end);
+            }
+            expandRange(0, 0, frontier.size() / workerCount);
+            for (std::thread &thread : threads) thread.join();
+
+            next.clear();
+            nextParents.clear();
+            std::size_t totalNext = 0;
+            for (const WorkerOutput &out : workers) totalNext += out.next.size();
+            if (!finalLayer) {
+                next.reserve(totalNext);
+                nextParents.reserve(totalNext);
+            }
+            std::size_t killParentIndex = 0;
+            int killAction = -1;
+            for (WorkerOutput &out : workers) {
+                result.generatedStates += out.generated;
+                result.observedLiveTransitionDeltaMask |= out.deltaMask;
+                if (!out.complete) result.complete = false;
+                if (out.killReachable && !result.killReachable) {
+                    result.killReachable = true;
+                    killParentIndex = out.killParentIndex;
+                    killAction = out.killAction;
+                }
+                next.insert(next.end(), out.next.begin(), out.next.end());
+                nextParents.insert(nextParents.end(), out.nextParents.begin(), out.nextParents.end());
             }
             result.generatedByDepth[depth + 1] = result.generatedStates - generatedBefore;
+
+            if (!result.complete || (stop.load(std::memory_order_relaxed) && !result.killReachable)) {
+                result.complete = false;
+                return result;
+            }
+            if (result.killReachable) {
+                restoreWitness(depth, killParentIndex, killAction);
+                return result;
+            }
 
             if (finalLayer) {
                 result.completedNoKillDepth = depth + 1;
                 return result;
             }
 
-            RadixSortPackedStatesWithParents(next, nextHp, frontier, scratchHp);
+            RadixSortPackedStatesWithParents(next, nextParents, frontier, scratchParents);
             std::size_t write = 0;
             for (std::size_t read = 0; read < next.size(); ++read) {
                 if (write != 0 && next[read] == next[write - 1]) {
                     ++result.duplicateStates;
-                    nextHp[write - 1] = std::max(nextHp[write - 1], nextHp[read]);
+                    if (DominantParentHp(nextParents[read]) >
+                        DominantParentHp(nextParents[write - 1])) {
+                        nextParents[write - 1] = nextParents[read];
+                    }
                     continue;
                 }
                 next[write] = next[read];
-                nextHp[write] = nextHp[read];
+                nextParents[write] = nextParents[read];
                 ++write;
             }
             next.resize(write);
-            nextHp.resize(write);
-            ParetoPruneDominantHeroHp(next, nextHp, result);
-            // Do not prune by lower enemy HP here. HP_HOOVER can heal the enemy
-            // back across the 1/4 rage threshold, so two otherwise equal states
-            // below that threshold can later consume different RNG in ProcessRage.
-            // Such a prune would under-approximate the authoritative transition
-            // system and therefore cannot be used for an UNSAT proof.
+            nextParents.resize(write);
+            ParetoPruneDominantHeroHp(next, nextParents, result);
             result.duplicatesByDepth[depth + 1] = result.duplicateStates - duplicatesBefore;
             result.dominatedByDepth[depth + 1] = result.dominatedStates - dominatedBefore;
+            parentHistory[depth + 1] = std::move(nextParents);
             frontier.swap(next);
-            frontierHp.swap(nextHp);
             result.completedNoKillDepth = depth + 1;
         }
 

@@ -1207,7 +1207,7 @@ int main(int argc, char *argv[]) {
             return 2;
         }
 
-        constexpr int kProofCliTimeLimitMs = 10000;
+        constexpr int kProofCliTimeLimitMs = 30000;
         if (std::strcmp(argv[1], "--prove-production-no-kill") == 0 ||
             std::strcmp(argv[1], "--probe-production-resource-relaxed") == 0) {
             const bool resourceRelaxed =
@@ -1287,6 +1287,18 @@ int main(int argc, char *argv[]) {
                               << " nonResourceGroups=" << proof.nonResourceGroupsByDepth[depth]
                               << " positionStatusGroups=" << proof.positionStatusGroupsByDepth[depth]
                               << std::endl;
+                }
+                if (!resourceRelaxed && proof.killReachable && proof.actionCount > 0) {
+                    const bool exactReplay = rngflow::ReplayBattleWitnessExact(
+                        context.root, proof.actions, proof.actionCount);
+                    std::cout << "proof.match=" << contextIndex
+                              << " witness.exactReplay=" << (exactReplay ? 1 : 0)
+                              << " actions=";
+                    for (int i = 0; i < proof.actionCount; ++i) {
+                        if (i != 0) std::cout << ',';
+                        std::cout << proof.actions[i];
+                    }
+                    std::cout << std::endl;
                 }
 
                 if (!proof.complete) {
@@ -1392,6 +1404,18 @@ int main(int argc, char *argv[]) {
                       << " exactPositionAfter=" << diagnosis.exactPositionAfter
                       << " relaxedPositionAfter=" << diagnosis.relaxedPositionAfter
                       << std::endl;
+        }
+        if (std::strcmp(argv[1], "--prove-production-shortest") == 0 &&
+            proof.killReachable && proof.actionCount > 0) {
+            const bool exactReplay = rngflow::ReplayBattleWitnessExact(
+                context.root, proof.actions, proof.actionCount);
+            std::cout << "witness.exactReplay=" << (exactReplay ? 1 : 0)
+                      << " actions=";
+            for (int i = 0; i < proof.actionCount; ++i) {
+                if (i != 0) std::cout << ',';
+                std::cout << proof.actions[i];
+            }
+            std::cout << std::endl;
         }
         return proof.complete ? 0 : 3;
     }
