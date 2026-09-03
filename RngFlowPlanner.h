@@ -214,6 +214,13 @@ struct ExactKillDecisionResult {
 [[nodiscard]] ExactKillDecisionResult FindShortestKillBattleExact(
     const BattleEmulator::SearchState& root, int maxTurns, int timeLimitMs = 0);
 
+// Exact shortest-kill search using the proven HP/MP/herb dominance relation.
+// Hero HP is removed from the key, but every key carries the maximum HP of a
+// real path that reached it.  Therefore SAT is real and complete UNSAT remains
+// a proof; this is an exact dominance quotient, not the optimistic HP reset.
+[[nodiscard]] ExactKillDecisionResult FindShortestKillBattleDominantHp(
+    const BattleEmulator::SearchState& root, int maxTurns, int timeLimitMs = 0);
+
 // Find one real executable witness using only authoritative battle transitions.
 // Ordering is heuristic-only: every legal branch remains in the DFS, and the
 // proof-safe optimistic lower bound is the only pruning rule.

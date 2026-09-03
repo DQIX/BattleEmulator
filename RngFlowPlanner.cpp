@@ -2227,6 +2227,99 @@ namespace rngflow {
             states.resize(write);
             if (parents != nullptr) parents->resize(write);
         }
+
+        constexpr int kDominantHpBits = 7;
+        constexpr int kDominantActionBits = 10;
+        constexpr int kDominantParentShift = kDominantHpBits + kDominantActionBits;
+        constexpr std::uint64_t kDominantHpMask = (UINT64_C(1) << kDominantHpBits) - 1;
+        constexpr std::uint64_t kDominantActionMask = (UINT64_C(1) << kDominantActionBits) - 1;
+
+        [[nodiscard]] std::uint64_t PackDominantParent(const std::size_t parentIndex,
+                                                       const int action,
+                                                       const int heroHp) noexcept {
+            assert(action >= 0 && action <= static_cast<int>(kDominantActionMask));
+            assert(heroHp > 0 && heroHp <= static_cast<int>(kDominantHpMask));
+            return (static_cast<std::uint64_t>(parentIndex) << kDominantParentShift) |
+                   (static_cast<std::uint64_t>(action) << kDominantHpBits) |
+                   static_cast<std::uint64_t>(heroHp);
+        }
+
+        [[nodiscard]] int DominantParentHp(const std::uint64_t parent) noexcept {
+            return static_cast<int>(parent & kDominantHpMask);
+        }
+
+        [[nodiscard]] int DominantParentAction(const std::uint64_t parent) noexcept {
+            return static_cast<int>((parent >> kDominantHpBits) & kDominantActionMask);
+        }
+
+        [[nodiscard]] std::size_t DominantParentIndex(const std::uint64_t parent) noexcept {
+            return static_cast<std::size_t>(parent >> kDominantParentShift);
+        }
+
+        void ParetoPruneDominantHeroHp(std::vector<std::uint64_t> &states,
+                                       std::vector<std::uint64_t> &parents,
+                                       ExactKillDecisionResult &result) {
+            if (states.empty()) return;
+            assert(states.size() == parents.size());
+
+            // The relaxed codec removes hero HP from the key, but every stored state
+            // carries the maximum *real reachable* HP for its exact non-HP boundary
+            // state.  For the same future state, higher HP/MP/herbs dominates lower
+            // resources exactly: forced commands do not branch on positive current HP,
+            // incoming damage is HP-independent, and capped healing is monotone.
+            //
+            // Keys in one group share every future field except MP/herbs (the encoded
+            // HP bits are the fixed max-HP value). Numeric descending order therefore
+            // visits higher herbs first and, within one herb count, higher MP first.
+            // A 32-leaf max tree answers whether any already-seen state with MP >= m
+            // also has real reachable HP >= h.
+            std::size_t write = 0;
+            std::size_t begin = 0;
+            while (begin < states.size()) {
+                const std::uint64_t base = states[begin] >> 15;
+                std::size_t end = begin + 1;
+                while (end < states.size() && (states[end] >> 15) == base) ++end;
+
+                std::array<std::uint8_t, 64> maxHpTree{};
+                const auto update = [&maxHpTree](unsigned mp, const int hp) {
+                    unsigned node = 32 + mp;
+                    maxHpTree[node] = std::max(maxHpTree[node], static_cast<std::uint8_t>(hp));
+                    for (node >>= 1; node != 0; node >>= 1) {
+                        maxHpTree[node] = std::max(maxHpTree[node << 1], maxHpTree[(node << 1) | 1]);
+                    }
+                };
+                const auto queryAtLeast = [&maxHpTree](unsigned mp) {
+                    unsigned left = 32 + mp;
+                    unsigned right = 63;
+                    std::uint8_t best = 0;
+                    while (left <= right) {
+                        if ((left & 1u) != 0) best = std::max(best, maxHpTree[left++]);
+                        if ((right & 1u) == 0) best = std::max(best, maxHpTree[right--]);
+                        left >>= 1;
+                        right >>= 1;
+                    }
+                    return static_cast<int>(best);
+                };
+
+                for (std::size_t i = end; i-- > begin;) {
+                    const std::uint64_t key = states[i];
+                    const unsigned mp = static_cast<unsigned>(key & 31u);
+                    const int hp = DominantParentHp(parents[i]);
+                    if (queryAtLeast(mp) >= hp) {
+                        ++result.dominatedStates;
+                        continue;
+                    }
+
+                    states[write] = key;
+                    parents[write] = parents[i];
+                    ++write;
+                    update(mp, hp);
+                }
+                begin = end;
+            }
+            states.resize(write);
+            parents.resize(write);
+        }
     } // namespace
 
     static ExactKillDecisionResult DecideKillWithinImpl(
@@ -2485,6 +2578,141 @@ namespace rngflow {
         const BattleEmulator::SearchState &root, const int maxTurns,
         const int timeLimitMs) {
         return DecideBattleExactImpl(root, maxTurns, timeLimitMs, false);
+    }
+
+    ExactKillDecisionResult FindShortestKillBattleDominantHp(
+        const BattleEmulator::SearchState &root, const int maxTurns,
+        const int timeLimitMs) {
+        ExactKillDecisionResult result{};
+        const auto started = std::chrono::steady_clock::now();
+        const auto deadline = timeLimitMs > 0
+                                  ? started + std::chrono::milliseconds(timeLimitMs)
+                                  : std::chrono::steady_clock::time_point::max();
+        const int turns = std::clamp(maxTurns, 0, kMaxPlanTurns);
+        if (root.players[1].hp <= 0) {
+            result.killReachable = true;
+            result.firstKillTurn = 0;
+            return result;
+        }
+        if (root.players[0].hp <= 0 || turns <= 0) return result;
+
+        // HP is intentionally omitted from the reversible key.  Unlike the relaxed
+        // proof path, however, each key carries the maximum HP of a real path that
+        // actually reached it.  Lower-HP paths to the same future state are exactly
+        // dominated, so SAT remains real while the frontier avoids an HP dimension.
+        ExactBattleStateCodec codec(root, true);
+        std::uint64_t rootKey = 0;
+        if (!codec.Pack(root, rootKey)) {
+            result.complete = false;
+            return result;
+        }
+
+        std::vector<std::uint64_t> frontier{rootKey};
+        std::vector<std::uint64_t> next;
+        std::vector<std::uint64_t> nextParents;
+        std::vector<std::uint64_t> scratchParents;
+        std::array<std::vector<std::uint64_t>, kMaxPlanTurns + 1> parentHistory{};
+        result.peakFrontier = 1;
+
+        const auto restoreWitness = [&](const int depth, std::size_t parentIndex, const int finalAction) {
+            result.firstKillTurn = depth + 1;
+            result.actionCount = depth + 1;
+            result.actions[depth] = finalAction;
+            for (int level = depth; level > 0; --level) {
+                assert(parentIndex < parentHistory[level].size());
+                const std::uint64_t parentInfo = parentHistory[level][parentIndex];
+                result.actions[level - 1] = DominantParentAction(parentInfo);
+                parentIndex = DominantParentIndex(parentInfo);
+            }
+        };
+
+        for (int depth = 0; depth < turns && !frontier.empty(); ++depth) {
+            const bool finalLayer = depth + 1 == turns;
+            result.peakFrontier = std::max<std::uint64_t>(result.peakFrontier, frontier.size());
+            result.expandedStates += frontier.size();
+            next.clear();
+            nextParents.clear();
+            if (!finalLayer && frontier.size() <= std::numeric_limits<std::size_t>::max() / 4) {
+                next.reserve(frontier.size() * 4);
+                nextParents.reserve(frontier.size() * 4);
+            }
+
+            for (std::size_t parentIndex = 0; parentIndex < frontier.size(); ++parentIndex) {
+                BattleEmulator::SearchState state = codec.Unpack(frontier[parentIndex]);
+                state.players[0].hp = depth == 0
+                                          ? root.players[0].hp
+                                          : DominantParentHp(parentHistory[depth][parentIndex]);
+                const int remainingTurns = turns - depth;
+                if (StaticOptimisticKillTurns(FromSearchState(state), remainingTurns) > remainingTurns) {
+                    continue;
+                }
+
+                std::array<int, 8> actions{};
+                const std::size_t count = BuildBattleProofCandidates(state, actions);
+                for (std::size_t i = 0; i < count; ++i) {
+                    if ((result.generatedStates & UINT64_C(0x0fff)) == 0 &&
+                        std::chrono::steady_clock::now() >= deadline) {
+                        result.complete = false;
+                        return result;
+                    }
+                    BattleEmulator::SearchState child{};
+                    if (!BattleEmulator::StepSearchState(state, {actions[i]}, &child, finalLayer)) {
+                        result.complete = false;
+                        return result;
+                    }
+                    ++result.generatedStates;
+                    if (child.players[0].hp <= 0) continue;
+                    if (child.players[1].hp <= 0) {
+                        result.killReachable = true;
+                        restoreWitness(depth, parentIndex, actions[i]);
+                        return result;
+                    }
+                    if (finalLayer) continue;
+
+                    const int transitionDelta = child.position - state.position;
+                    if (transitionDelta >= 0 && transitionDelta < 64) {
+                        result.observedLiveTransitionDeltaMask |= UINT64_C(1) << transitionDelta;
+                    }
+
+                    std::uint64_t childKey = 0;
+                    if (!codec.Pack(child, childKey)) {
+                        result.complete = false;
+                        return result;
+                    }
+                    next.push_back(childKey);
+                    nextParents.push_back(PackDominantParent(parentIndex, actions[i], child.players[0].hp));
+                }
+            }
+
+            if (finalLayer) {
+                result.completedNoKillDepth = depth + 1;
+                return result;
+            }
+
+            RadixSortPackedStatesWithParents(next, nextParents, frontier, scratchParents);
+            std::size_t write = 0;
+            for (std::size_t read = 0; read < next.size(); ++read) {
+                if (write != 0 && next[read] == next[write - 1]) {
+                    ++result.duplicateStates;
+                    if (DominantParentHp(nextParents[read]) > DominantParentHp(nextParents[write - 1])) {
+                        nextParents[write - 1] = nextParents[read];
+                    }
+                    continue;
+                }
+                next[write] = next[read];
+                nextParents[write] = nextParents[read];
+                ++write;
+            }
+            next.resize(write);
+            nextParents.resize(write);
+            ParetoPruneDominantHeroHp(next, nextParents, result);
+            parentHistory[depth + 1] = nextParents;
+            frontier.swap(next);
+            result.completedNoKillDepth = depth + 1;
+        }
+
+        result.peakFrontier = std::max<std::uint64_t>(result.peakFrontier, frontier.size());
+        return result;
     }
 
     ExactKillDecisionResult FindKillWitnessBattleExact(

@@ -28,6 +28,135 @@
 
 
 namespace {
+    struct RelaxedWitnessReplayDiagnosis {
+        bool exactReplay = false;
+        int firstRelaxationBeforeTurn = -1;
+        int firstSemanticDivergenceTurn = -1;
+        int action = -1;
+        const char *reason = "none";
+        int exactHpBefore = -1;
+        int relaxedHpBefore = -1;
+        int exactHpAfter = -1;
+        int relaxedHpAfter = -1;
+        int exactEnemyHpAfter = -1;
+        int relaxedEnemyHpAfter = -1;
+        int exactPositionAfter = -1;
+        int relaxedPositionAfter = -1;
+    };
+
+    [[nodiscard]] const char *FirstFutureSemanticDifference(
+        const BattleEmulator::SearchState &exact,
+        const BattleEmulator::SearchState &relaxed) noexcept {
+        const rngflow::State a = rngflow::FromSearchState(exact);
+        const rngflow::State b = rngflow::FromSearchState(relaxed);
+        const auto &ah = a.players[0];
+        const auto &bh = b.players[0];
+        const auto &ae = a.players[1];
+        const auto &be = b.players[1];
+
+        if ((ah.hp > 0) != (bh.hp > 0)) return "hero-survival";
+        if ((ae.hp > 0) != (be.hp > 0)) return "enemy-survival";
+        if (a.position != b.position) return "rng-position";
+        if (a.cameraCounter != b.cameraCounter) return "camera-counter";
+        if (ae.hp != be.hp) return "enemy-hp";
+        if (ah.mp != bh.mp) return "hero-mp";
+        if (ah.medicinal_herbs_count != bh.medicinal_herbs_count) return "hero-herbs";
+        if (ah.specialCharge != bh.specialCharge || ah.specialChargeTurn != bh.specialChargeTurn) {
+            return "hero-special-charge";
+        }
+        if (ah.paralysis != bh.paralysis || ah.paralysisLevel != bh.paralysisLevel ||
+            ah.paralysisTurns != bh.paralysisTurns) {
+            return "hero-paralysis";
+        }
+        if (ah.sleeping != bh.sleeping) return "hero-sleeping";
+        if (ah.inactive != bh.inactive) return "hero-inactive";
+        if (ah.acrobaticStar != bh.acrobaticStar || ah.acrobaticStarTurn != bh.acrobaticStarTurn) {
+            return "hero-acrobatic-star";
+        }
+        if (ae.rage != be.rage || ae.rageTurns != be.rageTurns) return "enemy-rage";
+        if (ae.specialCharge != be.specialCharge) return "enemy-special-charge";
+        return nullptr;
+    }
+
+    [[nodiscard]] RelaxedWitnessReplayDiagnosis DiagnoseRelaxedWitnessReplay(
+        const BattleEmulator::SearchState &root,
+        const std::array<int, rngflow::kMaxPlanTurns> &actions,
+        const int actionCount,
+        const int searchHorizon) {
+        RelaxedWitnessReplayDiagnosis diagnosis{};
+        if (actionCount < 0 || actionCount > rngflow::kMaxPlanTurns) {
+            diagnosis.reason = "invalid-action-count";
+            return diagnosis;
+        }
+
+        BattleEmulator::SearchState exact = root;
+        BattleEmulator::SearchState relaxed = root;
+        for (int i = 0; i < actionCount; ++i) {
+            const int turn = i + 1;
+            if (relaxed.players[0].hp != relaxed.players[0].maxHp) {
+                if (diagnosis.firstRelaxationBeforeTurn < 0) {
+                    diagnosis.firstRelaxationBeforeTurn = turn;
+                }
+                relaxed.players[0].hp = relaxed.players[0].maxHp;
+            }
+
+            diagnosis.action = actions[i];
+            diagnosis.exactHpBefore = exact.players[0].hp;
+            diagnosis.relaxedHpBefore = relaxed.players[0].hp;
+
+            const BattleEmulator::SearchCommand command{actions[i]};
+            const bool exactSelectable = exact.players[0].hp > 0 && exact.players[1].hp > 0 &&
+                                         BattleEmulator::IsHeroCommandSelectable(exact, command);
+            const bool relaxedSelectable = relaxed.players[0].hp > 0 && relaxed.players[1].hp > 0 &&
+                                           BattleEmulator::IsHeroCommandSelectable(relaxed, command);
+            if (exactSelectable != relaxedSelectable) {
+                diagnosis.firstSemanticDivergenceTurn = turn;
+                diagnosis.reason = exactSelectable ? "relaxed-action-unselectable" : "exact-action-unselectable";
+                return diagnosis;
+            }
+            if (!exactSelectable) {
+                diagnosis.firstSemanticDivergenceTurn = turn;
+                diagnosis.reason = "both-action-unselectable-before-witness-end";
+                return diagnosis;
+            }
+
+            BattleEmulator::SearchState exactChild{};
+            BattleEmulator::SearchState relaxedChild{};
+            const bool finalLayer = turn == searchHorizon;
+            const bool exactStep = BattleEmulator::StepSearchState(exact, command, &exactChild, finalLayer);
+            const bool relaxedStep = BattleEmulator::StepSearchState(relaxed, command, &relaxedChild, finalLayer);
+            if (exactStep != relaxedStep) {
+                diagnosis.firstSemanticDivergenceTurn = turn;
+                diagnosis.reason = exactStep ? "relaxed-transition-failed" : "exact-transition-failed";
+                return diagnosis;
+            }
+            if (!exactStep) {
+                diagnosis.firstSemanticDivergenceTurn = turn;
+                diagnosis.reason = "both-transitions-failed";
+                return diagnosis;
+            }
+
+            diagnosis.exactHpAfter = exactChild.players[0].hp;
+            diagnosis.relaxedHpAfter = relaxedChild.players[0].hp;
+            diagnosis.exactEnemyHpAfter = exactChild.players[1].hp;
+            diagnosis.relaxedEnemyHpAfter = relaxedChild.players[1].hp;
+            diagnosis.exactPositionAfter = exactChild.position;
+            diagnosis.relaxedPositionAfter = relaxedChild.position;
+
+            if (const char *difference = FirstFutureSemanticDifference(exactChild, relaxedChild)) {
+                diagnosis.firstSemanticDivergenceTurn = turn;
+                diagnosis.reason = difference;
+                return diagnosis;
+            }
+
+            exact = exactChild;
+            relaxed = relaxedChild;
+        }
+
+        diagnosis.exactReplay = exact.players[0].hp > 0 && exact.players[1].hp <= 0;
+        return diagnosis;
+    }
+
     // MinGW/GCC用のnoinline属性
 #ifndef NOINLINE
 #ifdef _MSC_VER
@@ -912,6 +1041,7 @@ int main(int argc, char *argv[]) {
     //std::cin.tie(0)->sync_with_stdio(0);
 
     if (argc >= 3 && (std::strcmp(argv[1], "--prove-shortest") == 0 ||
+                      std::strcmp(argv[1], "--prove-shortest-dominant-hp") == 0 ||
                       std::strcmp(argv[1], "--prove-no-kill-relaxed") == 0 ||
                       std::strcmp(argv[1], "--find-witness") == 0 ||
                       std::strcmp(argv[1], "--find-witness-relaxed") == 0)) {
@@ -949,6 +1079,8 @@ int main(int argc, char *argv[]) {
             proof = rngflow::FindKillWitnessBattleExact(root, maxTurns, kProofCliTimeLimitMs);
         } else if (std::strcmp(argv[1], "--find-witness-relaxed") == 0) {
             proof = rngflow::FindKillWitnessBattleRelaxed(root, maxTurns, kProofCliTimeLimitMs);
+        } else if (std::strcmp(argv[1], "--prove-shortest-dominant-hp") == 0) {
+            proof = rngflow::FindShortestKillBattleDominantHp(root, maxTurns, kProofCliTimeLimitMs);
         } else {
             proof = rngflow::SolveShortestKillBattleExact(root, maxTurns, kProofCliTimeLimitMs);
         }
@@ -977,8 +1109,22 @@ int main(int argc, char *argv[]) {
             }
             std::cout << std::endl;
             if (std::strcmp(argv[1], "--find-witness-relaxed") == 0) {
-                std::cout << "witness.exactReplay="
-                          << (rngflow::ReplayBattleWitnessExact(root, proof.actions, proof.actionCount) ? 1 : 0)
+                const auto diagnosis = DiagnoseRelaxedWitnessReplay(
+                    root, proof.actions, proof.actionCount, maxTurns);
+                const bool exactReplay = rngflow::ReplayBattleWitnessExact(root, proof.actions, proof.actionCount);
+                std::cout << "witness.exactReplay=" << (exactReplay ? 1 : 0)
+                          << " firstRelaxationBeforeTurn=" << diagnosis.firstRelaxationBeforeTurn
+                          << " firstSemanticDivergenceTurn=" << diagnosis.firstSemanticDivergenceTurn
+                          << " reason=" << diagnosis.reason
+                          << " action=" << diagnosis.action
+                          << " exactHpBefore=" << diagnosis.exactHpBefore
+                          << " relaxedHpBefore=" << diagnosis.relaxedHpBefore
+                          << " exactHpAfter=" << diagnosis.exactHpAfter
+                          << " relaxedHpAfter=" << diagnosis.relaxedHpAfter
+                          << " exactEnemyHpAfter=" << diagnosis.exactEnemyHpAfter
+                          << " relaxedEnemyHpAfter=" << diagnosis.relaxedEnemyHpAfter
+                          << " exactPositionAfter=" << diagnosis.exactPositionAfter
+                          << " relaxedPositionAfter=" << diagnosis.relaxedPositionAfter
                           << std::endl;
             }
         }
