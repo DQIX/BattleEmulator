@@ -10,6 +10,7 @@
 #include <limits>
 #include <memory>
 #include <numeric>
+#include <unordered_set>
 #include <vector>
 
 #include "lcg.h"
@@ -1907,7 +1908,9 @@ bool FindBattleWitnessDfs(
     const int remainingTurns,
     const int depth,
     const std::chrono::steady_clock::time_point deadline,
-    ExactKillDecisionResult& result) {
+    ExactKillDecisionResult& result,
+    const ExactBattleStateCodec& codec,
+    std::array<std::unordered_set<std::uint64_t>, kMaxPlanTurns + 1>& deadMemo) {
     if (state.players[1].hp <= 0) {
         result.killReachable = true;
         result.firstKillTurn = depth;
@@ -1923,6 +1926,10 @@ bool FindBattleWitnessDfs(
         result.complete = false;
         return false;
     }
+
+    std::uint64_t memoKey = 0;
+    const bool memoizable = codec.Pack(state, memoKey);
+    if (memoizable && deadMemo[remainingTurns].contains(memoKey)) return false;
 
     ++result.expandedStates;
     std::array<int, 8> actions{};
@@ -1974,11 +1981,12 @@ bool FindBattleWitnessDfs(
     for (std::size_t i = 0; i < candidateCount; ++i) {
         result.actions[depth] = candidates[i].action;
         if (FindBattleWitnessDfs(candidates[i].state, remainingTurns - 1, depth + 1,
-                                 deadline, result)) {
+                                 deadline, result, codec, deadMemo)) {
             return true;
         }
         if (!result.complete) return false;
     }
+    if (memoizable) deadMemo[remainingTurns].insert(memoKey);
     return false;
 }
 
@@ -2270,7 +2278,9 @@ ExactKillDecisionResult FindKillWitnessBattleExact(
     const auto deadline = timeLimitMs > 0
         ? std::chrono::steady_clock::now() + std::chrono::milliseconds(timeLimitMs)
         : std::chrono::steady_clock::time_point::max();
-    FindBattleWitnessDfs(root, turns, 0, deadline, result);
+    ExactBattleStateCodec codec(root, false);
+    std::array<std::unordered_set<std::uint64_t>, kMaxPlanTurns + 1> deadMemo{};
+    FindBattleWitnessDfs(root, turns, 0, deadline, result, codec, deadMemo);
     return result;
 }
 

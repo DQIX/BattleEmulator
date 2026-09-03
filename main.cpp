@@ -911,7 +911,9 @@ int main(int argc, char *argv[]) {
     //https://zenn.dev/reputeless/books/standard-cpp-for-competitive-programming/viewer/library-ios-iomanip#3.1-c-%E8%A8%80%E8%AA%9E%E3%81%AE%E5%85%A5%E5%87%BA%E5%8A%9B%E3%82%B9%E3%83%88%E3%83%AA%E3%83%BC%E3%83%A0%E3%81%A8%E3%81%AE%E5%90%8C%E6%9C%9F%E3%82%92%E7%84%A1%E5%8A%B9%E3%81%AB%E3%81%99%E3%82%8B
     //std::cin.tie(0)->sync_with_stdio(0);
 
-    if (argc >= 3 && std::strcmp(argv[1], "--prove-shortest") == 0) {
+    if (argc >= 3 && (std::strcmp(argv[1], "--prove-shortest") == 0 ||
+                      std::strcmp(argv[1], "--prove-no-kill-relaxed") == 0 ||
+                      std::strcmp(argv[1], "--find-witness") == 0)) {
         uint64_t seed = 0;
         int maxTurns = rngflow::kMaxPlanTurns;
         try {
@@ -934,7 +936,14 @@ int main(int argc, char *argv[]) {
         }
 
         const auto started = std::chrono::steady_clock::now();
-        const auto proof = rngflow::SolveShortestKillBattleExact(root, maxTurns, 0);
+        rngflow::ExactKillDecisionResult proof{};
+        if (std::strcmp(argv[1], "--prove-no-kill-relaxed") == 0) {
+            proof = rngflow::ProveNoKillWithinBattleExact(root, maxTurns, 0);
+        } else if (std::strcmp(argv[1], "--find-witness") == 0) {
+            proof = rngflow::FindKillWitnessBattleExact(root, maxTurns, 0);
+        } else {
+            proof = rngflow::SolveShortestKillBattleExact(root, maxTurns, 0);
+        }
         const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - started).count();
 
