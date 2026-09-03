@@ -117,6 +117,18 @@ struct ExactKillDecisionResult {
     std::uint64_t witnessExpandedStates = 0;
     std::uint64_t witnessGeneratedStates = 0;
     std::uint64_t observedLiveTransitionDeltaMask = 0;
+    // Diagnostic-only certificate for a complete no-kill run.  This is a real
+    // authoritative path to the frontier state that came closest to escaping
+    // the proof-safe optimistic damage bound; it is never treated as a SAT
+    // witness.  Values are exact integers from SearchState, not bucketed scores.
+    int closestRejectedDepth = -1;
+    int closestRejectedEnemyHp = -1;
+    int closestRejectedHeroHp = -1;
+    int closestRejectedPosition = -1;
+    int closestRejectedDamageUpper = -1;
+    int closestRejectedShortfall = -1;
+    int diagnosticActionCount = 0;
+    std::array<int, kMaxPlanTurns> diagnosticActions{};
 };
 
 
@@ -212,6 +224,14 @@ struct ExactKillDecisionResult {
 // reversible state, so SAT is real as well as UNSAT.  Because frontiers are
 // exhausted strictly by depth, firstKillTurn=T implies E(T-1)=false.
 [[nodiscard]] ExactKillDecisionResult FindShortestKillBattleExact(
+    const BattleEmulator::SearchState& root, int maxTurns, int timeLimitMs = 0);
+
+// Run the same authoritative exact frontier as FindShortestKillBattleExact,
+// while retaining parents only for diagnosis.  On complete UNSAT it records
+// one real path to the state with the smallest positive gap between exact
+// enemy HP and the proof-safe optimistic damage envelope.  This function does
+// not relax HP and does not manufacture a witness from the diagnostic path.
+[[nodiscard]] ExactKillDecisionResult DiagnoseNoKillBattleExact(
     const BattleEmulator::SearchState& root, int maxTurns, int timeLimitMs = 0);
 
 // Exact shortest-kill search using the proven HP/MP/herb dominance relation.

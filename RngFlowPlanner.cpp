@@ -1520,6 +1520,36 @@ namespace rngflow {
         return turns + 1;
     }
 
+    namespace {
+        [[nodiscard]] int StaticOptimisticDamageUpperForHorizon(
+            const State &root, const int maxTurns) {
+            const int turns = std::clamp(maxTurns, 0, kMaxPlanTurns);
+            if (turns <= 0 || root.players[1].hp <= 0) return 0;
+
+            // Keep this numerically identical to StaticOptimisticKillTurns().
+            // It exposes the exact integer margin used by the proof diagnostic;
+            // it is not a score bucket or a pruning rule of its own.
+            const double atk1 = root.players[0].atk * 0.5 - root.players[1].def * 0.25;
+            const double spread = std::max(0.0, atk1) * 0.0625;
+            const double physicalUpperExclusive = std::max(0.0, atk1) + spread + 1.0;
+            const int physicalNonCriticalUpper = std::max(
+                0, static_cast<int>(std::ceil(physicalUpperExclusive)) - 1);
+            const int nonCriticalHitUpper = std::max(17, physicalNonCriticalUpper);
+            const double criticalUpperExclusive = std::max(0, root.players[0].atk) * 1.05;
+            const int criticalHitUpper = std::max(
+                nonCriticalHitUpper,
+                std::max(0, static_cast<int>(std::ceil(criticalUpperExclusive)) - 1));
+            const RngPlayer &hero = root.players[0];
+            if (hero.acrobaticStar &&
+                (hero.acrobaticStarTurn <= 0 || hero.acrobaticStarTurn > 6)) {
+                return turns * 2 * criticalHitUpper;
+            }
+            const int starTurns = hero.acrobaticStar ? hero.acrobaticStarTurn : 0;
+            return StaticTapedDamageUpper(
+                root.position, turns, starTurns, nonCriticalHitUpper, criticalHitUpper);
+        }
+    }
+
     // Tighten the position-only static tail by keeping the first tail turn on the
     // exact projected state.  Every legal projected action is retained, and only
     // after that exact transition do we relax to StaticCriticalSlotUpperBound().
@@ -2431,7 +2461,8 @@ namespace rngflow {
     static ExactKillDecisionResult DecideBattleExactImpl(
         const BattleEmulator::SearchState &root, const int maxTurns,
         const int timeLimitMs, const bool relaxHeroHp,
-        const bool captureWitness = false) {
+        const bool captureWitness = false,
+        const bool captureRejected = false) {
         ExactKillDecisionResult result{};
         const auto started = std::chrono::steady_clock::now();
         const auto deadline = timeLimitMs > 0
@@ -2458,6 +2489,7 @@ namespace rngflow {
         std::vector<std::uint64_t> scratchParents;
         std::array<std::vector<std::uint64_t>, kMaxPlanTurns + 1> parentHistory{};
         result.peakFrontier = 1;
+        const bool captureParents = captureWitness || captureRejected;
 
         constexpr std::uint64_t kParentActionBits = 10;
         constexpr std::uint64_t kParentActionMask = (UINT64_C(1) << kParentActionBits) - 1;
@@ -2477,23 +2509,51 @@ namespace rngflow {
                 parentIndex = static_cast<std::size_t>(parentInfo >> kParentActionBits);
             }
         };
+        const auto restoreDiagnosticPath = [&](const int depth, std::size_t parentIndex) {
+            result.diagnosticActionCount = depth;
+            for (int level = depth; level > 0; --level) {
+                assert(parentIndex < parentHistory[level].size());
+                const std::uint64_t parentInfo = parentHistory[level][parentIndex];
+                result.diagnosticActions[level - 1] = static_cast<int>(parentInfo & kParentActionMask);
+                parentIndex = static_cast<std::size_t>(parentInfo >> kParentActionBits);
+            }
+        };
 
         for (int depth = 0; depth < turns && !frontier.empty(); ++depth) {
             const bool finalLayer = depth + 1 == turns;
             result.peakFrontier = std::max<std::uint64_t>(result.peakFrontier, frontier.size());
             result.expandedStates += frontier.size();
             next.clear();
-            if (captureWitness) nextParents.clear();
+            if (captureParents) nextParents.clear();
             if (!finalLayer && frontier.size() <= std::numeric_limits<std::size_t>::max() / 4) {
                 next.reserve(frontier.size() * 4);
-                if (captureWitness) nextParents.reserve(frontier.size() * 4);
+                if (captureParents) nextParents.reserve(frontier.size() * 4);
             }
 
             for (std::size_t parentIndex = 0; parentIndex < frontier.size(); ++parentIndex) {
                 const std::uint64_t packed = frontier[parentIndex];
                 const BattleEmulator::SearchState state = codec.Unpack(packed);
                 const int remainingTurns = turns - depth;
-                if (StaticOptimisticKillTurns(FromSearchState(state), remainingTurns) > remainingTurns) {
+                const State lightState = FromSearchState(state);
+                if (StaticOptimisticKillTurns(lightState, remainingTurns) > remainingTurns) {
+                    if (captureRejected) {
+                        const int damageUpper =
+                            StaticOptimisticDamageUpperForHorizon(lightState, remainingTurns);
+                        const int shortfall = state.players[1].hp - damageUpper;
+                        if (shortfall > 0 &&
+                            (result.closestRejectedShortfall < 0 ||
+                             shortfall < result.closestRejectedShortfall ||
+                             (shortfall == result.closestRejectedShortfall &&
+                              depth > result.closestRejectedDepth))) {
+                            result.closestRejectedDepth = depth;
+                            result.closestRejectedEnemyHp = state.players[1].hp;
+                            result.closestRejectedHeroHp = state.players[0].hp;
+                            result.closestRejectedPosition = state.position;
+                            result.closestRejectedDamageUpper = damageUpper;
+                            result.closestRejectedShortfall = shortfall;
+                            restoreDiagnosticPath(depth, parentIndex);
+                        }
+                    }
                     continue;
                 }
                 std::array<int, 8> actions{};
@@ -2530,7 +2590,7 @@ namespace rngflow {
                         return result;
                     }
                     next.push_back(childKey);
-                    if (captureWitness) nextParents.push_back(packParent(parentIndex, actions[i]));
+                    if (captureParents) nextParents.push_back(packParent(parentIndex, actions[i]));
                 }
             }
 
@@ -2538,7 +2598,7 @@ namespace rngflow {
                 result.completedNoKillDepth = depth + 1;
                 return result;
             }
-            if (captureWitness) {
+            if (captureParents) {
                 RadixSortPackedStatesWithParents(next, nextParents, frontier, scratchParents);
                 std::size_t write = 0;
                 for (std::size_t read = 0; read < next.size(); ++read) {
@@ -2578,6 +2638,12 @@ namespace rngflow {
         const BattleEmulator::SearchState &root, const int maxTurns,
         const int timeLimitMs) {
         return DecideBattleExactImpl(root, maxTurns, timeLimitMs, false);
+    }
+
+    ExactKillDecisionResult DiagnoseNoKillBattleExact(
+        const BattleEmulator::SearchState &root, const int maxTurns,
+        const int timeLimitMs) {
+        return DecideBattleExactImpl(root, maxTurns, timeLimitMs, false, true, true);
     }
 
     ExactKillDecisionResult FindShortestKillBattleDominantHp(

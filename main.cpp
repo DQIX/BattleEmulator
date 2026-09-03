@@ -847,6 +847,38 @@ constexpr Player BasePlayers[2] = {
     } // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 };
 
+namespace {
+    [[nodiscard]] std::string DumpWitnessTableExact(
+        const uint64_t seed,
+        const std::array<int, rngflow::kMaxPlanTurns> &actions,
+        const int actionCount) {
+        if (actionCount <= 0 || actionCount > rngflow::kMaxPlanTurns) return "witness.dump.invalid-action-count\n";
+
+        int32_t gene[350]{};
+        for (int i = 0; i < actionCount; ++i) gene[i] = actions[i];
+        gene[actionCount] = -1;
+
+        Player players[2] = {BasePlayers[0], BasePlayers[1]};
+        BattleResult result{};
+        int position = 1;
+        uint64_t nowState = 0;
+        lcg::init(seed, true);
+        BattleEmulator::ResetTurnProcessed();
+        BattleEmulator::Main(&position, actionCount, gene, players, &result,
+                             seed, nullptr, nullptr, -1, &nowState);
+
+        std::stringstream out;
+        out << "witness.dumpTable.begin\n"
+            << dumpTable(result, gene, -1)
+            << "witness.dump.final heroHp=" << players[0].hp
+            << " enemyHp=" << players[1].hp
+            << " position=" << position
+            << " kill=" << (players[0].hp > 0 && players[1].hp <= 0 ? 1 : 0)
+            << "\nwitness.dumpTable.end\n";
+        return out.str();
+    }
+}
+
 
 #if defined(MINGW_BUILD)
 #define __EMSCRIPTEN__
@@ -1043,6 +1075,7 @@ int main(int argc, char *argv[]) {
     if (argc >= 3 && (std::strcmp(argv[1], "--prove-shortest") == 0 ||
                       std::strcmp(argv[1], "--prove-shortest-dominant-hp") == 0 ||
                       std::strcmp(argv[1], "--prove-no-kill-relaxed") == 0 ||
+                      std::strcmp(argv[1], "--diagnose-no-kill-exact") == 0 ||
                       std::strcmp(argv[1], "--find-witness") == 0 ||
                       std::strcmp(argv[1], "--find-witness-relaxed") == 0)) {
         uint64_t seed = 0;
@@ -1075,6 +1108,8 @@ int main(int argc, char *argv[]) {
         rngflow::ExactKillDecisionResult proof{};
         if (std::strcmp(argv[1], "--prove-no-kill-relaxed") == 0) {
             proof = rngflow::ProveNoKillWithinBattleExact(root, maxTurns, kProofCliTimeLimitMs);
+        } else if (std::strcmp(argv[1], "--diagnose-no-kill-exact") == 0) {
+            proof = rngflow::DiagnoseNoKillBattleExact(root, maxTurns, kProofCliTimeLimitMs);
         } else if (std::strcmp(argv[1], "--find-witness") == 0) {
             proof = rngflow::FindKillWitnessBattleExact(root, maxTurns, kProofCliTimeLimitMs);
         } else if (std::strcmp(argv[1], "--find-witness-relaxed") == 0) {
@@ -1101,6 +1136,25 @@ int main(int argc, char *argv[]) {
                   << " witnessGenerated=" << proof.witnessGeneratedStates
                   << " deltaMask=0x" << std::hex << proof.observedLiveTransitionDeltaMask << std::dec
                   << std::endl;
+        if (std::strcmp(argv[1], "--diagnose-no-kill-exact") == 0) {
+            std::cout << "diagnostic.rejectedDepth=" << proof.closestRejectedDepth
+                      << " enemyHp=" << proof.closestRejectedEnemyHp
+                      << " heroHp=" << proof.closestRejectedHeroHp
+                      << " position=" << proof.closestRejectedPosition
+                      << " damageUpper=" << proof.closestRejectedDamageUpper
+                      << " shortfall=" << proof.closestRejectedShortfall
+                      << std::endl;
+            if (proof.diagnosticActionCount > 0) {
+                std::cout << "diagnostic.actions=";
+                for (int i = 0; i < proof.diagnosticActionCount; ++i) {
+                    if (i != 0) std::cout << ',';
+                    std::cout << proof.diagnosticActions[i];
+                }
+                std::cout << std::endl;
+                std::cout << DumpWitnessTableExact(
+                    seed, proof.diagnosticActions, proof.diagnosticActionCount);
+            }
+        }
         if (proof.killReachable && proof.actionCount > 0) {
             std::cout << "witness.actions=";
             for (int i = 0; i < proof.actionCount; ++i) {
@@ -1108,6 +1162,7 @@ int main(int argc, char *argv[]) {
                 std::cout << proof.actions[i];
             }
             std::cout << std::endl;
+            std::cout << DumpWitnessTableExact(seed, proof.actions, proof.actionCount);
             if (std::strcmp(argv[1], "--find-witness-relaxed") == 0) {
                 const auto diagnosis = DiagnoseRelaxedWitnessReplay(
                     root, proof.actions, proof.actionCount, maxTurns);
@@ -1127,6 +1182,9 @@ int main(int argc, char *argv[]) {
                           << " relaxedPositionAfter=" << diagnosis.relaxedPositionAfter
                           << std::endl;
             }
+        }
+        if (std::strcmp(argv[1], "--diagnose-no-kill-exact") == 0) {
+            return proof.complete ? 0 : 3;
         }
         return proof.complete && proof.killReachable ? 0 : 3;
     }
