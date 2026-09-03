@@ -2025,7 +2025,8 @@ namespace rngflow {
             const std::chrono::steady_clock::time_point deadline,
             ExactKillDecisionResult &result,
             const ExactBattleStateCodec &codec,
-            std::array<std::unordered_set<std::uint64_t>, kMaxPlanTurns + 1> &deadMemo) {
+            std::array<std::unordered_set<std::uint64_t>, kMaxPlanTurns + 1> &deadMemo,
+            const bool relaxHeroHp) {
             if (state.players[1].hp <= 0) {
                 result.killReachable = true;
                 result.firstKillTurn = depth;
@@ -2070,6 +2071,8 @@ namespace rngflow {
                 }
                 if (remainingTurns <= 1) continue;
 
+                if (relaxHeroHp) child.players[0].hp = child.players[0].maxHp;
+
                 const int childOptimisticTurns =
                         StaticOptimisticKillTurns(FromSearchState(child), remainingTurns - 1);
                 if (childOptimisticTurns > remainingTurns - 1) continue;
@@ -2096,7 +2099,7 @@ namespace rngflow {
             for (std::size_t i = 0; i < candidateCount; ++i) {
                 result.actions[depth] = candidates[i].action;
                 if (FindBattleWitnessDfs(candidates[i].state, remainingTurns - 1, depth + 1,
-                                         deadline, result, codec, deadMemo)) {
+                                         deadline, result, codec, deadMemo, relaxHeroHp)) {
                     return true;
                 }
                 if (!result.complete) return false;
@@ -2404,7 +2407,23 @@ namespace rngflow {
                                   : std::chrono::steady_clock::time_point::max();
         ExactBattleStateCodec codec(root, false);
         std::array<std::unordered_set<std::uint64_t>, kMaxPlanTurns + 1> deadMemo{};
-        FindBattleWitnessDfs(root, turns, 0, deadline, result, codec, deadMemo);
+        FindBattleWitnessDfs(root, turns, 0, deadline, result, codec, deadMemo, false);
+        return result;
+    }
+
+    ExactKillDecisionResult FindKillWitnessBattleRelaxed(
+        const BattleEmulator::SearchState &root, const int maxTurns,
+        const int timeLimitMs) {
+        ExactKillDecisionResult result{};
+        const int turns = std::clamp(maxTurns, 0, kMaxPlanTurns);
+        const auto deadline = timeLimitMs > 0
+                                  ? std::chrono::steady_clock::now() + std::chrono::milliseconds(timeLimitMs)
+                                  : std::chrono::steady_clock::time_point::max();
+        BattleEmulator::SearchState relaxedRoot = root;
+        relaxedRoot.players[0].hp = relaxedRoot.players[0].maxHp;
+        ExactBattleStateCodec codec(relaxedRoot, true);
+        std::array<std::unordered_set<std::uint64_t>, kMaxPlanTurns + 1> deadMemo{};
+        FindBattleWitnessDfs(relaxedRoot, turns, 0, deadline, result, codec, deadMemo, true);
         return result;
     }
 

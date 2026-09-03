@@ -220,6 +220,12 @@ struct ExactKillDecisionResult {
 [[nodiscard]] ExactKillDecisionResult FindKillWitnessBattleExact(
     const BattleEmulator::SearchState& root, int maxTurns, int timeLimitMs = 0);
 
+// Find one witness in the proven hero-HP-relaxed superset.  SAT from this
+// function is only a candidate action sequence; callers must replay it with the
+// authoritative non-relaxed state before accepting E(t)=true.
+[[nodiscard]] ExactKillDecisionResult FindKillWitnessBattleRelaxed(
+    const BattleEmulator::SearchState& root, int maxTurns, int timeLimitMs = 0);
+
 // End-to-end shortest-kill solver. First obtains an incumbent witness U, then
 // proves E(U-1) with the exact reversible-frontier solver. If that proof itself
 // finds a shorter T, a real witness is recovered inside horizon T; the completed

@@ -913,7 +913,8 @@ int main(int argc, char *argv[]) {
 
     if (argc >= 3 && (std::strcmp(argv[1], "--prove-shortest") == 0 ||
                       std::strcmp(argv[1], "--prove-no-kill-relaxed") == 0 ||
-                      std::strcmp(argv[1], "--find-witness") == 0)) {
+                      std::strcmp(argv[1], "--find-witness") == 0 ||
+                      std::strcmp(argv[1], "--find-witness-relaxed") == 0)) {
         uint64_t seed = 0;
         int maxTurns = rngflow::kMaxPlanTurns;
         try {
@@ -940,12 +941,14 @@ int main(int argc, char *argv[]) {
         // is never converted to UNSAT: the solver reports complete=false (UNKNOWN).
         // Leave a small wall-clock margin for LCG initialization and reporting so the
         // whole process stays inside the user-facing 15 second limit.
-        constexpr int kProofCliTimeLimitMs = 14500;
+        constexpr int kProofCliTimeLimitMs = 13500;
         rngflow::ExactKillDecisionResult proof{};
         if (std::strcmp(argv[1], "--prove-no-kill-relaxed") == 0) {
             proof = rngflow::ProveNoKillWithinBattleExact(root, maxTurns, kProofCliTimeLimitMs);
         } else if (std::strcmp(argv[1], "--find-witness") == 0) {
             proof = rngflow::FindKillWitnessBattleExact(root, maxTurns, kProofCliTimeLimitMs);
+        } else if (std::strcmp(argv[1], "--find-witness-relaxed") == 0) {
+            proof = rngflow::FindKillWitnessBattleRelaxed(root, maxTurns, kProofCliTimeLimitMs);
         } else {
             proof = rngflow::SolveShortestKillBattleExact(root, maxTurns, kProofCliTimeLimitMs);
         }
