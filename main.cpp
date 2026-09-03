@@ -970,20 +970,6 @@ int main(int argc, char *argv[]) {
         return proof.complete && proof.killReachable ? 0 : 3;
     }
 
-#if defined(OPTIMIZE_MODE)
-
-    int act[350] = {0};
-    int counter = 0;
-    act[counter++] = BattleEmulator::ATTACK_ALLY;
-    act[counter++] = -1;
-    SimpleParameterOptimizer::optimize(BasePlayers, 139924927+2, act, 1000, counter);
-
-    return 0;
-#endif
-
-
-
-
 #ifdef DEBUG2
     uint64_t time1 = 0xa726623;
 
