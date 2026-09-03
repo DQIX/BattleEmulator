@@ -2066,8 +2066,7 @@ namespace rngflow {
             // the sole distinct choice because it skips the status-processing half.
             if (state.players[0].paralysis || state.players[0].inactive) {
                 out[0] = BattleEmulator::ATTACK_ALLY;
-                out[1] = BattleEmulator::FLEE_ALLY;
-                return 2;
+                return 1;
             }
             static constexpr std::array<int, 8> candidates{
                 {
