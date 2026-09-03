@@ -888,6 +888,8 @@ namespace {
 
     struct ProductionProofContext {
         uint64_t seed = 0;
+        int foundTurn = 0;
+        int foundTurnOffset = 0;
         int prefixTurns = 0;
         BattleEmulator::SearchState root{};
     };
@@ -938,6 +940,8 @@ namespace {
 
             ProductionProofContext context{};
             context.seed = match.seed;
+            context.foundTurn = match.startTurn;
+            context.foundTurnOffset = foundTurnOffset;
             context.prefixTurns = prefixTurns;
             context.root.players[0] = players[0];
             context.root.players[1] = players[1];
@@ -989,6 +993,8 @@ namespace {
                              seed, nullptr, nullptr, -2, &nowState);
 
         context.seed = seed;
+        context.foundTurn = foundTurn;
+        context.foundTurnOffset = foundTurnOffset;
         context.prefixTurns = prefixTurns;
         context.root.players[0] = players[0];
         context.root.players[1] = players[1];
@@ -1239,6 +1245,7 @@ int main(int argc, char *argv[]) {
                 const int remainingMs = std::max(
                     1, kProofCliTimeLimitMs - static_cast<int>(elapsedBefore));
                 const ProductionProofContext &context = contexts[contextIndex];
+                lcg::init(context.seed, true);
                 const auto proofStarted = std::chrono::steady_clock::now();
                 const rngflow::ExactKillDecisionResult proof = resourceRelaxed
                     ? rngflow::ProveNoKillWithinBattleResourceRelaxed(context.root, maxTurns, remainingMs)
@@ -1255,6 +1262,8 @@ int main(int argc, char *argv[]) {
 
                 std::cout << "production.match=" << contextIndex
                           << " seed=0x" << std::hex << context.seed << std::dec
+                          << " foundTurn=" << context.foundTurn
+                          << " foundTurnOffset=" << context.foundTurnOffset
                           << " prefixTurns=" << context.prefixTurns
                           << " rootHeroHp=" << context.root.players[0].hp
                           << " rootEnemyHp=" << context.root.players[1].hp
@@ -1361,6 +1370,7 @@ int main(int argc, char *argv[]) {
                     1, kProofCliTimeLimitMs - static_cast<int>(elapsedBefore));
                 const int horizon = bestTurn > 0 ? bestTurn - 1 : maxTurns;
                 const ProductionProofContext& context = contexts[contextIndex];
+                lcg::init(context.seed, true);
                 const auto proofStarted = std::chrono::steady_clock::now();
                 const rngflow::ExactKillDecisionResult proof =
                     rngflow::ProveNoKillWithinBattleDominantHp(context.root, horizon, remainingMs);
@@ -1376,6 +1386,8 @@ int main(int argc, char *argv[]) {
 
                 std::cout << "production.match=" << contextIndex
                           << " seed=0x" << std::hex << context.seed << std::dec
+                          << " foundTurn=" << context.foundTurn
+                          << " foundTurnOffset=" << context.foundTurnOffset
                           << " prefixTurns=" << context.prefixTurns
                           << " rootHeroHp=" << context.root.players[0].hp
                           << " rootEnemyHp=" << context.root.players[1].hp

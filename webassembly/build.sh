@@ -50,10 +50,7 @@ SRC_FILES=(
   BattleEmulator.cpp
   camera.cpp
   debug.cpp
-  ActionOptimizer.cpp
-  EnhancedCostCalculator.cpp
-  EnhancedHashCalculator.cpp
-  EnhancedHeapQueue.cpp
+  RngFlowPlanner.cpp
 )
 
 EMCC_FLAGS=(
@@ -69,7 +66,7 @@ EMCC_FLAGS=(
   -sWASM_ASYNC_COMPILATION=0
   -sSINGLE_FILE=1
 
-  "-sEXPORTED_FUNCTIONS=['_wasm_prepare_input','_wasm_get_last_error','_wasm_bruteforce_range','_wasm_get_turn_processed','_wasm_get_found_seeds','_wasm_search_dump']"
+  "-sEXPORTED_FUNCTIONS=['_wasm_prepare_input','_wasm_get_last_error','_wasm_bruteforce_range','_wasm_get_turn_processed','_wasm_get_found_seeds','_wasm_prove_production','_wasm_search_dump']"
   "-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','UTF8ToString']"
 )
 

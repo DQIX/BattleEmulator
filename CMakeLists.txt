@@ -47,8 +47,6 @@ set(SOURCES
         Genome.h
         RngFlowPlanner.cpp
         RngFlowPlanner.h
-        SimpleParameterOptimizer.cpp
-        SimpleParameterOptimizer.h
 )
 
 # マルチスレッド版（multithreading = ON）
