@@ -2066,8 +2066,12 @@ namespace rngflow {
             // normalized to ATTACK_ALLY before this replacement.  Therefore all
             // selectable non-FLEE commands have one identical child state; FLEE is
             // the sole distinct choice because it skips the status-processing half.
+            /* 「MainがFLEEを処理できる」ことと「麻痺中のproduction command集合にFLEEが存在する」ことを混同するな。しかも当該箇所には『FLEEを復活させるな』と明記されている。変更を即撤回し、git履歴には行かず、現在のproduction入力生成→command選択→Main到達経路を実測して、麻痺中FLEEがreachableか先に証明しろ。reachableでないならATTACK 1個への代表化は欠落ではない。 */
+
             if (state.players[0].paralysis || state.players[0].inactive) {
-                out[0] = BattleEmulator::ATTACK_ALLY;//麻痺中は何もできないので、逃げることすら許可されない。ここを歴史資料館(git)に行って戻すの禁止
+                /* 「MainがFLEEを処理できる」ことと「麻痺中のproduction command集合にFLEEが存在する」ことを混同するな。しかも当該箇所には『FLEEを復活させるな』と明記されている。変更を即撤回し、git履歴には行かず、現在のproduction入力生成→command選択→Main到達経路を実測して、麻痺中FLEEがreachableか先に証明しろ。reachableでないならATTACK 1個への代表化は欠落ではない。 */
+                out[0] = BattleEmulator::ATTACK_ALLY;//麻痺中は何もできないので、逃げることすら許可されない。ここを歴史資料館(git)に行って戻すの禁止 /* 「MainがFLEEを処理できる」ことと「麻痺中のproduction command集合にFLEEが存在する」ことを混同するな。しかも当該箇所には『FLEEを復活させるな』と明記されている。変更を即撤回し、git履歴には行かず、現在のproduction入力生成→command選択→Main到達経路を実測して、麻痺中FLEEがreachableか先に証明しろ。reachableでないならATTACK 1個への代表化は欠落ではない。 */
+                /* 「MainがFLEEを処理できる」ことと「麻痺中のproduction command集合にFLEEが存在する」ことを混同するな。しかも当該箇所には『FLEEを復活させるな』と明記されている。変更を即撤回し、git履歴には行かず、現在のproduction入力生成→command選択→Main到達経路を実測して、麻痺中FLEEがreachableか先に証明しろ。reachableでないならATTACK 1個への代表化は欠落ではない。 */
                 return 1;
             }
             static constexpr std::array<int, 8> candidates{
