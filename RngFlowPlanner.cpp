@@ -2310,67 +2310,42 @@ ExactKillDecisionResult SolveShortestKillBattleExact(
         result.complete = false;
         return result;
     }
-    ExactKillDecisionResult witness = FindKillWitnessBattleExact(root, maxTurns, budget);
-    result.witnessExpandedStates = witness.expandedStates;
-    result.witnessGeneratedStates = witness.generatedStates;
-    if (!witness.complete) {
-        result.complete = false;
-        return result;
-    }
-    if (!witness.killReachable) {
-        // The witness DFS is itself exhaustive when it returns complete=true.
-        // No incumbent exists inside this horizon.
-        result.complete = true;
-        return result;
-    }
 
-    result.killReachable = true;
-    result.firstKillTurn = witness.firstKillTurn;
-    result.actionCount = witness.actionCount;
-    result.actions = witness.actions;
-    if (witness.firstKillTurn <= 0) return result;
-
-    budget = remainingBudgetMs();
-    if (budget < 0) {
-        result.complete = false;
-        return result;
-    }
-    ExactKillDecisionResult proof = DecideBattleExactImpl(
-        root, witness.firstKillTurn - 1, budget, false);
+    // Exhaust frontiers strictly by depth.  The first authoritative kill at T
+    // is enough to prove E(T-1)=false because every shallower frontier has
+    // already been completely consumed.  There is no reason to spend a full
+    // witness search first merely to discover an upper bound U.
+    ExactKillDecisionResult proof = FindShortestKillBattleExact(root, maxTurns, budget);
+    result.complete = proof.complete;
+    result.killReachable = proof.killReachable;
+    result.firstKillTurn = proof.firstKillTurn;
     result.expandedStates = proof.expandedStates;
     result.generatedStates = proof.generatedStates;
     result.duplicateStates = proof.duplicateStates;
     result.dominatedStates = proof.dominatedStates;
     result.peakFrontier = proof.peakFrontier;
-    if (!proof.complete) {
-        result.complete = false;
-        return result;
-    }
-    if (!proof.killReachable) {
-        // E(U)=true is witnessed above and the exact frontier proved E(U-1)=false.
+    if (!proof.complete || !proof.killReachable || proof.firstKillTurn <= 0) {
         return result;
     }
 
-    // The frontier found a shorter T after exhausting every depth below it.
-    // That already proves E(T-1)=false; only an authoritative witness at T is
-    // still needed for the final certificate.
+    // The proof frontier deliberately stores no parent table.  Recover one
+    // executable certificate only after T is known; this DFS changes visit
+    // order only, and every transition remains authoritative.
     budget = remainingBudgetMs();
     if (budget < 0) {
         result.complete = false;
         return result;
     }
-    ExactKillDecisionResult shorterWitness = FindKillWitnessBattleExact(
-        root, proof.firstKillTurn, budget);
-    result.witnessExpandedStates += shorterWitness.expandedStates;
-    result.witnessGeneratedStates += shorterWitness.generatedStates;
-    if (!shorterWitness.complete || !shorterWitness.killReachable ||
-        shorterWitness.firstKillTurn != proof.firstKillTurn) {
+    ExactKillDecisionResult witness = FindKillWitnessBattleExact(root, proof.firstKillTurn, budget);
+    result.witnessExpandedStates = witness.expandedStates;
+    result.witnessGeneratedStates = witness.generatedStates;
+    if (!witness.complete || !witness.killReachable ||
+        witness.firstKillTurn != proof.firstKillTurn) {
         result.complete = false;
         return result;
     }
-    result.firstKillTurn = shorterWitness.firstKillTurn;
-    result.actionCount = shorterWitness.actionCount;
-    result.actions = shorterWitness.actions;
+    result.actionCount = witness.actionCount;
+    result.actions = witness.actions;
     return result;
 }
 
