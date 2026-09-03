@@ -9,6 +9,8 @@
 #if defined(MULTITHREADING)
 #include <atomic>
 #endif
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include "Player.h"
@@ -140,7 +142,13 @@ public:
 
     static bool InitializeSearchState(SearchState* state, const Player initialPlayers[2], int initialPosition = 1);
 
+    static constexpr std::size_t SEARCH_HERO_COMMAND_CAPACITY = 8;
+
     static bool IsHeroCommandSelectable(const SearchState& state, SearchCommand command) noexcept;
+
+    static std::size_t BuildSelectableHeroCommands(
+        const SearchState& state,
+        std::array<int, SEARCH_HERO_COMMAND_CAPACITY>& actions) noexcept;
 
     static bool StepSearchState(const SearchState& source, SearchCommand command, SearchState* destination,
                                 bool stopBeforePresentationTail = false);

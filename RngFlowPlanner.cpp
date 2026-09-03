@@ -2060,30 +2060,16 @@ namespace rngflow {
 
         [[nodiscard]] std::size_t BuildBattleProofCandidates(
             const BattleEmulator::SearchState &state, std::array<int, 8> &out) noexcept {
-
+            // Main() handles FLEE before paralysis/inactive processing. Every other
+            // selectable hero command is overwritten by the same status action
+            // before callAttackFun(), so those commands have one exact successor
+            // class represented by ATTACK_ALLY. FLEE is the only distinct class.
             if (state.players[0].paralysis || state.players[0].inactive) {
-                 out[0] = BattleEmulator::ATTACK_ALLY;
-                return 1;
+                out[0] = BattleEmulator::ATTACK_ALLY;
+                out[1] = BattleEmulator::FLEE_ALLY;
+                return 2;
             }
-            static constexpr std::array<int, 8> candidates{
-                {
-                    BattleEmulator::ATTACK_ALLY,
-                    BattleEmulator::DRAGON_SLASH,
-                    BattleEmulator::DEFENCE,
-                    BattleEmulator::FLEE_ALLY,
-                    BattleEmulator::MEDICINAL_HERBS,
-                    BattleEmulator::HEAL,
-                    BattleEmulator::CRACK_ALLY,
-                    BattleEmulator::ACROBATIC_STAR,
-                }
-            };
-            std::size_t count = 0;
-            for (const int action: candidates) {
-                if (BattleEmulator::IsHeroCommandSelectable(state, {action})) {
-                    out[count++] = action;
-                }
-            }
-            return count;
+            return BattleEmulator::BuildSelectableHeroCommands(state, out);
         }
 
         [[nodiscard]] bool HasNoDirectEnemyDamageFromSelectedHeroAction(const int action) noexcept {

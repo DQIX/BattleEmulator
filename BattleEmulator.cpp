@@ -651,6 +651,11 @@ bool BattleEmulator::IsHeroCommandSelectable(const SearchState& state,
     const Player& hero = state.players[0];
     if (hero.hp <= 0) return false;
     switch (command.action) {
+        case ATTACK_ALLY:
+        case DRAGON_SLASH:
+        case DEFENCE:
+        case FLEE_ALLY:
+            return true;
         case MEDICINAL_HERBS:
             return hero.medicinal_herbs_count >= 1;
         case HEAL:
@@ -660,8 +665,28 @@ bool BattleEmulator::IsHeroCommandSelectable(const SearchState& state,
         case ACROBATIC_STAR:
             return hero.specialCharge && hero.specialChargeTurn != 0 && !hero.acrobaticStar;
         default:
-            return true;
+            return false;
     }
+}
+
+std::size_t BattleEmulator::BuildSelectableHeroCommands(
+    const SearchState& state,
+    std::array<int, SEARCH_HERO_COMMAND_CAPACITY>& actions) noexcept {
+    static constexpr std::array<int, SEARCH_HERO_COMMAND_CAPACITY> commandDomain{
+        ATTACK_ALLY,
+        DRAGON_SLASH,
+        DEFENCE,
+        FLEE_ALLY,
+        MEDICINAL_HERBS,
+        HEAL,
+        CRACK_ALLY,
+        ACROBATIC_STAR,
+    };
+    std::size_t count = 0;
+    for (const int action : commandDomain) {
+        if (IsHeroCommandSelectable(state, {action})) actions[count++] = action;
+    }
+    return count;
 }
 
 bool BattleEmulator::StepSearchState(const SearchState& source, const SearchCommand command,

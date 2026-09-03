@@ -1329,6 +1329,118 @@ int main(int argc, char *argv[]) {
             return decisionComplete && !anyKillReachable ? 0 : 3;
         }
 
+        if (std::strcmp(argv[1], "--prove-production-shortest") == 0) {
+            std::vector<ProductionProofContext> contexts;
+            if (!BuildProductionProofContexts(argc, argv, 3, contexts)) {
+                std::cerr << "failed to build production proof contexts" << std::endl;
+                return 2;
+            }
+
+            const auto started = std::chrono::steady_clock::now();
+            bool complete = true;
+            std::size_t processedContexts = 0;
+            int bestTurn = -1;
+            std::size_t bestContext = 0;
+            int bestActionCount = 0;
+            std::array<int, rngflow::kMaxPlanTurns> bestActions{};
+            std::uint64_t totalExpanded = 0;
+            std::uint64_t totalGenerated = 0;
+            std::uint64_t totalDuplicates = 0;
+            std::uint64_t totalDominated = 0;
+            std::uint64_t peakFrontier = 0;
+
+            std::cout << "production.matches=" << contexts.size() << std::endl;
+            for (std::size_t contextIndex = 0; contextIndex < contexts.size(); ++contextIndex) {
+                const auto elapsedBefore = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - started).count();
+                if (elapsedBefore >= kProofCliTimeLimitMs) {
+                    complete = false;
+                    break;
+                }
+                const int remainingMs = std::max(
+                    1, kProofCliTimeLimitMs - static_cast<int>(elapsedBefore));
+                const int horizon = bestTurn > 0 ? bestTurn - 1 : maxTurns;
+                const ProductionProofContext& context = contexts[contextIndex];
+                const auto proofStarted = std::chrono::steady_clock::now();
+                const rngflow::ExactKillDecisionResult proof =
+                    rngflow::ProveNoKillWithinBattleDominantHp(context.root, horizon, remainingMs);
+                const auto proofElapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - proofStarted).count();
+                ++processedContexts;
+
+                totalExpanded += proof.expandedStates;
+                totalGenerated += proof.generatedStates;
+                totalDuplicates += proof.duplicateStates;
+                totalDominated += proof.dominatedStates;
+                peakFrontier = std::max(peakFrontier, proof.peakFrontier);
+
+                std::cout << "production.match=" << contextIndex
+                          << " seed=0x" << std::hex << context.seed << std::dec
+                          << " prefixTurns=" << context.prefixTurns
+                          << " rootHeroHp=" << context.root.players[0].hp
+                          << " rootEnemyHp=" << context.root.players[1].hp
+                          << " rootPosition=" << context.root.position
+                          << std::endl;
+                std::cout << "proof.match=" << contextIndex
+                          << " horizon=" << horizon
+                          << " complete=" << (proof.complete ? 1 : 0)
+                          << " killReachable=" << (proof.killReachable ? 1 : 0)
+                          << " T=" << proof.firstKillTurn
+                          << " completedNoKillDepth=" << proof.completedNoKillDepth
+                          << " elapsedMs=" << proofElapsedMs
+                          << " expanded=" << proof.expandedStates
+                          << " generated=" << proof.generatedStates
+                          << " duplicates=" << proof.duplicateStates
+                          << " dominated=" << proof.dominatedStates
+                          << " peakFrontier=" << proof.peakFrontier
+                          << std::endl;
+
+                if (!proof.complete) {
+                    complete = false;
+                    break;
+                }
+                if (!proof.killReachable) continue;
+                if (proof.firstKillTurn <= 0 || proof.actionCount != proof.firstKillTurn ||
+                    !rngflow::ReplayBattleWitnessExact(context.root, proof.actions, proof.actionCount)) {
+                    complete = false;
+                    break;
+                }
+                if (bestTurn < 0 || proof.firstKillTurn < bestTurn) {
+                    bestTurn = proof.firstKillTurn;
+                    bestContext = contextIndex;
+                    bestActionCount = proof.actionCount;
+                    bestActions = proof.actions;
+                }
+            }
+
+            const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - started).count();
+            const bool decisionComplete = complete && processedContexts == contexts.size();
+            std::cout << "proof.complete=" << (decisionComplete ? 1 : 0)
+                      << " killReachable=" << (bestTurn > 0 ? 1 : 0)
+                      << " T=" << bestTurn
+                      << " completedNoKillDepth=" << (bestTurn > 0 ? bestTurn - 1 : maxTurns)
+                      << " processedMatches=" << processedContexts
+                      << " totalMatches=" << contexts.size()
+                      << " elapsedMs=" << elapsedMs
+                      << " expanded=" << totalExpanded
+                      << " generated=" << totalGenerated
+                      << " duplicates=" << totalDuplicates
+                      << " dominated=" << totalDominated
+                      << " peakFrontier=" << peakFrontier
+                      << std::endl;
+            if (decisionComplete && bestTurn > 0) {
+                std::cout << "witness.match=" << bestContext
+                          << " exactReplay=1 actions=";
+                for (int i = 0; i < bestActionCount; ++i) {
+                    if (i != 0) std::cout << ',';
+                    std::cout << bestActions[i];
+                }
+                std::cout << std::endl;
+            }
+            return decisionComplete ? 0 : 3;
+        }
+
         ProductionProofContext context{};
         if (!BuildProductionProofContext(argc, argv, 3, context)) {
             std::cerr << "failed to build production proof context" << std::endl;
