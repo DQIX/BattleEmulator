@@ -1192,6 +1192,7 @@ int main(int argc, char *argv[]) {
     //std::cin.tie(0)->sync_with_stdio(0);
 
     if (argc >= 7 && (std::strcmp(argv[1], "--prove-production-no-kill") == 0 ||
+                      std::strcmp(argv[1], "--probe-production-resource-relaxed") == 0 ||
                       std::strcmp(argv[1], "--prove-production-shortest") == 0 ||
                       std::strcmp(argv[1], "--probe-production-relaxed") == 0)) {
         int maxTurns = 0;
@@ -1207,7 +1208,10 @@ int main(int argc, char *argv[]) {
         }
 
         constexpr int kProofCliTimeLimitMs = 10000;
-        if (std::strcmp(argv[1], "--prove-production-no-kill") == 0) {
+        if (std::strcmp(argv[1], "--prove-production-no-kill") == 0 ||
+            std::strcmp(argv[1], "--probe-production-resource-relaxed") == 0) {
+            const bool resourceRelaxed =
+                std::strcmp(argv[1], "--probe-production-resource-relaxed") == 0;
             std::vector<ProductionProofContext> contexts;
             if (!BuildProductionProofContexts(argc, argv, 3, contexts)) {
                 std::cerr << "failed to build production proof contexts" << std::endl;
@@ -1236,8 +1240,9 @@ int main(int argc, char *argv[]) {
                     1, kProofCliTimeLimitMs - static_cast<int>(elapsedBefore));
                 const ProductionProofContext &context = contexts[contextIndex];
                 const auto proofStarted = std::chrono::steady_clock::now();
-                const rngflow::ExactKillDecisionResult proof =
-                    rngflow::ProveNoKillWithinBattleDominantHp(context.root, maxTurns, remainingMs);
+                const rngflow::ExactKillDecisionResult proof = resourceRelaxed
+                    ? rngflow::ProveNoKillWithinBattleResourceRelaxed(context.root, maxTurns, remainingMs)
+                    : rngflow::ProveNoKillWithinBattleDominantHp(context.root, maxTurns, remainingMs);
                 const auto proofElapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::steady_clock::now() - proofStarted).count();
                 ++processedContexts;
