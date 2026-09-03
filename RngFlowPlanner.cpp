@@ -582,13 +582,14 @@ namespace rngflow {
 
         constexpr int kMaxProjectedRngPerTurn = 64;
         // Static-tail relaxation used by optimistic planning.  For a completed yo2
-        // turn where both actors survive, Step() consumes at least 12 RNG positions:
-        //   3 turn-order + 3 enemy selection + 4 shortest enemy action + 1 post-enemy
-        //   + 1 turn tail.  FLEE makes the ally half and camera contribution zero.
+        // turn where both actors survive, authoritative Main() consumes at least
+        // 13 RNG positions: 3 turn-order + 3 shortest enemy selection + 5 shortest
+        // enemy action (PUFF_PUFF early return) + 1 post-enemy + 1 turn tail.
+        // FLEE makes the ally half and camera contribution zero.
         // A branch-by-branch upper count is below 45 positions.  Therefore 44 is a
         // proof-safe inclusive maximum.  Allowing every delta in [12,44] is still a relaxation (many are not really
         // reachable), so the DP below can only overestimate the real critical reward.
-        constexpr int kStaticMinRngPerCompletedTurn = 12;
+        constexpr int kStaticMinRngPerCompletedTurn = 13;
         constexpr int kStaticMaxRngPerCompletedTurn = 44;
         constexpr int kStaticMinPlayerCriticalOffset = 7;
         constexpr int kStaticMaxPlayerCriticalOffset = 30;
@@ -1359,33 +1360,32 @@ namespace rngflow {
     }
 
     namespace {
-        // Full-horizon optimistic damage DP over the fixed LCG tape.  Each virtual
-        // turn keeps its damage allowance attached to the same relaxed next RNG
-        // position q.  star=0 means Acrobatic Star is inactive; star=1..6 is its
-        // exact turn-boundary timer.  charge records whether Star may be selected at
-        // the start of the current turn.
+        // Full-horizon optimistic damage DP over the fixed LCG tape.  Unlike the
+        // old hit-count + critical-count envelope, each virtual turn keeps the
+        // damage allowance attached to the same relaxed next RNG position q.
         //
-        // The relaxation still accepts every RNG delta in [12,44], lets every active
-        // Star enemy action counter, ignores special-charge expiry, and treats any 1%
-        // roll anywhere in [p,q) as a possible charge gain.  These only add fake
-        // continuations.  Unlike the old bound, a state without charge can no longer
-        // activate Star unless the LCG tape contains a possible 1% gain first.
+        // star=0 means Acrobatic Star is inactive.  star=1..6 is the exact
+        // turn-boundary timer when it is active.  The relaxation deliberately
+        // assumes a special charge is always obtainable when Star is inactive,
+        // every active-Star enemy action can counter, and every RNG delta in
+        // [13,44] is reachable.  Those additions only create fake continuations;
+        // no real continuation is removed.
         struct StaticDamageDpCache {
             std::uint64_t generation = 0;
             int nonCriticalHitUpper = -1;
             int criticalHitUpper = -1;
             int computedTurns = 0;
             std::array<std::uint16_t, 5000> criticalPrefix{};
-            std::array<std::uint16_t, 5000> specialChargePrefix{};
-            std::array<
-                std::array<std::array<std::array<std::uint16_t, 5000>, 7>, 2>,
-                kMaxPlanTurns + 1> upper{};
+            std::array<std::array<std::array<std::uint16_t, 5000>, 7>, kMaxPlanTurns + 1> upper{};
+            std::array<std::array<std::uint16_t, 5000>, kMaxPlanTurns + 1> noChargeUpper{};
+            std::array<std::array<std::array<std::uint16_t, 5000>, 7>, kMaxPlanTurns + 1> forcedUpper{};
         };
 
         [[nodiscard]] int StaticTapedDamageUpper(const int position,
                                                  const int maxTurns,
                                                  const int starTurns,
-                                                 const bool specialCharge,
+                                                 const bool specialChargeAtBoundary,
+                                                 const bool forcedNoHeroDamageFirstTurn,
                                                  const int nonCriticalHitUpper,
                                                  const int criticalHitUpper) {
             const int turns = std::clamp(maxTurns, 0, kMaxPlanTurns);
@@ -1404,22 +1404,17 @@ namespace rngflow {
                 cache.criticalHitUpper = criticalHitUpper;
                 cache.computedTurns = 0;
                 cache.criticalPrefix.fill(0);
-                cache.specialChargePrefix.fill(0);
                 for (int p = 0; p < 4999; ++p) {
-                    const int peekPosition = std::max(1, p);
                     cache.criticalPrefix[p + 1] = static_cast<std::uint16_t>(
                         cache.criticalPrefix[p] +
-                        (lcg::peekPercent(peekPosition, kRngPercentScale) <
+                        (lcg::peekPercent(std::max(1, p), kRngPercentScale) <
                              kAttackCriticalThreshold
                              ? 1
                              : 0));
-                    cache.specialChargePrefix[p + 1] = static_cast<std::uint16_t>(
-                        cache.specialChargePrefix[p] +
-                        (lcg::peekPercent(peekPosition, 100) < 1 ? 1 : 0));
                 }
-                for (auto &chargeRow: cache.upper[0]) {
-                    for (auto &starRow: chargeRow) starRow.fill(0);
-                }
+                for (auto &starRow: cache.upper[0]) starRow.fill(0);
+                cache.noChargeUpper[0].fill(0);
+                for (auto &starRow: cache.forcedUpper[0]) starRow.fill(0);
             }
 
             const int criticalBonusUpper = criticalHitUpper - nonCriticalHitUpper;
@@ -1428,16 +1423,17 @@ namespace rngflow {
                 const int trivialUpper = t * 2 * criticalHitUpper;
                 for (int p = 4998; p >= 1; --p) {
                     if (p + kStaticMaxRngPerCompletedTurn >= 4999) {
-                        for (int charge = 0; charge <= 1; ++charge) {
-                            for (int star = 0; star <= 6; ++star) {
-                                cache.upper[t][charge][star][p] =
-                                    static_cast<std::uint16_t>(trivialUpper);
-                            }
+                        for (int star = 0; star <= 6; ++star) {
+                            cache.upper[t][star][p] = static_cast<std::uint16_t>(trivialUpper);
+                            cache.forcedUpper[t][star][p] = static_cast<std::uint16_t>(trivialUpper);
                         }
+                        cache.noChargeUpper[t][p] = static_cast<std::uint16_t>(trivialUpper);
                         continue;
                     }
 
-                    std::array<std::array<int, 7>, 2> best{};
+                    std::array<int, 7> best{};
+                    std::array<int, 7> forcedBest{};
+                    int noChargeBest = 0;
                     for (int delta = kStaticMinRngPerCompletedTurn;
                          delta <= kStaticMaxRngPerCompletedTurn; ++delta) {
                         const int q = p + delta;
@@ -1447,54 +1443,63 @@ namespace rngflow {
                                               ? 0
                                               : static_cast<int>(cache.criticalPrefix[criticalEnd]) -
                                                     static_cast<int>(cache.criticalPrefix[criticalBegin]);
+
                         const int oneHitDamage = nonCriticalHitUpper +
                                                  criticalBonusUpper * std::min(1, slots);
                         const int twoHitDamage = nonCriticalHitUpper * 2 +
                                                  criticalBonusUpper * std::min(2, slots);
-                        const bool canGainCharge =
-                            cache.specialChargePrefix[q] != cache.specialChargePrefix[p];
 
-                        for (int charge = 0; charge <= 1; ++charge) {
-                            const int nextCharge = (charge != 0 || canGainCharge) ? 1 : 0;
+                        best[0] = std::max(
+                            best[0],
+                            oneHitDamage + std::max(static_cast<int>(cache.upper[t - 1][0][q]),
+                                                    static_cast<int>(cache.upper[t - 1][5][q])));
+                        noChargeBest = std::max(
+                            noChargeBest,
+                            oneHitDamage + static_cast<int>(cache.upper[t - 1][0][q]));
 
-                            // A normal damaging command cannot use a charge gained
-                            // later in that same turn, but may carry it to the next turn.
-                            best[charge][0] = std::max(
-                                best[charge][0],
-                                oneHitDamage + static_cast<int>(
-                                    cache.upper[t - 1][nextCharge][0][q]));
-
-                            // Existing charge may be spent at turn selection time.
-                            if (charge != 0) {
-                                const int afterActivationCharge = canGainCharge ? 1 : 0;
-                                best[charge][0] = std::max(
-                                    best[charge][0],
-                                    oneHitDamage + static_cast<int>(
-                                        cache.upper[t - 1][afterActivationCharge][5][q]));
-                            }
-
-                            for (int star = 1; star <= 6; ++star) {
-                                const int damageAndAdvance =
-                                    twoHitDamage + static_cast<int>(
-                                        cache.upper[t - 1][nextCharge][star - 1][q]);
-                                const int fleeAndPreserve =
-                                    oneHitDamage + static_cast<int>(
-                                        cache.upper[t - 1][nextCharge][star][q]);
-                                best[charge][star] = std::max(
-                                    best[charge][star], std::max(damageAndAdvance, fleeAndPreserve));
-                            }
-                        }
-                    }
-                    for (int charge = 0; charge <= 1; ++charge) {
                         for (int star = 0; star <= 6; ++star) {
-                            assert(best[charge][star] <= std::numeric_limits<std::uint16_t>::max());
-                            cache.upper[t][charge][star][p] =
-                                static_cast<std::uint16_t>(best[charge][star]);
+                            const int fleePreserve = static_cast<int>(cache.upper[t - 1][star][q]);
+                            const int nextStar = star > 0 ? star - 1 : 0;
+                            const int clearForcedState =
+                                (star >= 2 ? oneHitDamage : 0) +
+                                static_cast<int>(cache.upper[t - 1][nextStar][q]);
+                            forcedBest[star] = std::max(
+                                forcedBest[star], std::max(fleePreserve, clearForcedState));
+                        }
+
+                        for (int star = 1; star <= 6; ++star) {
+                            const int damageAndAdvance =
+                                twoHitDamage + static_cast<int>(cache.upper[t - 1][star - 1][q]);
+                            const int fleeAndPreserve =
+                                oneHitDamage + static_cast<int>(cache.upper[t - 1][star][q]);
+                            best[star] = std::max(best[star],
+                                                  std::max(damageAndAdvance, fleeAndPreserve));
                         }
                     }
+                    for (int star = 0; star <= 6; ++star) {
+                        assert(best[star] <= std::numeric_limits<std::uint16_t>::max());
+                        assert(forcedBest[star] <= std::numeric_limits<std::uint16_t>::max());
+                        cache.upper[t][star][p] = static_cast<std::uint16_t>(best[star]);
+                        cache.forcedUpper[t][star][p] = static_cast<std::uint16_t>(forcedBest[star]);
+                    }
+                    assert(noChargeBest <= std::numeric_limits<std::uint16_t>::max());
+                    cache.noChargeUpper[t][p] = static_cast<std::uint16_t>(noChargeBest);
                 }
             }
-            return cache.upper[turns][specialCharge ? 1 : 0][starTurns][position];
+            // The generic DP assumes Star may be activated immediately whenever it
+            // is inactive.  That is valid only when the current turn-boundary state
+            // already has special charge.  A charge obtained later during this turn
+            // cannot retroactively change the command selected at the boundary.
+            // For a no-charge inactive-Star root, keep this first turn exact in that
+            // one respect, then return to the fully optimistic DP from the next turn.
+            const bool mustDelayStarActivation = starTurns == 0 && !specialChargeAtBoundary;
+            if (forcedNoHeroDamageFirstTurn) {
+                return cache.forcedUpper[turns][starTurns][position];
+            }
+            if (mustDelayStarActivation) {
+                return cache.noChargeUpper[turns][position];
+            }
+            return cache.upper[turns][starTurns][position];
         }
     } // namespace
 
@@ -1534,10 +1539,11 @@ namespace rngflow {
             return turns + 1;
         }
         const int starTurns = hero.acrobaticStar ? hero.acrobaticStarTurn : 0;
+        const bool forcedNoHeroDamageFirstTurn = hero.paralysis || hero.inactive;
 
         for (int t = 1; t <= turns; ++t) {
             const int damageUpper = StaticTapedDamageUpper(
-                root.position, t, starTurns, hero.specialCharge,
+                root.position, t, starTurns, hero.specialCharge, forcedNoHeroDamageFirstTurn,
                 nonCriticalHitUpper, criticalHitUpper);
             if (damageUpper >= enemyHp) return t;
         }
@@ -1569,8 +1575,9 @@ namespace rngflow {
                 return turns * 2 * criticalHitUpper;
             }
             const int starTurns = hero.acrobaticStar ? hero.acrobaticStarTurn : 0;
+            const bool forcedNoHeroDamageFirstTurn = hero.paralysis || hero.inactive;
             return StaticTapedDamageUpper(
-                root.position, turns, starTurns, hero.specialCharge,
+                root.position, turns, starTurns, hero.specialCharge, forcedNoHeroDamageFirstTurn,
                 nonCriticalHitUpper, criticalHitUpper);
         }
     }
@@ -2049,6 +2056,19 @@ namespace rngflow {
 
         [[nodiscard]] std::size_t BuildBattleProofCandidates(
             const BattleEmulator::SearchState &state, std::array<int, 8> &out) noexcept {
+            // In authoritative BattleEmulator::Main, a live hero that starts the
+            // turn paralyzed or inactive cannot execute the selected non-FLEE
+            // command.  After turn-order resolution every such command is replaced
+            // by PARALYSIS/CURE_PARALYSIS/INACTIVE_ALLY before callAttackFun(), so
+            // no selected-command MP/herb/Star effect occurs.  DEFENCE is also
+            // normalized to ATTACK_ALLY before this replacement.  Therefore all
+            // selectable non-FLEE commands have one identical child state; FLEE is
+            // the sole distinct choice because it skips the status-processing half.
+            if (state.players[0].paralysis || state.players[0].inactive) {
+                out[0] = BattleEmulator::ATTACK_ALLY;
+                out[1] = BattleEmulator::FLEE_ALLY;
+                return 2;
+            }
             static constexpr std::array<int, 8> candidates{
                 {
                     BattleEmulator::ATTACK_ALLY,
