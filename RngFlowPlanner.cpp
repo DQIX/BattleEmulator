@@ -1537,7 +1537,8 @@ namespace rngflow {
 
         for (int t = 1; t <= turns; ++t) {
             const int damageUpper = StaticTapedDamageUpper(
-                root.position, t, starTurns, nonCriticalHitUpper, criticalHitUpper);
+                root.position, t, starTurns, hero.specialCharge,
+                nonCriticalHitUpper, criticalHitUpper);
             if (damageUpper >= enemyHp) return t;
         }
         return turns + 1;
@@ -1569,7 +1570,8 @@ namespace rngflow {
             }
             const int starTurns = hero.acrobaticStar ? hero.acrobaticStarTurn : 0;
             return StaticTapedDamageUpper(
-                root.position, turns, starTurns, nonCriticalHitUpper, criticalHitUpper);
+                root.position, turns, starTurns, hero.specialCharge,
+                nonCriticalHitUpper, criticalHitUpper);
         }
     }
 
