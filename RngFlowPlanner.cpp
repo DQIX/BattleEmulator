@@ -1358,6 +1358,123 @@ namespace rngflow {
         return upper[turns][position];
     }
 
+    namespace {
+        // Full-horizon optimistic damage DP over the fixed LCG tape.  Unlike the
+        // old hit-count + critical-count envelope, each virtual turn keeps the
+        // damage allowance attached to the same relaxed next RNG position q.
+        //
+        // star=0 means Acrobatic Star is inactive.  star=1..6 is the exact
+        // turn-boundary timer when it is active.  The relaxation deliberately
+        // assumes a special charge is always obtainable when Star is inactive,
+        // every active-Star enemy action can counter, and every RNG delta in
+        // [12,48] is reachable.  Those additions only create fake continuations;
+        // no real continuation is removed.
+        struct StaticDamageDpCache {
+            std::uint64_t generation = 0;
+            int nonCriticalHitUpper = -1;
+            int criticalHitUpper = -1;
+            int computedTurns = 0;
+            std::array<std::uint16_t, 5000> criticalPrefix{};
+            std::array<std::array<std::array<std::uint16_t, 5000>, 7>, kMaxPlanTurns + 1> upper{};
+        };
+
+        [[nodiscard]] int StaticTapedDamageUpper(const int position,
+                                                 const int maxTurns,
+                                                 const int starTurns,
+                                                 const int nonCriticalHitUpper,
+                                                 const int criticalHitUpper) {
+            const int turns = std::clamp(maxTurns, 0, kMaxPlanTurns);
+            if (turns <= 0) return 0;
+            if (position <= 0 || position >= 4999) return turns * 2 * criticalHitUpper;
+            assert(starTurns >= 0 && starTurns <= 6);
+            assert(nonCriticalHitUpper >= 0 && criticalHitUpper >= nonCriticalHitUpper);
+
+            static thread_local StaticDamageDpCache cache{};
+            const std::uint64_t generation = lcg::generation();
+            if (cache.generation != generation ||
+                cache.nonCriticalHitUpper != nonCriticalHitUpper ||
+                cache.criticalHitUpper != criticalHitUpper) {
+                cache.generation = generation;
+                cache.nonCriticalHitUpper = nonCriticalHitUpper;
+                cache.criticalHitUpper = criticalHitUpper;
+                cache.computedTurns = 0;
+                cache.criticalPrefix.fill(0);
+                for (int p = 0; p < 4999; ++p) {
+                    cache.criticalPrefix[p + 1] = static_cast<std::uint16_t>(
+                        cache.criticalPrefix[p] +
+                        (lcg::peekPercent(std::max(1, p), kRngPercentScale) <
+                             kAttackCriticalThreshold
+                             ? 1
+                             : 0));
+                }
+                for (auto &starRow: cache.upper[0]) starRow.fill(0);
+            }
+
+            const int criticalBonusUpper = criticalHitUpper - nonCriticalHitUpper;
+            while (cache.computedTurns < turns) {
+                const int t = ++cache.computedTurns;
+                const int trivialUpper = t * 2 * criticalHitUpper;
+                for (int p = 4998; p >= 1; --p) {
+                    // If even one relaxed completed-turn transition can leave the
+                    // precomputed tape, keep the bound deliberately trivial.  The
+                    // exact solver would otherwise have to report UNKNOWN when it
+                    // reaches such a live state, so the bound must never prune it.
+                    if (p + kStaticMaxRngPerCompletedTurn >= 4999) {
+                        for (int star = 0; star <= 6; ++star) {
+                            cache.upper[t][star][p] = static_cast<std::uint16_t>(trivialUpper);
+                        }
+                        continue;
+                    }
+
+                    std::array<int, 7> best{};
+                    for (int delta = kStaticMinRngPerCompletedTurn;
+                         delta <= kStaticMaxRngPerCompletedTurn; ++delta) {
+                        const int q = p + delta;
+                        const int criticalBegin = p + kStaticMinPlayerCriticalOffset;
+                        const int criticalEnd = std::min(q, p + kStaticMaxPlayerCriticalOffset + 1);
+                        const int slots = criticalEnd <= criticalBegin
+                                              ? 0
+                                              : static_cast<int>(cache.criticalPrefix[criticalEnd]) -
+                                                    static_cast<int>(cache.criticalPrefix[criticalBegin]);
+
+                        const int oneHitDamage = nonCriticalHitUpper +
+                                                 criticalBonusUpper * std::min(1, slots);
+                        const int twoHitDamage = nonCriticalHitUpper * 2 +
+                                                 criticalBonusUpper * std::min(2, slots);
+
+                        // Star inactive: either use a one-hit hero command and
+                        // stay inactive, or spend the hero command activating Star.
+                        // Activation itself deals no damage, but optimistically allow
+                        // one same-turn counter; CallAction then leaves timer=5 at
+                        // the next turn boundary.
+                        best[0] = std::max(
+                            best[0],
+                            oneHitDamage + std::max(static_cast<int>(cache.upper[t - 1][0][q]),
+                                                    static_cast<int>(cache.upper[t - 1][5][q])));
+
+                        for (int star = 1; star <= 6; ++star) {
+                            // A damaging hero command can coexist with one optimistic
+                            // counter and advances the Star timer.  FLEE can preserve
+                            // the timer in the real transition, so keep a separate
+                            // one-counter preserve option as well.
+                            const int damageAndAdvance =
+                                twoHitDamage + static_cast<int>(cache.upper[t - 1][star - 1][q]);
+                            const int fleeAndPreserve =
+                                oneHitDamage + static_cast<int>(cache.upper[t - 1][star][q]);
+                            best[star] = std::max(best[star],
+                                                  std::max(damageAndAdvance, fleeAndPreserve));
+                        }
+                    }
+                    for (int star = 0; star <= 6; ++star) {
+                        assert(best[star] <= std::numeric_limits<std::uint16_t>::max());
+                        cache.upper[t][star][p] = static_cast<std::uint16_t>(best[star]);
+                    }
+                }
+            }
+            return cache.upper[turns][starTurns][position];
+        }
+    } // namespace
+
     int StaticOptimisticKillTurns(const State &root, const int maxTurns) {
         const int turns = std::clamp(maxTurns, 0, kMaxPlanTurns);
         const int enemyHp = std::max(0, root.players[1].hp);
@@ -1369,49 +1486,35 @@ namespace rngflow {
         // here on purpose; this is an upper bound, not a damage prediction.
         const double atk1 = root.players[0].atk * 0.5 - root.players[1].def * 0.25;
         const double spread = std::max(0.0, atk1) * 0.0625;
+        const double physicalUpperExclusive = std::max(0.0, atk1) + spread + 1.0;
         const int physicalNonCriticalUpper = std::max(
-            0, static_cast<int>(std::ceil(std::max(0.0, atk1) + spread + 1.0)));
+            0, static_cast<int>(std::ceil(physicalUpperExclusive)) - 1);
         // CRACK's non-critical damage is at most floor(34 * 0.5) = 17.
         const int nonCriticalHitUpper = std::max(17, physicalNonCriticalUpper);
         // Normal ATTACK / COUNTER criticals are strictly below atk*1.05; ceil is
         // deliberately one-sided and therefore safe. Dragon/Crack criticals are
         // smaller for this supported profile.
+        const double criticalUpperExclusive = std::max(0, root.players[0].atk) * 1.05;
         const int criticalHitUpper = std::max(
             nonCriticalHitUpper,
-            static_cast<int>(std::ceil(std::max(0, root.players[0].atk) * 1.05)));
-        const int criticalBonusUpper = criticalHitUpper - nonCriticalHitUpper;
-
-        const auto optimisticDamageHitCount = [&](const int t) {
-            // One hero command can deal at most one hit. A second player-owned hit
-            // can only be an Acrobatic Star counter.  Treat every active Star turn
-            // as a successful counter and pretend a new Star can always be
-            // activated as soon as useful (ignoring special-charge acquisition and
-            // the enemy-action/counter-roll requirements).  Each additional Star
-            // activation still consumes one hero command and supplies at most six
-            // counter-capable turns, which follows directly from the six-turn Star
-            // timer.  Maximising over activation counts is therefore an optimistic
-            // upper bound on total damaging player hits.
-            const RngPlayer &hero = root.players[0];
-            const int initialCounterCapacity = hero.acrobaticStar
-                                                   ? std::min(t, std::max(0, hero.acrobaticStarTurn))
-                                                   : 0;
-            int best = t + initialCounterCapacity;
-            const int maxActivations = (std::max(0, t - initialCounterCapacity) + 5) / 6;
-            for (int activations = 1; activations <= maxActivations; ++activations) {
-                const int heroHits = std::max(0, t - activations);
-                const int counterHits = std::min(t, initialCounterCapacity + 6 * activations);
-                best = std::max(best, heroHits + counterHits);
+            std::max(0, static_cast<int>(std::ceil(criticalUpperExclusive)) - 1));
+        const RngPlayer &hero = root.players[0];
+        if (hero.acrobaticStar &&
+            (hero.acrobaticStarTurn <= 0 || hero.acrobaticStarTurn > 6)) {
+            // A malformed/out-of-domain active timer is not allowed to become an
+            // UNSAT shortcut.  Fall back to the trivial two-critical-hits/turn
+            // envelope; the reversible codec will separately reject unsupported
+            // live states as UNKNOWN.
+            for (int t = 1; t <= turns; ++t) {
+                if (t * 2 * criticalHitUpper >= enemyHp) return t;
             }
-            return best;
-        };
+            return turns + 1;
+        }
+        const int starTurns = hero.acrobaticStar ? hero.acrobaticStarTurn : 0;
 
         for (int t = 1; t <= turns; ++t) {
-            // Promote as many of the optimistic damaging hits as the LCG-derived
-            // critical upper permits. Real play is a subset of these possibilities.
-            const int hitUpper = optimisticDamageHitCount(t);
-            const int criticals = StaticCriticalSlotUpperBound(root.position, t);
-            const int damageUpper = nonCriticalHitUpper * hitUpper
-                                    + criticalBonusUpper * std::min(criticals, hitUpper);
+            const int damageUpper = StaticTapedDamageUpper(
+                root.position, t, starTurns, nonCriticalHitUpper, criticalHitUpper);
             if (damageUpper >= enemyHp) return t;
         }
         return turns + 1;
@@ -1933,7 +2036,7 @@ namespace rngflow {
             if (StaticOptimisticKillTurns(FromSearchState(state), remainingTurns) > remainingTurns) {
                 return false;
             }
-            if ((result.generatedStates & UINT64_C(0xffff)) == 0 &&
+            if ((result.generatedStates & UINT64_C(0x0fff)) == 0 &&
                 std::chrono::steady_clock::now() >= deadline) {
                 result.complete = false;
                 return false;
@@ -2119,7 +2222,7 @@ namespace rngflow {
                 std::array<int, 8> actions{};
                 const std::size_t count = BuildCandidates(state, actions);
                 for (std::size_t i = 0; i < count; ++i) {
-                    if ((result.generatedStates & UINT64_C(0xffff)) == 0 &&
+                    if ((result.generatedStates & UINT64_C(0x0fff)) == 0 &&
                         std::chrono::steady_clock::now() >= deadline) {
                         result.complete = false;
                         return result;
@@ -2167,6 +2270,7 @@ namespace rngflow {
 
             if (relaxHeroHp) ParetoPruneHpMpHerbs(next, result);
             frontier.swap(next);
+            result.completedNoKillDepth = depth + 1;
         }
 
         result.peakFrontier = std::max<std::uint64_t>(result.peakFrontier, frontier.size());
@@ -2228,7 +2332,7 @@ namespace rngflow {
                 std::array<int, 8> actions{};
                 const std::size_t count = BuildBattleProofCandidates(state, actions);
                 for (std::size_t i = 0; i < count; ++i) {
-                    if ((result.generatedStates & UINT64_C(0xffff)) == 0 &&
+                    if ((result.generatedStates & UINT64_C(0x0fff)) == 0 &&
                         std::chrono::steady_clock::now() >= deadline) {
                         result.complete = false;
                         return result;
@@ -2247,6 +2351,11 @@ namespace rngflow {
                     }
                     if (finalLayer) continue;
 
+                    const int transitionDelta = child.position - state.position;
+                    if (transitionDelta >= 0 && transitionDelta < 64) {
+                        result.observedLiveTransitionDeltaMask |= UINT64_C(1) << transitionDelta;
+                    }
+
                     std::uint64_t childKey = 0;
                     if (!codec.Pack(child, childKey)) {
                         result.complete = false;
@@ -2256,7 +2365,10 @@ namespace rngflow {
                 }
             }
 
-            if (finalLayer) return result;
+            if (finalLayer) {
+                result.completedNoKillDepth = depth + 1;
+                return result;
+            }
             RadixSortPackedStates(next, frontier);
             const auto uniqueEnd = std::unique(next.begin(), next.end());
             result.duplicateStates += static_cast<std::uint64_t>(next.end() - uniqueEnd);
@@ -2264,6 +2376,7 @@ namespace rngflow {
 
             ParetoPruneHpMpHerbs(next, result);
             frontier.swap(next);
+            result.completedNoKillDepth = depth + 1;
         }
         result.peakFrontier = std::max<std::uint64_t>(result.peakFrontier, frontier.size());
         return result;
@@ -2322,11 +2435,13 @@ namespace rngflow {
         result.complete = proof.complete;
         result.killReachable = proof.killReachable;
         result.firstKillTurn = proof.firstKillTurn;
+        result.completedNoKillDepth = proof.completedNoKillDepth;
         result.expandedStates = proof.expandedStates;
         result.generatedStates = proof.generatedStates;
         result.duplicateStates = proof.duplicateStates;
         result.dominatedStates = proof.dominatedStates;
         result.peakFrontier = proof.peakFrontier;
+        result.observedLiveTransitionDeltaMask = proof.observedLiveTransitionDeltaMask;
         if (!proof.complete || !proof.killReachable || proof.firstKillTurn <= 0) {
             return result;
         }

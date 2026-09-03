@@ -936,13 +936,18 @@ int main(int argc, char *argv[]) {
         }
 
         const auto started = std::chrono::steady_clock::now();
+        // Keep the CLI bounded even when the exact proof cannot finish.  A deadline
+        // is never converted to UNSAT: the solver reports complete=false (UNKNOWN).
+        // Leave a small wall-clock margin for LCG initialization and reporting so the
+        // whole process stays inside the user-facing 15 second limit.
+        constexpr int kProofCliTimeLimitMs = 14500;
         rngflow::ExactKillDecisionResult proof{};
         if (std::strcmp(argv[1], "--prove-no-kill-relaxed") == 0) {
-            proof = rngflow::ProveNoKillWithinBattleExact(root, maxTurns, 0);
+            proof = rngflow::ProveNoKillWithinBattleExact(root, maxTurns, kProofCliTimeLimitMs);
         } else if (std::strcmp(argv[1], "--find-witness") == 0) {
-            proof = rngflow::FindKillWitnessBattleExact(root, maxTurns, 0);
+            proof = rngflow::FindKillWitnessBattleExact(root, maxTurns, kProofCliTimeLimitMs);
         } else {
-            proof = rngflow::SolveShortestKillBattleExact(root, maxTurns, 0);
+            proof = rngflow::SolveShortestKillBattleExact(root, maxTurns, kProofCliTimeLimitMs);
         }
         const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - started).count();
@@ -950,6 +955,7 @@ int main(int argc, char *argv[]) {
         std::cout << "proof.complete=" << (proof.complete ? 1 : 0)
                   << " killReachable=" << (proof.killReachable ? 1 : 0)
                   << " T=" << proof.firstKillTurn
+                  << " completedNoKillDepth=" << proof.completedNoKillDepth
                   << " elapsedMs=" << elapsedMs
                   << " expanded=" << proof.expandedStates
                   << " generated=" << proof.generatedStates
@@ -958,6 +964,7 @@ int main(int argc, char *argv[]) {
                   << " peakFrontier=" << proof.peakFrontier
                   << " witnessExpanded=" << proof.witnessExpandedStates
                   << " witnessGenerated=" << proof.witnessGeneratedStates
+                  << " deltaMask=0x" << std::hex << proof.observedLiveTransitionDeltaMask << std::dec
                   << std::endl;
         if (proof.killReachable && proof.actionCount > 0) {
             std::cout << "witness.actions=";

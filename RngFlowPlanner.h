@@ -103,6 +103,10 @@ struct ExactKillDecisionResult {
     bool killReachable = false;
     bool complete = true;
     int firstKillTurn = -1;
+    // Largest horizon d for which E(d)=false has been fully exhausted by the
+    // authoritative depth frontier.  If a run times out, this remains valid even
+    // though complete=false makes the requested larger horizon UNKNOWN.
+    int completedNoKillDepth = 0;
     int actionCount = 0;
     std::array<int, kMaxPlanTurns> actions{};
     std::uint64_t expandedStates = 0;
@@ -112,6 +116,7 @@ struct ExactKillDecisionResult {
     std::uint64_t peakFrontier = 0;
     std::uint64_t witnessExpandedStates = 0;
     std::uint64_t witnessGeneratedStates = 0;
+    std::uint64_t observedLiveTransitionDeltaMask = 0;
 };
 
 
