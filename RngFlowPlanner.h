@@ -241,6 +241,13 @@ struct ExactKillDecisionResult {
 [[nodiscard]] ExactKillDecisionResult FindShortestKillBattleDominantHp(
     const BattleEmulator::SearchState& root, int maxTurns, int timeLimitMs = 0);
 
+// Proof-only variant of the exact HP/MP/herb dominance quotient.  It stores no
+// parent/action history: each non-HP future state carries only the maximum real
+// reachable hero HP.  A complete no-kill result is therefore an exact UNSAT
+// proof, while a reached kill is reported only as SAT existence.
+[[nodiscard]] ExactKillDecisionResult ProveNoKillWithinBattleDominantHp(
+    const BattleEmulator::SearchState& root, int maxTurns, int timeLimitMs = 0);
+
 // Find one real executable witness using only authoritative battle transitions.
 // Ordering is heuristic-only: every legal branch remains in the DFS, and the
 // proof-safe optimistic lower bound is the only pruning rule.

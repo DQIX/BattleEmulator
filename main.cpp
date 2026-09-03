@@ -1075,6 +1075,7 @@ int main(int argc, char *argv[]) {
     if (argc >= 3 && (std::strcmp(argv[1], "--prove-shortest") == 0 ||
                       std::strcmp(argv[1], "--prove-shortest-dominant-hp") == 0 ||
                       std::strcmp(argv[1], "--prove-no-kill-relaxed") == 0 ||
+                      std::strcmp(argv[1], "--prove-no-kill-after-prefix") == 0 ||
                       std::strcmp(argv[1], "--diagnose-no-kill-exact") == 0 ||
                       std::strcmp(argv[1], "--find-witness") == 0 ||
                       std::strcmp(argv[1], "--find-witness-relaxed") == 0)) {
@@ -1099,15 +1100,44 @@ int main(int argc, char *argv[]) {
             return 2;
         }
 
+        if (std::strcmp(argv[1], "--prove-no-kill-after-prefix") == 0) {
+            for (int i = 4; i < argc; ++i) {
+                int action = 0;
+                try {
+                    action = std::stoi(argv[i]);
+                } catch (const std::exception& e) {
+                    std::cerr << "invalid prefix action: " << e.what() << std::endl;
+                    return 2;
+                }
+                const BattleEmulator::SearchCommand command{action};
+                if (!BattleEmulator::IsHeroCommandSelectable(root, command)) {
+                    std::cerr << "unselectable prefix action at index " << (i - 4) << std::endl;
+                    return 2;
+                }
+                BattleEmulator::SearchState child{};
+                if (!BattleEmulator::StepSearchState(root, command, &child, false)) {
+                    std::cerr << "failed to replay prefix action at index " << (i - 4) << std::endl;
+                    return 2;
+                }
+                if (child.players[0].hp <= 0 || child.players[1].hp <= 0) {
+                    std::cerr << "prefix ended the live battle at index " << (i - 4) << std::endl;
+                    return 2;
+                }
+                root = child;
+            }
+        }
+
         const auto started = std::chrono::steady_clock::now();
         // Keep the CLI bounded even when the exact proof cannot finish.  A deadline
         // is never converted to UNSAT: the solver reports complete=false (UNKNOWN).
         // Leave a small wall-clock margin for LCG initialization and reporting so the
         // whole process stays inside the user-facing 15 second limit.
-        constexpr int kProofCliTimeLimitMs = 13500;
+        constexpr int kProofCliTimeLimitMs = 10000;
         rngflow::ExactKillDecisionResult proof{};
         if (std::strcmp(argv[1], "--prove-no-kill-relaxed") == 0) {
             proof = rngflow::ProveNoKillWithinBattleExact(root, maxTurns, kProofCliTimeLimitMs);
+        } else if (std::strcmp(argv[1], "--prove-no-kill-after-prefix") == 0) {
+            proof = rngflow::ProveNoKillWithinBattleDominantHp(root, maxTurns, kProofCliTimeLimitMs);
         } else if (std::strcmp(argv[1], "--diagnose-no-kill-exact") == 0) {
             proof = rngflow::DiagnoseNoKillBattleExact(root, maxTurns, kProofCliTimeLimitMs);
         } else if (std::strcmp(argv[1], "--find-witness") == 0) {
