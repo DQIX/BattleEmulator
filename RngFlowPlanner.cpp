@@ -1680,15 +1680,15 @@ public:
             shift += bits;
         };
 
-        // Keep the two monotone resources in the low byte.  This is still a
-        // reversible state encoding; it merely makes equal non-resource states
-        // contiguous after an ordinary integer sort so proof-safe Pareto
-        // dominance can be applied without a hash table.
+        // Keep all three monotone resources at the low end.  This is still a
+        // reversible state encoding.  Making HP the most-significant member of
+        // this 15-bit suffix lets a descending scan see every possible
+        // HP/MP/herb dominator before the state it can dominate.
         put(static_cast<std::uint64_t>(hero.mp), 5);                            // 0..4
         put(static_cast<std::uint64_t>(hero.medicinal_herbs_count), 3);         // 5..7
-        put(static_cast<std::uint64_t>(state.position), 13);                    // 8..20
-        put(static_cast<std::uint64_t>(enemy.hp), 9);                           // 21..29
-        put(static_cast<std::uint64_t>(hero.hp), 7);                            // 30..36
+        put(static_cast<std::uint64_t>(hero.hp), 7);                            // 8..14
+        put(static_cast<std::uint64_t>(state.position), 13);                    // 15..27
+        put(static_cast<std::uint64_t>(enemy.hp), 9);                           // 28..36
         put(static_cast<std::uint64_t>(hero.specialCharge ? hero.specialChargeTurn : 0), 3);
         put(static_cast<std::uint64_t>(hero.paralysis ? hero.paralysisTurns + 2 : 0), 3);
         put(static_cast<std::uint64_t>(hero.acrobaticStar ? hero.acrobaticStarTurn : 0), 3);
@@ -1719,9 +1719,9 @@ public:
 
         hero.mp = static_cast<int>(take(5));
         hero.medicinal_herbs_count = static_cast<int>(take(3));
+        hero.hp = static_cast<int>(take(7));
         state.position = static_cast<int>(take(13));
         enemy.hp = static_cast<int>(take(9));
-        hero.hp = static_cast<int>(take(7));
         const int specialTurn = static_cast<int>(take(3));
         const int paralysisTurn = static_cast<int>(take(3)) - 2;
         const int starTurn = static_cast<int>(take(3));
@@ -2012,6 +2012,50 @@ void RadixSortPackedStates(std::vector<std::uint64_t>& values,
     pass(scratch, values, 48);
 }
 
+void ParetoPruneHpMpHerbs(std::vector<std::uint64_t>& states,
+                          ExactKillDecisionResult& result) {
+    if (states.empty()) return;
+
+    // Low 15 bits are [mp:5, herbs:3, hp:7].  For an otherwise identical
+    // reachable turn-boundary state, larger HP/MP/herb counts can execute every
+    // continuation available to a smaller triple with exactly the same RNG:
+    // forced search commands do not branch on current HP, incoming damage is
+    // HP-independent, capped healing is monotone, and MP/herbs only gate or
+    // consume commands.  Thus removing a component-wise dominated triple
+    // preserves E(t) exactly; this is not approximate state merging.
+    //
+    // HP is the most-significant part of the suffix, so a descending scan sees
+    // every possible HP dominator first.  For each herb threshold keep a
+    // 32-bit set of MP values already seen with at least that many herbs.
+    std::size_t write = 0;
+    std::size_t begin = 0;
+    while (begin < states.size()) {
+        const std::uint64_t base = states[begin] >> 15;
+        std::size_t end = begin + 1;
+        while (end < states.size() && (states[end] >> 15) == base) ++end;
+
+        std::array<std::uint32_t, 8> seenMpAtLeastHerbs{};
+        for (std::size_t i = end; i-- > begin;) {
+            const std::uint64_t key = states[i];
+            const unsigned mp = static_cast<unsigned>(key & 31u);
+            const unsigned herbs = static_cast<unsigned>((key >> 5) & 7u);
+            const std::uint32_t mpAtLeastMask = UINT32_MAX << mp;
+            if ((seenMpAtLeastHerbs[herbs] & mpAtLeastMask) != 0) {
+                ++result.dominatedStates;
+                continue;
+            }
+
+            states[write++] = key;
+            const std::uint32_t bit = UINT32_C(1) << mp;
+            for (unsigned h = 0; h <= herbs; ++h) {
+                seenMpAtLeastHerbs[h] |= bit;
+            }
+        }
+        begin = end;
+    }
+    states.resize(write);
+}
+
 } // namespace
 
 static ExactKillDecisionResult DecideKillWithinImpl(
@@ -2101,44 +2145,7 @@ static ExactKillDecisionResult DecideKillWithinImpl(
         result.duplicateStates += static_cast<std::uint64_t>(next.end() - uniqueEnd);
         next.erase(uniqueEnd, next.end());
 
-        if (relaxHeroHp && !next.empty()) {
-            // For a fixed non-resource state, MP and medicinal herbs are
-            // monotone resources in this supported action set:
-            //   * exact values affect only command availability;
-            //   * HEAL/CRACK/herb consume fixed amounts;
-            //   * choosing the same command from a resource-richer state uses
-            //     the same RNG and produces the same non-resource successor.
-            // Therefore (mpA>=mpB && herbsA>=herbsB) lets A simulate every
-            // continuation of B.  Removing B preserves existence exactly.
-            // The low eight codec bits are [mp:5, herbs:3], so integer sorting
-            // already groups identical non-resource states by key>>8.
-            std::size_t write = 0;
-            std::size_t begin = 0;
-            while (begin < next.size()) {
-                const std::uint64_t base = next[begin] >> 8;
-                std::size_t end = begin + 1;
-                while (end < next.size() && (next[end] >> 8) == base) ++end;
-
-                std::array<std::uint64_t, 8> kept{};
-                std::size_t keptCount = 0;
-                int bestMpAtHigherOrEqualHerbs = -1;
-                for (std::size_t i = end; i-- > begin;) {
-                    const int mp = static_cast<int>(next[i] & 31u);
-                    if (mp <= bestMpAtHigherOrEqualHerbs) {
-                        ++result.dominatedStates;
-                        continue;
-                    }
-                    bestMpAtHigherOrEqualHerbs = mp;
-                    assert(keptCount < kept.size());
-                    kept[keptCount++] = next[i];
-                }
-                for (std::size_t i = 0; i < keptCount; ++i) {
-                    next[write++] = kept[i];
-                }
-                begin = end;
-            }
-            next.resize(write);
-        }
+        if (relaxHeroHp) ParetoPruneHpMpHerbs(next, result);
         frontier.swap(next);
     }
 
@@ -2235,33 +2242,7 @@ static ExactKillDecisionResult DecideBattleExactImpl(
         result.duplicateStates += static_cast<std::uint64_t>(next.end() - uniqueEnd);
         next.erase(uniqueEnd, next.end());
 
-        // Same proof-safe resource dominance as the light diagnostic solver.
-        // Low key byte is [MP:5, herbs:3].
-        if (!next.empty()) {
-            std::size_t write = 0;
-            std::size_t begin = 0;
-            while (begin < next.size()) {
-                const std::uint64_t base = next[begin] >> 8;
-                std::size_t end = begin + 1;
-                while (end < next.size() && (next[end] >> 8) == base) ++end;
-                std::array<std::uint64_t, 8> kept{};
-                std::size_t keptCount = 0;
-                int bestMpAtHigherOrEqualHerbs = -1;
-                for (std::size_t i = end; i-- > begin;) {
-                    const int mp = static_cast<int>(next[i] & 31u);
-                    if (mp <= bestMpAtHigherOrEqualHerbs) {
-                        ++result.dominatedStates;
-                        continue;
-                    }
-                    bestMpAtHigherOrEqualHerbs = mp;
-                    assert(keptCount < kept.size());
-                    kept[keptCount++] = next[i];
-                }
-                for (std::size_t i = 0; i < keptCount; ++i) next[write++] = kept[i];
-                begin = end;
-            }
-            next.resize(write);
-        }
+        ParetoPruneHpMpHerbs(next, result);
         frontier.swap(next);
     }
     result.peakFrontier = std::max<std::uint64_t>(result.peakFrontier, frontier.size());
