@@ -1552,7 +1552,8 @@ namespace rngflow {
 
     namespace {
         [[nodiscard]] int StaticOptimisticDamageUpperForHorizon(
-            const State &root, const int maxTurns) {
+            const State &root, const int maxTurns,
+            const bool forceNoHeroDamageFirstTurn = false) {
             const int turns = std::clamp(maxTurns, 0, kMaxPlanTurns);
             if (turns <= 0 || root.players[1].hp <= 0) return 0;
 
@@ -1575,7 +1576,8 @@ namespace rngflow {
                 return turns * 2 * criticalHitUpper;
             }
             const int starTurns = hero.acrobaticStar ? hero.acrobaticStarTurn : 0;
-            const bool forcedNoHeroDamageFirstTurn = hero.paralysis || hero.inactive;
+            const bool forcedNoHeroDamageFirstTurn =
+                forceNoHeroDamageFirstTurn || hero.paralysis || hero.inactive;
             return StaticTapedDamageUpper(
                 root.position, turns, starTurns, hero.specialCharge, forcedNoHeroDamageFirstTurn,
                 nonCriticalHitUpper, criticalHitUpper);
@@ -2065,7 +2067,7 @@ namespace rngflow {
             // selectable non-FLEE commands have one identical child state; FLEE is
             // the sole distinct choice because it skips the status-processing half.
             if (state.players[0].paralysis || state.players[0].inactive) {
-                out[0] = BattleEmulator::ATTACK_ALLY;
+                out[0] = BattleEmulator::ATTACK_ALLY;//麻痺中は何もできないので、逃げることすら許可されない。ここを歴史資料館(git)に行って戻すの禁止
                 return 1;
             }
             static constexpr std::array<int, 8> candidates{
@@ -2087,6 +2089,13 @@ namespace rngflow {
                 }
             }
             return count;
+        }
+
+        [[nodiscard]] bool HasNoDirectEnemyDamageFromSelectedHeroAction(const int action) noexcept {
+            return action == BattleEmulator::DEFENCE ||
+                   action == BattleEmulator::FLEE_ALLY ||
+                   action == BattleEmulator::MEDICINAL_HERBS ||
+                   action == BattleEmulator::HEAL;
         }
 
         struct BattleWitnessCandidate {
@@ -2599,23 +2608,31 @@ namespace rngflow {
         const BattleEmulator::SearchState &root, const int maxTurns,
         const int timeLimitMs, const bool relaxHeroHp,
         const bool captureWitness = false,
-        const bool captureRejected = false) {
+        const bool captureRejected = false,
+        const bool relaxHeroResources = false) {
         ExactKillDecisionResult result{};
         const auto started = std::chrono::steady_clock::now();
         const auto deadline = timeLimitMs > 0
                                   ? started + std::chrono::milliseconds(timeLimitMs)
                                   : std::chrono::steady_clock::time_point::max();
         const int turns = std::clamp(maxTurns, 0, kMaxPlanTurns);
-        if (root.players[1].hp <= 0) {
+        BattleEmulator::SearchState searchRoot = root;
+        const int relaxedMp = searchRoot.players[0].maxMp;
+        const int relaxedHerbs = searchRoot.players[0].medicinal_herbs_count;
+        if (relaxHeroResources) {
+            searchRoot.players[0].mp = relaxedMp;
+            searchRoot.players[0].medicinal_herbs_count = relaxedHerbs;
+        }
+        if (searchRoot.players[1].hp <= 0) {
             result.killReachable = true;
             result.firstKillTurn = 0;
             return result;
         }
-        if (root.players[0].hp <= 0 || turns <= 0) return result;
+        if (searchRoot.players[0].hp <= 0 || turns <= 0) return result;
 
-        ExactBattleStateCodec codec(root, relaxHeroHp);
+        ExactBattleStateCodec codec(searchRoot, relaxHeroHp);
         std::uint64_t rootKey = 0;
-        if (!codec.Pack(root, rootKey)) {
+        if (!codec.Pack(searchRoot, rootKey)) {
             result.complete = false;
             return result;
         }
@@ -2715,6 +2732,11 @@ namespace rngflow {
                         return result;
                     }
                     if (finalLayer) continue;
+
+                    if (relaxHeroResources) {
+                        child.players[0].mp = relaxedMp;
+                        child.players[0].medicinal_herbs_count = relaxedHerbs;
+                    }
 
                     const int transitionDelta = child.position - state.position;
                     if (transitionDelta >= 0 && transitionDelta < 64) {
@@ -2950,10 +2972,32 @@ namespace rngflow {
 
         for (int depth = 0; depth < turns && !frontier.empty(); ++depth) {
             const bool finalLayer = depth + 1 == turns;
+            result.frontierByDepth[depth] = frontier.size();
+            std::uint64_t nonResourceGroups = 0;
+            std::uint64_t positionStatusGroups = 0;
+            std::uint64_t previousNonResource = UINT64_MAX;
+            std::uint64_t previousPositionStatus = UINT64_MAX;
+            for (const std::uint64_t key : frontier) {
+                const std::uint64_t nonResource = key >> 15;
+                if (nonResource != previousNonResource) {
+                    ++nonResourceGroups;
+                    previousNonResource = nonResource;
+                }
+                const std::uint64_t positionStatus = key >> 24;
+                if (positionStatus != previousPositionStatus) {
+                    ++positionStatusGroups;
+                    previousPositionStatus = positionStatus;
+                }
+            }
+            result.nonResourceGroupsByDepth[depth] = nonResourceGroups;
+            result.positionStatusGroupsByDepth[depth] = positionStatusGroups;
             result.peakFrontier = std::max<std::uint64_t>(result.peakFrontier, frontier.size());
             result.expandedStates += frontier.size();
             next.clear();
             nextHp.clear();
+            const std::uint64_t generatedBefore = result.generatedStates;
+            const std::uint64_t duplicatesBefore = result.duplicateStates;
+            const std::uint64_t dominatedBefore = result.dominatedStates;
             if (!finalLayer && frontier.size() <= std::numeric_limits<std::size_t>::max() / 4) {
                 next.reserve(frontier.size() * 4);
                 nextHp.reserve(frontier.size() * 4);
@@ -2963,20 +3007,39 @@ namespace rngflow {
                 BattleEmulator::SearchState state = codec.Unpack(frontier[parentIndex]);
                 state.players[0].hp = static_cast<int>(frontierHp[parentIndex]);
                 const int remainingTurns = turns - depth;
-                if (StaticOptimisticKillTurns(FromSearchState(state), remainingTurns) > remainingTurns) {
+                const State plannerState = FromSearchState(state);
+                if (StaticOptimisticKillTurns(plannerState, remainingTurns) > remainingTurns) {
                     continue;
                 }
 
                 std::array<int, 8> actions{};
                 const std::size_t count = BuildBattleProofCandidates(state, actions);
+                const int noDirectDamageUpper = StaticOptimisticDamageUpperForHorizon(
+                    plannerState, remainingTurns, true);
+                int activateStarDamageUpper = -1;
                 for (std::size_t i = 0; i < count; ++i) {
+                    const int action = actions[i];
+                    if (HasNoDirectEnemyDamageFromSelectedHeroAction(action) &&
+                        noDirectDamageUpper < state.players[1].hp) {
+                        continue;
+                    }
+                    if (action == BattleEmulator::ACROBATIC_STAR) {
+                        if (activateStarDamageUpper < 0) {
+                            State activatedStarState = plannerState;
+                            activatedStarState.players[0].acrobaticStar = true;
+                            activatedStarState.players[0].acrobaticStarTurn = 6;
+                            activateStarDamageUpper = StaticOptimisticDamageUpperForHorizon(
+                                activatedStarState, remainingTurns, true);
+                        }
+                        if (activateStarDamageUpper < state.players[1].hp) continue;
+                    }
                     if ((result.generatedStates & UINT64_C(0x0fff)) == 0 &&
                         std::chrono::steady_clock::now() >= deadline) {
                         result.complete = false;
                         return result;
                     }
                     BattleEmulator::SearchState child{};
-                    if (!BattleEmulator::StepSearchState(state, {actions[i]}, &child, finalLayer)) {
+                    if (!BattleEmulator::StepSearchState(state, {action}, &child, finalLayer)) {
                         result.complete = false;
                         return result;
                     }
@@ -3009,6 +3072,7 @@ namespace rngflow {
                     nextHp.push_back(static_cast<std::uint64_t>(child.players[0].hp));
                 }
             }
+            result.generatedByDepth[depth + 1] = result.generatedStates - generatedBefore;
 
             if (finalLayer) {
                 result.completedNoKillDepth = depth + 1;
@@ -3030,7 +3094,13 @@ namespace rngflow {
             next.resize(write);
             nextHp.resize(write);
             ParetoPruneDominantHeroHp(next, nextHp, result);
-            ParetoPruneLowEnemyHp(next, nextHp, result);
+            // Do not prune by lower enemy HP here. HP_HOOVER can heal the enemy
+            // back across the 1/4 rage threshold, so two otherwise equal states
+            // below that threshold can later consume different RNG in ProcessRage.
+            // Such a prune would under-approximate the authoritative transition
+            // system and therefore cannot be used for an UNSAT proof.
+            result.duplicatesByDepth[depth + 1] = result.duplicateStates - duplicatesBefore;
+            result.dominatedByDepth[depth + 1] = result.dominatedStates - dominatedBefore;
             frontier.swap(next);
             frontierHp.swap(nextHp);
             result.completedNoKillDepth = depth + 1;

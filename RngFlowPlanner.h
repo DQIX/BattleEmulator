@@ -114,6 +114,12 @@ struct ExactKillDecisionResult {
     std::uint64_t duplicateStates = 0;
     std::uint64_t dominatedStates = 0;
     std::uint64_t peakFrontier = 0;
+    std::array<std::uint64_t, kMaxPlanTurns + 1> frontierByDepth{};
+    std::array<std::uint64_t, kMaxPlanTurns + 1> generatedByDepth{};
+    std::array<std::uint64_t, kMaxPlanTurns + 1> duplicatesByDepth{};
+    std::array<std::uint64_t, kMaxPlanTurns + 1> dominatedByDepth{};
+    std::array<std::uint64_t, kMaxPlanTurns + 1> nonResourceGroupsByDepth{};
+    std::array<std::uint64_t, kMaxPlanTurns + 1> positionStatusGroupsByDepth{};
     std::uint64_t witnessExpandedStates = 0;
     std::uint64_t witnessGeneratedStates = 0;
     std::uint64_t observedLiveTransitionDeltaMask = 0;
@@ -217,6 +223,14 @@ struct ExactKillDecisionResult {
 // state is stored in a reversible 64-bit integer.  No rngflow::Step equivalence
 // assumption is needed for a complete UNSAT result.
 [[nodiscard]] ExactKillDecisionResult ProveNoKillWithinBattleExact(
+    const BattleEmulator::SearchState& root, int maxTurns, int timeLimitMs = 0);
+
+// Proof-safe resource relaxation for structure testing and, if it closes,
+// direct UNSAT proof. Hero HP and every authoritative transition field remain
+// exact, while MP and medicinal-herb counts are reset upward at each turn
+// boundary. Every real executable path is therefore represented in this
+// superset. SAT is only abstract; complete UNSAT proves the real horizon.
+[[nodiscard]] ExactKillDecisionResult ProveNoKillWithinBattleResourceRelaxed(
     const BattleEmulator::SearchState& root, int maxTurns, int timeLimitMs = 0);
 
 // One-pass exact shortest-kill decision on the authoritative BattleEmulator

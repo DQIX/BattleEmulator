@@ -184,8 +184,14 @@ namespace {
 
     void SearchRequest(Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads);
 
+    struct BruteForceMatch {
+        uint64_t seed = 0;
+        int startTurn = 0;
+    };
+
     uint64_t BruteForceRequest(Player copiedPlayers[2], int hours, int minutes, int seconds, int turns,
-                               int damages[350], int aActions[350]);
+                               int damages[350], int aActions[350],
+                               std::vector<BruteForceMatch> *matches = nullptr);
 
     void dumpTableMain(BattleResult &result1, Genome &genome, uint64_t seed, int turns);
 
@@ -658,7 +664,7 @@ namespace {
 #endif
     }
     void BruteForceMainLoop(const Player copiedPlayers[2], uint64_t start, uint64_t end, int turns, int gene[350],
-                            int damages[350]) {
+                            int damages[350], std::vector<BruteForceMatch> *matches = nullptr) {
         int maxElement = 350;
         for (uint64_t seed = start; seed < end; ++seed) {
             BattleEmulator::resetStartTurn();
@@ -678,13 +684,15 @@ namespace {
                 FoundSeed = seed;
                 foundSeeds++;
                 foundTurn = BattleEmulator::getStartTurn();
+                if (matches != nullptr) matches->push_back({seed, foundTurn});
             }
         }
     }
 
     // ブルートフォースリクエスト関数
     [[nodiscard]] uint64_t BruteForceRequest(Player copiedPlayers[2], int hours, int minutes, int seconds,
-                                             int turns, int damages[350], int aActions[350]) {
+                                             int turns, int damages[350], int aActions[350],
+                                             std::vector<BruteForceMatch> *matches) {
 #ifdef DEBUG
         auto t0 = std::chrono::high_resolution_clock::now();
 #endif
@@ -700,6 +708,7 @@ namespace {
 
         foundSeeds = 0;
         FoundSeed = 0;
+        if (matches != nullptr) matches->clear();
 
         int totalSeconds = hours * 3600 + minutes * 60 + seconds;
         totalSeconds = totalSeconds - 15;
@@ -722,7 +731,7 @@ namespace {
         +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
                                      合計 6Byte
         */
-        BruteForceMainLoop(copiedPlayers, time1, time2, turns, aActions, damages);
+        BruteForceMainLoop(copiedPlayers, time1, time2, turns, aActions, damages, matches);
 
         std::cout << std::endl << "found: " << foundSeeds << std::endl;
 
@@ -876,6 +885,117 @@ namespace {
             << " kill=" << (players[0].hp > 0 && players[1].hp <= 0 ? 1 : 0)
             << "\nwitness.dumpTable.end\n";
         return out.str();
+    }
+
+    struct ProductionProofContext {
+        uint64_t seed = 0;
+        int prefixTurns = 0;
+        BattleEmulator::SearchState root{};
+    };
+
+    [[nodiscard]] bool BuildProductionProofContexts(
+        const int argc, char *argv[], const int firstTimeArg,
+        std::vector<ProductionProofContext> &contexts) {
+        if (firstTimeArg < 0 || argc <= firstTimeArg + 3) return false;
+
+        std::vector<char *> productionArgv;
+        productionArgv.reserve(static_cast<std::size_t>(argc - firstTimeArg + 1));
+        productionArgv.push_back(argv[0]);
+        for (int i = firstTimeArg; i < argc; ++i) productionArgv.push_back(argv[i]);
+
+        const int hours = toint(productionArgv[1]);
+        const int minutes = toint(productionArgv[2]);
+        const int seconds = toint(productionArgv[3]);
+        if (hours < 0 || minutes < 0 || seconds < 0) return false;
+
+        int values[350]{};
+        int actions[350]{};
+        int valuesIndex = 0;
+        foundTurn = 0;
+        foundTurnOffset = 0;
+        FoundSeed = 0;
+        foundSeeds = 0;
+        if (!ProcessInputBuilder(static_cast<int>(productionArgv.size()), productionArgv.data(),
+                                 actions, values, valuesIndex)) {
+            return false;
+        }
+
+        Player initialPlayers[2] = {BasePlayers[0], BasePlayers[1]};
+        std::vector<BruteForceMatch> matches;
+        BruteForceRequest(initialPlayers, hours, minutes, seconds,
+                          valuesIndex, values, actions, &matches);
+        if (matches.empty()) return false;
+
+        contexts.clear();
+        contexts.reserve(matches.size());
+        for (const BruteForceMatch &match : matches) {
+            const int prefixTurns = match.startTurn + foundTurnOffset;
+            Player players[2] = {BasePlayers[0], BasePlayers[1]};
+            int position = 1;
+            uint64_t nowState = 0;
+            lcg::init(match.seed, true);
+            BattleEmulator::Main(&position, prefixTurns, actions, players, nullptr,
+                                 match.seed, nullptr, nullptr, -2, &nowState);
+
+            ProductionProofContext context{};
+            context.seed = match.seed;
+            context.prefixTurns = prefixTurns;
+            context.root.players[0] = players[0];
+            context.root.players[1] = players[1];
+            context.root.position = position;
+            context.root.nowState = nowState;
+            contexts.push_back(context);
+        }
+        return true;
+    }
+
+    [[nodiscard]] bool BuildProductionProofContext(
+        const int argc, char *argv[], const int firstTimeArg,
+        ProductionProofContext &context) {
+        if (firstTimeArg < 0 || argc <= firstTimeArg + 3) return false;
+
+        std::vector<char *> productionArgv;
+        productionArgv.reserve(static_cast<std::size_t>(argc - firstTimeArg + 1));
+        productionArgv.push_back(argv[0]);
+        for (int i = firstTimeArg; i < argc; ++i) productionArgv.push_back(argv[i]);
+
+        const int hours = toint(productionArgv[1]);
+        const int minutes = toint(productionArgv[2]);
+        const int seconds = toint(productionArgv[3]);
+        if (hours < 0 || minutes < 0 || seconds < 0) return false;
+
+        int values[350]{};
+        int actions[350]{};
+        int valuesIndex = 0;
+        foundTurn = 0;
+        foundTurnOffset = 0;
+        FoundSeed = 0;
+        foundSeeds = 0;
+        if (!ProcessInputBuilder(static_cast<int>(productionArgv.size()), productionArgv.data(),
+                                 actions, values, valuesIndex)) {
+            return false;
+        }
+
+        Player initialPlayers[2] = {BasePlayers[0], BasePlayers[1]};
+        const uint64_t seed = BruteForceRequest(initialPlayers, hours, minutes, seconds,
+                                                valuesIndex, values, actions);
+        if (foundSeeds != 1 || seed == 0) return false;
+
+        const int prefixTurns = foundTurn + foundTurnOffset;
+        Player players[2] = {BasePlayers[0], BasePlayers[1]};
+        int position = 1;
+        uint64_t nowState = 0;
+        lcg::init(seed, true);
+        BattleEmulator::Main(&position, prefixTurns, actions, players, nullptr,
+                             seed, nullptr, nullptr, -2, &nowState);
+
+        context.seed = seed;
+        context.prefixTurns = prefixTurns;
+        context.root.players[0] = players[0];
+        context.root.players[1] = players[1];
+        context.root.position = position;
+        context.root.nowState = nowState;
+        return true;
     }
 }
 
@@ -1072,6 +1192,206 @@ int main(int argc, char *argv[]) {
     //https://zenn.dev/reputeless/books/standard-cpp-for-competitive-programming/viewer/library-ios-iomanip#3.1-c-%E8%A8%80%E8%AA%9E%E3%81%AE%E5%85%A5%E5%87%BA%E5%8A%9B%E3%82%B9%E3%83%88%E3%83%AA%E3%83%BC%E3%83%A0%E3%81%A8%E3%81%AE%E5%90%8C%E6%9C%9F%E3%82%92%E7%84%A1%E5%8A%B9%E3%81%AB%E3%81%99%E3%82%8B
     //std::cin.tie(0)->sync_with_stdio(0);
 
+    if (argc >= 7 && (std::strcmp(argv[1], "--prove-production-no-kill") == 0 ||
+                      std::strcmp(argv[1], "--prove-production-shortest") == 0 ||
+                      std::strcmp(argv[1], "--probe-production-relaxed") == 0)) {
+        int maxTurns = 0;
+        try {
+            maxTurns = std::stoi(argv[2]);
+        } catch (const std::exception& e) {
+            std::cerr << "invalid production proof horizon: " << e.what() << std::endl;
+            return 2;
+        }
+        if (maxTurns < 0 || maxTurns > rngflow::kMaxPlanTurns) {
+            std::cerr << "invalid production proof horizon" << std::endl;
+            return 2;
+        }
+
+        constexpr int kProofCliTimeLimitMs = 10000;
+        if (std::strcmp(argv[1], "--prove-production-no-kill") == 0) {
+            std::vector<ProductionProofContext> contexts;
+            if (!BuildProductionProofContexts(argc, argv, 3, contexts)) {
+                std::cerr << "failed to build production proof contexts" << std::endl;
+                return 2;
+            }
+
+            const auto started = std::chrono::steady_clock::now();
+            bool anyKillReachable = false;
+            bool allProcessedComplete = true;
+            std::size_t processedContexts = 0;
+            std::uint64_t totalExpanded = 0;
+            std::uint64_t totalGenerated = 0;
+            std::uint64_t totalDuplicates = 0;
+            std::uint64_t totalDominated = 0;
+            std::uint64_t peakFrontier = 0;
+
+            std::cout << "production.matches=" << contexts.size() << std::endl;
+            for (std::size_t contextIndex = 0; contextIndex < contexts.size(); ++contextIndex) {
+                const auto elapsedBefore = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - started).count();
+                if (elapsedBefore >= kProofCliTimeLimitMs) {
+                    allProcessedComplete = false;
+                    break;
+                }
+                const int remainingMs = std::max(
+                    1, kProofCliTimeLimitMs - static_cast<int>(elapsedBefore));
+                const ProductionProofContext &context = contexts[contextIndex];
+                const auto proofStarted = std::chrono::steady_clock::now();
+                const rngflow::ExactKillDecisionResult proof =
+                    rngflow::ProveNoKillWithinBattleDominantHp(context.root, maxTurns, remainingMs);
+                const auto proofElapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - proofStarted).count();
+                ++processedContexts;
+
+                totalExpanded += proof.expandedStates;
+                totalGenerated += proof.generatedStates;
+                totalDuplicates += proof.duplicateStates;
+                totalDominated += proof.dominatedStates;
+                peakFrontier = std::max(peakFrontier, proof.peakFrontier);
+
+                std::cout << "production.match=" << contextIndex
+                          << " seed=0x" << std::hex << context.seed << std::dec
+                          << " prefixTurns=" << context.prefixTurns
+                          << " rootHeroHp=" << context.root.players[0].hp
+                          << " rootEnemyHp=" << context.root.players[1].hp
+                          << " rootPosition=" << context.root.position
+                          << std::endl;
+                std::cout << "proof.match=" << contextIndex
+                          << " complete=" << (proof.complete ? 1 : 0)
+                          << " killReachable=" << (proof.killReachable ? 1 : 0)
+                          << " T=" << proof.firstKillTurn
+                          << " completedNoKillDepth=" << proof.completedNoKillDepth
+                          << " elapsedMs=" << proofElapsedMs
+                          << " expanded=" << proof.expandedStates
+                          << " generated=" << proof.generatedStates
+                          << " duplicates=" << proof.duplicateStates
+                          << " dominated=" << proof.dominatedStates
+                          << " peakFrontier=" << proof.peakFrontier
+                          << " deltaMask=0x" << std::hex << proof.observedLiveTransitionDeltaMask << std::dec
+                          << std::endl;
+                for (int depth = 0; depth <= maxTurns; ++depth) {
+                    if (proof.frontierByDepth[depth] == 0 && proof.generatedByDepth[depth] == 0 &&
+                        proof.duplicatesByDepth[depth] == 0 && proof.dominatedByDepth[depth] == 0) {
+                        continue;
+                    }
+                    std::cout << "proof.match=" << contextIndex
+                              << " layer=" << depth
+                              << " frontier=" << proof.frontierByDepth[depth]
+                              << " generated=" << proof.generatedByDepth[depth]
+                              << " duplicates=" << proof.duplicatesByDepth[depth]
+                              << " dominated=" << proof.dominatedByDepth[depth]
+                              << " nonResourceGroups=" << proof.nonResourceGroupsByDepth[depth]
+                              << " positionStatusGroups=" << proof.positionStatusGroupsByDepth[depth]
+                              << std::endl;
+                }
+
+                if (!proof.complete) {
+                    allProcessedComplete = false;
+                    break;
+                }
+                if (proof.killReachable) {
+                    anyKillReachable = true;
+                    break;
+                }
+            }
+
+            const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - started).count();
+            const bool decisionComplete = anyKillReachable ||
+                (allProcessedComplete && processedContexts == contexts.size());
+            std::cout << "proof.complete=" << (decisionComplete ? 1 : 0)
+                      << " killReachable=" << (anyKillReachable ? 1 : 0)
+                      << " processedMatches=" << processedContexts
+                      << " totalMatches=" << contexts.size()
+                      << " elapsedMs=" << elapsedMs
+                      << " expanded=" << totalExpanded
+                      << " generated=" << totalGenerated
+                      << " duplicates=" << totalDuplicates
+                      << " dominated=" << totalDominated
+                      << " peakFrontier=" << peakFrontier
+                      << std::endl;
+            return decisionComplete && !anyKillReachable ? 0 : 3;
+        }
+
+        ProductionProofContext context{};
+        if (!BuildProductionProofContext(argc, argv, 3, context)) {
+            std::cerr << "failed to build production proof context" << std::endl;
+            return 2;
+        }
+
+        const auto started = std::chrono::steady_clock::now();
+        rngflow::ExactKillDecisionResult proof{};
+        if (std::strcmp(argv[1], "--probe-production-relaxed") == 0) {
+            proof = rngflow::FindKillWitnessBattleRelaxed(
+                context.root, maxTurns, kProofCliTimeLimitMs);
+        } else {
+            proof = rngflow::FindShortestKillBattleDominantHp(
+                context.root, maxTurns, kProofCliTimeLimitMs);
+        }
+        const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - started).count();
+
+        std::cout << "production.seed=0x" << std::hex << context.seed << std::dec
+                  << " prefixTurns=" << context.prefixTurns
+                  << " rootHeroHp=" << context.root.players[0].hp
+                  << " rootEnemyHp=" << context.root.players[1].hp
+                  << " rootPosition=" << context.root.position
+                  << std::endl;
+        std::cout << "proof.complete=" << (proof.complete ? 1 : 0)
+                  << " killReachable=" << (proof.killReachable ? 1 : 0)
+                  << " T=" << proof.firstKillTurn
+                  << " completedNoKillDepth=" << proof.completedNoKillDepth
+                  << " elapsedMs=" << elapsedMs
+                  << " expanded=" << proof.expandedStates
+                  << " generated=" << proof.generatedStates
+                  << " duplicates=" << proof.duplicateStates
+                  << " dominated=" << proof.dominatedStates
+                  << " peakFrontier=" << proof.peakFrontier
+                  << " deltaMask=0x" << std::hex << proof.observedLiveTransitionDeltaMask << std::dec
+                  << std::endl;
+        for (int depth = 0; depth <= maxTurns; ++depth) {
+            if (proof.frontierByDepth[depth] == 0 && proof.generatedByDepth[depth] == 0 &&
+                proof.duplicatesByDepth[depth] == 0 && proof.dominatedByDepth[depth] == 0) {
+                continue;
+            }
+            std::cout << "proof.layer=" << depth
+                      << " frontier=" << proof.frontierByDepth[depth]
+                      << " generated=" << proof.generatedByDepth[depth]
+                      << " duplicates=" << proof.duplicatesByDepth[depth]
+                      << " dominated=" << proof.dominatedByDepth[depth]
+                      << " nonResourceGroups=" << proof.nonResourceGroupsByDepth[depth]
+                      << " positionStatusGroups=" << proof.positionStatusGroupsByDepth[depth]
+                      << std::endl;
+        }
+        if (std::strcmp(argv[1], "--probe-production-relaxed") == 0 &&
+            proof.killReachable && proof.actionCount > 0) {
+            const bool exactReplay = rngflow::ReplayBattleWitnessExact(
+                context.root, proof.actions, proof.actionCount);
+            const auto diagnosis = DiagnoseRelaxedWitnessReplay(
+                context.root, proof.actions, proof.actionCount, maxTurns);
+            std::cout << "relaxed.exactReplay=" << (exactReplay ? 1 : 0)
+                      << " actions=";
+            for (int i = 0; i < proof.actionCount; ++i) {
+                if (i != 0) std::cout << ',';
+                std::cout << proof.actions[i];
+            }
+            std::cout << std::endl
+                      << "relaxed.firstRelaxationBeforeTurn=" << diagnosis.firstRelaxationBeforeTurn
+                      << " firstSemanticDivergenceTurn=" << diagnosis.firstSemanticDivergenceTurn
+                      << " reason=" << diagnosis.reason
+                      << " exactHpBefore=" << diagnosis.exactHpBefore
+                      << " relaxedHpBefore=" << diagnosis.relaxedHpBefore
+                      << " exactHpAfter=" << diagnosis.exactHpAfter
+                      << " relaxedHpAfter=" << diagnosis.relaxedHpAfter
+                      << " exactEnemyHpAfter=" << diagnosis.exactEnemyHpAfter
+                      << " relaxedEnemyHpAfter=" << diagnosis.relaxedEnemyHpAfter
+                      << " exactPositionAfter=" << diagnosis.exactPositionAfter
+                      << " relaxedPositionAfter=" << diagnosis.relaxedPositionAfter
+                      << std::endl;
+        }
+        return proof.complete ? 0 : 3;
+    }
+
     if (argc >= 3 && (std::strcmp(argv[1], "--prove-shortest") == 0 ||
                       std::strcmp(argv[1], "--prove-shortest-dominant-hp") == 0 ||
                       std::strcmp(argv[1], "--prove-no-kill-relaxed") == 0 ||
@@ -1218,20 +1538,6 @@ int main(int argc, char *argv[]) {
         }
         return proof.complete && proof.killReachable ? 0 : 3;
     }
-
-#if defined(OPTIMIZE_MODE)
-
-    int act[350] = {0};
-    int counter = 0;
-    act[counter++] = BattleEmulator::ATTACK_ALLY;
-    act[counter++] = -1;
-    SimpleParameterOptimizer::optimize(BasePlayers, 139924927+2, act, 1000, counter);
-
-    return 0;
-#endif
-
-
-
 
 #ifdef DEBUG2
     uint64_t time1 = 0xa726623;
