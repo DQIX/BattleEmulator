@@ -248,7 +248,7 @@ inline void BattleEmulator::processTurn() {
 bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
                           BattleResult* result,
                           uint64_t seed, const int eActions[350], const int damages[350], int mode,
-                          uint64_t *NowState, bool logicalTurnStart) {
+                          uint64_t *NowState, bool logicalTurnStart, bool stopBeforePresentationTail) {
     bool player0_has_initiative = false;
     int genePosition = 0;
     int exCounter = 0;
@@ -598,6 +598,13 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
         if (Player::isPlayerAlive(players[0]) && Player::isPlayerAlive(players[1])) {
             (*position) += 1;
+        }
+        // Bounded reachability only needs post-action HP on its final layer.
+        // Camera processing does not access Player and therefore cannot change
+        // whether this turn killed the enemy.  Earlier layers still execute the
+        // complete presentation tail so their RNG/presentation state is exact.
+        if (stopBeforePresentationTail) {
+            return false;
         }
         camera::Main(position, actions, NowState, player0_has_initiative, false);
 

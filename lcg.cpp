@@ -40,7 +40,10 @@ void lcg::init(uint64_t seed, bool init) {
     init_mode   = init;
 
     if (init) {
-        GenerateifNeed(ARRAY_SIZE - 3);
+        // Precompute every valid tape entry.  Exact reachability evaluates
+        // transitions concurrently and must never fall back to mutating this
+        // shared cache from a worker near the end of the fixed tape.
+        GenerateifNeed(ARRAY_SIZE - 1);
     }
 }
 

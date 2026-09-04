@@ -11,6 +11,7 @@
 #include "debug.h"
 #include "Genome.h"
 #include "setting.h"
+#include "ExactDecisionProof.h"
 
 #ifdef DEBUG
 
@@ -907,6 +908,38 @@ EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed
 
 int main(int argc, char *argv[]) {
     showHeader();
+
+    if (argc >= 2 && std::strcmp(argv[1], "--prove-exact") == 0) {
+        if (argc != 4) {
+            std::cerr << "usage: " << argv[0] << " --prove-exact <seed> <horizon>" << std::endl;
+            return 1;
+        }
+
+        try {
+            std::size_t seedEnd = 0;
+            std::size_t horizonEnd = 0;
+            const uint64_t seed = std::stoull(argv[2], &seedEnd, 0);
+            const int horizon = std::stoi(argv[3], &horizonEnd, 10);
+            if (seedEnd != std::strlen(argv[2]) || horizonEnd != std::strlen(argv[3]) || horizon < 0) {
+                throw std::invalid_argument("invalid exact proof argument");
+            }
+
+            const auto proof = ExactDecisionProof::Run(BasePlayers, seed, horizon);
+            for (std::size_t depth = 0; depth < proof.frontierSizes.size(); ++depth) {
+                std::cout << "proof layer=" << depth
+                          << " frontier=" << proof.frontierSizes[depth] << std::endl;
+            }
+            std::cout << "D(" << horizon << ")=" << (proof.reachable ? "true" : "false")
+                      << " expanded=" << proof.expandedStates
+                      << " generated=" << proof.generatedTransitions
+                      << " elapsed_ms=" << std::fixed << std::setprecision(3) << proof.elapsedMilliseconds
+                      << std::endl;
+            return 0;
+        } catch (const std::exception &e) {
+            std::cerr << "exact proof error: " << e.what() << std::endl;
+            return 1;
+        }
+    }
 #ifdef DEBUG
     auto t0 = std::chrono::high_resolution_clock::now();
 #endif

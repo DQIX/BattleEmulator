@@ -45,6 +45,8 @@ set(SOURCES
         debug.h
         BattleResult.h
         Genome.h
+        ExactDecisionProof.cpp
+        ExactDecisionProof.h
         EnhancedCostCalculator.cpp
         EnhancedCostCalculator.h
         EnhancedHashCalculator.cpp
@@ -53,6 +55,7 @@ set(SOURCES
         EnhancedHeapQueue.h
         SimpleParameterOptimizer.cpp
         SimpleParameterOptimizer.h
+        ExactDecisionProof.cpp
 )
 
 # マルチスレッド版（multithreading = ON）
