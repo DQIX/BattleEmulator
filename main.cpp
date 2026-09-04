@@ -9,7 +9,7 @@
 #include "lcg.h"
 #include "BattleEmulator.h"
 #include "debug.h"
-#include "ActionOptimizer.h"
+#include "Genome.h"
 #include "setting.h"
 
 #ifdef DEBUG
@@ -495,10 +495,10 @@ namespace {
             turns = foundTurn + foundTurnOffset;
         }
 
-        auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 100000, gene, numThreads);
+        //auto genome =
+        //        ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 100000, gene, numThreads);
 
-        auto turnProcessed = BattleEmulator::getTurnProcessed();
+/*        auto turnProcessed = BattleEmulator::getTurnProcessed();
         BattleResult result1;
         Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
 
@@ -519,12 +519,14 @@ namespace {
         dumpTableMain(result1, genome, seed, turns);
 #endif
 
+
 #ifdef DEBUG
         auto t3 = std::chrono::high_resolution_clock::now();
         auto elapsed_time1 =
                 std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
         PerformanceDebug("Searcher multi", turnProcessed, static_cast<double>(elapsed_time1), 0);
 #endif
+        */
     }
     void BruteForceMainLoop(const Player copiedPlayers[2], uint64_t start, uint64_t end, int turns, int gene[350],
                             int damages[350]) {
@@ -814,10 +816,10 @@ namespace {
             gene[349] = -1;
         }
 
-        auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 100000, gene, 0);
+        //auto genome =
+        //        ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 100000, gene, 0);
 
-        if (genome.turn >= 100) {
+        /*if (genome.turn >= 100) {
             return "SearchRequest failed: turn limit reached.";
         }
 
@@ -834,6 +836,7 @@ namespace {
         delete position;
         delete nowState;
 
+
         std::stringstream ss;
         ss << dumpTable(result1, genome.actions, foundTurn + foundTurnOffset) << "\n";
         ss << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
@@ -845,7 +848,8 @@ namespace {
             ss << genome.actions[i] << ", ";
         }
         ss << "\n";
-        return ss.str();
+        return ss.str();*/
+        return "";
     }
 }
 
