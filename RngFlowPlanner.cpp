@@ -26,6 +26,13 @@
 #endif
 
 namespace rngflow {
+    struct ExactBattleKey {
+        std::uint64_t light = 0;
+        std::uint64_t nowState = 0;
+
+        bool operator==(const ExactBattleKey &) const = default;
+    };
+
     namespace {
         constexpr int kAttackCriticalThreshold = 200;
         constexpr int kDragonCriticalThreshold = 100;
@@ -1963,12 +1970,10 @@ namespace rngflow {
                                            const bool relaxHeroHp)
                 : base_(root), lightCodec_(FromSearchState(root), relaxHeroHp),
                   relaxHeroHp_(relaxHeroHp) {
-                CanonicalizeBoundary(base_);
             }
 
             [[nodiscard]] bool Pack(BattleEmulator::SearchState state,
                                     std::uint64_t &key) const noexcept {
-                CanonicalizeBoundary(state);
                 if (!OmittedFieldsMatchBase(state)) return false;
                 return lightCodec_.Pack(FromSearchState(state), key);
             }
@@ -2007,20 +2012,6 @@ namespace rngflow {
             }
 
         private:
-            static void CanonicalizeBoundary(BattleEmulator::SearchState &state) noexcept {
-                Player &hero = state.players[0];
-                Player &enemy = state.players[1];
-                hero.defence = 1.0;
-                if (!hero.specialCharge) hero.specialChargeTurn = 0;
-                if (!hero.paralysis) {
-                    hero.paralysisLevel = 0;
-                    hero.paralysisTurns = -1;
-                }
-                if (!hero.acrobaticStar) hero.acrobaticStarTurn = 0;
-                if (!enemy.rage) enemy.rageTurns = -1;
-                enemy.specialChargeTurn = 0;
-                state.nowState &= UINT64_C(0x0000000000000f00);
-            }
 
             [[nodiscard]] static bool SameOmittedPlayerFields(const Player &a,
                                                               const Player &b,
@@ -2072,13 +2063,6 @@ namespace rngflow {
             return BattleEmulator::BuildSelectableHeroCommands(state, out);
         }
 
-        [[nodiscard]] bool HasNoDirectEnemyDamageFromSelectedHeroAction(const int action) noexcept {
-            return action == BattleEmulator::DEFENCE ||
-                   action == BattleEmulator::FLEE_ALLY ||
-                   action == BattleEmulator::MEDICINAL_HERBS ||
-                   action == BattleEmulator::HEAL;
-        }
-
         struct BattleWitnessCandidate {
             BattleEmulator::SearchState state{};
             int action = -1;
@@ -2101,9 +2085,6 @@ namespace rngflow {
                 return true;
             }
             if (remainingTurns <= 0 || state.players[0].hp <= 0) return false;
-            if (StaticOptimisticKillTurns(FromSearchState(state), remainingTurns) > remainingTurns) {
-                return false;
-            }
             if ((result.generatedStates & UINT64_C(0x0fff)) == 0 &&
                 std::chrono::steady_clock::now() >= deadline) {
                 result.complete = false;
@@ -2692,7 +2673,6 @@ namespace rngflow {
                 const BattleEmulator::SearchState state = codec.Unpack(packed);
                 const int remainingTurns = turns - depth;
                 const State lightState = FromSearchState(state);
-                if (StaticOptimisticKillTurns(lightState, remainingTurns) > remainingTurns) {
                     if (captureRejected) {
                         const int damageUpper =
                             StaticOptimisticDamageUpperForHorizon(lightState, remainingTurns);
@@ -2712,7 +2692,6 @@ namespace rngflow {
                         }
                     }
                     continue;
-                }
                 std::array<int, 8> actions{};
                 const std::size_t count = BuildBattleProofCandidates(state, actions);
                 for (std::size_t i = 0; i < count; ++i) {
@@ -2837,10 +2816,6 @@ namespace rngflow {
         // init(seed, true) has already materialized the LCG tape.  This guard
         // keeps every proof-thread read below that immutable prefix, so the
         // authoritative transition performs no shared RNG-table writes.
-        constexpr int kPrecomputedLcgLastPosition = 4997;
-        constexpr int kProofTransitionPositionUpper = 64;
-        const bool immutableTape =
-            searchRoot.position + turns * kProofTransitionPositionUpper < kPrecomputedLcgLastPosition;
         constexpr unsigned kMaxProofWorkers = 8;
 
         struct WorkerOutput {
@@ -2880,11 +2855,6 @@ namespace rngflow {
             const std::uint64_t dominatedBefore = result.dominatedStates;
 
             unsigned workerCount = 1;
-            if (immutableTape && frontier.size() >= 4096) {
-                const unsigned hardware = std::max(1u, std::thread::hardware_concurrency());
-                workerCount = std::min<unsigned>(kMaxProofWorkers, hardware);
-                workerCount = std::min<unsigned>(workerCount, static_cast<unsigned>(frontier.size()));
-            }
 
             std::vector<WorkerOutput> workers(workerCount);
             std::atomic<bool> stop{false};
@@ -2908,9 +2878,6 @@ namespace rngflow {
 
                     const BattleEmulator::SearchState state = codec.Unpack(frontier[parentIndex]);
                     const int remainingTurns = turns - depth;
-                    if (StaticOptimisticKillTurns(FromSearchState(state), remainingTurns) > remainingTurns) {
-                        continue;
-                    }
 
                     std::array<int, 8> actions{};
                     const std::size_t count = BuildBattleProofCandidates(state, actions);
@@ -3075,9 +3042,6 @@ namespace rngflow {
                                           ? root.players[0].hp
                                           : DominantParentHp(parentHistory[depth][parentIndex]);
                 const int remainingTurns = turns - depth;
-                if (StaticOptimisticKillTurns(FromSearchState(state), remainingTurns) > remainingTurns) {
-                    continue;
-                }
 
                 std::array<int, 8> actions{};
                 const std::size_t count = BuildBattleProofCandidates(state, actions);
@@ -3189,17 +3153,6 @@ namespace rngflow {
             }
         };
 
-        // This target keeps one process-global LCG tape. BuildProductionProofContexts
-        // has already called init(seed, true), so reads below the precomputed prefix
-        // are immutable and can be shared by proof workers. OPTIMIZE_MODE uses a
-        // thread_local tape, so keep that build single-threaded unless every worker
-        // gets its own initialized tape.
-        constexpr int kPrecomputedLcgLastPosition = 4997;
-        constexpr int kProofTransitionPositionUpper = 64;
-        const bool immutableTape =
-            root.position + turns * kProofTransitionPositionUpper < kPrecomputedLcgLastPosition;
-        constexpr unsigned kMaxProofWorkers = 8;
-
         struct WorkerOutput {
             std::vector<std::uint64_t> next{};
             std::vector<std::uint64_t> nextParents{};
@@ -3241,13 +3194,6 @@ namespace rngflow {
             const std::uint64_t dominatedBefore = result.dominatedStates;
 
             unsigned workerCount = 1;
-#if !defined(OPTIMIZE_MODE)
-            if (immutableTape && frontier.size() >= 4096) {
-                const unsigned hardware = std::max(1u, std::thread::hardware_concurrency());
-                workerCount = std::min<unsigned>(kMaxProofWorkers, hardware);
-                workerCount = std::min<unsigned>(workerCount, static_cast<unsigned>(frontier.size()));
-            }
-#endif
             std::vector<WorkerOutput> workers(workerCount);
             std::atomic<bool> stop{false};
             const auto expandRange = [&](const unsigned workerIndex,
@@ -3273,33 +3219,10 @@ namespace rngflow {
                     state.players[0].hp = depth == 0
                                               ? root.players[0].hp
                                               : DominantParentHp(parentHistory[depth][parentIndex]);
-                    const int remainingTurns = turns - depth;
-                    const State plannerState = FromSearchState(state);
-                    if (StaticOptimisticKillTurns(plannerState, remainingTurns) > remainingTurns) {
-                        continue;
-                    }
-
                     std::array<int, 8> actions{};
                     const std::size_t count = BuildBattleProofCandidates(state, actions);
-                    const int noDirectDamageUpper = StaticOptimisticDamageUpperForHorizon(
-                        plannerState, remainingTurns, true);
-                    int activateStarDamageUpper = -1;
                     for (std::size_t i = 0; i < count; ++i) {
                         const int action = actions[i];
-                        if (HasNoDirectEnemyDamageFromSelectedHeroAction(action) &&
-                            noDirectDamageUpper < state.players[1].hp) {
-                            continue;
-                        }
-                        if (action == BattleEmulator::ACROBATIC_STAR) {
-                            if (activateStarDamageUpper < 0) {
-                                State activatedStarState = plannerState;
-                                activatedStarState.players[0].acrobaticStar = true;
-                                activatedStarState.players[0].acrobaticStarTurn = 6;
-                                activateStarDamageUpper = StaticOptimisticDamageUpperForHorizon(
-                                    activatedStarState, remainingTurns, true);
-                            }
-                            if (activateStarDamageUpper < state.players[1].hp) continue;
-                        }
 
                         BattleEmulator::SearchState child{};
                         if (!BattleEmulator::StepSearchState(state, {action}, &child, finalLayer)) {
@@ -3317,12 +3240,6 @@ namespace rngflow {
                             return;
                         }
                         if (finalLayer) continue;
-
-                        const int childRemainingTurns = remainingTurns - 1;
-                        if (StaticOptimisticKillTurns(
-                                FromSearchState(child), childRemainingTurns) > childRemainingTurns) {
-                            continue;
-                        }
 
                         const int transitionDelta = child.position - state.position;
                         if (transitionDelta >= 0 && transitionDelta < 64) {

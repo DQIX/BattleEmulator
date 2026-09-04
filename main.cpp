@@ -231,9 +231,9 @@ namespace {
         ss << std::string(99, '-') << "\n"; // 区切り線を出力
     }
 
-    std::string dumpTable(BattleResult &result, int32_t gene[350], int PastTurns);
+    std::string dumpTable(BattleResult &result, const int32_t gene[350], int PastTurns);
 
-    std::string dumpTable(BattleResult &result, int32_t gene[350], int PastTurns) {
+    std::string dumpTable(BattleResult &result, const int32_t gene[350], int PastTurns) {
         std::stringstream ss6;
         printHeader(ss6);
         int currentTurn = -1;
@@ -581,19 +581,23 @@ namespace {
      * @param seed テーブル生成と表示に使用されるランダムシード値。
      * @param turns テーブル表示を省略するターン数(リリースバイナリでのみ使用)
      */
-    void dumpTableMain(BattleResult &result1, Genome &genome, uint64_t seed, int turns) {
-        std::cout << dumpTable(result1, genome.actions, turns) << std::endl;
+    void dumpTableMain(BattleResult &result1,const int actions[350], uint64_t seed, int turns) {
+        std::cout << dumpTable(result1, actions, turns) << std::endl;
 
         std::cout << "ver: " << version << ", seed: ";
         std::cout << "0x" << std::hex << seed << std::dec << ", actions: ";
 
         for (auto i = 0; i < 100; ++i) {
-            if (genome.actions[i] == 0 || genome.actions[i] == -1) {
+            if (actions[i] == 0 || actions[i] == -1) {
                 break;
             }
-            std::cout << genome.actions[i] << ", ";
+            std::cout << actions[i] << ", ";
         }
         std::cout << std::endl;
+    }
+
+    void dumpTableMain(BattleResult &result1, Genome &genome, uint64_t seed, int turns) {
+        dumpTableMain(result1, genome.actions, seed, turns);
     }
 
     void PerformanceDebug(const char *name, int turnProcessed, double elapsed_time1, uint64_t seeds) {
@@ -618,6 +622,8 @@ namespace {
         BattleEmulator::ResetTurnProcessed();
 #endif
 
+        lcg::init(seed, true);
+
         int32_t gene[350] = {0};
         auto turns = 0;
         for (int i = 0; i < 349; ++i) {
@@ -631,23 +637,58 @@ namespace {
         if (foundTurn != 0) {
             turns = foundTurn + foundTurnOffset;
         }
-        //auto genome =
-        //        ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 100000, gene, numThreads);
+
 
         auto turnProcessed = BattleEmulator::getTurnProcessed();
         BattleResult result1;
         Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
 
-        lcg::init(seed);
+        int position = 1;
+        uint64_t nowState = 0;
 
-        auto *position = new int(1);
-        auto *nowState = new uint64_t(0);
+        BattleEmulator::Main(&position, turns, gene, players, &result1, seed, nullptr, nullptr, -1,
+                             &nowState);
+
+        dumpTableMain(result1, aActions, seed, 0);
+
+        if (players[0].hp <= 0) {
+            dumpTableMain(result1, aActions, seed, 0);
+            return;
+        }
+
+        std::cout
+    << "turns=" << turns
+    << " seed=0x" << std::hex << seed << std::dec
+    << " heroHp=" << players[0].hp
+    << " enemyHp=" << players[1].hp
+    << " position=" << position
+    << " nowState=" << nowState
+    << std::endl;
+
+
+        auto context = BattleEmulator::SearchState{};
+        memcpy(context.players, players, sizeof(Player) * 2);
+        context.position = position;
+        context.nowState = nowState;
+
+        auto ret = rngflow::ProveNoKillWithinBattleDominantHp(
+            context,
+            20,
+            0
+        );
+
+        //auto genome =
+        //        ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 100000, gene, numThreads);
+
+        auto turnProcessed2 = BattleEmulator::getTurnProcessed();
+        BattleResult result12;
+        Player players2[2] = {copiedPlayers[0], copiedPlayers[1]};
+
+        int position2 = 1;
+        uint32_t nowState2 = 0;
 
         //BattleEmulator::Main(position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
         //                     nowState);
-
-        delete position;
-        delete nowState;
 
 #if defined(MINGW_BUILD)
         //dumpTableMain(result1, genome, seed, 0);
