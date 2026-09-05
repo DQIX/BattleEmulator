@@ -53,6 +53,11 @@ public:
 	int amp[1000] = {};
 	int defenseFlag[1000] = {};
 	uint64_t state[1000] = {};
+	int actorIndex[1000] = {};
+	int actorMp[1000] = {};
+	int aiResourceGateMask[1000] = {};
+	int aiOriginalSlot[1000] = {};
+	int aiResolvedSlot[1000] = {};
 };
 
 #endif //NEWDIRECTORY_BATTLERESULT_H

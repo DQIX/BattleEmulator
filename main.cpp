@@ -800,7 +800,12 @@ int main(int argc, char* argv[]){
 			std::cout << "TRACE record[" << i << "] turn=" << traceResult.turns[i]
 			          << " action=" << traceResult.actions[i]
 			          << " damage=" << traceResult.damages[i]
-			          << " enemy=" << traceResult.isEnemy[i] << '\n';
+			          << " enemy=" << traceResult.isEnemy[i]
+			          << " actor=" << traceResult.actorIndex[i]
+			          << " actorMp=" << traceResult.actorMp[i]
+			          << " aiGate=0x" << std::hex << traceResult.aiResourceGateMask[i] << std::dec
+			          << " originalSlot=" << traceResult.aiOriginalSlot[i]
+			          << " resolvedSlot=" << traceResult.aiResolvedSlot[i] << '\n';
 		}
 	};
 
@@ -873,6 +878,93 @@ int main(int argc, char* argv[]){
 		BattleEmulator::Main(&tracePosition, traceTurns, traceGene, tracePlayers, &traceResult,
 		                     traceSeed, nullptr, nullptr, -1, &traceState, traceTarget, true);
 		printTrace(traceSeed, tracePosition, tracePlayers, traceResult);
+		return 0;
+	}
+
+	if (argc >= 4 && std::string_view(argv[1]) == "--scan-iron-mp-gate-seeds") {
+		const uint64_t startSeed = std::stoull(argv[2], nullptr, 0);
+		const uint64_t count = std::stoull(argv[3], nullptr, 0);
+		const int scanTurns = argc >= 5 ? std::stoi(argv[4], nullptr, 0) : 6;
+		const int heroAction = argc >= 6 ? std::stoi(argv[5], nullptr, 0) : BattleEmulator::DEFENCE;
+		const int heroTarget = argc >= 7 ? std::stoi(argv[6], nullptr, 0) : -1;
+		const int currentSeedPosition = argc >= 8 ? std::stoi(argv[7], nullptr, 0) : 1;
+		const int emitLimit = argc >= 9 ? std::stoi(argv[8], nullptr, 0) : 16;
+		if (scanTurns < 3 || scanTurns > 349) throw std::invalid_argument("iron MP gate scan turns must be 3..349");
+		if (emitLimit < 0) throw std::invalid_argument("iron MP gate emitLimit must be >= 0");
+
+		int32_t scanGene[350] = {};
+		makeDebugGene(scanGene, scanTurns, heroAction);
+		uint64_t matches = 0;
+		int emitted = 0;
+
+		for (uint64_t offset = 0; offset < count; ++offset) {
+			const uint64_t seed = startSeed + offset;
+			if (seed == 0) continue;
+			Player scanPlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
+			BattleResult scanResult;
+			int scanPosition = currentSeedPosition + 1;
+			uint64_t scanState = 0;
+			lcg::init(seed);
+			BattleEmulator::Main(&scanPosition, scanTurns, scanGene, scanPlayers, &scanResult,
+			                     seed, nullptr, nullptr, -1, &scanState, heroTarget);
+
+			for (const int actor : {1, 3}) {
+				int stage = 0;
+				int firstTurn = -1;
+				int shortageTurn = -1;
+				int fallbackTurn = -1;
+				for (int record = 0; record < scanResult.position; ++record) {
+					if (!scanResult.isEnemy[record] || scanResult.actorIndex[record] != actor) continue;
+					const int action = scanResult.actions[record];
+					const int originalSlot = scanResult.aiOriginalSlot[record];
+					const int resolvedSlot = scanResult.aiResolvedSlot[record];
+					const int mp = scanResult.actorMp[record];
+					const int gate = scanResult.aiResourceGateMask[record];
+
+					if (stage == 0 && action == BattleEmulator::KABUFF &&
+					    originalSlot == 4 && resolvedSlot == 4 && mp == 4 && (gate & 0x08) == 0) {
+						stage = 1;
+						firstTurn = scanResult.turns[record];
+						continue;
+					}
+					if (stage == 1 && action == BattleEmulator::KABUFF &&
+					    originalSlot == 4 && resolvedSlot == 4 && mp == 4 && (gate & 0x08) != 0) {
+						stage = 2;
+						shortageTurn = scanResult.turns[record];
+						continue;
+					}
+					if (stage == 2 && action == BattleEmulator::HELM_SPLITTER &&
+					    originalSlot == 4 && resolvedSlot == 3 && mp == 4 && (gate & 0x08) != 0) {
+						stage = 3;
+						fallbackTurn = scanResult.turns[record];
+						break;
+					}
+				}
+
+				if (stage == 3) {
+					++matches;
+					if (emitted < emitLimit) {
+						++emitted;
+						std::cout << "IRON_MP_GATE_CANDIDATE seed=0x" << std::hex << seed << std::dec
+						          << " actor=" << actor
+						          << " firstKabuffTurn=" << (firstTurn + 1)
+						          << " insufficientKabuffTurn=" << (shortageTurn + 1)
+						          << " fallbackHelmTurn=" << (fallbackTurn + 1)
+						          << " finalMp=" << scanPlayers[actor].mp
+						          << " finalGate=0x" << std::hex
+						          << static_cast<unsigned>(scanPlayers[actor].aiResourceGateMask)
+						          << std::dec << " finalPosition=" << scanPosition << '\n';
+					}
+				}
+			}
+		}
+
+		std::cout << "IRON_MP_GATE_SCAN_DONE start=0x" << std::hex << startSeed << std::dec
+		          << " count=" << count
+		          << " turns=" << scanTurns
+		          << " heroAction=" << heroAction
+		          << " currentSeedPosition=" << currentSeedPosition
+		          << " matches=" << matches << '\n';
 		return 0;
 	}
 
@@ -1125,7 +1217,14 @@ int main(int argc, char* argv[]){
 			          << " mirrorTurn=" << traceState.players[0].MagicMirrorTurn
 			          << " buffLevel=" << traceState.players[0].BuffLevel
 			          << " buffTurns=" << traceState.players[0].BuffTurns
-			          << " tension=" << traceState.players[0].TensionLevel << '\n';
+			          << " tension=" << traceState.players[0].TensionLevel
+			          << " ironA.mp=" << traceState.players[1].mp
+			          << " ironA.aiGate=0x" << std::hex
+			          << static_cast<unsigned>(traceState.players[1].aiResourceGateMask)
+			          << " ironB.mp=" << std::dec << traceState.players[3].mp
+			          << " ironB.aiGate=0x" << std::hex
+			          << static_cast<unsigned>(traceState.players[3].aiResourceGateMask)
+			          << std::dec << '\n';
 			for (int i = 0; i < traceResult.position; ++i) {
 				std::cout << "TRACE sequence-record step=" << step
 				          << " record=" << i

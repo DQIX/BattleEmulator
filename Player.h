@@ -53,6 +53,7 @@ struct Player {
     // Keep new state fields at the end: legacy fixtures use positional aggregate
     // initialization for Player and must retain their existing field ordering.
     int MagicMirrorRecoveryTurn = 0;
+    uint8_t aiResourceGateMask = 0;
 
     [[nodiscard]] constexpr bool operator==(const Player&) const = default;
 

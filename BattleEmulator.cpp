@@ -98,6 +98,7 @@ struct EnemySelection {
     int action;
     int target;
     int slot;
+    int originalSlot = -1;
 };
 
 constexpr int kIronActions[6] = {
@@ -138,7 +139,7 @@ inline int selectScheme1Slot(int *position) {
     return 5;
 }
 
-inline bool resolveIronSlot(int slot, int *position, Player players[4], bool guardAlreadyPlanned,
+inline bool resolveIronSlot(int actor, int slot, int *position, Player players[4], bool guardAlreadyPlanned,
                             EnemySelection &selection) {
     switch (slot) {
         case 0: // ゲルニックかばう: handler 159
@@ -160,6 +161,12 @@ inline bool resolveIronSlot(int slot, int *position, Player players[4], bool gua
             selection = {BattleEmulator::HELM_SPLITTER, 0, slot};
             return true;
         case 4: { // スクルト: handler 20, valid encounter group から1つ選ぶ
+            // Judgment 1 only starts enforcing this MP class after the runtime
+            // combat+0x3c bit has been raised by an execution-time shortage.
+            if ((players[actor].aiResourceGateMask & 0x08) != 0 &&
+                players[actor].mp != 255 && players[actor].mp < 6) {
+                return false;
+            }
             int targets[3];
             int count = 0;
             for (int actor = 1; actor < 4; ++actor) {
@@ -184,12 +191,13 @@ inline bool resolveIronSlot(int slot, int *position, Player players[4], bool gua
     }
 }
 
-inline EnemySelection selectIronAction(int *position, Player players[4], bool guardAlreadyPlanned) {
+inline EnemySelection selectIronAction(int actor, int *position, Player players[4], bool guardAlreadyPlanned) {
     const int originalSlot = selectScheme1Slot(position);
     EnemySelection selection{BattleEmulator::ATTACK_ENEMY, 0, -1};
     for (int i = 0; i < 6; ++i) {
         const int slot = kFallbackOrder[originalSlot][i];
-        if (resolveIronSlot(slot, position, players, guardAlreadyPlanned, selection)) {
+        if (resolveIronSlot(actor, slot, position, players, guardAlreadyPlanned, selection)) {
+            selection.originalSlot = originalSlot;
             return selection;
         }
     }
@@ -197,6 +205,7 @@ inline EnemySelection selectIronAction(int *position, Player players[4], bool gu
     (*position)++; // max: 2, lr: 0x02156874
     (*position)++; // range: 3..4, lr: 0x0216139c
     (*position)++; // range: 6..8, lr: 0x021613b0
+    selection.originalSlot = originalSlot;
     return selection;
 }
 
@@ -769,13 +778,19 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         for (const int actor : order) {
             if (!Player::isPlayerAlive(players[actor]) || actor == 0) continue;
             if (actor == 1 || actor == 3) {
-                plannedIron[actor] = selectIronAction(position, players, guardAlreadyPlanned);
+                plannedIron[actor] = selectIronAction(actor, position, players, guardAlreadyPlanned);
                 plannedIronValid[actor] = true;
                 DEBUG_TRACE_IF(traceBoundaries,
                                std::cout << "TRACE iron-plan turn=" << counterJ
                                          << " actor=" << actor
                                          << " action=" << plannedIron[actor].action
-                                         << " target=" << plannedIron[actor].target << '\n');
+                                         << " target=" << plannedIron[actor].target
+                                         << " originalSlot=" << plannedIron[actor].originalSlot
+                                         << " resolvedSlot=" << plannedIron[actor].slot
+                                         << " mp=" << players[actor].mp
+                                         << " gate=0x" << std::hex
+                                         << static_cast<unsigned>(players[actor].aiResourceGateMask)
+                                         << std::dec << '\n');
                 if (plannedIron[actor].action == WHIPPING_BOY) {
                     guardAlreadyPlanned = true;
                     players[2].guardedBy = actor;
@@ -877,7 +892,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             }
         };
 
-        auto addResult = [&](const int action, const int damage, const bool isEnemy) {
+        auto addResult = [&](const int action, const int damage, const bool isEnemy,
+                             const int actor = -1, const int originalSlot = -1,
+                             const int resolvedSlot = -1) {
             if (mode != -1) return;
             int atkTurn = players[0].AtkBuffTurn > 0 ? players[0].AtkBuffTurn
                 : (players[0].AtkBuffLevel != 0 ? 0 : -1);
@@ -888,6 +905,15 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             BattleResult::add(result, action, damage, isEnemy, atkTurn, buffTurn, mirrorTurn,
                               counterJ - 1, player0_has_initiative, ehp, ahp, tmpState,
                               players[0].specialChargeTurn, players[0].mp, defenseFlag);
+            if (result != nullptr) {
+                const int pos = result->position - 1;
+                result->actorIndex[pos] = actor;
+                result->actorMp[pos] = actor >= 0 && actor < 4 ? players[actor].mp : -1;
+                result->aiResourceGateMask[pos] = actor >= 0 && actor < 4
+                    ? players[actor].aiResourceGateMask : 0;
+                result->aiOriginalSlot[pos] = originalSlot;
+                result->aiResolvedSlot[pos] = resolvedSlot;
+            }
         };
 
         auto enemyDamageIsTracked = [](const int action) noexcept {
@@ -1175,7 +1201,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             traceBoundary("start FUN_021ebd9c_ct");
                             const int basedamage = callAttackFun(INACTIVE_ENEMY, position, players, actor, 0, NowState);
                             traceBoundary("end FUN_021ebd9c_ct");
-                            addResult(INACTIVE_ENEMY, basedamage, true);
+                            addResult(INACTIVE_ENEMY, basedamage, true, actor);
                             const int validation = validateEnemy(INACTIVE_ENEMY, basedamage);
                             if (validation < 0) return false;
                             if (validation > 0) return true;
@@ -1191,7 +1217,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         const int basedamage = callAttackFun(selection.action, position, players, actor,
                                                              selection.target, NowState);
                         traceBoundary("end FUN_021ebd9c_ct");
-                        addResult(selection.action, basedamage, true);
+                        addResult(selection.action, basedamage, true, actor,
+                                  selection.originalSlot, selection.slot);
                         if (basedamage > 0 && selection.target >= 0 && selection.target < 4) {
                             Player::reduceHp(players[selection.target], basedamage);
                         }
@@ -1215,7 +1242,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                                 traceBoundary("start FUN_021ebd9c_ct");
                                 const int basedamage = callAttackFun(INACTIVE_ENEMY, position, players, 2, 0, NowState);
                                 traceBoundary("end FUN_021ebd9c_ct");
-                                addResult(INACTIVE_ENEMY, basedamage, true);
+                                addResult(INACTIVE_ENEMY, basedamage, true, 2);
                                 const int validation = validateEnemy(INACTIVE_ENEMY, basedamage);
                                 if (validation < 0) return false;
                                 if (validation > 0) return true;
@@ -1231,7 +1258,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             const int basedamage = callAttackFun(selection.action, position, players, 2,
                                                                  selection.target, NowState);
                             traceBoundary("end FUN_021ebd9c_ct");
-                            addResult(selection.action, basedamage, true);
+                            addResult(selection.action, basedamage, true, 2,
+                                      selection.originalSlot, selection.slot);
                             if (basedamage > 0 && selection.target >= 0 && selection.target < 4) {
                                 Player::reduceHp(players[selection.target], basedamage);
                             }
@@ -2666,6 +2694,11 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
         case BattleEmulator::KABUFF: {
             const bool insufficientMp = players[attacker].mp != 255 && players[attacker].mp < 6;
             const int kabuffDefender = insufficientMp ? attacker : defender;
+            if (insufficientMp) {
+                // Execution-time MP shortage raises the judgment-1 availability
+                // bit used by future isCanActionTaken calls for this resource class.
+                players[attacker].aiResourceGateMask |= 0x08;
+            }
             if (!insufficientMp && players[attacker].mp != 255) {
                 players[attacker].mp -= 6;
             }
