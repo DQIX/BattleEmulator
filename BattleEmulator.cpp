@@ -2663,16 +2663,18 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             baseDamage = 0;
             resetCombo(NowState);
             break;
-        case BattleEmulator::KABUFF:
-            if (players[attacker].mp != 255) {
-                players[attacker].mp = std::max(0, players[attacker].mp - 6);
+        case BattleEmulator::KABUFF: {
+            const bool insufficientMp = players[attacker].mp != 255 && players[attacker].mp < 6;
+            const int kabuffDefender = insufficientMp ? attacker : defender;
+            if (!insufficientMp && players[attacker].mp != 255) {
+                players[attacker].mp -= 6;
             }
             (*position) += 2;
             (*position)++; // 関係ない
             (*position)++; // 会心判定
             (*position)++; // 回避
 
-            baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[defender].def);
+            baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[kabuffDefender].def);
             if (baseDamage == 0) {
                 baseDamage = lcg::getPercent(position, 2); //0x021e81a0
             }
@@ -2680,7 +2682,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 (*position)++; //不明 0x021e54fc
             }
 
-            if (Player::isPlayerAlive(players[defender]) && players[defender].BuffLevel < 2) {
+            if (!insufficientMp && Player::isPlayerAlive(players[defender]) && players[defender].BuffLevel < 2) {
                 players[defender].BuffLevel++;
                 players[defender].BuffTurns = 7;
                 RecalculateBuff(players, defender);
@@ -2689,6 +2691,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             baseDamage = 0;
             resetCombo(NowState);
             break;
+        }
         case BattleEmulator::WHIPPING_BOY:
             (*position) += 5;
             baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[defender].def);
