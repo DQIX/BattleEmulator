@@ -1196,7 +1196,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 #if defined(gerunikku)
                         if (!plannedIronValid[actor]) break;
                         traceBoundary("start FUN_02158dfc");
-                        if (EnemyLosesActionToCharm(position)) {
+                        const bool losesActionToCharm = EnemyLosesActionToCharm(position);
+                        (*position)++; // max: 100, lr: 0x02159b10
+                        if (losesActionToCharm) {
                             traceBoundary("end FUN_02158dfc");
                             traceBoundary("start FUN_021ebd9c_ct");
                             const int basedamage = callAttackFun(INACTIVE_ENEMY, position, players, actor, 0, NowState);
@@ -1210,7 +1212,6 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             traceBoundary("end FUN_021594bc");
                             break;
                         }
-                        (*position)++; // max: 100, lr: 0x02159b10
                         const EnemySelection selection = plannedIron[actor];
                         traceBoundary("end FUN_02158dfc");
                         traceBoundary("start FUN_021ebd9c_ct");
@@ -1238,6 +1239,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             if (!Player::isPlayerAlive(players[2]) || !Player::isPlayerAlive(players[0])) break;
                             traceBoundary("start FUN_02158dfc");
                             if (EnemyLosesActionToCharm(position)) {
+                                (*position)++; // max: 100, lr: 0x02159b10
                                 traceBoundary("end FUN_02158dfc");
                                 traceBoundary("start FUN_021ebd9c_ct");
                                 const int basedamage = callAttackFun(INACTIVE_ENEMY, position, players, 2, 0, NowState);
@@ -2936,6 +2938,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     }
                 }
 
+
                 if (baseDamage != 0 && (Id & 0xffff) == UPWARD_SLICE) {
                     (*position)++; // 0x021e34e8??
                 }
@@ -2960,6 +2963,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     tmp *= players[defender].defence;
                 }
                 baseDamage = static_cast<int>((tmp));
+
 
                 if (baseDamage != 0 && (Id & 0xffff) == BattleEmulator::HELM_SPLITTER) {
                     // 実ROM順序: final damage -> 防御低下判定 -> 被ダメージ状態解除 -> 共通後処理。

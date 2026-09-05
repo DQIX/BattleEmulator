@@ -1217,10 +1217,13 @@ int main(int argc, char* argv[]){
 			          << " mirrorTurn=" << traceState.players[0].MagicMirrorTurn
 			          << " buffLevel=" << traceState.players[0].BuffLevel
 			          << " buffTurns=" << traceState.players[0].BuffTurns
+			          << " magicRes=" << traceState.players[0].magicResistanceLevel
 			          << " tension=" << traceState.players[0].TensionLevel
 			          << " ironA.mp=" << traceState.players[1].mp
 			          << " ironA.aiGate=0x" << std::hex
 			          << static_cast<unsigned>(traceState.players[1].aiResourceGateMask)
+			          << " gerunikuMirror=" << std::dec << traceState.players[2].hasMagicMirror
+			          << " gerunikuMirrorTurn=" << traceState.players[2].MagicMirrorTurn
 			          << " ironB.mp=" << std::dec << traceState.players[3].mp
 			          << " ironB.aiGate=0x" << std::hex
 			          << static_cast<unsigned>(traceState.players[3].aiResourceGateMask)
