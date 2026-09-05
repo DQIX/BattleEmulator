@@ -56,6 +56,9 @@ PoCでは補足仕様の第2・13〜16節の固定Box、mode、外包の保存�
 本書の一般的な説明から、任意のInvariant関数や任意pcの補完を追加してはならない。
 最も難しいのは、この生成・検査と、小さい分割で上限を締められるかであり、DPの実装ではない。
 
+2026-09-06補足。Supportをrefine後のpartitionに対して再構築する手順と、
+rule_idを変更不可の登録versionに結びつける手順を明記する。定理や近似の方向の変更ではない。
+
 **1. 何を判定するか**
 
 固定seed、観測済み入力を反映した正確なターン境界状態を `S0` とする。
@@ -73,6 +76,16 @@ NをS0からの勝利手順の長さとすれば `H=N-1` である。
 戦闘開始からのターン数と、途中局面から使う残りターン数を混同しない。
 固定した観測条件下での結果を、未固定の前半手順まで含む最短性へ一般化しない。
 同一のseed・S0・規則・観測条件で `d(N-1)=偽` と `d(N)=true` がそろったときだけ最短Nと返す。
+
+規則の同一性は、人間向けの名前ではなく `rule_id=(registry_namespace, rule_version)` で管理する。
+一つのrule_idには、固定RuleProgram、数値設定・native関数、対応profile、正確な再実行との対応を
+一つの変更不可の登録内容として結びつける。いずれかを変えたら新しいrule_versionを登録する。
+証明書から登録内容を上書きしたり、同じ表示名の別versionを組にしたりしない。
+登録と照合の模擬コードは補足仕様第16節、現ソースに未定義のRuleProgramの型と具体例は同第3節に置く。
+
+共通の問題は `Problem=(rule_id, seed, 正確なS0, 開始ターンt0, 観測・行動制約)` とする。
+S0はp・NowState・無効タイマーを含む生の値で照合し、証明用に省略したmodeだけでは比較しない。
+N・H・partition・価格は共通問題の外に置く。refineしただけで規則のversionを変える必要はない。
 
 入力seedや局面が複数候補なら、全候補について偽を示して初めて入力全体を偽にできる。
 観測がターン途中で終わる場合も、未観測の行動を勝手に確定させない。
@@ -162,7 +175,7 @@ S=(p,c,E,A,M,I)
 
 と表す。`c` は、眠り・麻痺・inactive・必殺・アクロ・怒り・カメラ等の制御情報と必要な残りターン。
 PoCで必要な実状態や再実行用の状態は、可逆な `uint64_t[3]` で保持してよい。
-ハッシュ値を状態として扱わない。
+保存した実状態から、元の各値を完全に復元できることを要求する。
 証明用のmode化で無効タイマー等を省く写像は、この可逆保存とは別である。
 横展開で資源や状態を追加する場合、実状態の保存容量も再検証する。
 
@@ -635,6 +648,10 @@ DP用の辺数が小さいことから、生成と検査まで軽いとは推論
 未展開の補完部分の詳細が必要になった場合だけ、そのpcから記号実行を再開する。
 セルを分けるたびに一ターン全体を生成し直す必要はない。再利用の条件は補足仕様の第7節に定める。
 
+ただし、Supportは新partitionの初期セルから全層を再構築する。古いセル番号の支持をコピーしない。
+検査済みの全継続出力先と、そこから必要になる全合法行動の根を確定してから、新しい辺でDPを計算する。
+補完の詳細化で行き先が変わる場合も同様である。局所更新式の再利用と、支持・接続の再構築を混同しない。
+
 直近の条件だけでは足りないときは、数ターン分の更新式に沿って条件を逆向きに引く。
 例えば次に必要な条件が `E'<=227`、直前の式が `E'=E-16` なら、
 その前の条件は `E<=243`。
@@ -712,41 +729,40 @@ theta=0 でDPを一回実行
 **13. 実装担当者へ渡す擬似コード**
 
 ```text
-decide_bound(S0, seed, H, limits, shared_deadline, checked_cache):
-    validate_exact_input_and_supported_rules()
-    if enemyHP(S0)==0: return TRUE
-    if heroHP(S0)==0 or H==0: return FALSE_WITH_TRIVIAL_CERTIFICATE
+decide_bound(ctx, H, limits, shared_deadline, checked_cache):
+    (S0, seed) = exact_input_from(ctx.Problem)
+    validate_exact_input_and_supported_rules(ctx, H)
+    if enemyHP(S0)==0: return kernel_check_initial_success(ctx, H)
+    if heroHP(S0)==0 or H==0: return kernel_check_trivial_false(ctx, H)
 
     # 入力・勝利手順取得からの共通deadlineを使い、ここで15秒を取り直さない。
-    tape = original_rng_tape(seed)
+    tape = registered_rng_tape(ctx.bundle, seed)
     partition = initial_predicate_partition(max_cells_per_position=K)
-    envelope = kernel_construct_envelopes(S0, H, fixed_rule_program)
+    envelope = kernel_construct_envelopes(ctx, H)
 
-    coverage = build_guard_certificates(
-        partition, original_battle_rules,
+    proof_provider = guard_certificate_provider(
+        ctx, checked_cache, shared_deadline,
         max_detailed_cases_per_action=J,
         max_completion_terms_per_action=C,
         total_proof_work_limit=V,
         total_proof_bytes_limit=limits.proof_bytes,
         complete_unexpanded_cases_with_upper_edges=true)
-    checked_coverage = verify_program_traces(
-        coverage, fixed_rule_program, envelope,
-        kernel_constructs_support_and_required_roots=true,
-        check_whole_output_before_intersection=true)
-    model = derive_cell_edges(checked_coverage, partition)
+    (Support, checked_coverage, model) = rebuild_support(
+        ctx, H, partition, envelope, proof_provider, checked_cache)
 
     repeat within the shared time / work budgets:
         theta = next_bounded_coefficient_candidate()
         (Q,u,v,w) = checked_nonnegative_integer_coefficients(theta)
 
-        B[0][live_cells] = NEGATIVE_INFINITY
+        B = new_empty_layer_tables(Support)
+        B[0][Support[H]] = NEGATIVE_INFINITY
         B[0][GOAL] = 0
 
         for h in 1..H:
             B[h][GOAL] = 0
             prepare_maxima_for_completion_edges(B[h-1])
 
-            for q in live_cells:
+            for q in Support[H-h]:
                 best = NEGATIVE_INFINITY
                 for covered edge tau in model.edges_at_elapsed_turn(q, H-h):
                     if tau leads only to failure: continue
@@ -757,7 +773,7 @@ decide_bound(S0, seed, H, limits, shared_deadline, checked_cache):
                     best = max(best, value)
                 B[h][q] = best
 
-        root = B[H][project(S0)]
+        root = B[H][project(S0, partition)]
         if root==NEGATIVE_INFINITY:
             candidate_is_false = true
         else:
@@ -766,51 +782,66 @@ decide_bound(S0, seed, H, limits, shared_deadline, checked_cache):
         # Every multiplication inside checked_sum is checked too.
         # An undefined/unbounded upper value cannot establish candidate_is_false.
         if candidate_is_false:
-            certificate = (input, partition, coverage, Q,u,v,w,B)
-            if independently_verify_local_inequalities(certificate):
-                return FALSE_WITH_CERTIFICATE
+            certificate = (ctx.Problem, H, partition, checked_coverage.proof_records, Q,u,v,w,B)
+            if independently_verify_local_inequalities(ctx, certificate):
+                return FALSE_WITH_CERTIFICATE(ctx.problem_key, H, certificate)
             return MODEL_OR_ARITHMETIC_ERROR
 
         P = a_maximizing_abstract_goal_path()
-        if exact_replay(S0, commands(P)) wins within H:
-            return TRUE_WITH_REPLAY
+        replay = exact_replay(ctx, commands(P), shared_deadline)
+        if replay is checked winning within H:
+            return TRUE_WITH_REPLAY(ctx.problem_key, replay)
 
         if selected_unexpanded_completion_on(P) and proof_work_budget_remains:
-            resume_and_verify_selected_checkpoint()
-            restrict_cached_guards_and_reconnect_cells()
+            resume_and_verify_selected_checkpoint(ctx, P, proof_provider, checked_cache)
+            (Support, checked_coverage, model) = rebuild_support(
+                ctx, H, partition, envelope, proof_provider, checked_cache)
             restart_coefficient_LP_for_changed_graph()
             continue
 
         add_affine_constraint_from(P)
         if refinement_is_selected_or_exact_price_lower_bound_is_insufficient:
-            refine_a_separating_predicate_from(P)
-            restrict_cached_guards_and_reconnect_cells()
+            partition = refine_a_separating_predicate_from(P, partition)
+            (Support, checked_coverage, model) = rebuild_support(
+                ctx, H, partition, envelope, proof_provider, checked_cache)
             restart_coefficient_LP_for_changed_graph()
             # Never reuse old LP lower bounds as bounds for a refined graph.
 
     return UNKNOWN_WITH_BOUND_AND_BUDGET_REPORT
 ```
 
+`rebuild_support` は補足仕様第14節の手順である。毎回全層のSupportを空にして、
+S0の属する新partitionの葉から、全詳細葉・補完の継続出力先と必要根を前向きに構築する。
+`proof_provider` は要求された根の証明を供給する生成側の窓口で、必要根や空判定を決めるAPIではない。
+適合する検査済みガードの領域制限は使えるが、不足する根は生成・検査するか、許可された補完で覆う。
+最終検査では提出証明書から必要根を読み直し、欠落は拒否する。出力をEnvelopeで削る前の包含検査も必須である。
+Support・checked_coverage・modelは再構築完了後に同時に差し替え、旧DPと補完用の最大表は破棄して再計算する。
+必要な行き先が次層のSupportやDP表にない場合は構築エラーであり、存在しない辺や負の無限大として扱わない。
+この再構築にも共通deadline・累積V・byte予算を使い、打切り時はUNKNOWNとする。
+自明な結果にもctx.problem_key・対象H・検査記録を持たせ、通常の検査済み結果と同じ形式で返す。
+
 上の手続きは一つのHを調べる。最短性を返す外側の手続きは次とする。
 
 ```text
 prove_minimum(Problem, candidate_commands, limits):
     deadline = now + limits.total_time  # PoCでは最大15秒。入力受理から計時する。
-    (S0, seed) = exact_input_from(Problem)
-    checked_cache = new_empty_kernel_cache(Problem)
-    validate_exact_input_and_supported_rules()
+    ctx = bind_problem(Problem)         # 補足仕様第16節。不変な登録内容を束縛する。
+    (S0, seed) = exact_input_from(ctx.Problem)
+    checked_cache = new_empty_kernel_cache(ctx.problem_key)
     if enemyHP(S0)==0: return OPTIMAL(0)
 
-    witness = obtain_and_exactly_replay_candidate(Problem, candidate_commands, deadline)
+    witness = obtain_and_exactly_replay_candidate(ctx, candidate_commands, deadline)
     if no checked winning witness: return UNKNOWN_WITH_AVAILABLE_BOUNDS
     N = first_winning_turn(witness)
 
     repeat within deadline:
-        result = decide_bound(S0, seed, N-1, limits, deadline, checked_cache)
+        result = decide_bound(ctx, N-1, limits, deadline, checked_cache)
         if result is checked FALSE:
-            assert witness and result have the same Problem
+            assert witness.problem_key == result.problem_key == ctx.problem_key
+            assert result.H == first_winning_turn(witness)-1
             return OPTIMAL(N, witness, result.certificate)
         if result is checked TRUE:
+            assert result.problem_key == ctx.problem_key
             witness = result.witness
             N = first_winning_turn(witness)  # 必ず以前のNより小さい。
             continue
@@ -819,6 +850,9 @@ prove_minimum(Problem, candidate_commands, limits):
 ```
 
 手順取得は最短性の証明の信用基盤に含めず、その再実行だけを検査する。
+`problem_key` は登録照合済みrule_idを含むProblemの全フィールドの比較用表現である。
+再実行・被覆検査・最終判定には同じctx.bundleを渡し、途中で表示名から別の規則を引き直さない。
+別実行の検査済みフラグは信用せず、同じ登録内容で再実行・再検査する。
 証明済みの `d(h)=偽` と長さNの勝利手順があれば、途中でも `h+1<=最短ターン数<=N` を返せる。
 `h=N-1` へ届いていなければ最短確定としない。
 
@@ -830,12 +864,12 @@ prove_minimum(Problem, candidate_commands, limits):
 
 否定証明には以下の1〜5、最短性の確定には6も必要である。
 
-1. 入力、seed、合法行動、初期状態、残りターン数が対象問題と一致する。
-2. kernelがS0の外包包含、セル分割、支持集合、全必要根の合法遷移被覆を検査する。
+1. rule_idの不変な登録内容と、seed・生のS0・開始ターン・観測・行動制約を照合する。数値設定やprofileの上書きを認めず、証明のHも確認する。
+2. kernelがS0の外包包含とセル分割を検査し、提出されたpartitionで支持集合を初期セルから再構築して、全必要根の合法遷移を検査する。
 3. 全詳細葉・補完の継続出力が次の外包に入り、終端を含めて資源が非負である。出力を切り落としていない。
 4. `B0(live)=-infinity`、全hで `B[h][G]=0` を確認し、各層で必要な全辺について `B[h][q] >= Wtau+B[h-1][q']` が成立する。
 5. 初期状態で `Q*E0 > B[H][q0]+u*A0+v*M0+w*I0`、または抽象成功経路が存在しない。
-6. `H=N-1` とし、同じ入力・規則で正確に再実行した長さNの勝利手順がある。
+6. `H=N-1` とし、同じ登録規則・Problemで正確に再実行して初めてNターンで撃破する勝利手順がある。
 
 項目2を、生成済み辺一覧への検査だけで済ませてはならない。
 補足仕様の検査器が、根領域、各pcの命令、分岐の両側、乱数読み、更新式、出力包含を再計算する。
@@ -871,7 +905,7 @@ prove_minimum(Problem, candidate_commands, limits):
 | 実状態 | 必要な入力・再実行用だけ。各 `uint64_t[3]` |
 
 `hotel[position]` は直接添字、セルは葉番号、辺は連続配列でよい。
-大量の実状態ハッシュ表、親付きの個体履歴、無制限のPareto集合は不要。
+大量の実状態の照合表、親付きの個体履歴、無制限のPareto集合は不要。
 同じ完全な辺の記述を統合するなら、整列して完全比較できる。
 
 数百ms〜15秒を論じる際は、以下を同じ計時に含める。

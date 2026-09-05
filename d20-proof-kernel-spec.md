@@ -14,6 +14,9 @@
 v1のPoCは `yo2_be` のままとする。利用者が指定した前半系2例の調査結果と拡張条件を第17・18節に追記した。
 前半系の約18ブランチ全体を調査済みとはしない。後半系への適用は対象外である。
 
+2026-09-06追記。partition変更後のSupport再構築と、規則を変更不可のversionで識別する手順を明記する。
+これは生成器の古い情報の再利用と、別規則の証明の組合せを防ぐ補足であり、健全性の定理の変更ではない。
+
 最大の難所は、DPへ渡す一ターンの遷移を、正しい領域と更新式に分解することにある。
 次に難しいのが、それを粗く近似した際の架空の接続を、少数の分割で除けるかである。
 DPの辺評価回数だけを根拠に、全体が数百ms〜15秒に収まるとは見積もれない。
@@ -26,6 +29,11 @@ DPの辺評価回数だけを根拠に、全体が数百ms〜15秒に収まる�
 証明生成器から渡された命令列を、無条件に戦闘の定義として受け取ってはいけない。
 検査器側に、対象戦闘の一ターンの規則を固定した `RuleProgram` を置く。
 各命令は固定された位置 `pc` を持ち、分岐先、呼び出す関数、更新先もこの規則で決まる。
+
+現行のC++には、この仕様の `RuleProgram` の型・登録器・検査器はまだ定義されていない。
+第3節の模擬コードは将来の実装形式を示すもので、既存APIを呼べば既に動くという意味ではない。
+「固定」の単位は命令列だけでなく、数値設定・対応profile・native関数・正確な再実行との対応を含む。
+その内容を変更不可の `rule_id` に結びつける登録手順は第16節に定める。
 
 信用する基盤は次の三つ。
 
@@ -166,6 +174,102 @@ Frame = (pc, call_stack, RNG_position, selected_command,
 
 小さい固定回数のループや一段のカウンター呼び出しは、その規則上の順序で処理する。
 一般的なSMT処理系や、任意のC++を解析する仕組みは要求しない。
+
+**RuleProgramの模擬定義と、現ソースとの対応例。**
+規則側は次のような読み取り専用データとする。証明書側のSTEP・SPLIT等とは別の型である。
+
+```text
+RuleProgram = frozen {
+    instruction_format_version,
+    entry_pc,
+    instructions: [Instruction(opcode, typed_operands, prescribed_successors)],
+    subroutine_entries,
+    source_correspondence,       # 元の比較・更新・呼出しとpcの対応
+    explicit_rule_changes       # 選択合法性、FLEE実行時ゲート等
+}
+
+Instructionのopcodeは本節の命令表に限定する。
+資源式・制御式・比較は第2節の型だけを使う。
+乱数・native関数は登録済みの識別子で指定し、引数は確定した値だけを渡す。
+CALLはこのprogram内の固定entry_pcへ進む。任意のC++関数への呼出しではない。
+FINISHは一ターンの終了、RETURNは呼出し元の規定pcへの復帰であり、区別する。
+```
+
+以下の局所例のラベルは固定pcの説明用表記である。複数操作を含む行は順番を保存した命令列へ展開する。
+`max` によるclampも比較・真偽の更新へ展開し、全非空領域を検査する。
+一ターン全体の登録には全呼出し先と全caseが必要であり、この抜粋だけを完成したRuleProgramとして登録しない。
+
+`ProcessRage` は、ダメージDが既に具体値に確定した後、敵HPを書き換える前に呼ばれる。
+敵最大HP456、非負のD、整数安全性を検査した領域で、次のように表せる。
+
+```text
+R00: before = current(E)                 # 自座標の式の保存。Eは更新しない。
+R01: after = max(0, before-D)
+R02: if after <= 227:
+    R03: if before >= 228:
+        R04: if Rage == OFF:
+            R05: SkipRng(1)
+            R06: r = ReadRng(INT_RANGE, 2, 4)
+            R07: Rage = ON(r)
+        else:
+            R08: SkipRng(1)
+    else:
+        R09: if after <= 113:
+            R10: if before >= 114:
+                R11: if Rage == OFF: SkipRng(2)
+                else:               SkipRng(1)
+R12: RETURN
+```
+
+`after<=227` と `after<=113` は、現ソースの `hp_after*2<456` と `hp_after*4<456` に対応する。
+R03の真側ではR09へ進まないため、両閾値を一度に越えても25%側の追加消費は発生しない。
+R06〜R07は、生の `rage=true`、残り値抽選、`rageTurns` 代入を一つのON更新へmode化した表記である。
+乱数関数はRageを読まず、この代入途中で中断を認めない。生の再実行では元の代入順を保持する。
+
+カウンターの呼出し元は、非回避側で次の順序になる。
+
+```text
+COUNTER_HIT: CALL(R00, D)
+COUNTER_HP:  E = max(0, E-D)             # Player::reduceHpの減算とclamp
+COUNTER_RET: RETURN(value=0)             # 敵から味方への戻りダメージは0
+```
+
+戻り値0を「敵HPも変化しない」と解釈しない。次の味方行動や終端検査は更新後のEを読む。
+通常の味方攻撃では、怒り判定後にも追加乱数・必殺判定があり、最後に `Main` が敵HPを減らす。
+`process7A8` の `hp>D` と、味方攻撃側の `hp-D>=0` も別の比較pcとして残す。
+HEALのMP2消費はcaseの後部、CRACKのMP3消費はcaseの冒頭にあり、共通の入口へ移動させない。
+
+FLEEの修正は、味方行動枠の入口で次のように表す。眠りを含む入力は先にPoCのprofile検査で拒否する。
+
+```text
+ALLY_GATE: action = selected_command
+    if action == FLEE_ALLY and Paralysis == CLEAR and Inactive == false:
+        goto ALLY_SLOT_DONE             # 行動可能なFLEEの既存skip部分
+    goto ALLY_STATUS
+
+ALLY_STATUS:
+    if Paralysis != CLEAR:
+        CALL(PARALYSIS_GATE)            # 減算・解除抽選。actionはPARALYSISかCURE_PARALYSIS
+    else:
+        SkipRng(1)
+    if Inactive:
+        Inactive = false
+        if action != PARALYSIS and action != CURE_PARALYSIS:
+            action = INACTIVE_ALLY
+    D = CALL(ALLY_CASE[action])         # 各枝が固定entryへ進む、登録済みswitch。
+    actionsへ実行したactionを追加
+    CALL(APPLY_ALLY_RESULT, action, D)  # Mainの味方回復または敵HP減算。
+    CALL(ALLY_POST_ACTION)              # 両者生存時の消費とアクロ減算・失効。
+    goto ALLY_SLOT_DONE
+
+ALLY_SLOT_DONE: 次の行動枠、または規定のターン末尾・カメラ処理へ進む
+```
+
+ここでのCALL先は元の処理を分解して登録する命令列であり、状態を隠して読むnative命令ではない。
+敵先攻で麻痺したFLEEは解除に成功してもCURE_PARALYSISの行動になり、選択時のFLEEへ戻さない。
+行動可能なFLEEのskip部分は、味方case・味方行動配列への追加・その枠のアクロ減算を通らない。
+敵行動や規定のターン末尾・カメラまでskipする意味ではなく、各行動枠前の生死判定も元の位置に置く。
+このゲートは第13節の明示的な修正規則であり、現在の `Main` に既に実装されているとは扱わない。
 
 証明記録のノードは、例えば次を持つ。
 
@@ -357,11 +461,16 @@ clampや制御値の更新も、検査済みの式を使って逆像を計算す
 規則、seed、開始pc、制御条件、資源式、証明された領域との包含が必要である。
 規則がターン番号を読む場合は、その番号から決まる行動回数等の実行条件も一致させる。
 第18節の奇偶で敵行動回数が変わる例では、同じpでも別の局所遷移になる。
-保存する識別子は検査済み記録への添字でよく、実状態ハッシュ表は不要。
+保存する識別子は検査済み記録への添字でよく、実状態の照合表は不要。
 
 再利用のために古い証明やセルの写しを無制限に残すこともしない。
 証明ノード・派生した辺・更新式の記録に、総byte数と総個数の上限を持たせる。
 共有する記録と、現在の分割に依存する参照を分けて計上する。
+
+partitionをrefineしたら、Supportも新partitionに対してS0から再構築する。
+再利用する詳細葉 `(D,F)` と、セル番号に依存する支持・根一覧・接続は別の寿命を持つ。
+第14節の `rebuild_support` で新しい全出力先と全必要根を確定してから、DPを再計算する。
+補完の詳細化で行き先集合が変わった場合も同じ手順を使い、旧DP・区間最大表・LP下界を引き継がない。
 
 検査済みのガードと資源増減ベクトルは、非負の価格を変えても利用できる。
 この検査を価格候補ごとに繰り返す必要はない。
@@ -684,21 +793,52 @@ native関数の消費上限も登録し、kernelが同じ有限の制御フロ�
 MP・薬草が負になる葉を「Invariantの外なので無視」とすると、消費を無視した偽の証明になる。
 成功葉についても非負を検査するのは、DPの証明が撃破時の `Phi(S')>=0` を使うためである。
 
-必要な根は、次の前向き手順でkernelが決める。
+必要な根は、次の前向き手順でkernelが決める。`ctx` は第16節の同一問題と不変な登録規則を保持する。
+この手順を初回だけでなく、partitionのrefine後にも呼ぶ。
 
 ```text
-Support[0] = { (p0, partitionの中でalpha(S0)を含む唯一の葉) }
+rebuild_support(ctx, H, partition, envelope, proof_provider, checked_cache):
+    S0 = ctx.Problem.S0; p0 = S0.p
+    assert envelope == kernel_construct_envelopes(ctx, H)
+    assert alpha(S0) in envelope[0]
+    validate_partition_covers_BaseBox(partition)
+    Support[0..H] = empty_sets()       # 旧partitionのbit列・葉番号をコピーしない。
+    checked_coverage = empty_root_records()
+    model = empty_layered_edges()
+    Support[0] = { (p0, partitionの中でalpha(S0)を含む唯一の葉) }
 
-for t = 0 .. H-1:
-    for (p,cell) in Support[t]:
-        for b in 固定された8行動:
-            D = Envelope[t] ∩ Cell(cell) ∩ Selectable(b)
-            if D is empty: continue
-            D全体の証明を検査し、全詳細葉・全補完から出力を導く
-            継続出力がEnvelope[t+1]に入ることを、交差で削る前に検査
-            全出力先の(p',cell')をSupport[t+1]へ追加
-            成功・失敗出力は、それぞれの終端へ分類
+    for t = 0 .. H-1:
+        for (p,cell) in Support[t]:
+            for b in ctx.bundle.profileの固定された8行動:
+                D = envelope[t]のp断面 ∩ Cell(partition,cell) ∩ Selectable(ctx,t,b)
+                if D is empty: continue
+                proof = proof_provider.required_root(ctx,H,partition,t,p,cell,b,D,checked_cache)
+                checked = verify_root(ctx,t,p,b,D,proof,partition,envelope)  # 第5節。欠落は拒否。
+                outputs = derive_all_checked_outputs(checked, partition)
+                継続出力がenvelope[t+1]に入ることを、交差で削る前に検査
+                全継続出力先の(p',cell')をSupport[t+1]へ追加
+                成功・失敗出力は、資源の非負を検査してそれぞれの終端へ分類
+                checked_coverageへこの根の検査記録を保存
+                modelへ新partitionで導いた全詳細辺・全補完を保存
+    return (Support, checked_coverage, model)
 ```
+
+生成時の `proof_provider` は、kernelから要求された根を、適合するキャッシュの領域制限、
+不足部分の記号実行、または適用可能な補完で満たす。古いSupportにないことを欠落の理由にできない。
+最終verifierでは同じ入口を提出証明書の読取専用providerに替え、必要な根がなければ拒否する。
+いずれも次の根を決めるのはkernelである。生成器のSupportや「検査済み」印をそのまま受け取らない。
+
+例えば旧セル7の `A∈[1,65]` を、新セル7の `[1,32]` と新セル8の `[33,65]` に分けたとする。
+検査済みの継続出力に同じpで `A'=20` と `A'=60` があれば、次層の支持は両セルを含む必要がある。
+旧bit列のセル7だけを残すとセル8の必要根を落とす。葉番号を一つ改名するだけでは再構築にならない。
+
+Support・根一覧・セル接続の再利用キーは少なくとも
+`(ctx.problem_key, H, partition_version, coverage_version)` とする。
+二つのversionは分割木と被覆・行き先の変更ごとに更新する実行内の世代番号で、同じ番号の内容を変更しない。
+DPと区間最大表にはさらに現在の整数価格が対応する。規則のversionとは別の識別情報である。
+構築途中のSupportやmodelはDPへ公開せず、全必要根を処理してから一組として差し替える。
+再構築が時間・容量予算を超えたらUNKNOWNとし、古いSupportへ戻してFALSEを出さない。
+同じ規則の詳細葉を部分領域へ制限して使える条件は第7節のままであり、戦闘実行をすべてやり直す指示ではない。
 
 セル一個の支持は、その中の全状態が到達したという主張ではない。
 全状態を根として多めに調べることは安全である。最初のセルでも同じ扱いにする。
@@ -708,7 +848,7 @@ H層目の継続状態は、その先の行動を検査する必要がない。
 
 この手順についてtで帰納すれば、実際に到達する全継続状態がSupportとEnvelopeに入り、
 そこから選べる全行動が覆われる。根・出力のいずれにも到達可能性を判定する未知の関数はない。
-乱数位置の外包はtで変わるため、DPの層と対応させる。Hを変えた証明に古い支持集合をそのまま流用しない。
+乱数位置の外包はtで変わるため、DPの層と対応させる。Hまたはpartitionを変えた証明に古い支持集合をそのまま流用しない。
 規則実行の葉そのものは第7節の条件で再利用できる。
 
 | 担当 | 責任 |
@@ -811,13 +951,73 @@ mode表、pc別の行動済み情報と乱数消費上限を含める。
 観測済みのt0ターンを足して表示する場合は `t0+N` とし、固定された観測条件下での最短性と明記する。
 この局面の結果を、別の開始局面や未固定の前半手順まで含む最短性へ一般化しない。
 
+**rule_idは変更不可の登録versionとする。**
+`rule_id = (registry_namespace, rule_version)` とし、一つの識別子は次の固定内容にだけ対応させる。
+人間向けの表示名、ブランチ名、可変の「最新版」別名をrule_idの代用にしない。
+
+| 固定する内容 | 登録に含めるもの |
+| --- | --- |
+| RuleProgram | 命令形式のversion、全pc・分岐・定数・呼出し先、終了位置、明示的な修正規則 |
+| 数値設定とnative対応 | 使用する乱数・ダメージ関数の固定実体、引数・副作用・乱数消費の契約、整数幅・変換・丸め、浮動小数の演算順序、対象ビルドとコンパイル設定 |
+| 対応profile | 資源軸・能力値・合法行動・入力制約、modeの値とbit対応、alphaと省略条件、外包の構築規則、補完の許可pcと登録表 |
+| 正確な再実行との対応 | 使用する再実行入口と固定実体、ターン境界・開始ターン・行動指定の解釈、生状態とRuleProgramの対応表 |
+
+これらを一つの `RuleBundle` とする。profileの名称だけ、関数名だけ、数値設定の自由な上書きは受け付けない。
+例えばHPの比較を一箇所変更した場合も、乱数関数やmodeのbit対応だけを変更した場合も、新しいrule_versionを登録する。
+現行の `Main` を指す入口と、FLEE修正規則を反映した入口は同じものとして登録しない。
+数値設定は現在のC++の `double` という型名だけでは固定できず、実際に使う演算と関数群の対応確認が必要である。
+
+```text
+# 信用する規則の登録側の模擬コード。証明生成器からは呼べない。
+register_rule(rule_id, reviewed_bundle):
+    assert rule_id is not already registered
+    assert reviewed_bundleのC++対応・修正点・native契約の監査が完了している
+    check_closed_program_and_profile(reviewed_bundle)  # 全case、型、呼出し先、補完表等
+    registry.insert_new_only(rule_id, deep_freeze(reviewed_bundle))
+
+# 判定要求の入口。TRUE再実行とFALSE検査へ、この同じctxを渡す。
+bind_problem(Problem):
+    bundle = registry.lookup_exact(Problem.rule_id)     # 未登録なら未対応
+    assert 実際の実行入口・native関数・数値環境がbundleの固定内容と一致する
+    validate_exact_input(Problem, bundle.profile)
+    return frozen Context(Problem, bundle, problem_key=exact_problem_fields(Problem))
+```
+
+登録済みの内容を上書き・再割当てするAPIは設けない。別の登録表から同じrule_idを持ち込む場合も、
+対応する構造化された登録内容を完全比較し、不一致なら設定エラーとして拒否する。
+この照合は意味の同値性を自動証明するものではなく、監査済みの同じ内容を参照するための手続きである。
+現状ではRuleProgram全体の実装・登録は未完了であり、本書の局所例に実際の登録済みversionを割り当てたとはしない。
+
 最短性の証明書は、次の二つと共通の入力識別情報を持つ。
 
 ```text
-Problem = (rule_id, 数値計算の設定, seed, 正確なS0, 観測・行動制約)
+Problem = (rule_id, seed, 正確なS0, 開始ターンt0, 観測・行動制約)
 TRUE    = Nターン以内のコマンド列と、同じ規則での再実行結果
 FALSE   = H=N-1、セル分割、被覆・補完、整数価格、DP不等式
 ```
+
+数値設定とprofileはrule_idの登録内容から得る。証明書に説明用の写しを持たせる場合も完全一致を要求する。
+`exact_problem_fields` は固定書式で各フィールドを比較し、S0にはp・NowState・生のPlayer値を含める。
+無効タイマーを省いた `alpha(S0)` で代用せず、構造体のpaddingやポインタのアドレスも比較対象にしない。
+開始ターンはS0内のターン情報との一致も検査する。N・H・partition・価格・探索予算は共通Problemには含めない。
+したがってrefineや価格変更はrule_idを変えず、前節のpartition・coverageの世代だけを更新する。
+
+```text
+ctx = bind_problem(requested_Problem)
+if enemyHP(ctx.Problem.S0)==0: return OPTIMAL(0)
+assert TRUE.Problemの全フィールド == ctx.problem_key
+assert FALSE.Problemの全フィールド == ctx.problem_key
+witness = exact_replay(ctx, TRUE.commands)             # 保存された勝利表示を信用しない。
+if witness is not checked winning: reject
+N = witnessの最初の撃破ターン
+assert FALSE.H == N-1
+checked_false = verify_false(ctx, FALSE)              # 提出partitionでSupportも再構築。
+if checked_false accepted:
+    return OPTIMAL(N)
+```
+
+別実行の「検査済み」フラグや表示名一致だけで組を受理しない。両側を同じ不変なbundleへ束縛して検査する。
+表示名が同じでもrule_versionが違うTRUE/FALSEは組にせず、現在の規則で改めて再実行・再検査が必要である。
 
 TRUE側は、各ターンの選択合法性、敵先攻後の実行時状態、乱数位置、最初の撃破を検査する。
 近似したHPやmodeの代表値による再実行では合格にしない。
@@ -897,6 +1097,8 @@ RNG位置数Pは `H*Rmax+1` 以下の外包から支持を絞り、Hを20に固�
 - 生の無効タイマーが異なる二状態は、定義域内なら同じmode遷移になる。麻痺の負の有効タイマーはCLEARと区別する。
 - 出力をEnvelopeで切り落とす証明、成功時にMPが負の証明を拒否する。
 - 補完の行き先に含まれるセルをSupportから一個消すと、必要な根の欠落として拒否する。
+- セル分割で葉番号が再使用されても、新しい両出力先からSupportを再構築し、片方の必要根を欠く証明は拒否する。
+- 表示名が同じでRuleProgram・数値設定・profileのいずれかが異なる登録versionの組を拒否する。同じversionへの上書きも拒否する。
 - 許可されていない途中pcの補完、済んだカウンターの追加、消費済みMPの払い戻しを拒否する。
 - 量子化前だけ不等式が成立する候補や、別の入力・規則の勝利手順との組を拒否する。
 
@@ -907,12 +1109,13 @@ PoCの合格条件は、正確な入力ごとの `d(N-1)=偽` と `d(N)=真` の
 
 **17. 指定された前半系2例で、効果の型と減算位置を確認する**
 
-追加調査で読んだソースは、次の4ファイルだけである。ブランチの先端を読み、過去の版へは遡っていない。
+前回の追加調査で読んだソースは、次の4ファイルだけである。ブランチの先端を読み、過去の版へは遡っていない。
+今回のSupport・rule_idの補足では、この二例の再取得は行っていない。
 
 | 参照した先端 | 指定ファイル |
 | --- | --- |
-| ローカル `bilyouma_new_arugo`：`eae244b3b21899601127717565bc15d06745a063` | `BattleEmulator.cpp`, `Player.h` |
-| `origin/zilyadama_new_arugo`：`ca0e389e1f920009634f8553c32b02d2824d6821` | `BattleEmulator.cpp`, `Player.h` |
+| 前回調査時のローカル `bilyouma_new_arugo` の先端 | `BattleEmulator.cpp`, `Player.h` |
+| 前回調査時の `origin/zilyadama_new_arugo` の先端 | `BattleEmulator.cpp`, `Player.h` |
 
 探索アルゴリズム、指定外のヘッダ・初期値・乱数・カメラ実装、`deep*.md` は追加調査していない。
 以下は指定4ファイルから分かる拡張条件であり、各ブランチ全体の登録検査が済んだという意味ではない。
