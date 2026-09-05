@@ -771,6 +771,11 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             if (actor == 1 || actor == 3) {
                 plannedIron[actor] = selectIronAction(position, players, guardAlreadyPlanned);
                 plannedIronValid[actor] = true;
+                DEBUG_TRACE_IF(traceBoundaries,
+                               std::cout << "TRACE iron-plan turn=" << counterJ
+                                         << " actor=" << actor
+                                         << " action=" << plannedIron[actor].action
+                                         << " target=" << plannedIron[actor].target << '\n');
                 if (plannedIron[actor].action == WHIPPING_BOY) {
                     guardAlreadyPlanned = true;
                     players[2].guardedBy = actor;
@@ -1645,7 +1650,14 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 // Selector success performs these three actor checks even when Block/Evade
                 // forced the final damage to zero. Measured Block+success seed 0x43 consumes
                 // exactly these six RNG calls while skipping 0x02158ac4/0x021e54fc.
+                // Dead actors are not checked. On a lethal hit the caller has not reduced HP
+                // yet, so exclude the defender that this damage is about to kill as well.
+                const bool defenderWillDie = !kaihi && baseDamage >= players[defender].hp;
                 for (int rageActor = 1; rageActor < 4; ++rageActor) {
+                    if (!Player::isPlayerAlive(players[rageActor]) ||
+                        (rageActor == defender && defenderWillDie)) {
+                        continue;
+                    }
                     (*position)++; // rage判定, max: 100, lr: 0x021eb8c8
                     (*position)++;//(void)lcg::intRangeRand(position, 2, 4); // max: 3, lr: 0x021eb8f0
                 }
