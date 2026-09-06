@@ -134,6 +134,13 @@ public:
     static void resetStartTurn();
     static int getStartTurn();
 
+    // Proof-kernel native gateway.  These wrappers expose only the reviewed,
+    // resource-independent numeric routines; they do not expose Player,
+    // NowState, Frame, or any other mutable battle state.
+    static int proofNativePhysicalDamage(int *position, int atk, int def);
+    static int proofNativeTypeC(int *position, double min, double max, double base);
+    static int proofNativeTypeD(int *position, double difference, double base);
+
 private:
     static int ProcessMagicBurst(int *position);
 

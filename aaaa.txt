@@ -1,0 +1,354 @@
+ある開始列Zを入れた時に、そのアルゴリズムを使用して、将来のwitnessを求められるというところは閉じてる？ 例えばposition、nowstate、開始行動列をrootとすれば、それの拡張でアルゴリズムを適応し、100ms~15秒以内に勝利列を得るという話(私の前提が弱かった)
+
+そこは、今の仕様だと**半分しか閉じてない**。あなたの前提を今の形まで強めるなら、私はさっきの「PoC実装GO」を少し修正する。
+
+あなたの真の要求をこう読む。
+
+> 初期状態から既に確定している開始列 `Z` がある。
+> `Z` を正確に実行して得られる `position / NowState / Player / turn` をrootとし、そこから先をこのアルゴリズムで探索・証明して、**100ms〜15秒程度を目標に将来の勝利suffix witness `W` を実際に生成する**。
+> 最終出力は `Z ++ W`。さらに可能ならそのsuffixの最短性も `d(N-1)=false` で証明する。
+
+この要求なら、**root化までは閉じているが、witness生成器が閉じていない**。
+
+まずroot化はかなり綺麗にできる。仕様は最初から `S0` を「固定seed、観測済み入力を反映した正確なターン境界状態」としていて、途中局面をrootとして扱える。 kernel側も途中局面について「過去の戦闘開始からの到達可能性を逆に証明する必要はなく、指定された正確なS0からの命題を扱う」と明記している。
+
+だから例えば、
+
+```text
+initial state S_init
+      |
+      | exact replay Z
+      v
+S_Z = {
+    position,
+    NowState,
+    Player[0],
+    Player[1],
+    turn,
+    ...
+}
+      |
+      v
+Problem_Z
+```
+
+とすればよい。
+
+むしろ `Z` 自体を抽象DPの中に残す必要はない。`Z` をexact replayして得た**生の正確な `S_Z`** を新しいrootにすれば、既存の
+
+```text
+Support[0] = {
+    (p_Z, project(alpha(S_Z), Partition[p_Z]))
+}
+```
+
+からそのまま始められる。`rebuild_support` は既に任意の正確なS0から開始する形になっている。
+
+なので
+
+> 「Zを固定した問題へこの数学を適用できるか」
+
+は **YES**。
+
+問題はその次。
+
+現在の `prove_minimum` は実際には、
+
+```text
+witness = obtain_and_exactly_replay_candidate(
+    ctx, candidate_commands, deadline)
+
+if no checked winning witness:
+    return UNKNOWN
+```
+
+から始まっている。
+
+つまり厳密には、
+
+> **まず勝利candidateが何かしら手元にある**
+
+ことを基本形としている。
+
+kernel仕様には一応、
+
+> 「候補がなければ、候補生成器や抽象経路から手順を求める」
+
+とは書いてある。
+
+でも、ここが仕様上の穴。
+
+**その「候補生成器」がアルゴリズムとして定義されていない。**
+
+さらに `decide_bound` 内には、
+
+```text
+P = a_maximizing_abstract_goal_path()
+replay = exact_replay(ctx, commands(P))
+if replay wins:
+    return TRUE_WITH_REPLAY
+```
+
+というwitness取得経路はある。
+
+ただし、これは「witness探索アルゴリズムとして完全」ではない。
+
+なぜなら `a_maximizing_abstract_goal_path()` が最大化しているのは、
+
+**実勝利確率でも、実現可能性でも、最短witnessらしさでもない。**
+
+証明用の
+
+$$
+\sum W_\tau
+$$
+
+を最大にする**最も楽観的な抽象成功経路**。
+
+こいつはむしろ「FALSE証明を邪魔している最悪の架空経路を見つける」ためのもの。
+
+だから、
+
+```text
+実在する勝利列 W がある
+
+しかし
+
+max-weight abstract path P1 = fake
+↓ refine
+P2 = fake
+↓ refine
+P3 = fake
+...
+time out
+```
+
+は普通にあり得る。
+
+実際、現在の仕様自身も最後は
+
+```text
+return UNKNOWN_WITH_BOUND_AND_BUDGET_REPORT
+```
+
+としている。
+
+つまり
+
+$$
+d(H)=true
+$$
+
+であっても、
+
+**現在のアルゴリズムがH以内の実witnessを必ず取り出すことは証明されていない。**
+
+ここはかなり重要。
+
+今までの仕様の主目的は、
+
+```text
+既知 witness
+      +
+d(N-1)=false の証明
+      =
+OPTIMAL
+```
+
+だった。
+
+あなたが今言っているXは一段強くて、
+
+```text
+prefix Z
+   ↓
+exact root S_Z
+   ↓
+アルゴリズム自身が future witness W を発見
+   ↓
+必要なら W より短いものがないことも証明
+   ↓
+Z ++ W
+```
+
+になってる。
+
+これは**同じ世界線上の自然な拡張**ではあるけど、現在の3文書では最後の「witnessを自力で必ず/実用的に取りに行く部分」がブラックボックスになっている。
+
+特に仕様中の
+
+> 候補がなければ、候補生成器や抽象経路から手順を求める
+
+は、設計仕様としては弱い。
+
+「どう求めるのか」がないから。
+
+なので今の状態を表にするとこう。
+
+| 要求                                       | 現仕様                 |
+| ---------------------------------------- | ------------------- |
+| `Z` をexact replayする                      | **閉じている**           |
+| `Z` 終端を正確なroot `S_Z` にする                 | **閉じている**           |
+| `position/NowState/Player/turn` をrootに持つ | **閉じている**           |
+| rootから全合法未来をabstract graphで覆う            | **閉じている**           |
+| `d(H)=false` を証明する                       | **閉じている**           |
+| 抽象候補をexact replayしてTRUE確認                | **閉じている**           |
+| 既知candidateをより短いwitnessへ更新               | **閉じている**           |
+| candidateなしからfuture witnessを自力生成         | **未完**              |
+| `d(H)=true` ならwitnessを確実に抽出              | **未完**              |
+| witness生成込み100ms〜15秒をPoC目標にする            | **文言はあるがアルゴリズム未定義** |
+
+で、ここは巨大な別方式を追加する必要はないと思う。
+
+この証明系をそのまま使って、**search modeを明示的に1本足す**のが自然。
+
+たとえば概念上、
+
+```text
+extend_prefix(Problem_initial, Z, limits):
+    S_Z = exact_replay_prefix(Z)
+
+    ctx_Z = bind_problem(
+        same rule_id,
+        same seed,
+        exact S_Z,
+        start_turn_after_Z,
+        future action constraints
+    )
+
+    W = find_winning_suffix(ctx_Z, limits)
+
+    if W found:
+        exact replay W from S_Z
+        return Z ++ W
+
+    return UNKNOWN
+```
+
+がまず必要。
+
+そして `find_winning_suffix` が今欠けている。
+
+ここで大事なのは、**FALSE証明器を捨てて別の全探索を作る必要はない**こと。
+
+既存のabstract graph / refinementをそのまま「候補生成」に使える。
+
+ただし目的関数を、
+
+```text
+証明を邪魔する最大weight pathを1本だけ見る
+```
+
+だけにしてはいけない。
+
+少なくとも、
+
+```text
+abstract success pathを候補として取得
+→ exact replay
+    ├─ win → witness
+    └─ fake → 最初の不一致をrefine
+→ graph再構築
+→ 次のabstract success path
+```
+
+という**witness-oriented loop**を仕様化する必要がある。
+
+これなら今あるCEGARっぽい構造とほぼ同じ。
+
+そして重要なのは結果の三値化。
+
+```text
+WIN(W)       実witnessを得た
+PROVED_FALSE d(H)=false証明を得た
+UNKNOWN      budget切れ
+```
+
+にすべき。
+
+つまりroot `S_Z` とhorizon Hに対して、
+
+$$
+\operatorname{Solve}(S_Z,H)
+$$
+
+が
+
+```text
+WIN(commands)
+FALSE(certificate)
+UNKNOWN
+```
+
+を返す。
+
+これが一番きれい。
+
+そして `WIN(W)` はexact replay済みなので、
+
+$$
+d(H\mid S_Z)=true
+$$
+
+の証拠。
+
+`FALSE(C)` は今までのmax-plus証明で、
+
+$$
+d(H\mid S_Z)=false
+$$
+
+の証拠。
+
+この形なら「探索」と「不可能証明」が同じroot・同じRuleProgramを共有する。
+
+ただし、もう一点。
+
+**100ms〜15秒以内に必ずwitnessが取れる、という数学的保証までは現実的に要求しない方がいい。**
+
+今のFALSE側と同じで、
+
+```text
+300ms
+2s
+15s
+```
+
+を累積budgetとして、
+
+```text
+WIN / FALSE / UNKNOWN
+```
+
+のどれかを返すPoCにするのが筋。
+
+現在の仕様もこの予算を「達成保証ではなく初期打切り設定」と明記している。
+
+だから強いXは、
+
+> `Z` から始めて100ms〜15秒のbudget内で、可能ならfuture witnessを自力で生成する。
+> 同じ機構で不可能性も証明する。
+> budget内でどちらも確定しなければUNKNOWN。
+
+が正確。
+
+もしあなたの意図がさらに強く、
+
+> **解が存在する入力なら15秒以内に必ず見つける**
+
+なら、それは今の資料では全く証明されてないし、かなり別の性能保証になる。
+
+でも、
+
+> **既知witnessを事前条件にせず、Zからfuture witness探索もこのPoCの第一級機能にする**
+
+という意味なら、**今の仕様には明確に1セクション足りない**。
+
+なのでさっきの最終判定を更新すると、
+
+**数学的false証明kernel：GO。**
+**prefix Zをrootにする構造：GO。**
+**既知witness前提の最短性PoC：GO。**
+**Zだけからfuture witnessを自力生成するPoC：まだ仕様未完。**
+
+ここ、あなたの指摘でかなり重要な抜けが見えた。Xが「証明」だけじゃなくて**実際に将来列を作るアルゴリズム**なら、実装開始前にこのwitness-generation loopだけは仕様へ入れた方がいい。

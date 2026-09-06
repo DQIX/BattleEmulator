@@ -11,7 +11,7 @@
 #include "debug.h"
 #include "Genome.h"
 #include "setting.h"
-#include "ExactDecisionProof.h"
+#include "BattleInitialPlayers.h"
 
 #ifdef DEBUG
 
@@ -699,25 +699,6 @@ namespace {
 }
 
 
-constexpr Player BasePlayers[2] = {
-    // プレイヤー1
-    {
-        setting::Ally_MAX_HP, setting::Ally_MAX_HP, 61, 61, 66, 66, setting::ALLY_SPEED, setting::ALLY_SPEED, 29, setting::ALLY_CURRENT_MP, // 最初のメンバー
-        setting::ALLY_CURRENT_MP, false, false, 0, false, 0, -1,
-        // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-        8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-        false, -1, 0, -1, 0, false, 1, 1, 1, -1, 0, -1, false, 2, false, -1, -1, 7, false
-    }, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
-
-    // プレイヤー2
-    {
-        setting::ENEMY_MAX_HP, setting::ENEMY_MAX_HP, 56, 56, 58, 58, setting::ENEMY_SPEED, setting::ENEMY_SPEED, 0, 255, // 最初のメンバー
-        255, false, false, 0, false, 0, -1,
-        // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-        0, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-        false, -1, 0, -1, 0, false, 0, 0, 0, -1, 0, -1, false, 2, false, -1, -1, 7, false
-    } // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
-};
 
 
 #if defined(MINGW_BUILD)
@@ -908,38 +889,6 @@ EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed
 
 int main(int argc, char *argv[]) {
     showHeader();
-
-    if (argc >= 2 && std::strcmp(argv[1], "--prove-exact") == 0) {
-        if (argc != 4) {
-            std::cerr << "usage: " << argv[0] << " --prove-exact <seed> <horizon>" << std::endl;
-            return 1;
-        }
-
-        try {
-            std::size_t seedEnd = 0;
-            std::size_t horizonEnd = 0;
-            const uint64_t seed = std::stoull(argv[2], &seedEnd, 0);
-            const int horizon = std::stoi(argv[3], &horizonEnd, 10);
-            if (seedEnd != std::strlen(argv[2]) || horizonEnd != std::strlen(argv[3]) || horizon < 0) {
-                throw std::invalid_argument("invalid exact proof argument");
-            }
-
-            const auto proof = ExactDecisionProof::Run(BasePlayers, seed, horizon);
-            for (std::size_t depth = 0; depth < proof.frontierSizes.size(); ++depth) {
-                std::cout << "proof layer=" << depth
-                          << " frontier=" << proof.frontierSizes[depth] << std::endl;
-            }
-            std::cout << "D(" << horizon << ")=" << (proof.reachable ? "true" : "false")
-                      << " expanded=" << proof.expandedStates
-                      << " generated=" << proof.generatedTransitions
-                      << " elapsed_ms=" << std::fixed << std::setprecision(3) << proof.elapsedMilliseconds
-                      << std::endl;
-            return 0;
-        } catch (const std::exception &e) {
-            std::cerr << "exact proof error: " << e.what() << std::endl;
-            return 1;
-        }
-    }
 #ifdef DEBUG
     auto t0 = std::chrono::high_resolution_clock::now();
 #endif

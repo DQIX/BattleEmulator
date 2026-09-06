@@ -57,13 +57,13 @@ DPの辺評価回数だけを根拠に、全体が数百ms〜15秒に収まる�
 ```text
 HEALの選択条件：MP>=2
 CRACKの選択条件：MP>=3
-眠り・麻痺中のFLEE禁止、および行動実行時の再判定
+FLEEはMainのskipTurnをそのまま使い、味方status処理より先に判定
 敵先攻時の状態異常と、その後の味方行動
 カウンターによる敵HP更新と、その後の味方行動
 v1では初期状態が眠っておらず、対象行動が眠りを書き込まないこと
 ```
 
-FLEEの旧skipTurnを、そのままこの規則として取り込まない。
+FLEEの `skipTurn` は現 `Main` の規則としてそのまま取り込む。
 未定義の眠りの動作も推測で埋めない。未対応なら、検証済みの上限で覆うか未判定とする。
 v1では眠りを含む入力を未対応とする。眠りなしを保証できる対象は第13節に限定する。
 
@@ -224,7 +224,7 @@ RuleProgram = frozen {
                        typed_parameters, typed_result, declared_reads, declared_writes,
                        instructions)],
     source_correspondence,       # 元の比較・更新・呼出しとpcの対応
-    explicit_rule_changes       # 選択合法性、FLEE実行時ゲート等
+    explicit_rule_changes       # 現C++との差分が実際にある場合の明示規則
 }
 Pc = (routine_id, instruction_index)
 Instruction = tagged_union(opcode, typed_operands, prescribed_successors)
@@ -251,7 +251,7 @@ RuleProgramは命令と対応表を保持する不変データに限定する。
 | CellConnector / SupportBuilder（kernel） | 検査済みのガード・更新・補完をpartitionsへ接続し、全必要根を要求する。命令を変更せず、RuleProgramにセル番号や価格を埋め込まない |
 | 証明生成器・価格DP | 許可形式の分割・展開・価格を提案し、検査後の辺を使う。登録規則、必要root、合法性を差し替えない |
 | WitnessCandidateIterator（生成側） | 同じ検査済みグラフから有限予算で候補コマンド列を列挙する。本体仕様第13節のL・順序・重複管理を持ち、RuleProgramやFALSE用modelを変更しない |
-| ExactReplayAdapter | RuleBundleに固定した生状態の再実行入口へつなぐ。FLEE等の明示的な修正を含む対応を監査する。記号実行の代表点で代用しない |
+| ExactReplayAdapter | RuleBundleに固定した生状態の再実行入口へつなぐ。現C++との差分が登録されている場合はその対応も監査する。記号実行の代表点で代用しない |
 
 規則作成用moduleは、次の単位でroutineを提供する。一つのroutineが行動種別の全switchを抱える必要はない。
 moduleの分割と、後述するroutine単位のcall graph検査は別である。
@@ -425,12 +425,12 @@ COUNTER_RET: RETURN(value=0)             # 敵から味方への戻りダメー�
 `process7A8` の `hp>D` と、味方攻撃側の `hp-D>=0` も別の比較pcとして残す。
 HEALのMP2消費はcaseの後部、CRACKのMP3消費はcaseの冒頭にあり、共通の入口へ移動させない。
 
-FLEEの修正は、味方行動枠の入口で次のように表す。眠りを含む入力は先にPoCのprofile検査で拒否する。
+FLEEは、現 `Main` の味方行動枠の入口を次のように表す。眠りを含む入力は先にPoCのprofile検査で拒否する。
 
 ```text
 ALLY_GATE: action = prepared_command
-    if action == FLEE_ALLY and Paralysis == CLEAR and Inactive == false:
-        goto ALLY_SLOT_DONE             # 行動可能なFLEEの既存skip部分
+    if action == FLEE_ALLY:
+        goto ALLY_SLOT_DONE             # MainのskipTurn。status処理より先
     goto ALLY_STATUS
 
 ALLY_STATUS:
@@ -452,10 +452,10 @@ ALLY_SLOT_DONE: RETURN                  # TurnFlowの規定の次枠・ターン
 ```
 
 ここでのCALL先は元の処理を分解して登録する命令列であり、状態を隠して読むnative命令ではない。
-敵先攻で麻痺したFLEEは解除に成功してもCURE_PARALYSISの行動になり、選択時のFLEEへ戻さない。
-行動可能なFLEEのskip部分は、味方case・味方行動配列への追加・その枠のアクロ減算を通らない。
+敵先攻で麻痺またはinactiveになっていても、準備済み行動がFLEEならこの味方枠ではstatus処理へ入らない。
+FLEEのskip部分は、味方case・味方行動配列への追加・その枠のアクロ減算を通らない。
 敵行動や規定のターン末尾・カメラまでskipする意味ではなく、各行動枠前の生死判定も元の位置に置く。
-このゲートは第13節の明示的な修正規則であり、現在の `Main` に既に実装されているとは扱わない。
+このゲートは現在の `Main` の `skipTurn` と同じ順序であり、proof用の修正規則を追加しない。
 
 証明記録のノードは、例えば次を持つ。
 
@@ -489,8 +489,8 @@ D_{t,p,\ell,b}=\left.\operatorname{Envelope}_t\right|_p
 旧記法の `Invariant` は第14節の `Envelope_t` に置き換える。
 これは入力と固定enumからkernelが組み立てるBoxとpの範囲であり、生成器が供給する関数ではない。
 `Selectable` も固定する。HEALは `M>=2`、CRACKは `M>=3`、薬草は `I>=1`、
-ACROは `Charge=ON(1..6)` かつ `Acro=OFF`、FLEEは `Paralysis=CLEAR`。
-眠りなしは入力プロファイルが保証する。ATTACK・DRAGON・DEFENCEには追加の資源条件はない。
+ACROは `Charge=ON(1..6)` かつ `Acro=OFF`。
+眠りなしは入力プロファイルが保証する。ATTACK・DRAGON・DEFENCE・FLEEには追加の資源条件はない。
 行動実行時の状態異常による差し替えは、根を消す条件ではなく規則内部の遷移である。
 
 未到達セルを省略する場合は、被覆済みの辺から再計算した支持集合などの根拠が必要になる。
@@ -926,11 +926,10 @@ PoCでは、固定能力値の味方一人と敵一体、本体仕様の8行動�
 このプロファイルの対象外として `UNSUPPORTED_INPUT` を返す。
 過去の戦闘開始からの到達可能性を逆に証明する必要はなく、指定された正確なS0からの命題を扱う。
 
-FLEEの修正規則もPoC用に固定する。選択時は麻痺中なら不許可とする。
-敵先攻後、実行時に麻痺またはinactiveなら通常の行動不能処理へ進み、解除判定・フラグ更新・必要な乱数を実行する。
-行動可能なら味方の逃走選択部分を実行し、敵行動・ターン処理・カメラは維持する。
-inactiveによる行動不能処理の適用も、このRuleProgramの明示的な修正点である。
-無修正の `Main` を再実行して、この修正規則での勝利手順と呼ばない。
+FLEEはPoCでも現 `Main` の `skipTurn` を固定する。選択時の麻痺・inactiveによる追加の不許可条件は置かない。
+味方枠ではFLEE判定を麻痺・inactive処理より先に行い、FLEEならその味方枠のstatus更新・action case・action配列追加・アクロ減算を通らない。
+敵行動・規定のターン末尾・カメラは維持する。
+再実行はこの点について無修正の `Main` と同じ意味を使う。
 
 **14. Invariantを作る人と、保証する人を分ける**
 
@@ -1198,7 +1197,7 @@ mode表、pc別の行動済み情報と乱数消費上限を含める。
 
 これらを一つの `RuleBundle` とする。profileの名称だけ、関数名だけ、数値設定の自由な上書きは受け付けない。
 例えばHPの比較を一箇所変更した場合も、乱数関数やmodeのbit対応だけを変更した場合も、新しいrule_versionを登録する。
-現行の `Main` を指す入口と、FLEE修正規則を反映した入口は同じものとして登録しない。
+現行の `Main` を指す入口に、FLEE専用の意味変更を重ねて登録しない。
 数値設定は現在のC++の `double` という型名だけでは固定できず、実際に使う演算と関数群の対応確認が必要である。
 
 ```text
@@ -1239,7 +1238,7 @@ Zだけ、positionだけ、NowStateだけから他の値を推測してrootを�
 1. 不変なctx_initialの再実行入口を使い、Zの長さ、選択合法性、観測・行動制約、整数・RNGの入力範囲を検査する。
    prefix自体には残り長さ|Z|の安全性検査を行い、suffixは実際に得たS_ZについてH_limitの安全性を別に検査する。
 2. Zの全コマンドを一ターンずつ正確に実行する。敵先攻による差替、カウンター、行動後処理を含め、
-   継続する境界は規定の末尾・カメラ処理後とする。FLEE修正規則もsuffixと同じものを使う。
+   継続する境界は規定の末尾・カメラ処理後とする。FLEEもsuffixと同じ `Main` のskipTurn規則を使う。
 3. 観測の途中returnやMainのbool戻り値を、一ターン完了や勝敗の判定に代用しない。
    Zが途中の勝敗終端より後にもコマンドを要求する場合、勝手にZを短縮せずINVALID_PREFIXとする。
 4. 完了した生状態S_Zのp、NowState、生のPlayer各値、ターン情報を保存する。

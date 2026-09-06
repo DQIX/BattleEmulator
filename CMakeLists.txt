@@ -55,6 +55,43 @@ target_compile_definitions(ybe_v5_lv10 PRIVATE MULTITHREADING)  # `#define MULTI
 add_executable(ybe_v5_lv10_opt ${SOURCES})
 target_compile_definitions(ybe_v5_lv10_opt PRIVATE MULTITHREADING OPTIMIZE_MODE)  # `#define MULTITHREADING` を適用
 
+# d20 worldline proof PoC.  These targets intentionally do not link main.cpp;
+# the proof kernel and the generator/searcher have independent entry points but
+# share the exact BattleEmulator implementation.
+set(D20_PROOF_COMMON
+        lcg.cpp
+        BattleEmulator.cpp
+        camera.cpp
+        debug.cpp
+        proof/ProofTypes.cpp
+        proof/ExactReplay.cpp
+        proof/RuleProgram.cpp
+        proof/SymbolicStepper.cpp
+        proof/ProofKernel.cpp
+        proof/CliCommon.cpp
+)
+
+add_executable(d20_proof_kernel
+        proof/kernel_main.cpp
+        ${D20_PROOF_COMMON}
+)
+target_compile_definitions(d20_proof_kernel PRIVATE MULTITHREADING D20_PROOF_NUMERIC_CONTRACT_V1)
+
+add_executable(d20_worldline
+        proof/worldline_main.cpp
+        proof/WorldlineSolver.cpp
+        ${D20_PROOF_COMMON}
+)
+target_compile_definitions(d20_worldline PRIVATE MULTITHREADING D20_PROOF_NUMERIC_CONTRACT_V1)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(d20_proof_kernel PRIVATE -fno-fast-math -ffp-contract=off)
+    target_compile_options(d20_worldline PRIVATE -fno-fast-math -ffp-contract=off)
+elseif(MSVC)
+    target_compile_options(d20_proof_kernel PRIVATE /fp:strict)
+    target_compile_options(d20_worldline PRIVATE /fp:strict)
+endif()
+
 
 string(TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)
 string(TIMESTAMP BUILD_TIME "%H:%M:%S" UTC)

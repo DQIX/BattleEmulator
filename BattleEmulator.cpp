@@ -1095,6 +1095,18 @@ int BattleEmulator::FUN_021e8458_typeD(int *position, double difference, double 
     return static_cast<int>((result));
 }
 
+int BattleEmulator::proofNativePhysicalDamage(int *position, int atk, int def) {
+    return FUN_0207564c(position, atk, def);
+}
+
+int BattleEmulator::proofNativeTypeC(int *position, double min, double max, double base) {
+    return FUN_021e8458_typeC(position, min, max, base);
+}
+
+int BattleEmulator::proofNativeTypeD(int *position, double difference, double base) {
+    return FUN_021e8458_typeD(position, difference, base);
+}
+
 
 int BattleEmulator::FUN_0207564c(int *position, int atk, int def) {
     [[assume(atk >= 0)]];
