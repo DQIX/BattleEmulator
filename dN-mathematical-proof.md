@@ -2,7 +2,8 @@
 
 本書は [本体仕様](d20-worldline-proof-spec.md) と [kernel仕様](d20-proof-kernel-spec.md) の健全性を証明する。
 特定seedの最短Nや実行時間の実測を報告するものではない。実装は行わない。
-2026-09-06補足。Supportの再構築と規則の不変な識別を明記する。以下の定理や近似の方向は変更しない。
+2026-09-06補足。位置ごとのPartition[p]、Supportの全層再構築、RuleProgram登録時の有限実行性検査を明記する。
+規則の不変な識別、以下の定理や近似の方向、横展開に必要な前提は変更しない。
 
 **1. 対象と仮定**
 
@@ -21,8 +22,14 @@ seed、正確な開始状態S0、開始ターン、合法な選択集合、実�
 を満たすことが登録条件である。以下はこの条件を満たす固定RuleProgramに対する証明である。
 C++からRuleProgramへの対応やnative関数の契約を、証明生成器の宣言だけで保証したことにはしない。
 
+kernel仕様第3節に従い、登録時にkernelが、unroll後の全routineの通常CFGとcall graphが
+有限・acyclicであり、再帰がなく、全entryの全経路がFINISHまたはRETURNに終わることを検査済みとする。
+登録nativeの有限終了・内部work・RNG消費契約も必要とし、maximum instruction steps、最大call depth、
+Rmaxを静的に再計算する。Rremaining(pc,stack)はこの検査済み構造と正しい復帰先から合成する。
+一条件でも検査できないProgramは登録拒否される。COMPLETEは証明側の補完であり、規則の終了位置ではない。
+
 「固定」は表示名の一致ではなく、RuleProgramの命令・定数・修正規則、数値設定、対応profile、
-native関数と正確な再実行との対応を束ねた、不変な登録内容の一致を指す。
+native関数と正確な再実行との対応を束ねた、不変な登録内容RuleBundleの一致を指す。
 `rule_id` はその内容に結びつく変更不可の登録versionとし、kernel仕様第16節の登録照合に従う。
 同じ名前のまま命令・丸め・mode定義等を変更した規則は別のrule_idになる。
 versionは内容識別用であり、規則とC++の対応や本書の仮定を証明するものではない。
@@ -66,20 +73,31 @@ OFF中の生タイマーは別途整数安全性を検査し、-4以下をONの�
 
 **4. 定理：kernelの局所検査から、全到達遷移の被覆が得られる**
 
-kernelが構築する継続外包をA_t、セルの分割をC_q、合法な選択領域をL_bとする。
-検査する根は `D=A_t∩C_q∩L_b` である。次を合格条件とする。
+kernelが構築する継続外包をA_t、合法な選択領域をL_bとする。
+各Partition[p]はBaseBoxを重複なく覆い、leaf数は各pでK以下とする。DPの添字は `q=(p,ell)` である。
+Support[t]はこの組の集合であり、位置pに属するlocal cell ellの領域と検査する根を
+
+\[
+C_{p,\ell}=\operatorname{Cell}(\operatorname{Partition}[p],\ell),\qquad
+D=A_t\cap(\{p\}\times C_{p,\ell})\cap L_b
+\]
+
+と定める。次を合格条件とする。
 
 1. `alpha(S0)∈A_0`。
 2. 必要な根について、kernel自身が規則の次pc・全非空分岐・更新を計算する。
    通常葉は規則の終了位置だけで認め、補完葉は検査した残り遷移の外包を持つ。
 3. 全継続出力がA_(t+1)に入ることを、出力を交差で削る前に検査する。
-4. 支持集合は初期セルから始め、検査済みの全継続出力先を次の支持へ加える。
+4. 支持集合は `(p0,project(alpha(S0),partitions[p0]))` から始める。
+   検査済みの各継続出力の位置p'に属するPartition[p']で分類し、全出力先 `(p',ell')` を次の支持へ加える。
    必要な根または非空caseが欠ければ拒否する。
 
 証明。まず一つの根Dの任意の点sを取る。
 決定的命令ではkernelの再計算によってsの具体実行との対応が保たれる。
 比較では補題2によりsは真側か偽側のどちらかに必ず入り、その子は必須である。
-従って規則の有限な命令列を進めても、sが証明から失われることはない。
+登録時にkernelがCFG・call graphの有限・acyclicとnative契約を検査済みなので、
+具体実行は算出されたmaximum instruction steps以内で終了する。
+従ってこの有限な実行を進めても、sが証明から失われることはない。
 通常葉なら正確な出力、補完葉なら検査済みの外包がsの実行を含む。
 これで一つの根の全入力が被覆される。
 
@@ -92,18 +110,22 @@ kernelが構築する継続外包をA_t、セルの分割をC_q、合法な選�
 敵先攻のMP吸収後にMPが負になる等、保存検査に失敗するモデルを、
 「外包の外なので無視」として受理することはできない。
 
-この定理の支持集合は、その検査で使うpartitionに対して構築した集合である。
-生成器がpartitionをrefineした場合にも、初期状態の属する新しいセルから全層のSupportを作り直す。
+この定理の支持集合は、その検査で使うpartition family全体に対して構築した集合である。
+あるpの木だけをrefineしても、初期状態の属する新しいPartition[p0]のセルから全層のSupportを作り直す。
 
 ```text
-partition = refine(partition, separating_predicate)
+new_tree = refine(partitions[p], separating_predicate, max_leaves=K)
+partitions = replace_partition_at_fresh_version(partitions, p, new_tree)
+# 他位置の木は変更しない。family全体のpartition_versionを更新する。
 (Support, checked_coverage, model) = rebuild_support(
-    ctx, H, partition, envelope, proof_provider, checked_cache)
+    ctx, H, partitions, envelope, proof_provider, checked_cache)
 # kernel仕様第14節の手順。全継続出力先と、そこから必要になる全合法行動の根を含める。
 ```
 
 再利用できるのは、同じ規則・実行条件で検査済みのガードと更新式を部分領域へ制限した記録である。
-古いセル番号のSupportは引き継がない。最終verifierも提出されたpartitionから独立に再構築する。
+古いlocal cell idのSupportや旧世代の根一覧は引き継がない。
+partition_versionはfamily全体、coverage_versionは被覆・補完・行き先の世代を識別する（kernel仕様第14節）。
+最終verifierも提出された全partitionsから独立に再構築し、新しい必要根の欠落を拒否する。
 これは定理4の前提を生成器でも維持するための手順の明記であり、被覆の帰納法の変更ではない。
 
 **5. 定理：外側近似による d(H)=偽 と、最短Nの証明**
@@ -141,7 +163,7 @@ B_H(q_0)&\ge\sum_{i=1}^{k}W_{\tau_i}\\
 さらに同じ問題の正確な再実行がNターンで初めて撃破し、`H=N-1` で上の否定証明が合格すれば、
 最短値はN以下かつN-1より大きいので、ちょうどNである。
 ここで同じ問題とは、登録内容まで照合したrule_id、seed、生の正確なS0、開始ターン、観測・行動制約が
-一致することをいう。NとH、partition、価格は証明側のパラメータであり、共通問題の同一性とは分ける。
+一致することをいう。NとH、partitions、価格は証明側のパラメータであり、共通問題の同一性とは分ける。
 無効タイマーを省いた `alpha(S0)` の一致や、規則の表示名の一致だけでTRUEとFALSEを組にしない。
 N=0は初期撃破の自明な場合として別に扱い、`d(-1)` は使わない。
 抽象成功経路が存在することだけではTRUEを証明しない。

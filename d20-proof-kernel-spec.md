@@ -12,10 +12,11 @@
 数百ms〜15秒は生成・検査・再実行を含む実測の目標であり、本書には特定入力の証明書や達成時間はまだない。
 以下のv1の制限は、先行する本体仕様の一般的な記述より優先する。
 v1のPoCは `yo2_be` のままとする。利用者が指定した前半系2例の調査結果と拡張条件を第17・18節に追記した。
-前半系の約18ブランチ全体を調査済みとはしない。後半系への適用は対象外である。
+前半系の約17ブランチ全体を調査済みとはしない。後半系への適用は対象外である。
 
-2026-09-06追記。partition変更後のSupport再構築と、規則を変更不可のversionで識別する手順を明記する。
-これは生成器の古い情報の再利用と、別規則の証明の組合せを防ぐ補足であり、健全性の定理の変更ではない。
+2026-09-06追記。`aaaa.txt` の指摘に従い、乱数位置ごとの `Partition[p]` とSupportの全層再構築、
+RuleProgramの登録時の有限実行性検査を明記する。第3節には責務を分けた実装案も示す。
+規則を変更不可のversionで識別する方針、健全性の定理、外側近似の方向は変更しない。
 
 最大の難所は、DPへ渡す一ターンの遷移を、正しい領域と更新式に分解することにある。
 次に難しいのが、それを粗く近似した際の架空の接続を、少数の分割で除けるかである。
@@ -125,10 +126,38 @@ kernelに必要な領域操作は以下で尽きる。
 | 更新後の像 | 自座標の平行移動・定数、または小さい写像表の像 |
 | 出力セルの逆像 | 出力の分割木をたどり、資源式への代入または写像表の逆像で入力を制限 |
 
-各セルはBaseBoxを上の原子条件で分割した木の一葉とする。葉は一個のBoxになる。
+各RNG位置pは独立した分割木 `Partition[p]` を持ち、その一葉をlocal cellと呼ぶ。
+各local cellはBaseBoxを上の原子条件で分割した一個のBoxになる。
 不連続な集合は複数の葉・証明枝で表す。任意のBox和集合、DNF、多面体、DBM、SMTはv1に入れない。
 凸包で二つの枝を通常葉へ合併することもしない。合併するなら、全体を覆う補完として検査する。
 葉数だけでなく、これらの領域操作・写像表の処理・出力木の走査も第10節のVに数える。
+
+```text
+PredicatePartition = 有限な二分木（内部ノードは許可述語と真偽の二子、葉はlocal_cell_id）
+PartitionFamily = frozen {
+    partition_version,
+    trees: map<RngPosition, PredicatePartition>
+}
+partitions: PartitionFamily                 # Partition[p] == partitions[p] == partitions.trees[p]
+CellKey = (p: RngPosition, local_cell_id: LocalCellId)
+Support[t]: set<CellKey>
+Cell(partitions[p], local_cell_id): Box
+project(alpha(S), partitions[S.p]): LocalCellId  # alpha(S)を含む唯一の葉
+```
+
+位置集合 `P_set=[p0,p0+H*Rmax]` の各pについて木を定義し、各木がBaseBox全体を重複なく覆い、
+`leaf_count(Partition[p])<=K` であることをkernelが検査する。`P=|P_set|` とする。
+木の循環・未解決参照・重複local cell idを拒否し、各分割の真偽二子が非空で元のBoxを覆うことも確認する。
+従って各木のノード数はleaf数Lに対して `2L-1<=2K-1` であり、木の保存量もO(PK)に収まる。
+一つのpartition_versionの間は、同じpを別の層tで使っても同じ木を参照する。
+`p=100` に `E<=227` を追加する操作は `Partition[100]` だけをrefineする。
+他の位置へ自動伝播させず、必要なら生成器が位置を指定して個別に追加する。
+local cell id単独や、別位置で同じ番号の葉を、同一セルとして照合してはならない。
+
+出力の位置がp'なら、必ず `classify_output(output, partitions[p'])` で出力先を求める。
+詳細葉ではこの木の述語の逆像で入力を分け、全出力先 `(p',local_cell_id')` を得る。
+補完がp'の区間を持つ場合は、区間内の各p'の木の全葉を含める（第15節）。入力位置pの木で代用しない。
+分割集合とその世代に依存する記録の寿命、未定義位置の拒否は第14節に定める。
 
 この形式では資源式が自座標だけに依存するため、詳細葉の資源の像も直積のままである。
 重みの最大値は `e=ue, a=la, m=lm, i=li` で計算できる。
@@ -139,12 +168,14 @@ kernelに必要な領域操作は以下で尽きる。
 ```text
 Frame = (pc, call_stack, RNG_position, selected_command,
          control_expressions, E_expr, A_expr, M_expr, I_expr,
-         action_progress, input_domain)
+         transient_slots, action_progress, input_domain)
 ```
 
 である。`action_progress` は、味方・敵の行動が未実行か実行済みか、
 資源消費まで進んだか等を規則上の実行位置から決める情報である。
 生成器が「未実行」と自由に宣言する情報ではない。
+transient_slotsには準備済みコマンド・実行行動・カメラへ渡す行動列等を型付きで保持する。
+これらは一ターン内部の作業値であり、ターン境界のmodeやDPの添字には追加しない。
 
 実状態の保存方式は可逆なビットパックとする。`uint64_t[3]`（24byte）は設計案であり、現行C++の実装済みの型ではない。
 `Frame` は局所証明を読むための作業領域であり、到達した全個体の保存ではない。
@@ -164,7 +195,9 @@ Frame = (pc, call_stack, RNG_position, selected_command,
 | 限定された計算関数 | 規則側が指定する関数を、環境から決まる引数で再実行 |
 | ジャンプ・呼び出し・復帰 | 規則側の次pcとスタックを確認 |
 | 正常終了・成功・失敗 | 到達すべき終了位置、生死、出力式を確認 |
-| 検証済み上限による中断 | その実行位置で使える補題と、その適用条件を確認 |
+
+`COMPLETE` は検証済み上限で残り実行を覆う**証明ノード**であり、RuleProgramの命令ではない。
+規則側の正常終了は `FINISH`、subroutineの復帰は `RETURN` とする。COMPLETEを規則の終了性の根拠にしない。
 
 既存関数を一個の命令として扱えるのは、渡す引数が具体的に決まり、
 隠れた資源読み出し・書き込みがない場合に限る。
@@ -172,7 +205,8 @@ Frame = (pc, call_stack, RNG_position, selected_command,
 `callAttackFun` 全体、`ProcessRage`、`process7A8` を資源に無関係な黒箱として扱ってはならない。
 その中にある資源比較、状態変更、追加乱数消費を命令列に含める必要がある。
 
-小さい固定回数のループや一段のカウンター呼び出しは、その規則上の順序で処理する。
+小さい固定回数のループは登録前または登録時にunrollし、一段のカウンターは非再帰の呼出しにする。
+以下の有限実行性検査を登録の必須条件とし、規則上の比較・更新・乱数の順序を保存する。
 一般的なSMT処理系や、任意のC++を解析する仕組みは要求しない。
 
 **RuleProgramの模擬定義と、現ソースとの対応例。**
@@ -182,18 +216,165 @@ Frame = (pc, call_stack, RNG_position, selected_command,
 RuleProgram = frozen {
     instruction_format_version,
     entry_pc,
-    instructions: [Instruction(opcode, typed_operands, prescribed_successors)],
-    subroutine_entries,
+    routines: [Routine(id, kind=TURN|SUBROUTINE, entry_pc,
+                       typed_parameters, typed_result, declared_reads, declared_writes,
+                       instructions)],
     source_correspondence,       # 元の比較・更新・呼出しとpcの対応
     explicit_rule_changes       # 選択合法性、FLEE実行時ゲート等
 }
+Pc = (routine_id, instruction_index)
+Instruction = tagged_union(opcode, typed_operands, prescribed_successors)
 
 Instructionのopcodeは本節の命令表に限定する。
 資源式・制御式・比較は第2節の型だけを使う。
 乱数・native関数は登録済みの識別子で指定し、引数は確定した値だけを渡す。
-CALLはこのprogram内の固定entry_pcへ進む。任意のC++関数への呼出しではない。
-FINISHは一ターンの終了、RETURNは呼出し元の規定pcへの復帰であり、区別する。
+CALL(callee_id, arguments, result_slot, return_pc) はこのprogram内の固定entryへ進む。
+任意のC++関数への呼出しではない。return_pcは呼出し元routine内の固定pcである。
+FINISHはTURNの一ターン終了、RETURNはSUBROUTINEからの復帰専用とする。
 ```
+
+**RuleProgramを肥大化させない実装単位。**
+RuleProgramは命令と対応表を保持する不変データに限定する。戦闘実行、登録、証明生成、
+セル分割、DP、キャッシュ、再実行をメソッドとして集めたクラスにはしない。
+次の名前は実装予定の責務を表すもので、今回ファイルやC++の型を追加する指示ではない。
+
+| 実装単位 | 入力と出力・責任 |
+| --- | --- |
+| 規則作成用moduleとRuleAssembler | 小さいroutine定義を受け、固定ループ展開、型付きラベル解決、pcとソース対応表の生成を行う。未検査のRuleProgram案を出力する |
+| RegistrationChecker（kernel） | 同じ不変な案の型・全case・CFG・call graph・native契約・profileを検査し、後述の静的上限を計算する。Assemblerの成功表示や手書き上限は信用しない |
+| RuleRegistry / RuleBundle | 検査済みProgram、数値・native、profile、再実行対応とkernel算出の上限を一つの変更不可のrule_idへ束縛する（第16節） |
+| SymbolicStepper / ProofVerifier（kernel） | RuleProgramとFrameから、次pc、更新、全非空子領域を決め、証明ノードを照合する。opcodeだけを解釈し、技名別の戦闘switchをもう一つ作らない |
+| CellConnector / SupportBuilder（kernel） | 検査済みのガード・更新・補完をpartitionsへ接続し、全必要根を要求する。命令を変更せず、RuleProgramにセル番号や価格を埋め込まない |
+| 証明生成器・価格DP | 許可形式の分割・展開・価格を提案し、検査後の辺を使う。登録規則、必要root、合法性を差し替えない |
+| ExactReplayAdapter | RuleBundleに固定した生状態の再実行入口へつなぐ。FLEE等の明示的な修正を含む対応を監査する。記号実行の代表点で代用しない |
+
+規則作成用moduleは、次の単位でroutineを提供する。一つのroutineが行動種別の全switchを抱える必要はない。
+moduleの分割と、後述するroutine単位のcall graph検査は別である。
+
+| moduleの責務 | 現ソースとの対応と所有する処理 |
+| --- | --- |
+| TurnFlow | Mainの一ターン分。必殺減算、defence初期化、先攻RNG、選択済みコマンドの準備、二つの行動枠と枠前の生死判定、ターン末尾への順序だけを組み立てる |
+| AllyActions / EnemyActions | callAttackFunをcaseごとのroutineへ分解する。敵選択はProcessEnemyRandomAction2BとMainの置換・追加消費を含む。case内の支払いや副作用は元の位置に置く |
+| StatusTiming | 味方枠の麻痺減算・解除・inactive処理、味方行動後のアクロ失効、敵行動後の怒り減算を別entryにする。所有者・生存条件・減算pcを固定し、一括したターン末尾処理へ移さない |
+| ReactiveEffects | ACROBATSTAR_KAIHI、COUNTER、ProcessRage、process7A8を別routineにする。カウンター側の敵HP減算もここから明示的に呼ぶ |
+| ResourceUpdates | Player::reduceHp / healを、型付き資源の減算・加算とclampへ展開する。Mainの通常結果反映と、case内のHP_HOOVER回復・COUNTER減算を区別する |
+| PresentationTail | 行動列とCameraから決まるカメラ処理を登録する。Mainのactions配列はカメラへの入力なので、ログとして削除しない。実体との対応は既存の第13節の監査対象である |
+
+Mainの複数ターンのfor、Gene解釈、ログ出力、観測による早期returnは、一ターンの命令列の外へ分ける。
+開始ターンと観測・行動制約はProblemと再実行対応に残し、Mainのbool戻り値をそのまま勝敗にはしない。
+一ターンの通常の継続境界は規定の末尾・カメラ処理後である。尾部を省く入口を使うなら、その対応も別途固定する。
+
+例えばMainの行動順序は、次の構成用記法で表せる。各CALL先は後続の処理へ勝手に飛ばずRETURNする。
+二枠をunrollし、同じslot routineを二回CALLしてもよい。生死判定・break相当の分岐は各元位置に残す。
+
+```text
+TURN_ENTRY -> BEGIN_TURN -> PREPARE_SELECTED_COMMAND
+  -> initiativeの固定分岐
+     ally先攻:  SLOT_ALLY -> SLOT_ENEMY
+     enemy先攻: SLOT_ENEMY -> SLOT_ALLY
+  -> TURN_TAIL -> CAMERA_TAIL -> FINISH
+
+SLOT_ENEMY:
+    枠入口の生死判定で、終了済みならRETURN
+    action = CALL(SELECT_ENEMY)
+    SWITCH(action) -> 各caseの固定CALL                    # 間接CALLは禁止
+    actionsへ実行したactionを追加
+    CALL(APPLY_ENEMY_RESULT, returned_damage)             # 味方HPへ反映
+    CALL(ENEMY_POST_ACTION)                              # 生存判定・消費・怒り減算
+    RETURN
+
+ENEMY_ATTACK / HP_HOOVER -> アクロ判定の各条件からACRO_DODGE / COUNTER / 通常被弾へ分岐
+COUNTER -> 規定順のRNG・会心・回避・ダメージ計算
+  回避あり: RETURN(value=0)
+  回避なし: CALL(RAGE_CROSSING) -> CALL(REDUCE_ENEMY_HP) -> RETURN(value=0)
+```
+
+PREPARE_SELECTED_COMMANDでは、選択済みコマンドからMainのDEFENCE差替とdefence倍率設定を元の位置で行う。
+選択したcommand、準備後のcommand、状態異常で差し替わる実行actionは区別する。HPによる未指定行動のフォールバックは使わない。
+現C++の `callAttackFun(COUNTER, ...)` は同じC++関数を呼ぶが、IRでは別routineへの固定CALLである。
+COUNTERから元の敵攻撃caseへ呼び戻す辺を作らないため、C++の見かけ上の自己呼出しをIRの再帰にしない。
+カウンターが返した0はMain側の味方被ダメージだけに使い、既に減った敵HPを二重に減算したり戻したりしない。
+同じ補助routineを共有する場合も、引数・効果・乱数順序が一致する部分に限る。
+
+Frame内の資源式・mode式・RNG位置はkernelが所有する。routineの引数と戻り値は型付きslotで受け渡し、
+局所slotはCALLごとに分ける。生のPlayerポインタ、任意の参照、文字列によるフィールド検索は命令の引数にしない。
+HPの保存式には由来の資源座標を保持し、型の違う資源への代入を許さない。
+共有状態へのread/writeは宣言された型付きフィールドに限定し、登録検査が呼出し先を含めて再計算する。
+未初期化slot、引数・戻り値の型不一致、宣言外の書込みを拒否する。補完の行動済み情報もpcとこの効果から検査する。
+
+approved nativeの窓口は `invoke(native_id, concrete_arguments, bounded_rng_cursor)` に限定する。
+戻り値と実際のRNG増分をkernelが得て検査し、nativeへPlayer・Frame・NowStateを直接渡さない。
+契約には固定実体、引数の許容域、戻り値型、終了性と有限な内部work上限、RNG消費上限を登録する。
+I/O、待機、VMへの再入、隠れた状態変更・RNG消費は認めない。C++実体が契約を満たすことの監査は第1節の責任であり、
+kernelは名前だけから終了性を推論せず、監査済み契約への登録照合と引数・結果・増分検査を行う。
+FUN_0207564cやtypeC/typeDはこの限定窓口の候補だが、内部LCGを含む契約が揃って初めて登録できる。
+新しい技の追加はcase routine・必要な対応表・profile・補完表の更新で行い、原則としてkernelのopcode解釈を増やさない。
+第17・18節の横展開では、登録profileに従って資源座標・有限enum・行動枠を拡張する前提を維持する。
+その拡張後も自座標の式・有限modeという形式で表せない技は、この構造へ無理に押し込まず未対応とする。
+
+**有限実行性の登録検査（v1必須）。**
+kernelは汎用のループ停止性解析を作らず、次の強い構造制限を使う。
+手書きの「最大64消費」「再試行は有限」という宣言だけで受理しない。
+
+1. 全routineの命令集合と通常CFGを有限にする。通常CFGはroutine内の次pc・分岐・jumpを辺とし、
+   CALLではcalleeをその場で展開せず、規定のreturn_pcへの辺を置く。このCFGをトポロジカル順序で検査し、cycleを拒否する。
+2. 固定回数ループは登録前または登録時に有限回unrollし、break・短絡評価・早期復帰の順序を保つ。
+   元のMainの二枠、process7A8の最大9比較はその例である。複数ターンの反復はProgramの外のHで行う。
+   再選択も、登録した有限表と条件から確認した上限で展開する。上限後の再試行枝を黙って削除してはならない。
+3. 命令pc、全jump先、各switchの全case、CALL先・引数型・return_pcを解決する。
+   未解決jump、未登録call target、間接CALL、routineをまたぐjumpを拒否する。
+4. routine間のCALL辺から作る有限なcall graphもacyclicとする。自己再帰・相互再帰をともに拒否する。
+   「一回だけ再帰する」という実行時フラグに頼らず、COUNTERの例のようにentryを分ける。
+5. 全entryのすべての制御経路が、TURNならFINISH、SUBROUTINEならRETURNへ終わることを検査する。
+   DAGの末端に別の命令、暗黙のfallthrough、未処理caseを残さない。到達不能という生成器の申告で検査を省かない。
+6. 最大call depthと、全entryからそのFINISHまたはRETURNまでのmaximum instruction stepsを静的に計算する。
+   call depthは未復帰のCALLフレーム数（TURN入口で0）。命令stepにはCALL・RETURN・FINISHも各1を数える。
+7. 同じ有限CFGと登録native契約から、RNG read / skip / approved nativeの最大消費数を計算する。
+   読み飛ばし個数は非負の固定値にし、状態依存なら先に有限caseへ展開する。位置の後退を許さない。
+   nativeの有限終了・work・RNG消費上限が未登録、または許容引数域を保証できない場合も拒否する。
+8. 一つでも検査できない案、静的上限の計算がオーバーフローする案、登録用の容量制限を超える案は登録拒否する。
+   証明時にCOMPLETEを置く予定であることを、これらの条件の免除には使わない。
+
+上限の算出は次の小さい後ろ向きDPで足りる。call graphでcalleeから先に処理し、
+routine内は通常CFGの逆トポロジカル順に処理する。分岐条件による経路の実現可能性の解析は不要で、
+構文上の全後続のmaxは保守的な上限になる。`S_f,R_f,D_f` はroutine fのentryの算出結果とする。
+
+```text
+pcがFINISHまたはRETURN:
+    S(pc)=1; R(pc)=0; D(pc)=0
+pcがCALL(g, ..., return_pc=k):
+    S(pc)=1 + S_g + S(k)
+    R(pc)=R_g + R(k)
+    D(pc)=max(1 + D_g, D(k))
+それ以外（後続集合Succは非空）:
+    S(pc)=1 + max(S(s) for s in Succ)
+    R(pc)=rng_cost_upper(pc) + max(R(s) for s in Succ)
+    D(pc)=max(D(s) for s in Succ)
+
+rng_cost_upper: readは登録RNGの消費数、skipは指定数、nativeは契約の上限、その他は0
+maximum_instruction_steps = S_TURN
+maximum_call_depth = D_TURN
+Rmax = R_TURN
+```
+
+nativeを一つの命令stepと数えても、内部の計算費が1になるわけではない。
+nativeの内部workは監査済み上限で別に加算し、最大命令step数だけで時間を見積もらない。
+以上の結果をkernel由来の登録情報として保持し、証明書から別のS・D・Rへ置換させない。
+
+中断時のstackもkernelがCALL/RETURNから作る。現在pcからそのroutineの出口までの `R(pc)` に、
+stackに積まれた全復帰先kの `R(k)` を足したものが `Rremaining(pc, stack)` である。
+CALL先の消費は各Rに既に含まれるので二重加算しない。stackが空なら `Rremaining=R(pc)`。
+有限CFGと有限call graphを検査済みだから、この和と残り命令step数を有限時間で計算できる。
+Frameのstack長がmaximum_call_depthを超える場合、不正な復帰先、TURNでのRETURNを拒否する。
+検査器の実装は明示的なwork stackを使い、説明用verify_nodeの再帰をそのままホストのcall stackへ載せない。
+
+一ターンの具体的な一経路の長さと、全領域のproof workは別である。
+命令ごとの有限分岐数（引数を確定する有限mode分割も含む）の上界を `Fsplit>=1` とすると、
+詳細展開の木は保守的に `sum(Fsplit^i, i=0..maximum_instruction_steps)` 個の命令訪問で抑えられる。
+各訪問の領域演算・nativeのworkと、末端での出力木の最大 `2K-1` ノードの分類費も掛けて評価する。
+この上界は巨大になりうる。評価は予算超過を表す値で飽和させてよく、木を事前生成する指示ではない。
+実際には第10・16節の累積V・byte・時間を優先し、許可pcでの補完までの予約ができなければUNKNOWNとする。
+証明側の循環参照・無意味な追加stepも拒否し、有限実行性から小さい証明や15秒達成を推論しない。
 
 以下の局所例のラベルは固定pcの説明用表記である。複数操作を含む行は順番を保存した命令列へ展開する。
 `max` によるclampも比較・真偽の更新へ展開し、全非空領域を検査する。
@@ -242,27 +423,27 @@ HEALのMP2消費はcaseの後部、CRACKのMP3消費はcaseの冒頭にあり、
 FLEEの修正は、味方行動枠の入口で次のように表す。眠りを含む入力は先にPoCのprofile検査で拒否する。
 
 ```text
-ALLY_GATE: action = selected_command
+ALLY_GATE: action = prepared_command
     if action == FLEE_ALLY and Paralysis == CLEAR and Inactive == false:
         goto ALLY_SLOT_DONE             # 行動可能なFLEEの既存skip部分
     goto ALLY_STATUS
 
 ALLY_STATUS:
     if Paralysis != CLEAR:
-        CALL(PARALYSIS_GATE)            # 減算・解除抽選。actionはPARALYSISかCURE_PARALYSIS
+        action = CALL(PARALYSIS_GATE)   # 減算・解除抽選。戻り値はPARALYSISかCURE_PARALYSIS
     else:
         SkipRng(1)
     if Inactive:
         Inactive = false
         if action != PARALYSIS and action != CURE_PARALYSIS:
             action = INACTIVE_ALLY
-    D = CALL(ALLY_CASE[action])         # 各枝が固定entryへ進む、登録済みswitch。
+    SWITCH(action) -> 各ALLY_CASEの固定CALL、戻り値をDへ格納
     actionsへ実行したactionを追加
     CALL(APPLY_ALLY_RESULT, action, D)  # Mainの味方回復または敵HP減算。
     CALL(ALLY_POST_ACTION)              # 両者生存時の消費とアクロ減算・失効。
     goto ALLY_SLOT_DONE
 
-ALLY_SLOT_DONE: 次の行動枠、または規定のターン末尾・カメラ処理へ進む
+ALLY_SLOT_DONE: RETURN                  # TurnFlowの規定の次枠・ターン末尾へ復帰
 ```
 
 ここでのCALL先は元の処理を分解して登録する命令列であり、状態を隠して読むnative命令ではない。
@@ -287,10 +468,12 @@ child_ids
 
 **4. 根と子を、生成器に決めさせない**
 
-検査器は各必要な `(経過ターンt, 乱数位置p, セルq)` と8行動について、自分で次を計算する。
+検査器は各必要な `(経過ターンt, 乱数位置p, local_cell_id=ell)` と8行動について、自分で次を計算する。
+DPの添字qは常に組 `(p,ell)` であり、ell単独ではない。
 
 \[
-D_{t,q,b}=\operatorname{Envelope}_t\cap\operatorname{Cell}(q)
+D_{t,p,\ell,b}=\left.\operatorname{Envelope}_t\right|_p
+\cap\operatorname{Cell}(\operatorname{Partition}[p],\ell)
 \cap\operatorname{Selectable}(b).
 \]
 
@@ -340,8 +523,8 @@ D_T=D\cap g,\qquad D_F=D\cap\neg g
 
 **5. 検査手続き**
 
-以下のtとEnvelopeは、第14節の根検査が渡す検査コンテキストから取得する。
-証明ノードに書かれたターン数や外包へ置き換えない。
+以下のt、Envelope、partitionsは、第14節の根検査が渡す検査コンテキストから取得する。
+証明ノードに書かれたターン数・外包・別世代の分割集合へ置き換えない。
 
 ```text
 verify_node(program, expected_frame, proof_node):
@@ -355,11 +538,16 @@ verify_node(program, expected_frame, proof_node):
         emit_checked_summary(summary)
         return
 
-    instruction = program[expected_frame.pc]
+    instruction = program.routines[expected_frame.pc.routine_id].instructions[expected_frame.pc.instruction_index]
 
     if instruction is deterministic update / RNG / approved native computation:
         next_frame = independently_execute(instruction, expected_frame)
         assert payload agrees with the recomputed values
+        verify_node(program, next_frame, required_child(proof_node))
+
+    else if instruction is JUMP / CALL / RETURN:
+        next_frame = advance_control_and_checked_stack(program, instruction, expected_frame)
+        assert payload agrees with the prescribed target, arguments and return value
         verify_node(program, next_frame, required_child(proof_node))
 
     else if instruction is branch:
@@ -370,13 +558,18 @@ verify_node(program, expected_frame, proof_node):
                 verify_node(program, child_frame, required_child(proof_node, branch))
 
     else if instruction is finish:
+        assert expected_frame.call_stack is empty and pc belongs to TURN
         assert claimed_resource_updates == expected_frame.resource_expressions
         assert claimed_terminal_kind agrees over the entire input domain
         outputs = exact_image(expected_frame)
         assert continuing outputs are contained in Envelope[t+1]
         assert terminal outputs have nonnegative HP, MP and item counts
-        assert claimed_destination_contains_all_outputs(expected_frame)
-        recompute_weight_bound_and_emit_checked_edge(expected_frame)
+        if outputs are continuing:
+            p_out = outputs.RNG_position
+            destinations = classify_output(outputs, partitions[p_out])
+            assert claimed destinations cover every computed (p_out, local_cell_id)
+            # 各出力葉の述語の逆像で根領域を制限する。分類中の省略は不可。
+        recompute_weight_bounds_and_emit_all_checked_edges(expected_frame, partitions)
 
     else:
         reject
@@ -385,7 +578,8 @@ verify_node(program, expected_frame, proof_node):
 葉は、規則の終了位置へ到達した場合か、適用可能な補完補題を検査した場合だけ認める。
 比較を処理する前に通常の終了葉を置くことはできない。
 
-出力先セルの検査は、更新式に出力セルの述語を代入した逆像で行う。
+出力先セルの検査は、出力位置p'の `Partition[p']` の述語を更新式へ代入した逆像で行う。
+複数位置を含む補完は、各p'の木に対して第15節の全行き先を構成する。
 一個のセルに入ると主張するなら、入力領域全体でその述語が成立する必要がある。
 複数セルへ分かれるなら、入力領域をさらに分割するか、全出力先を含む補完として扱う。
 包含検査の前に出力を `Envelope[t+1]` と交差させてはならない。
@@ -394,7 +588,7 @@ verify_node(program, expected_frame, proof_node):
 補完の適用箇所と形式は第15節のホワイトリストに限定する。
 
 実装を小さくするため、最初は木として検査してよい。
-共有ノードを許す場合は、参照先のpc・環境・領域との適合も検査する。
+共有ノードを許す場合は、循環参照を拒否し、参照先のpc・stack・環境・領域との適合も検査する。
 同じノード番号というだけで別の途中状態へ証明を流用してはならない。
 
 **6. この検査で、枝落ちを検出できる理由**
@@ -428,7 +622,7 @@ verify_node(program, expected_frame, proof_node):
 そこに価格や、現在のセル番号を埋め込まない。
 セルへの接続と価格は、この記録から作る派生情報とする。
 
-例えば元のセル `C` を `C1,C2` に分ける場合、既存葉 `(D,F)` は
+例えば入力位置pの元のlocal cell `C` を、同じ `Partition[p]` の `C1,C2` に分ける場合、既存葉 `(D,F)` は
 
 \[
 (D\cap C_1,F),\qquad(D\cap C_2,F)
@@ -437,7 +631,7 @@ verify_node(program, expected_frame, proof_node):
 に制限できる。空の側だけ除く。
 既に `D` 全体で更新式を検査しているので、その部分領域で乱数・ダメージを計算し直す必要はない。
 
-出力先を `C1',C2'` に分ける場合も、
+出力位置p'の `Partition[p']` の出力先を `C1',C2'` に分ける場合も、
 
 \[
 D\cap F^{-1}(C'_j)
@@ -467,8 +661,9 @@ clampや制御値の更新も、検査済みの式を使って逆像を計算す
 証明ノード・派生した辺・更新式の記録に、総byte数と総個数の上限を持たせる。
 共有する記録と、現在の分割に依存する参照を分けて計上する。
 
-partitionをrefineしたら、Supportも新partitionに対してS0から再構築する。
-再利用する詳細葉 `(D,F)` と、セル番号に依存する支持・根一覧・接続は別の寿命を持つ。
+`partitions[p]` をrefineしたら、Supportは新しいpartition family全体に対してS0から全層再構築する。
+変更位置だけ木を差し替え、他位置の木を共有してもよいが、旧Supportの部分更新だけで済ませない。
+再利用する詳細葉 `(D,F)` と、位置・local cell id・分割世代に依存する支持・根一覧・接続は別の寿命を持つ。
 第14節の `rebuild_support` で新しい全出力先と全必要根を確定してから、DPを再計算する。
 補完の詳細化で行き先集合が変わった場合も同じ手順を使い、旧DP・区間最大表・LP下界を引き継がない。
 
@@ -572,18 +767,20 @@ Q(E(S)-E(S_c))+\Phi(S_c)-\Phi(S)
 制限する量を少なくとも次の四つに分ける。
 
 ```text
-K：乱数位置あたりのセル数
-J：セル・行動あたりの詳細な辺の項数
-C：セル・行動あたりの補完の一次式と行き先集合の項数
+K：各RNG位置pのPartition[p]のleaf数の上限
+J：CellKey=(p,local_cell_id)・行動あたりの詳細な辺の項数
+C：CellKey・行動あたりの補完の一次式と行き先集合の項数
 V：生成・再利用・独立検査を含む命令/証明ノードの総処理量
 ```
 
-DPの評価対象の項数は `8 P K (J+C)` 以下とする。
+セル数は `sum_p leaf_count(Partition[p])<=PK`、DPの各層の評価対象は `8 P K (J+C)` 項以下とする。
 検査記録の総byte数にも別の上限を設ける。
 制限に達したら、適用可能な補完へ切り替えるか未判定とする。
 証明ノードの途中を黙って省略してはならない。
 
-同じコードの一ターン内の経路長には上限があるが、それを無視して生成費が0だと扱わない。
+一ターン内の経路長の上限は、第3節で登録時に計算するmaximum instruction stepsである。
+これと最大call depth・native内部workから一経路の処理を見積もれるが、生成費が0だとは扱わない。
+分岐の全子を検査するproof workには第3節の木の上界と累積Vを使い、Jだけから上限を推測しない。
 分割・領域の制限・記号実行の再開を何回行ったかも合計して数える。
 
 **11. 反復で、次に何を直すかを切り分ける**
@@ -757,8 +954,9 @@ E・Aの下界1は継続状態だけに適用する。成功・失敗終端へ�
 \]
 
 `Rmax` はダメージ上限ではなく、一ターンの乱数位置の増分上限である。
-規則の固定ループと一段のカウンターを展開し、各命令の消費数を足し、分岐では最大を取って求める。
-native関数の消費上限も登録し、kernelが同じ有限の制御フローから再計算する。
+第3節で通常CFGとcall graphの有限・acyclicを検査した後、kernelがその後ろ向きDPで再計算する。
+固定ループはunroll済み、カウンターは非再帰の固定CALLであり、nativeも登録済みの有限消費契約を使う。
+登録済みの全entryのmaximum instruction steps・最大call depthも、この前提に基づく。
 現コードでは、次の緩い積み上げで64を予算にできる。
 
 ```text
@@ -782,7 +980,7 @@ native関数の消費上限も登録し、kernelが同じ有限の制御フロ�
 \[
 \begin{aligned}
 &\alpha(S_0)\in\operatorname{Envelope}_0,\\
-&S\in D_{t,q,b},\ \operatorname{Step}(S,b)=S',\ S'\text{が継続}
+&S\in\{p\}\times D_{t,p,\ell,b},\ \operatorname{Step}(S,b)=S',\ S'\text{が継続}
   \Longrightarrow S'\in\operatorname{Envelope}_{t+1},\\
 &S'\text{が終端}\Longrightarrow E',A',M',I'\ge0
   \text{かつ、規則どおりの成功・失敗分類}.
@@ -795,47 +993,70 @@ MP・薬草が負になる葉を「Invariantの外なので無視」とすると
 成功葉についても非負を検査するのは、DPの証明が撃破時の `Phi(S')>=0` を使うためである。
 
 必要な根は、次の前向き手順でkernelが決める。`ctx` は第16節の同一問題と不変な登録規則を保持する。
-この手順を初回だけでなく、partitionのrefine後にも呼ぶ。
+この手順を初回だけでなく、どれか一位置の `Partition[p]` をrefineした後にも呼ぶ。
+入力partitionsは全位置の木とそのpartition_versionを固定したfamilyである。Kは今回の検査予算の上限とする。
 
 ```text
-rebuild_support(ctx, H, partition, envelope, proof_provider, checked_cache):
+rebuild_support(ctx, H, partitions: PartitionFamily, envelope, proof_provider, checked_cache):
     S0 = ctx.Problem.S0; p0 = S0.p
     assert envelope == kernel_construct_envelopes(ctx, H)
     assert alpha(S0) in envelope[0]
-    validate_partition_covers_BaseBox(partition)
-    Support[0..H] = empty_sets()       # 旧partitionのbit列・葉番号をコピーしない。
-    checked_coverage = empty_root_records()
+    P_set = [p0, p0 + H*ctx.bundle.bounds.Rmax]
+    assert partitionsの位置キー集合 == P_set
+    for p in P_set:
+        validate_finite_partition_covers_BaseBox(partitions[p], max_leaves=K)
+    Support[0..H] = empty_sets<CellKey>()  # 旧世代のbit列・local cell idをコピーしない。
+    checked_coverage = empty_root_records(partitions.partition_version, この再構築用のcoverage_version)
     model = empty_layered_edges()
-    Support[0] = { (p0, partitionの中でalpha(S0)を含む唯一の葉) }
+    Support[0] = { (p0, project(alpha(S0), partitions[p0])) }
 
     for t = 0 .. H-1:
-        for (p,cell) in Support[t]:
+        for (p,local_cell_id) in Support[t]:
             for b in ctx.bundle.profileの固定された8行動:
-                D = envelope[t]のp断面 ∩ Cell(partition,cell) ∩ Selectable(ctx,t,b)
+                D = envelope[t]のp断面 ∩ Cell(partitions[p],local_cell_id) ∩ Selectable(ctx,t,b)
                 if D is empty: continue
-                proof = proof_provider.required_root(ctx,H,partition,t,p,cell,b,D,checked_cache)
-                checked = verify_root(ctx,t,p,b,D,proof,partition,envelope)  # 第5節。欠落は拒否。
-                outputs = derive_all_checked_outputs(checked, partition)
-                継続出力がenvelope[t+1]に入ることを、交差で削る前に検査
-                全継続出力先の(p',cell')をSupport[t+1]へ追加
-                成功・失敗出力は、資源の非負を検査してそれぞれの終端へ分類
+                proof = proof_provider.required_root(ctx,H,partitions,t,p,local_cell_id,b,D,checked_cache)
+                checked = verify_root(ctx,t,p,b,D,proof,partitions,envelope)  # 第5節。欠落は拒否。
+                outputs = derive_all_checked_outputs(checked)
+                for output in outputs:
+                    if output is terminal:
+                        資源の非負を検査して成功・失敗の終端へ分類
+                        continue
+                    assert output全体がenvelope[t+1]に入る  # 交差で削る前に検査
+                    for p_out in outputが覆う全RNG位置:
+                        assert p_out in partitions
+                        if output is detailed:
+                            destinations = classify_output(output.at(p_out), partitions[p_out])
+                        else:
+                            destinations = all_leaf_ids(partitions[p_out])  # 第15節の補完
+                        全destinationsの(p_out,local_cell_id_out)をSupport[t+1]へ追加
                 checked_coverageへこの根の検査記録を保存
-                modelへ新partitionで導いた全詳細辺・全補完を保存
+                modelへ新partitionsで導いた全詳細辺・全補完を保存
     return (Support, checked_coverage, model)
 ```
+
+詳細出力のatは具体的な一位置への参照で、classify_outputはその木の全非空逆像も返す。
+補完はp区間を範囲として記録したままでよく、Supportには各pの全葉を加えても、DP辺を全組数へ展開する必要はない。
+位置や葉の未定義はエラーであり、辺なし・空集合・負の無限大に置換してはならない。
 
 生成時の `proof_provider` は、kernelから要求された根を、適合するキャッシュの領域制限、
 不足部分の記号実行、または適用可能な補完で満たす。古いSupportにないことを欠落の理由にできない。
 最終verifierでは同じ入口を提出証明書の読取専用providerに替え、必要な根がなければ拒否する。
 いずれも次の根を決めるのはkernelである。生成器のSupportや「検査済み」印をそのまま受け取らない。
 
-例えば旧セル7の `A∈[1,65]` を、新セル7の `[1,32]` と新セル8の `[33,65]` に分けたとする。
-検査済みの継続出力に同じpで `A'=20` と `A'=60` があれば、次層の支持は両セルを含む必要がある。
-旧bit列のセル7だけを残すとセル8の必要根を落とす。葉番号を一つ改名するだけでは再構築にならない。
+例えばPartition[100]の旧local cell 7の `A∈[1,65]` を、新7の `[1,32]` と新8の `[33,65]` に分けたとする。
+検査済みの継続出力にp'=100で `A'=20` と `A'=60` があれば、次層の支持には `(100,7)` と `(100,8)` が必要である。
+旧bit列の7だけを残すと8の必要根を落とす。別位置の `(101,7)` は独立した葉であり、この変更では分割しない。
+local cell idを一つ改名することや、変更位置の旧Supportだけを置換することは、S0からの全層再構築にはならない。
 
 Support・根一覧・セル接続の再利用キーは少なくとも
 `(ctx.problem_key, H, partition_version, coverage_version)` とする。
-二つのversionは分割木と被覆・行き先の変更ごとに更新する実行内の世代番号で、同じ番号の内容を変更しない。
+partition_versionは**partition family全体**の実行内の世代番号で、一位置でも木を変更したら更新する。
+変更のない木の不変データは共有できるが、旧世代のlocal cell id付き記録を現世代の根としてそのまま受理しない。
+coverage_versionは検査対象の被覆・補完・行き先を変更するたびに更新する世代番号である。
+生成時は再構築用の新しい世代を用意し、最終verifierは提出された世代を記録の照合にだけ使って内容を再検査する。
+同じ番号の内容を変更しない。証明書は全partitionsを持ち、根記録はこのキーに `(t,p,local_cell_id,b)` を加えて識別する。
+世代番号だけを信用するのではなく、最終verifierが木・根領域・全出力先を再計算する。
 DPと区間最大表にはさらに現在の整数価格が対応する。規則のversionとは別の識別情報である。
 構築途中のSupportやmodelはDPへ公開せず、全必要根を処理してから一組として差し替える。
 再構築が時間・容量予算を超えたらUNKNOWNとし、古いSupportへ戻してFALSEを出さない。
@@ -849,13 +1070,13 @@ H層目の継続状態は、その先の行動を検査する必要がない。
 
 この手順についてtで帰納すれば、実際に到達する全継続状態がSupportとEnvelopeに入り、
 そこから選べる全行動が覆われる。根・出力のいずれにも到達可能性を判定する未知の関数はない。
-乱数位置の外包はtで変わるため、DPの層と対応させる。Hまたはpartitionを変えた証明に古い支持集合をそのまま流用しない。
+乱数位置の外包はtで変わるため、DPの層と対応させる。Hまたはpartitionsを変えた証明に古い支持集合をそのまま流用しない。
 規則実行の葉そのものは第7節の条件で再利用できる。
 
 | 担当 | 責任 |
 | --- | --- |
 | RuleProgram作成者・レビュー担当 | 現C++、明示した修正点、mode化、省略フィールド、native計算との対応を固定する |
-| kernel | 入力検査、BaseBox・Envelope・合法領域の構築、全必要根の決定、保存性と終端資源の検査を行う |
+| kernel | 登録時の有限実行性と静的上限の検査、入力検査、BaseBox・Envelope・合法領域の構築、全必要根の決定、保存性と終端資源の検査を行う |
 | 証明生成器 | セルの切り方、展開箇所、価格、候補手順を提案する。Invariant・合法性・空判定は上書きできない |
 | 呼出し側 | seed・正確なS0・残りターンの意味を固定し、同一問題の証明と手順だけを組にする |
 
@@ -910,7 +1131,8 @@ caseを省略できるのは、kernelがその中断領域で不可能だと確�
    根拠は、HPのclampと非負ダメージ、各資源の書込箇所、有限modeの更新表であり、
    「出力もInvariant内のはず」という仮定ではない。
 5. 乱数位置は `[pc時点のp, pc時点のp + Rremaining(pc,stack)]` で覆う。
-   `Rremaining` は第14節と同じ、命令の消費数と分岐maxから求める。
+   `Rremaining` は第3節で検査済みの有限CFG・非再帰のcall graphと、登録native契約に依存する。
+   現在routineの残り上限と、kernelが構成したstackの復帰先の残り上限を足して求める。
    確定したprefixの消費と足して一ターンの上限に入ることも検査する。
 
 Eの出力下界が正なら成功終端を行き先に加える必要はない。
@@ -927,15 +1149,19 @@ HEALのMP消費直後等、表にない途中pcでの `COMPLETE` はv1では拒�
 行き先集合の書式も限定する。
 
 ```text
-詳細葉       : kernelが出力分割木の逆像で求めた単一の(p',cell')、または終端
-補完         : 検査したp区間にある全セル + 必要なら成功終端
-最も粗い補完 : 次層の全セル + 必要なら成功終端
+詳細葉       : Partition[p']の逆像で求めた単一の(p',local_cell_id')、または終端
+補完         : union_{p' in 検査したp区間} {p'}×Leaves(Partition[p']) + 必要なら成功終端
+最も粗い補完 : 次層の位置範囲について上のunion + 必要なら成功終端
 ```
 
+失敗終端も被覆記録には残すが、成功へ至るDPの行き先にはしない。
 補完のp区間は出力外包全体を含む必要がある。
 その区間の外や、未登録のセルへ出る可能性を黙って削れない。
-全セル最大は層ごとに一回求める。p区間最大を使うなら、まずpごとの全セル最大を作り、
+全セル最大は層ごとに一回求める。p区間最大を使うなら、まず各pについて
+`max_{ell in Leaves(Partition[p])} B[h][(p,ell)]` を作り、
 固定配列の区間最大表等で問い合わせる。その準備費・容量・問い合わせ数も計上する。
+最大表を作る対象はその層の補完が要求する位置とし、そこでは全葉が対応するSupportとDPにあることを先に確認する。
+不足するDP値を負の無限大で埋めて、補完の行き先を減らしてはならない。
 例えばsparse tableなら層ごとに `O(P log P)` の準備と容量が必要であり、DPの辺評価数に隠さない。
 複数の一次式・行き先集合の組は、実際の組数をCに数える。
 
@@ -958,8 +1184,8 @@ mode表、pc別の行動済み情報と乱数消費上限を含める。
 
 | 固定する内容 | 登録に含めるもの |
 | --- | --- |
-| RuleProgram | 命令形式のversion、全pc・分岐・定数・呼出し先、終了位置、明示的な修正規則 |
-| 数値設定とnative対応 | 使用する乱数・ダメージ関数の固定実体、引数・副作用・乱数消費の契約、整数幅・変換・丸め、浮動小数の演算順序、対象ビルドとコンパイル設定 |
+| RuleProgram | 命令形式のversion、全routine・pc・分岐・定数・呼出し先、終了位置、明示的な修正規則。第3節の検査に用いる展開後の有限CFGとcall graph |
+| 数値設定とnative対応 | 使用する乱数・ダメージ関数の固定実体、引数・副作用・有限終了・内部work・乱数消費の契約、整数幅・変換・丸め、浮動小数の演算順序、対象ビルドとコンパイル設定 |
 | 対応profile | 資源軸・能力値・合法行動・入力制約、modeの値とbit対応、alphaと省略条件、外包の構築規則、補完の許可pcと登録表 |
 | 正確な再実行との対応 | 使用する再実行入口と固定実体、ターン境界・開始ターン・行動指定の解釈、生状態とRuleProgramの対応表 |
 
@@ -973,12 +1199,17 @@ mode表、pc別の行動済み情報と乱数消費上限を含める。
 register_rule(rule_id, reviewed_bundle):
     assert rule_id is not already registered
     assert reviewed_bundleのC++対応・修正点・native契約の監査が完了している
-    check_closed_program_and_profile(reviewed_bundle)  # 全case、型、呼出し先、補完表等
-    registry.insert_new_only(rule_id, deep_freeze(reviewed_bundle))
+    candidate = deep_freeze(reviewed_bundle)           # 以降はこの同じ内容を検査する。
+    check_instruction_types_and_resolved_targets(candidate.program)
+    bounds = check_finite_execution(candidate.program, candidate.native_contracts)  # 第3節の全条件
+    check_closed_program_and_profile(candidate, bounds)  # 全case、効果、mode、外包・補完表等
+    registered = with_kernel_computed_bounds(candidate, bounds)
+    registry.insert_new_only(rule_id, deep_freeze(registered))
 
 # 判定要求の入口。TRUE再実行とFALSE検査へ、この同じctxを渡す。
 bind_problem(Problem):
     bundle = registry.lookup_exact(Problem.rule_id)     # 未登録なら未対応
+    assert bundleは第3節の登録検査を通過した不変な内容である
     assert 実際の実行入口・native関数・数値環境がbundleの固定内容と一致する
     validate_exact_input(Problem, bundle.profile)
     return frozen Context(Problem, bundle, problem_key=exact_problem_fields(Problem))
@@ -986,6 +1217,8 @@ bind_problem(Problem):
 
 登録済みの内容を上書き・再割当てするAPIは設けない。別の登録表から同じrule_idを持ち込む場合も、
 対応する構造化された登録内容を完全比較し、不一致なら設定エラーとして拒否する。
+Rmax・最大call depth・各entryのmaximum instruction stepsはkernelが計算したboundsとして束縛する。
+別実行からの登録データを読み込む場合にも第3節の検査と上限計算を行い、提出されたboundsを信用しない。
 この照合は意味の同値性を自動証明するものではなく、監査済みの同じ内容を参照するための手続きである。
 現状ではRuleProgram全体の実装・登録は未完了であり、本書の局所例に実際の登録済みversionを割り当てたとはしない。
 
@@ -994,14 +1227,15 @@ bind_problem(Problem):
 ```text
 Problem = (rule_id, seed, 正確なS0, 開始ターンt0, 観測・行動制約)
 TRUE    = Nターン以内のコマンド列と、同じ規則での再実行結果
-FALSE   = H=N-1、セル分割、被覆・補完、整数価格、DP不等式
+FALSE   = H=N-1、全partitionsとpartition_version、被覆・補完とcoverage_version、整数価格、DP不等式
 ```
 
 数値設定とprofileはrule_idの登録内容から得る。証明書に説明用の写しを持たせる場合も完全一致を要求する。
 `exact_problem_fields` は固定書式で各フィールドを比較し、S0にはp・NowState・生のPlayer値を含める。
 無効タイマーを省いた `alpha(S0)` で代用せず、構造体のpaddingやポインタのアドレスも比較対象にしない。
-開始ターンはS0内のターン情報との一致も検査する。N・H・partition・価格・探索予算は共通Problemには含めない。
-したがってrefineや価格変更はrule_idを変えず、前節のpartition・coverageの世代だけを更新する。
+開始ターンはS0内のターン情報との一致も検査する。N・H・partitions・価格・探索予算は共通Problemには含めない。
+refineはrule_idを変えず、第14節のpartition_versionと再構築したcoverage_versionを更新する。
+補完の詳細化はcoverage_versionを更新する。価格だけの変更では両世代を維持し、価格に依存するDPを再計算する。
 
 ```text
 ctx = bind_problem(requested_Problem)
@@ -1012,7 +1246,7 @@ witness = exact_replay(ctx, TRUE.commands)             # 保存された勝利�
 if witness is not checked winning: reject
 N = witnessの最初の撃破ターン
 assert FALSE.H == N-1
-checked_false = verify_false(ctx, FALSE)              # 提出partitionでSupportも再構築。
+checked_false = verify_false(ctx, FALSE)              # 提出partitions全体でSupportも再構築。
 if checked_false accepted:
     return OPTIMAL(N)
 ```
@@ -1077,7 +1311,8 @@ FALSE側は、第14節の被覆と保存性を検査した上で、
 | 15秒 | 8 | 8 | 3 | 8 | 800万 | 128MiB |
 
 実際の詳細・補完項数にも、順に6.5万・15万・25万の総上限を置く。
-K・J・Cは上限であり、全乱数位置で使い切る指示ではない。
+Kは各 `Partition[p]` のleaf数の上限であり、J・Cは各CellKey・行動に対する上限である。
+いずれも全乱数位置で使い切る指示ではない。
 RNG位置数Pは `H*Rmax+1` 以下の外包から支持を絞り、Hを20に固定しない。
 価格候補数は、グラフを変更しても累積予算をリセットしない。
 節目で証明できたら直ちに返し、最終段階まで必ず反復する必要はない。
@@ -1099,6 +1334,11 @@ RNG位置数Pは `H*Rmax+1` 以下の外包から支持を絞り、Hを20に固�
 - 出力をEnvelopeで切り落とす証明、成功時にMPが負の証明を拒否する。
 - 補完の行き先に含まれるセルをSupportから一個消すと、必要な根の欠落として拒否する。
 - セル分割で葉番号が再使用されても、新しい両出力先からSupportを再構築し、片方の必要根を欠く証明は拒否する。
+- Partition[100]だけをrefineした際に他位置の木が変わらず、p'への出力がPartition[p']で分類されることを確認する。位置違い・旧partition_versionのlocal cell idによる根や接続の流用は拒否する。
+- ある位置のleaf数がKを超える木、未定義の出力位置、全層再構築で必要になる根の欠落を拒否する。
+- CFGのcycle、未解決jump、未登録CALL先、自己・相互再帰、未処理の末端、誤ったRETURNを登録時に拒否する。無消費のcycleも拒否対象である。
+- nativeの有限終了・work・RNG上限が欠ける登録を拒否し、手書きのRmaxを小さくしてもkernelの再計算をすり抜けないことを確認する。
+- unrollした二枠・9比較・非再帰COUNTERの順序と、最大命令数・call depth・Rremainingの算出を確認する。COMPLETEを加えて不正なProgramを登録可能にはしない。
 - 表示名が同じでRuleProgram・数値設定・profileのいずれかが異なる登録versionの組を拒否する。同じversionへの上書きも拒否する。
 - 許可されていない途中pcの補完、済んだカウンターの追加、消費済みMPの払い戻しを拒否する。
 - 量子化前だけ不等式が成立する候補や、別の入力・規則の勝利手順との組を拒否する。
@@ -1112,6 +1352,8 @@ PoCの合格条件は、正確な入力ごとの `d(N-1)=偽` と `d(N)=真` の
 
 前回の追加調査で読んだソースは、次の4ファイルだけである。ブランチの先端を読み、過去の版へは遡っていない。
 今回のSupport・rule_idの補足では、この二例の再取得は行っていない。
+今回の位置別分割・有限実行性・責務分割の補足でも、以下の横展開用の前提設計は維持する。
+約17ブランチへの展開を見据えた条件であり、yo2_beの固定値へ統一したり、全ブランチを対応済みとしたりしない。
 
 | 参照した先端 | 指定ファイル |
 | --- | --- |
@@ -1208,6 +1450,8 @@ DPはその層の実行条件に対応する辺を使い、キャッシュにも
 
 bilyoumaの行動置換ループは、眠り→守備力低下→素早さ低下→通常攻撃という一方向の置換と、
 二枠の重複回避を含む。この局所ループの停止条件も、実際の候補表を登録した上で確認する。
+これらの横展開でも、第3節の登録条件を満たすよう、確認した再選択・置換回数でunrollする。
+展開後に再試行が残りうる場合は登録拒否とし、その経路を削って有限に見せない。
 局所Frameには、選択コマンド、予約済み行動、現在の行動枠、残り敵行動、必要なコンボ情報を残す。
 bilyoumaでは敵先攻中に眠りから起こされても、予約されたSLEEPINGの枠をskipする処理がある。
 「現在起きている」だけを見て、最初に選んだ攻撃へ戻してはならない。

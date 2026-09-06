@@ -56,8 +56,9 @@ PoCでは補足仕様の第2・13〜16節の固定Box、mode、外包の保存�
 本書の一般的な説明から、任意のInvariant関数や任意pcの補完を追加してはならない。
 最も難しいのは、この生成・検査と、小さい分割で上限を締められるかであり、DPの実装ではない。
 
-2026-09-06補足。Supportをrefine後のpartitionに対して再構築する手順と、
-rule_idを変更不可の登録versionに結びつける手順を明記する。定理や近似の方向の変更ではない。
+2026-09-06補足。`aaaa.txt` に従い、位置ごとの `Partition[p]`、そのfamilyに対するSupportの全層再構築、
+RuleProgramの登録時の有限実行性検査を明記する。rule_idは変更不可のRuleBundleの登録versionに結びつける。
+定理・近似の方向と、約17ブランチへの横展開の前提設計は維持する。
 
 **1. 何を判定するか**
 
@@ -79,13 +80,22 @@ NをS0からの勝利手順の長さとすれば `H=N-1` である。
 
 規則の同一性は、人間向けの名前ではなく `rule_id=(registry_namespace, rule_version)` で管理する。
 一つのrule_idには、固定RuleProgram、数値設定・native関数、対応profile、正確な再実行との対応を
-一つの変更不可の登録内容として結びつける。いずれかを変えたら新しいrule_versionを登録する。
+一つの変更不可の登録内容 `RuleBundle` として結びつける。いずれかを変えたら新しいrule_versionを登録する。
 証明書から登録内容を上書きしたり、同じ表示名の別versionを組にしたりしない。
 登録と照合の模擬コードは補足仕様第16節、現ソースに未定義のRuleProgramの型と具体例は同第3節に置く。
+RuleProgramは不変な命令データとし、規則の作成・登録検査・記号実行・セル接続・再実行を別の責務にする。
+補足仕様第3節に、Mainの一ターンとcallAttackFunの各caseからroutineを組み立てる実装案を示す。
+
+v1の登録時には、固定ループをunrollした全routineの通常CFGと、非再帰のcall graphが有限・acyclicであることを
+kernelが機械検査する。全entryの全経路がFINISHまたはRETURNへ終わること、未解決jump・未登録call targetがないことも必須である。
+同じCFGからmaximum instruction steps、最大call depth、RNG read・skip・登録nativeを含むRmaxを静的に計算する。
+nativeは有限終了・内部work・RNG消費の監査済み契約を必要とし、上限不明や計算不能なProgramは登録拒否する。
+Rremaining(pc,stack)はこの検査済み構造から残り上限を合成する。COMPLETEは証明ノードであり、規則の終了命令にはしない。
+具体的な拒否条件と上限の計算式は補足仕様第3節、外包への使用は同第14・15節に従う。
 
 共通の問題は `Problem=(rule_id, seed, 正確なS0, 開始ターンt0, 観測・行動制約)` とする。
 S0はp・NowState・無効タイマーを含む生の値で照合し、証明用に省略したmodeだけでは比較しない。
-N・H・partition・価格は共通問題の外に置く。refineしただけで規則のversionを変える必要はない。
+N・H・partitions・価格は共通問題の外に置く。refineしただけで規則のversionを変える必要はない。
 
 入力seedや局面が複数候補なら、全候補について偽を示して初めて入力全体を偽にできる。
 観測がターン途中で終わる場合も、未観測の行動を勝手に確定させない。
@@ -184,10 +194,13 @@ PoCで必要な実状態や再実行用の状態は、可逆なビットパッ�
 一方、証明表の添字は
 
 \[
-q=\pi(S)=(p,\text{cell}(S))
+q=\pi(S)=(p,\text{cell}_{\operatorname{Partition}[p]}(\alpha(S)))
 \]
 
-とする。`cell` は後述の述語分割の葉番号であり、代表個体ではない。
+とする。`Partition[p]` は位置p専用の述語分割木であり、cellはその木のlocal cell idである。
+型は `CellKey=(p,local_cell_id)` とし、id単独や別位置の同番号の葉を同一視しない。
+`Support[t]` とDPのqはこの組を持つ。各木は同じBaseBoxを覆い、一つの分割世代では層tに依存しない。
+local cellは代表個体ではない。
 一つのセルに含まれる実状態は、すべて不等式の検査対象になる。
 
 例として、カメラが同じで、麻痺中かどうかが同じ状態を同じセルにできる。
@@ -210,8 +223,8 @@ zilyadamaの敵行動回数は戦闘ターンの奇偶で変わるので、異�
 辺 `tau` に以下を持たせる。
 
 ```text
-source cell / command / input guard
-destination cell または G または失敗終端
+source (p,local_cell_id) / command / input guard
+destination (p',local_cell_id') または G または失敗終端
 E', A', M', I' の更新式
 乱数位置・制御状態の更新と、その分岐の根拠
 ```
@@ -322,7 +335,8 @@ FLEEなら、選択時の眠り・麻痺を除いた領域から始め、実行�
 clamp後に定数になっていれば、その比較は定数として判定する。
 
 分割の両側の和集合が親領域であること、空領域だけを除いたことを記録する。
-終端セルの分類にも未確定の述語があれば、その述語の逆像で入力領域を分割する。
+継続出力が位置p'へ進むときは、必ずPartition[p']で出力セルを分類する。
+未確定の出力述語があれば、その述語の逆像で入力領域を分割する。入力位置pの木では代用しない。
 
 実装担当者は、元のエミュレーターの乱数・ダメージ計算を利用し、
 資源比較と更新に対する式の追跡を付加する形を選べる。
@@ -532,8 +546,9 @@ B_H(q_0)\ge\sum_i W_{\tau_i}\ge QE_0-\Phi(S_0).
 資源の全組み合わせを除いただけでは、制御状態の直積が膨らむ可能性が残る。
 これも無制限に展開してはならない。
 
-ホテルの部屋を、各乱数位置につき最大 `K` 枚の述語セルと定義する。
-述語分割は二分木にし、葉同士は交わらず、対象領域全体を覆うものにする。
+ホテルの部屋を、各乱数位置pの `Partition[p]` のlocal cellと定義する。
+各位置の述語分割は独立した有限二分木にし、葉同士は交わらず、BaseBox全体を覆うものにする。
+上限Kの意味は、**各pについて `leaf_count(Partition[p])<=K`** である。
 初期にはカメラの値を区別する程度から始め、必要な分岐条件だけを追加できる。
 すべての状態フラグと残りターンを最初から直積にしない。
 
@@ -541,17 +556,19 @@ B_H(q_0)\ge\sum_i W_{\tau_i}\ge QE_0-\Phi(S_0).
 一つのセルの不等式が、何億個の実状態へ同時に適用されても、表の要素は一つである。
 部屋に入りきらない個体という概念がない。
 
-使用する乱数位置が `P` 個なら、証明表のセル数は必ず
+検査対象の位置集合を `P_set=[p0,p0+H*Rmax]`、その位置数をPとすると、証明表のセル数は必ず
 
 \[
-n_{\rm cell}\le P K
+n_{\rm cell}=\sum_{p\in P_{\rm set}}|\operatorname{Leaves}(\operatorname{Partition}[p])|\le P K
 \]
 
-となる。保持する制御条件を増やすときも、葉数 `K` を超えて分割しない。
+となる。保持する制御条件を増やすときも、その位置のleaf数 `K` を超えて分割しない。
+partitionsはこの全位置の木を束ねたpartition familyであり、未到達位置の木も定義しておく。
 分割できない条件は、引き続きその全場合を辺の上限へ含める。
 
 一方、一つの行動の被覆木の葉数も無制限にはしない。
 DPへ渡す詳細な辺の項数を最大 `J`、未展開部分を覆う**保守的な補完の項数**を最大 `C` とする。
+J・Cはそれぞれ一つのCellKey・行動に対する上限であり、異なる位置の同じlocal idをまとめた上限ではない。
 補完を複数の一次式の最大値で表す場合は、その一次式の数も `C` に数える。
 未展開の枝を削除する操作ではない。
 
@@ -584,7 +601,7 @@ W_{\rm top}+\max_{q'\in\mathrm{Targets}}B_{h-1}(q')
 この128は**与ダメージの上限**であり、乱数の最大消費数とは別の定数である。
 能力値や行動集合を変えた場合は、この小さい上限を再検証する。
 
-行き先集合は範囲として表現してよい。
+行き先集合は範囲として表現してよい。補完のp区間では、各p'のPartition[p']の全葉の和集合を行き先とする。
 全セルを対象にする場合の最大値は層ごとに一回計算すればよく、
 補完辺を `n_cell` 本の実辺へ展開する必要はない。
 乱数位置の進行範囲まで検証できれば、対象の位置範囲に限定した最大値を使える。
@@ -641,22 +658,25 @@ DP用の辺数が小さいことから、生成と検査まで軽いとは推論
 ```
 
 例えば、次の辺が `E<=227` を必要としているのに、実際には `E=239` だった場合、
-その乱数位置のセルに `E<=227` という述語を追加する。
+その食い違いの位置がp=100なら、Partition[100]だけに `E<=227` という述語を追加する。
+別位置の木へ自動伝播しない。同じ述語を複数位置へ追加する場合も、生成器が各位置を指定する。
 そのセルへ入る辺も、検査済みの更新式に対する出力述語の逆像で接続し直す。
 ラベルだけを付け替えたり、その抽象辺を全体から削除したりしてはならない。
 
-詳細なガードと更新式はセル番号・価格から分離して保持する。
+詳細なガードと更新式はlocal cell id・分割世代・価格から分離して保持する（入力位置pは実行条件に含む）。
 セルを細分化しただけなら、既存の証明領域を制限して再利用できる。
 未展開の補完部分の詳細が必要になった場合だけ、そのpcから記号実行を再開する。
 セルを分けるたびに一ターン全体を生成し直す必要はない。再利用の条件は補足仕様の第7節に定める。
 
-ただし、Supportは新partitionの初期セルから全層を再構築する。古いセル番号の支持をコピーしない。
+ただし、Supportは新しいpartition familyの `Partition[p0]` でalpha(S0)を分類し、そこから全層を再構築する。
+葉構造の変更は該当位置だけでよいが、古いlocal cell idの支持や変更位置だけのSupport更新で必要rootを省略しない。
 検査済みの全継続出力先と、そこから必要になる全合法行動の根を確定してから、新しい辺でDPを計算する。
 補完の詳細化で行き先が変わる場合も同様である。局所更新式の再利用と、支持・接続の再構築を混同しない。
 
 直近の条件だけでは足りないときは、数ターン分の更新式に沿って条件を逆向きに引く。
 例えば次に必要な条件が `E'<=227`、直前の式が `E'=E-16` なら、
 その前の条件は `E<=243`。
+この逆算結果を採用する場合も、直前の位置p_prevを指定してPartition[p_prev]を個別にrefineする。
 これをさらに前へ引けば、必要な将来の閾値だけを覚えるセルを作れる。
 clampでは、その条件の逆像が空・全域・区間のどれになるかを正確に計算する。
 
@@ -739,8 +759,10 @@ decide_bound(ctx, H, limits, shared_deadline, checked_cache):
 
     # 入力・勝利手順取得からの共通deadlineを使い、ここで15秒を取り直さない。
     tape = registered_rng_tape(ctx.bundle, seed)
-    partition = initial_predicate_partition(max_cells_per_position=K)
     envelope = kernel_construct_envelopes(ctx, H)
+    partitions: PartitionFamily = initial_partition_family(
+        positions=[S0.p, S0.p+H*ctx.bundle.bounds.Rmax],
+        base_box=BaseBox(S0), max_leaves_per_position=K)
 
     proof_provider = guard_certificate_provider(
         ctx, checked_cache, shared_deadline,
@@ -750,7 +772,7 @@ decide_bound(ctx, H, limits, shared_deadline, checked_cache):
         total_proof_bytes_limit=limits.proof_bytes,
         complete_unexpanded_cases_with_upper_edges=true)
     (Support, checked_coverage, model) = rebuild_support(
-        ctx, H, partition, envelope, proof_provider, checked_cache)
+        ctx, H, partitions, envelope, proof_provider, checked_cache)
 
     repeat within the shared time / work budgets:
         theta = next_bounded_coefficient_candidate()
@@ -775,7 +797,8 @@ decide_bound(ctx, H, limits, shared_deadline, checked_cache):
                     best = max(best, value)
                 B[h][q] = best
 
-        root = B[H][project(S0, partition)]
+        q0 = (S0.p, project(alpha(S0), partitions[S0.p]))
+        root = B[H][q0]
         if root==NEGATIVE_INFINITY:
             candidate_is_false = true
         else:
@@ -784,7 +807,8 @@ decide_bound(ctx, H, limits, shared_deadline, checked_cache):
         # Every multiplication inside checked_sum is checked too.
         # An undefined/unbounded upper value cannot establish candidate_is_false.
         if candidate_is_false:
-            certificate = (ctx.Problem, H, partition, checked_coverage.proof_records, Q,u,v,w,B)
+            certificate = (ctx.Problem, H, partitions, checked_coverage.coverage_version,
+                           checked_coverage.proof_records, Q,u,v,w,B)
             if independently_verify_local_inequalities(ctx, certificate):
                 return FALSE_WITH_CERTIFICATE(ctx.problem_key, H, certificate)
             return MODEL_OR_ARITHMETIC_ERROR
@@ -797,15 +821,20 @@ decide_bound(ctx, H, limits, shared_deadline, checked_cache):
         if selected_unexpanded_completion_on(P) and proof_work_budget_remains:
             resume_and_verify_selected_checkpoint(ctx, P, proof_provider, checked_cache)
             (Support, checked_coverage, model) = rebuild_support(
-                ctx, H, partition, envelope, proof_provider, checked_cache)
+                ctx, H, partitions, envelope, proof_provider, checked_cache)
             restart_coefficient_LP_for_changed_graph()
             continue
 
         add_affine_constraint_from(P)
         if refinement_is_selected_or_exact_price_lower_bound_is_insufficient:
-            partition = refine_a_separating_predicate_from(P, partition)
+            (p_refine, predicate) = choose_position_and_separating_predicate(P, partitions)
+            new_tree = refine(partitions[p_refine], predicate, max_leaves=K)
+            if new_tree is unavailable:
+                continue  # 現在のモデルで別の改善へ。残り予算がなければUNKNOWN。
+            partitions = replace_partition_at_fresh_version(partitions, p_refine, new_tree)
+            # 他位置の木は維持する。partition_versionはfamily全体で更新する。
             (Support, checked_coverage, model) = rebuild_support(
-                ctx, H, partition, envelope, proof_provider, checked_cache)
+                ctx, H, partitions, envelope, proof_provider, checked_cache)
             restart_coefficient_LP_for_changed_graph()
             # Never reuse old LP lower bounds as bounds for a refined graph.
 
@@ -813,7 +842,12 @@ decide_bound(ctx, H, limits, shared_deadline, checked_cache):
 ```
 
 `rebuild_support` は補足仕様第14節の手順である。毎回全層のSupportを空にして、
-S0の属する新partitionの葉から、全詳細葉・補完の継続出力先と必要根を前向きに構築する。
+`(p0,project(alpha(S0),partitions[p0]))` から、全詳細葉・補完の継続出力先と必要根を前向きに構築する。
+各出力の位置p'に応じて `classify_output(output,partitions[p'])` を行い、補完は各p'の全葉を含める。
+`partitions` は補足仕様第2節のPartitionFamily型であり、各木とfamily全体のpartition_versionを持つ。
+一位置のrefineでもpartition_versionを更新し、被覆・補完・行き先の変更ではcoverage_versionを更新する。
+根は `(problem_key,H,partition_version,coverage_version,t,p,local_cell_id,b)` で識別する。
+規則のrule_idとは別の世代であり、同じ番号に別内容を上書きしない。価格だけの変更では両世代を変えない。
 `proof_provider` は要求された根の証明を供給する生成側の窓口で、必要根や空判定を決めるAPIではない。
 適合する検査済みガードの領域制限は使えるが、不足する根は生成・検査するか、許可された補完で覆う。
 最終検査では提出証明書から必要根を読み直し、欠落は拒否する。出力をEnvelopeで削る前の包含検査も必須である。
@@ -859,7 +893,9 @@ prove_minimum(Problem, candidate_commands, limits):
 `h=N-1` へ届いていなければ最短確定としない。
 
 必要な `(turn,q)` は、補足仕様第14節のkernelが全出力先から作る支持集合で決める。
-支持集合は `PK` bit/層で保存できる。具体的な個体の前向き探索を、その作成に持ち込まない。
+支持集合は `sum_p leaf_count(Partition[p])<=PK` bit/層で保存できる。
+現世代の全CellKeyに密な内部添字を付け、local cell id単独をbit位置にはしない。
+具体的な個体の前向き探索を、その作成に持ち込まない。
 補完が要求する行き先も含め、未登録を理由に必要な根を省略しない。
 
 **14. 証明書の独立検査**
@@ -867,7 +903,7 @@ prove_minimum(Problem, candidate_commands, limits):
 否定証明には以下の1〜5、最短性の確定には6も必要である。
 
 1. rule_idの不変な登録内容と、seed・生のS0・開始ターン・観測・行動制約を照合する。数値設定やprofileの上書きを認めず、証明のHも確認する。
-2. kernelがS0の外包包含とセル分割を検査し、提出されたpartitionで支持集合を初期セルから再構築して、全必要根の合法遷移を検査する。
+2. kernelがS0の外包包含と各pのPartition[p]の被覆・leaf数を検査し、提出されたpartitions全体でSupportを初期CellKeyから全層再構築して、全必要根の合法遷移を検査する。
 3. 全詳細葉・補完の継続出力が次の外包に入り、終端を含めて資源が非負である。出力を切り落としていない。
 4. `B0(live)=-infinity`、全hで `B[h][G]=0` を確認し、各層で必要な全辺について `B[h][q] >= Wtau+B[h-1][q']` が成立する。
 5. 初期状態で `Q*E0 > B[H][q0]+u*A0+v*M0+w*I0`、または抽象成功経路が存在しない。
@@ -884,7 +920,7 @@ prove_minimum(Problem, candidate_commands, limits):
 オーバーフロー、未被覆領域、未処理の乱数位置があれば、証明は不成立。
 
 乱数テープの端で探索を切って偽としてはならない。
-使用する位置範囲 `P` が全対象経路を含むことを、1ターンの最大消費数とHから検証するか、
+使用する位置集合P_setが全対象経路を含むことを、登録時に再計算したRmaxとHから検証するか、
 範囲を超える可能性を「上限不明」として伝播させる。
 既存テープが5000要素であることは、5000以降へ行く経路がないことの証明ではない。
 
@@ -899,14 +935,16 @@ prove_minimum(Problem, candidate_commands, limits):
 | 対象 | 大きさ |
 | --- | --- |
 | 乱数テープ | `O(P)` |
-| 述語セル | `O(PK)` |
+| 述語セルと各位置の分割木 | `sum_p O(leaf_count(Partition[p]))=O(PK)` |
+| Support | 各層高々 `PK` bitと、現世代のCellKeyへの添字対応 |
 | 局所更新と補完の項 | `O(8PK(J+C))` |
 | ガード証明記録と検査作業領域 | 総byte数を別に制限。辺数から容量を決めつけない |
 | DPの2層 | `2×8PK` byte |
 | 全層の証明値を残す場合 | `(H+1)×8PK` byte |
 | 実状態 | 必要な入力・再実行用だけ。可逆ビットパックの `uint64_t[3]`（24byte）は設計案 |
 
-`hotel[position]` は直接添字、セルは葉番号、辺は連続配列でよい。
+`hotel[position]` は直接添字、各hotel内のセルはそのPartition[position]のlocal cell id、辺は連続配列でよい。
+DPのセル総数は全位置のleaf数の和であり、各pの木を一枚のglobal partitionへ共通化する意味ではない。
 大量の実状態ハッシュ表、親付きの個体履歴、無制限のPareto集合は不要。
 同じ完全な辺の記述を統合するなら、整列して完全比較できる。
 
@@ -968,6 +1006,9 @@ FLEEについては、行動可能時の引っ越しが残ること、眠り・�
 
 実装担当者は、次の順に可否を判断する。
 
+まず補足仕様第3・16節の登録検査で、有限CFG・非再帰のcall graph・静的上限を確認したRuleBundleを用意する。
+以下はその登録規則に対する評価であり、登録拒否を補完で回避するものではない。
+
 1. 一ターンの規則に沿う証明記録を生成・独立検査し、非空の枝・比較・乱数読みを欠落させた記録を拒否できるか確認する。
 2. セル分割後に既存の更新式を領域制限して再利用できるか確認し、小さい分割で価格0の上限を計算する。
 3. 価格を最適化して、偽を示す余裕が出るか確認する。
@@ -997,7 +1038,7 @@ FLEEについては、行動可能時の引っ越しが残ること、眠り・�
 MP吸収・MP回復・消耗品の追加は自座標の加減算とclampで表せることを確認した。
 敵行動回数・予約された眠り行動・バフ減算の位置も、固定規則と有限な局所Frameで扱える。
 各事実の範囲、指定外の未確認事項、実行時MP不足などの修正規則の必要箇所は補足仕様第17・18節に定める。
-18ブランチすべての対応を確認したという意味ではなく、まずyo2_beのPoCを優先する。
+約17ブランチすべての対応を確認したという意味ではなく、まずyo2_beのPoCを優先する。
 
 採用する消耗品がk種類なら、資源を
 
@@ -1052,7 +1093,7 @@ MP単調減少は、この定理自体の仮定ではない。
 | --- | --- |
 | 資源の型 | 敵・味方最大HP、MP上限の根拠、消耗品ごとの初期数。補充可能な軸を区別する |
 | 効果の型 | 所有者、OFF/ONと段階・負の解除カウンタの有限値、初期条件と全更新 |
-| 行動規則 | 合法な選択集合、実行時の状態・残量の再判定、行動枠と減算pc、固定ループ・再選択の上限 |
+| 行動規則 | 合法な選択集合、実行時の状態・残量の再判定、行動枠と減算pc、固定ループ・再選択の上限。unroll後のCFG・call graphのacyclic検査と、命令step数・call depth・Rmaxの算出 |
 | 数値と乱数 | 対象ビルドの限定関数、引数と消費上限、カメラ・ローテーション、ターン番号の使用箇所 |
 | 補完 | 許可pc、未実行の行動と資源収支、出力外包と全行き先 |
 
