@@ -2440,6 +2440,65 @@ namespace d20proof {
                 return result;
             }
 
+            RuleBundle changedEffects = makeYo2BeBundleCandidate();
+            bool changedDeclaredEffects = false;
+            for (Routine &routine: changedEffects.program.routines) {
+                if (!routine.declaredEffects.stateReads.empty()) {
+                    routine.declaredEffects.stateReads.pop_back();
+                    changedDeclaredEffects = true;
+                    break;
+                }
+            }
+            if (!changedDeclaredEffects || !expectRegistrationReject(
+                    std::move(changedEffects),
+                    "same-version declared routine effects mutation")) {
+                if (!changedDeclaredEffects) {
+                    result.reason = "registration self-check could not locate a declared state read";
+                }
+                return result;
+            }
+
+            RuleBundle changedCallBinding = makeYo2BeBundleCandidate();
+            bool changedTypedCall = false;
+            for (Routine &routine: changedCallBinding.program.routines) {
+                for (Instruction &instruction: routine.instructions) {
+                    if (instruction.opcode == Opcode::Call && !instruction.call.arguments.empty()) {
+                        instruction.call.arguments.clear();
+                        changedTypedCall = true;
+                        break;
+                    }
+                }
+                if (changedTypedCall) {
+                    break;
+                }
+            }
+            if (!changedTypedCall || !expectRegistrationReject(
+                    std::move(changedCallBinding),
+                    "same-version typed CALL argument mutation")) {
+                if (!changedTypedCall) {
+                    result.reason = "registration self-check could not locate a CALL with typed arguments";
+                }
+                return result;
+            }
+
+            RuleBundle changedResultType = makeYo2BeBundleCandidate();
+            bool changedTypedResult = false;
+            for (Routine &routine: changedResultType.program.routines) {
+                if (routine.result.present) {
+                    routine.result.type = ScalarType::Boolean;
+                    changedTypedResult = true;
+                    break;
+                }
+            }
+            if (!changedTypedResult || !expectRegistrationReject(
+                    std::move(changedResultType),
+                    "same-version typed routine result mutation")) {
+                if (!changedTypedResult) {
+                    result.reason = "registration self-check could not locate a typed routine result";
+                }
+                return result;
+            }
+
             RuleBundle changedFleeLegality = makeYo2BeBundleCandidate();
             bool foundFleeProfile = false;
             for (CommandProfile &profile: changedFleeLegality.profile.commandProfiles) {

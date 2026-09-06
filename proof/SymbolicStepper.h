@@ -39,6 +39,9 @@ namespace d20proof {
     struct ReturnAddress {
         std::string routineId;
         int pc = -1;
+        std::array<double, static_cast<std::size_t>(ScalarSlot::Count)> callerLocalScalars{};
+        std::array<bool, static_cast<std::size_t>(ScalarSlot::Count)> callerLocalDefined{};
+        ScalarSlot resultSlot = ScalarSlot::None;
 
         bool operator==(const ReturnAddress &) const = default;
     };

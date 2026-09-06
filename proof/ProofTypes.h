@@ -89,6 +89,7 @@ namespace d20proof {
     struct PrefixReceipt {
         bool valid = false;
         bool observationsChecked = false;
+        SolveKind failureKind = SolveKind::InvalidPrefix;
         std::string reason;
         Problem initialProblem;
         std::vector<int> prefix;

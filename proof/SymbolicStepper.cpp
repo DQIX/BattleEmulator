@@ -239,6 +239,19 @@ namespace d20proof {
             return false;
         }
 
+        bool scalarIsTurnTransient(ScalarSlot slot) noexcept {
+            switch (slot) {
+                case ScalarSlot::DefenceHalfFlag:
+                case ScalarSlot::PreemptiveFlag:
+                case ScalarSlot::ActionSlot0:
+                case ScalarSlot::ActionSlot1:
+                case ScalarSlot::ActionCount:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
         double normalizeScalar(ScalarSlot slot, double value) noexcept {
             if (scalarIsIntegral(slot)) {
                 return static_cast<double>(static_cast<std::int64_t>(value));
@@ -1307,14 +1320,48 @@ namespace d20proof {
                     return result;
                 }
                 const Routine *callee = findRoutine(bundle_.program, instruction.callTarget);
-                if (callee == nullptr) {
-                    result.reason = "CALL target is missing";
+                if (callee == nullptr || instruction.call.arguments.size() != callee->parameters.size()) {
+                    result.reason = "CALL target or typed arguments are invalid";
                     return result;
                 }
+                if ((callee->result.present && instruction.call.resultSlot == ScalarSlot::None) ||
+                    (!callee->result.present && instruction.call.resultSlot != ScalarSlot::None)) {
+                    result.reason = "CALL typed result binding is invalid";
+                    return result;
+                }
+
+                std::vector<double> arguments;
+                arguments.reserve(instruction.call.arguments.size());
+                for (ScalarSlot argumentSlot: instruction.call.arguments) {
+                    double value = 0.0;
+                    if (!getScalar(frame, argumentSlot, value, result.reason)) {
+                        return result;
+                    }
+                    arguments.push_back(value);
+                }
+
                 SymbolicFrame child = frame;
-                child.callStack.push_back({frame.routineId, instruction.successors.front()});
+                ReturnAddress address;
+                address.routineId = frame.routineId;
+                address.pc = instruction.successors.front();
+                address.callerLocalScalars = frame.scalars;
+                address.callerLocalDefined = frame.scalarDefined;
+                address.resultSlot = instruction.call.resultSlot;
+                child.callStack.push_back(std::move(address));
                 child.routineId = callee->id;
                 child.pc = 0;
+                for (int rawSlot = 1; rawSlot < static_cast<int>(ScalarSlot::Count); ++rawSlot) {
+                    const ScalarSlot slot = static_cast<ScalarSlot>(rawSlot);
+                    if (!scalarIsTurnTransient(slot)) {
+                        child.scalars[scalarIndex(slot)] = 0.0;
+                        child.scalarDefined[scalarIndex(slot)] = false;
+                    }
+                }
+                for (std::size_t index = 0; index < callee->parameters.size(); ++index) {
+                    if (!setScalar(child, callee->parameters[index].slot, arguments[index], result.reason)) {
+                        return result;
+                    }
+                }
                 if (!applyRoutineInitializers(child, *callee, result.reason)) {
                     return result;
                 }
@@ -1328,6 +1375,11 @@ namespace d20proof {
                     return result;
                 }
                 SymbolicFrame child = frame;
+                double returnValue = 0.0;
+                const bool hasResult = routine->result.present;
+                if (hasResult && !getScalar(frame, routine->result.slot, returnValue, result.reason)) {
+                    return result;
+                }
                 if (frame.routineId == "ally-slot") {
                     child.actionProgress |= ActionProgressAllyDone;
                 } else if (frame.routineId == "enemy-slot") {
@@ -1335,6 +1387,25 @@ namespace d20proof {
                 }
                 const ReturnAddress address = child.callStack.back();
                 child.callStack.pop_back();
+                for (int rawSlot = 1; rawSlot < static_cast<int>(ScalarSlot::Count); ++rawSlot) {
+                    const ScalarSlot slot = static_cast<ScalarSlot>(rawSlot);
+                    if (!scalarIsTurnTransient(slot)) {
+                        child.scalars[scalarIndex(slot)] = address.callerLocalScalars[scalarIndex(slot)];
+                        child.scalarDefined[scalarIndex(slot)] = address.callerLocalDefined[scalarIndex(slot)];
+                    }
+                }
+                if (hasResult) {
+                    if (address.resultSlot == ScalarSlot::None ||
+                        !setScalar(child, address.resultSlot, returnValue, result.reason)) {
+                        if (result.reason.empty()) {
+                            result.reason = "RETURN has no typed caller result slot";
+                        }
+                        return result;
+                    }
+                } else if (address.resultSlot != ScalarSlot::None) {
+                    result.reason = "void RETURN has a typed caller result slot";
+                    return result;
+                }
                 child.routineId = address.routineId;
                 child.pc = address.pc;
                 result.frames.push_back(std::move(child));

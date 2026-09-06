@@ -229,6 +229,13 @@ namespace d20proof {
         bool operator==(const StateWriteOperand &) const = default;
     };
 
+    struct CallOperand {
+        std::vector<ScalarSlot> arguments;
+        ScalarSlot resultSlot = ScalarSlot::None;
+
+        bool operator==(const CallOperand &) const = default;
+    };
+
     struct Instruction {
         Opcode opcode = Opcode::Step;
         std::string label;
@@ -242,6 +249,7 @@ namespace d20proof {
         RngReadOperand rngRead;
         ScalarUpdateOperand scalarUpdate;
         std::string callTarget;
+        CallOperand call;
         std::string nativeId;
         SwitchOperand switchOperand;
         BranchCondition branchCondition;
@@ -257,11 +265,47 @@ namespace d20proof {
         bool operator==(const ScalarInitializer &) const = default;
     };
 
+    enum class ScalarType : std::uint8_t {
+        Real,
+        Integer,
+        Boolean,
+        Action,
+    };
+
+    struct RoutineParameter {
+        ScalarSlot slot = ScalarSlot::None;
+        ScalarType type = ScalarType::Real;
+
+        bool operator==(const RoutineParameter &) const = default;
+    };
+
+    struct RoutineResultSpec {
+        bool present = false;
+        ScalarSlot slot = ScalarSlot::None;
+        ScalarType type = ScalarType::Real;
+
+        bool operator==(const RoutineResultSpec &) const = default;
+    };
+
+    struct RoutineEffects {
+        std::vector<ResourceAxis> resourceReads;
+        std::vector<ResourceAxis> resourceWrites;
+        std::vector<StateField> stateReads;
+        std::vector<StateField> stateWrites;
+        std::vector<ScalarSlot> transientReads;
+        std::vector<ScalarSlot> transientWrites;
+
+        bool operator==(const RoutineEffects &) const = default;
+    };
+
     struct Routine {
         std::string id;
         bool turnRoutine = false;
         std::vector<Instruction> instructions;
         std::vector<ScalarInitializer> localInitializers;
+        std::vector<RoutineParameter> parameters;
+        RoutineResultSpec result;
+        RoutineEffects declaredEffects;
 
         bool operator==(const Routine &) const = default;
     };

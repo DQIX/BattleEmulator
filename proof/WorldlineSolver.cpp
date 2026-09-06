@@ -1176,79 +1176,21 @@ namespace d20proof {
             return result;
         }
 
-        std::optional<SolveResult> witness;
-        if (!candidateHint.empty()) {
-            if (report.candidates >= limits.maxCandidates ||
-                !chargeSearchBudget(
-                    report,
-                    limits,
-                    candidateHint.size() + 1,
-                    candidateHint.size() * sizeof(int))) {
-                SolveResult result = makeFailure(
-                    SolveKind::Unknown,
-                    horizonLimit,
-                    "candidate hint exceeded shared proof budget",
-                    start);
-                result.budget = report;
-                stampElapsed(result.budget, start);
-                return result;
-            }
-            ++report.candidates;
-            ReplayResult replay = ExactReplay::replay(bundle_, problem, candidateHint, false);
-            if (!replay.supported) {
-                SolveResult result = makeFailure(
-                    SolveKind::ModelError,
-                    horizonLimit,
-                    replay.reason,
-                    start);
-                result.budget = report;
-                stampElapsed(result.budget, start);
-                return result;
-            }
-            if (replay.valid && replay.won && replay.firstWinningTurn <= horizonLimit) {
-                SolveResult result;
-                result.kind = SolveKind::Win;
-                result.horizon = horizonLimit;
-                result.firstWinningTurn = replay.firstWinningTurn;
-                result.commands.assign(
-                    candidateHint.begin(),
-                    candidateHint.begin() + replay.firstWinningTurn);
-                replay.checkedCommands = result.commands;
-                result.replay = std::move(replay);
-                result.budget = report;
-                bindProblemKey(result, problem);
-                witness = std::move(result);
-            }
-            if (deadlineReached(start, limits, report)) {
-                SolveResult result = makeFailure(
-                    SolveKind::Unknown,
-                    horizonLimit,
-                    "candidate hint replay exhausted total_time",
-                    start);
-                result.budget = report;
-                stampElapsed(result.budget, start);
-                return result;
-            }
-        }
-
-        if (!witness.has_value()) {
-            SolveResult result = solveSuffixWithBudget(
-                problem,
-                horizonLimit,
-                limits,
-                {},
-                start,
-                report,
-                checkedCache);
-            if (result.kind != SolveKind::Win) {
-                return result;
-            }
-            witness = std::move(result);
+        SolveResult witness = solveSuffixWithBudget(
+            problem,
+            horizonLimit,
+            limits,
+            candidateHint,
+            start,
+            report,
+            checkedCache);
+        if (witness.kind != SolveKind::Win) {
+            return witness;
         }
 
         return tightenMinimumWithBudget(
             problem,
-            std::move(*witness),
+            std::move(witness),
             limits,
             start,
             checkedCache);
@@ -1493,6 +1435,7 @@ namespace d20proof {
                 "candidate hint exceeds H_limit",
                 start);
         }
+        std::optional<std::pair<std::vector<int>, CandidateFailureKind>> rejectedHint;
         if (!candidateHint.empty()) {
             if (report.candidates >= budget.maxCandidates) {
                 SolveResult result = makeFailure(
@@ -1541,6 +1484,13 @@ namespace d20proof {
                 stampElapsed(result.budget, start);
                 return result;
             }
+            CandidateFailureKind hintFailure = CandidateFailureKind::NotWon;
+            if (!candidateReplay.valid) {
+                hintFailure = CandidateFailureKind::IllegalCommand;
+            } else if (candidateReplay.lost) {
+                hintFailure = CandidateFailureKind::Lost;
+            }
+            rejectedHint = std::pair{candidateHint, hintFailure};
             if (deadlineReached(start, budget, report)) {
                 SolveResult result = makeFailure(
                     SolveKind::Unknown,
@@ -1658,8 +1608,21 @@ namespace d20proof {
         auto iterator = std::make_unique<GoalCandidateIterator>(
             bundle_, falseCheck.snapshot, distances, horizon, budget, report);
         std::map<std::vector<int>, CandidateFailureKind> failedCommands;
+        if (rejectedHint.has_value()) {
+            const std::uint64_t failedHintBytes =
+                sizeof(CandidateFailureKind) + rejectedHint->first.size() * sizeof(int);
+            if (!chargeSearchBudget(report, budget, 1, failedHintBytes)) {
+                return makeFailure(
+                    SolveKind::Unknown,
+                    horizon,
+                    "failed candidate hint could not fit FailedCommands budget",
+                    start);
+            }
+            failedCommands.emplace(rejectedHint->first, rejectedHint->second);
+        }
         std::vector<CandidateMismatch> failures;
         std::uint32_t trialOrder = 0;
+        std::uint32_t failedCandidatesInBatch = rejectedHint.has_value() ? 1u : 0u;
 
         auto makeCurrentFailure = [&](SolveKind kind, std::string reason) {
             SolveResult result = makeFailure(kind, horizon, std::move(reason), start);
@@ -1890,6 +1853,7 @@ namespace d20proof {
             iterator = std::make_unique<GoalCandidateIterator>(
                 bundle_, falseCheck.snapshot, distances, horizon, budget, report);
             failures.clear();
+            failedCandidatesInBatch = 0;
             return std::nullopt;
         };
 
@@ -2019,6 +1983,7 @@ namespace d20proof {
                 return result;
             }
             failedCommands.emplace(path.commands, failure);
+            ++failedCandidatesInBatch;
 
             const std::optional<CandidateMismatch> mismatch = firstCandidateMismatch(
                 bundle_, falseCheck.snapshot, path, replay, trialOrder++);
@@ -2036,7 +2001,7 @@ namespace d20proof {
                 failures.push_back(*mismatch);
             }
 
-            if (failures.size() == 8) {
+            if (failedCandidatesInBatch >= 8) {
                 const std::optional<bool> repaired = tryOneRepair();
                 if (!repaired.has_value()) {
                     return makeCurrentFailure(
@@ -2050,6 +2015,7 @@ namespace d20proof {
                     continue;
                 }
                 failures.clear();
+                failedCandidatesInBatch = 0;
             }
         }
     }
@@ -2067,7 +2033,12 @@ namespace d20proof {
 
         PrefixReceipt receipt = ExactReplay::replayPrefix(bundle_, initialProblem, prefix);
         if (!receipt.valid) {
-            return makeFailure(SolveKind::InvalidPrefix, horizon, receipt.reason, start);
+            const SolveKind failureKind =
+                receipt.failureKind == SolveKind::UnsupportedInput ||
+                receipt.failureKind == SolveKind::ModelError
+                    ? receipt.failureKind
+                    : SolveKind::InvalidPrefix;
+            return makeFailure(failureKind, horizon, receipt.reason, start);
         }
         const std::uint64_t prefixBytes =
             receipt.prefix.size() * sizeof(int) +
@@ -2113,6 +2084,12 @@ namespace d20proof {
             result.kind = SolveKind::Win;
             result.horizon = horizon;
             result.firstWinningTurn = 0;
+            if (proveMinimal) {
+                result.minimality = MinimalityKind::Optimal;
+                result.minimumTurnLowerBound = 0;
+                result.minimumTurnUpperBound = 0;
+                result.reason = "prefix already reaches the goal; minimum suffix length is zero";
+            }
             result.replay = ExactReplay::replay(bundle_, suffixProblem, {}, true);
             result.budget = report;
             bindProblemKey(result, suffixProblem);

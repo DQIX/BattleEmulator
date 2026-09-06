@@ -56,6 +56,31 @@ namespace d20proof {
             return static_cast<int>((nowState >> 12) & 0xfffffULL);
         }
 
+        std::string validateProfileModes(const RawState &state) {
+            const Player &hero = state.players[0];
+            const Player &enemy = state.players[1];
+            if (hero.sleeping || enemy.sleeping) {
+                return "sleeping state is unsupported";
+            }
+            if (hero.paralysis && (hero.paralysisTurns < -2 || hero.paralysisTurns > 4)) {
+                return "active paralysis timer outside proof mode range";
+            }
+            if (hero.specialCharge && (hero.specialChargeTurn < 0 || hero.specialChargeTurn > 6)) {
+                return "active charge timer outside proof mode range";
+            }
+            if (hero.acrobaticStar && (hero.acrobaticStarTurn < 1 || hero.acrobaticStarTurn > 6)) {
+                return "active acrobat timer outside proof mode range";
+            }
+            if (enemy.rage && (enemy.rageTurns < 1 || enemy.rageTurns > 4)) {
+                return "active rage timer outside proof mode range";
+            }
+            const int cameraMode = static_cast<int>((state.nowState >> 8) & 0xfULL);
+            if (cameraMode < 0 || cameraMode > 5) {
+                return "camera mode outside proof mode range";
+            }
+            return {};
+        }
+
         bool battleIsTerminal(const RawState &state) noexcept {
             return state.players[0].hp == 0 || state.players[1].hp == 0;
         }
@@ -81,8 +106,8 @@ namespace d20proof {
                 hero.medicinal_herbs_count > bundle.profile.heroInitialHerbs) {
                 return "observation resource value outside profile";
             }
-            if (hero.sleeping || enemy.sleeping) {
-                return "sleeping observation is unsupported";
+            if (const std::string modeError = validateProfileModes(state); !modeError.empty()) {
+                return "observation " + modeError;
             }
             return {};
         }
@@ -328,21 +353,8 @@ namespace d20proof {
             hero.medicinal_herbs_count > bundle.profile.heroInitialHerbs) {
             return "herb count outside profile";
         }
-        if (hero.sleeping || enemy.sleeping) {
-            return "sleeping state is unsupported";
-        }
-        if (hero.paralysis && (hero.paralysisTurns < -2 || hero.paralysisTurns > 4)) {
-            return "active paralysis timer outside proof mode range";
-        }
-
-        if (hero.specialCharge && (hero.specialChargeTurn < 0 || hero.specialChargeTurn > 6)) {
-            return "active charge timer outside proof mode range";
-        }
-        if (hero.acrobaticStar && (hero.acrobaticStarTurn < 1 || hero.acrobaticStarTurn > 6)) {
-            return "active acrobat timer outside proof mode range";
-        }
-        if (enemy.rage && (enemy.rageTurns < 1 || enemy.rageTurns > 4)) {
-            return "active rage timer outside proof mode range";
+        if (const std::string modeError = validateProfileModes(problem.s0); !modeError.empty()) {
+            return modeError;
         }
 
         const long long chargeLower =
@@ -355,11 +367,6 @@ namespace d20proof {
             acroLower < std::numeric_limits<int>::min() ||
             paralysisLevelUpper > std::numeric_limits<int>::max()) {
             return "raw timer arithmetic may overflow within horizon";
-        }
-
-        const int cameraMode = static_cast<int>((problem.s0.nowState >> 8) & 0xfULL);
-        if (cameraMode < 0 || cameraMode > 5) {
-            return "camera mode outside proof mode range";
         }
 
         const long long lastPosition = static_cast<long long>(problem.s0.position) +
@@ -504,12 +511,19 @@ namespace d20proof {
 
         const std::string validationError = validateProblem(bundle, problem, static_cast<int>(prefix.size()));
         if (!validationError.empty()) {
+            receipt.failureKind = SolveKind::UnsupportedInput;
             receipt.reason = validationError;
             return receipt;
         }
 
         const ReplayResult replayedPrefix = replay(bundle, problem, prefix, true);
-        if (!replayedPrefix.supported || !replayedPrefix.valid) {
+        if (!replayedPrefix.supported) {
+            receipt.failureKind = SolveKind::ModelError;
+            receipt.reason = replayedPrefix.reason;
+            return receipt;
+        }
+        if (!replayedPrefix.valid) {
+            receipt.failureKind = SolveKind::InvalidPrefix;
             receipt.reason = replayedPrefix.reason;
             return receipt;
         }
@@ -518,12 +532,14 @@ namespace d20proof {
         receipt.terminalState = replayedPrefix.finalState;
         receipt.terminalTurn = problem.startTurn + static_cast<int>(replayedPrefix.checkedCommands.size());
         if (turnFromNowState(receipt.terminalState.nowState) != receipt.terminalTurn) {
+            receipt.failureKind = SolveKind::ModelError;
             receipt.reason = "prefix turn accounting disagrees with NowState";
             return receipt;
         }
 
         receipt.observationsChecked = true;
         receipt.valid = true;
+        receipt.failureKind = SolveKind::Win;
         return receipt;
     }
 

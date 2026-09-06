@@ -973,6 +973,651 @@ namespace d20proof {
             std::vector<ScalarInitializer> initializers_;
         };
 
+        bool isTurnTransientScalar(ScalarSlot slot) noexcept {
+            switch (slot) {
+                case ScalarSlot::DefenceHalfFlag:
+                case ScalarSlot::PreemptiveFlag:
+                case ScalarSlot::ActionSlot0:
+                case ScalarSlot::ActionSlot1:
+                case ScalarSlot::ActionCount:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        ScalarType scalarInterfaceType(ScalarSlot slot) {
+            switch (slot) {
+                case ScalarSlot::Damage:
+                case ScalarSlot::Amount:
+                    return ScalarType::Integer;
+                case ScalarSlot::Random0:
+                case ScalarSlot::Random1:
+                case ScalarSlot::SpeedHero:
+                case ScalarSlot::SpeedEnemy:
+                    return ScalarType::Real;
+                case ScalarSlot::Duration:
+                case ScalarSlot::ActionCount:
+                    return ScalarType::Integer;
+                case ScalarSlot::CriticalFlag:
+                case ScalarSlot::DodgeFlag:
+                case ScalarSlot::ShieldFlag:
+                case ScalarSlot::DefenceHalfFlag:
+                case ScalarSlot::PreemptiveFlag:
+                    return ScalarType::Boolean;
+                case ScalarSlot::ActionSlot0:
+                case ScalarSlot::ActionSlot1:
+                    return ScalarType::Action;
+                case ScalarSlot::None:
+                case ScalarSlot::Count:
+                    break;
+            }
+            return ScalarType::Real;
+        }
+
+        struct EffectSets {
+            std::set<ResourceAxis> resourceReads;
+            std::set<ResourceAxis> resourceWrites;
+            std::set<StateField> stateReads;
+            std::set<StateField> stateWrites;
+            std::set<ScalarSlot> transientReads;
+            std::set<ScalarSlot> transientWrites;
+        };
+
+        void mergeEffects(EffectSets &target, const EffectSets &source) {
+            target.resourceReads.insert(source.resourceReads.begin(), source.resourceReads.end());
+            target.resourceWrites.insert(source.resourceWrites.begin(), source.resourceWrites.end());
+            target.stateReads.insert(source.stateReads.begin(), source.stateReads.end());
+            target.stateWrites.insert(source.stateWrites.begin(), source.stateWrites.end());
+            target.transientReads.insert(source.transientReads.begin(), source.transientReads.end());
+            target.transientWrites.insert(source.transientWrites.begin(), source.transientWrites.end());
+        }
+
+        void addScalarEffectRead(EffectSets &effects, ScalarSlot slot) {
+            if (slot != ScalarSlot::None && isTurnTransientScalar(slot)) {
+                effects.transientReads.insert(slot);
+            }
+        }
+
+        void addScalarEffectWrite(EffectSets &effects, ScalarSlot slot) {
+            if (slot != ScalarSlot::None && isTurnTransientScalar(slot)) {
+                effects.transientWrites.insert(slot);
+            }
+        }
+
+        void addValueRefEffects(EffectSets &effects, const ValueRef &ref) {
+            switch (ref.kind) {
+                case ValueRefKind::Resource:
+                    effects.resourceReads.insert(ref.resource);
+                    break;
+                case ValueRefKind::StateField:
+                case ValueRefKind::StateIndexedLookup:
+                    effects.stateReads.insert(ref.state);
+                    break;
+                case ValueRefKind::Scalar:
+                case ValueRefKind::FixedSourceTimesScalar:
+                    addScalarEffectRead(effects, ref.scalar);
+                    break;
+                case ValueRefKind::ResourceMinusScalar:
+                    effects.resourceReads.insert(ref.resource);
+                    addScalarEffectRead(effects, ref.scalar);
+                    break;
+                case ValueRefKind::Constant:
+                    break;
+            }
+        }
+
+        EffectSets directInstructionEffects(const Instruction &instruction) {
+            EffectSets effects;
+            if (instruction.opcode == Opcode::Branch) {
+                for (const ConditionClause &conditionClause: instruction.branchCondition.any) {
+                    for (const Comparison &item: conditionClause.all) {
+                        addValueRefEffects(effects, item.left);
+                        addValueRefEffects(effects, item.right);
+                    }
+                }
+            }
+            if (instruction.opcode == Opcode::Switch) {
+                switch (instruction.switchOperand.kind) {
+                    case SwitchSourceKind::CurrentAction:
+                        effects.stateReads.insert(StateField::CurrentAction);
+                        break;
+                    case SwitchSourceKind::ActionHistorySlot0:
+                        effects.transientReads.insert(ScalarSlot::ActionSlot0);
+                        break;
+                    case SwitchSourceKind::ActionHistorySlot1:
+                        effects.transientReads.insert(ScalarSlot::ActionSlot1);
+                        break;
+                    case SwitchSourceKind::WeightedScalarUpperBounds:
+                        addScalarEffectRead(effects, instruction.switchOperand.sourceSlot);
+                        break;
+                    case SwitchSourceKind::None:
+                        break;
+                }
+            }
+            if (instruction.opcode == Opcode::ResourceUpdate) {
+                effects.resourceReads.insert(instruction.resourceUpdate.target);
+                effects.resourceWrites.insert(instruction.resourceUpdate.target);
+                addScalarEffectRead(effects, instruction.resourceUpdate.sourceSlot);
+            }
+            if (instruction.opcode == Opcode::ModeUpdate) {
+                for (const StateWriteOperand &write: instruction.stateWrites) {
+                    if (write.kind == StateWriteKind::Increment || write.kind == StateWriteKind::Decrement) {
+                        effects.stateReads.insert(write.target);
+                    }
+                    effects.stateWrites.insert(write.target);
+                    addScalarEffectRead(effects, write.sourceSlot);
+                }
+            }
+            if (instruction.opcode == Opcode::ScalarUpdate) {
+                const ScalarUpdateOperand &update = instruction.scalarUpdate;
+                if (update.kind == ScalarUpdateKind::MultiplyBySlot ||
+                    update.kind == ScalarUpdateKind::MultiplyRational ||
+                    update.kind == ScalarUpdateKind::MultiplyByDefenceFlag) {
+                    addScalarEffectRead(effects, update.targetSlot);
+                }
+                if (update.kind == ScalarUpdateKind::MultiplyBySlot ||
+                    update.kind == ScalarUpdateKind::SetFixedSourceTimesSlot) {
+                    addScalarEffectRead(effects, update.sourceSlot);
+                }
+                if (update.kind == ScalarUpdateKind::MultiplyByDefenceFlag) {
+                    effects.transientReads.insert(ScalarSlot::DefenceHalfFlag);
+                }
+                addScalarEffectWrite(effects, update.targetSlot);
+            }
+            if (instruction.opcode == Opcode::ReadRng) {
+                if (instruction.rngRead.kind == RngReadKind::PercentCameraRemaining) {
+                    effects.stateReads.insert(StateField::Camera);
+                }
+                addScalarEffectWrite(effects, instruction.rngRead.resultSlot);
+            }
+            if (instruction.opcode == Opcode::Native) {
+                addScalarEffectWrite(effects, instruction.scalarResult);
+            }
+            if (instruction.opcode == Opcode::Call) {
+                for (ScalarSlot argument: instruction.call.arguments) {
+                    addScalarEffectRead(effects, argument);
+                }
+                addScalarEffectWrite(effects, instruction.call.resultSlot);
+            }
+            if (instruction.opcode == Opcode::RecordAction) {
+                effects.stateReads.insert(StateField::CurrentAction);
+                effects.transientReads.insert(ScalarSlot::ActionCount);
+                effects.transientReads.insert(ScalarSlot::ActionSlot0);
+                effects.transientReads.insert(ScalarSlot::ActionSlot1);
+                effects.transientWrites.insert(ScalarSlot::ActionCount);
+                effects.transientWrites.insert(ScalarSlot::ActionSlot0);
+                effects.transientWrites.insert(ScalarSlot::ActionSlot1);
+            }
+            return effects;
+        }
+
+        RoutineEffects materializeEffects(const EffectSets &sets) {
+            RoutineEffects effects;
+            effects.resourceReads.assign(sets.resourceReads.begin(), sets.resourceReads.end());
+            effects.resourceWrites.assign(sets.resourceWrites.begin(), sets.resourceWrites.end());
+            effects.stateReads.assign(sets.stateReads.begin(), sets.stateReads.end());
+            effects.stateWrites.assign(sets.stateWrites.begin(), sets.stateWrites.end());
+            effects.transientReads.assign(sets.transientReads.begin(), sets.transientReads.end());
+            effects.transientWrites.assign(sets.transientWrites.begin(), sets.transientWrites.end());
+            return effects;
+        }
+
+        bool computeRoutineEffectMap(
+            const RuleProgram &program,
+            std::unordered_map<std::string, RoutineEffects> &out,
+            std::string &error) {
+            std::unordered_map<std::string, const Routine *> routines;
+            for (const Routine &routine: program.routines) {
+                routines.emplace(routine.id, &routine);
+            }
+            std::set<std::string> visiting;
+            std::function<bool(const std::string &)> compute = [&](const std::string &id) {
+                if (out.contains(id)) {
+                    return true;
+                }
+                if (!visiting.insert(id).second) {
+                    error = "recursive call graph while computing declared effects";
+                    return false;
+                }
+                const auto found = routines.find(id);
+                if (found == routines.end()) {
+                    error = "missing routine while computing declared effects";
+                    return false;
+                }
+                EffectSets effects;
+                for (const ScalarInitializer &initializer: found->second->localInitializers) {
+                    addScalarEffectWrite(effects, initializer.slot);
+                }
+                for (const Instruction &instruction: found->second->instructions) {
+                    mergeEffects(effects, directInstructionEffects(instruction));
+                    if (instruction.opcode == Opcode::Call) {
+                        if (!compute(instruction.callTarget)) {
+                            return false;
+                        }
+                        const RoutineEffects &callee = out.at(instruction.callTarget);
+                        EffectSets calleeSets;
+                        calleeSets.resourceReads.insert(callee.resourceReads.begin(), callee.resourceReads.end());
+                        calleeSets.resourceWrites.insert(callee.resourceWrites.begin(), callee.resourceWrites.end());
+                        calleeSets.stateReads.insert(callee.stateReads.begin(), callee.stateReads.end());
+                        calleeSets.stateWrites.insert(callee.stateWrites.begin(), callee.stateWrites.end());
+                        calleeSets.transientReads.insert(callee.transientReads.begin(), callee.transientReads.end());
+                        calleeSets.transientWrites.insert(callee.transientWrites.begin(), callee.transientWrites.end());
+                        mergeEffects(effects, calleeSets);
+                    }
+                }
+                out.emplace(id, materializeEffects(effects));
+                visiting.erase(id);
+                return true;
+            };
+            for (const Routine &routine: program.routines) {
+                if (!compute(routine.id)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        bool hasId(const std::set<std::string_view> &ids, const std::string &id) {
+            return ids.contains(id);
+        }
+
+        bool configureYo2RoutineContracts(RuleProgram &program, std::string &error) {
+            const std::set<std::string_view> damageResults = {
+                "ally-action", "enemy-action", "ally-attack", "ally-dragon-slash",
+                "ally-defence", "ally-herb", "ally-heal", "ally-crack", "ally-acro",
+                "ally-paralysis", "ally-cure-paralysis", "ally-inactive",
+                "enemy-victimiser", "enemy-hp-hoover", "enemy-crack", "enemy-attack",
+                "enemy-manazashi", "enemy-puff-puff", "enemy-inactive", "acro-dodge", "counter",
+            };
+            const std::set<std::string_view> damageParameters = {
+                "rage-crossing", "process7a8", "apply-ally-result", "apply-enemy-result",
+            };
+            std::unordered_map<std::string, Routine *> routines;
+            for (Routine &routine: program.routines) {
+                routines.emplace(routine.id, &routine);
+                if (hasId(damageParameters, routine.id)) {
+                    routine.parameters = {{ScalarSlot::Damage, scalarInterfaceType(ScalarSlot::Damage)}};
+                }
+                if (hasId(damageResults, routine.id)) {
+                    routine.result = {true, ScalarSlot::Damage, scalarInterfaceType(ScalarSlot::Damage)};
+                }
+            }
+            for (Routine &routine: program.routines) {
+                for (Instruction &instruction: routine.instructions) {
+                    if (instruction.opcode != Opcode::Call) {
+                        continue;
+                    }
+                    const auto calleeIt = routines.find(instruction.callTarget);
+                    if (calleeIt == routines.end()) {
+                        error = "assembler cannot bind typed CALL to missing routine";
+                        return false;
+                    }
+                    instruction.call.arguments.clear();
+                    for (const RoutineParameter &parameter: calleeIt->second->parameters) {
+                        instruction.call.arguments.push_back(parameter.slot);
+                    }
+                    instruction.call.resultSlot = calleeIt->second->result.present
+                        ? calleeIt->second->result.slot
+                        : ScalarSlot::None;
+                }
+            }
+            std::unordered_map<std::string, RoutineEffects> effects;
+            if (!computeRoutineEffectMap(program, effects, error)) {
+                return false;
+            }
+            for (Routine &routine: program.routines) {
+                routine.declaredEffects = effects.at(routine.id);
+            }
+            return true;
+        }
+
+        void addValueRefScalarReads(std::set<ScalarSlot> &reads, const ValueRef &ref) {
+            switch (ref.kind) {
+                case ValueRefKind::Scalar:
+                case ValueRefKind::ResourceMinusScalar:
+                case ValueRefKind::FixedSourceTimesScalar:
+                    if (ref.scalar != ScalarSlot::None) {
+                        reads.insert(ref.scalar);
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        void directScalarUse(
+            const Instruction &instruction,
+            std::set<ScalarSlot> &reads,
+            std::set<ScalarSlot> &writes) {
+            if (instruction.opcode == Opcode::Branch) {
+                for (const ConditionClause &conditionClause: instruction.branchCondition.any) {
+                    for (const Comparison &item: conditionClause.all) {
+                        addValueRefScalarReads(reads, item.left);
+                        addValueRefScalarReads(reads, item.right);
+                    }
+                }
+            }
+            if (instruction.opcode == Opcode::Switch) {
+                switch (instruction.switchOperand.kind) {
+                    case SwitchSourceKind::WeightedScalarUpperBounds:
+                        if (instruction.switchOperand.sourceSlot != ScalarSlot::None) {
+                            reads.insert(instruction.switchOperand.sourceSlot);
+                        }
+                        break;
+                    case SwitchSourceKind::ActionHistorySlot0:
+                        reads.insert(ScalarSlot::ActionSlot0);
+                        break;
+                    case SwitchSourceKind::ActionHistorySlot1:
+                        reads.insert(ScalarSlot::ActionSlot1);
+                        break;
+                    default:
+                        break;
+                }
+            }
+            if (instruction.opcode == Opcode::ResourceUpdate &&
+                instruction.resourceUpdate.sourceSlot != ScalarSlot::None) {
+                reads.insert(instruction.resourceUpdate.sourceSlot);
+            }
+            if (instruction.opcode == Opcode::ModeUpdate) {
+                for (const StateWriteOperand &write: instruction.stateWrites) {
+                    if (write.sourceSlot != ScalarSlot::None) {
+                        reads.insert(write.sourceSlot);
+                    }
+                }
+            }
+            if (instruction.opcode == Opcode::ScalarUpdate) {
+                const ScalarUpdateOperand &update = instruction.scalarUpdate;
+                if (update.kind == ScalarUpdateKind::MultiplyBySlot ||
+                    update.kind == ScalarUpdateKind::MultiplyRational ||
+                    update.kind == ScalarUpdateKind::MultiplyByDefenceFlag) {
+                    reads.insert(update.targetSlot);
+                }
+                if (update.kind == ScalarUpdateKind::MultiplyBySlot ||
+                    update.kind == ScalarUpdateKind::SetFixedSourceTimesSlot) {
+                    reads.insert(update.sourceSlot);
+                }
+                if (update.kind == ScalarUpdateKind::MultiplyByDefenceFlag) {
+                    reads.insert(ScalarSlot::DefenceHalfFlag);
+                }
+                writes.insert(update.targetSlot);
+            }
+            if (instruction.opcode == Opcode::ReadRng) {
+                writes.insert(instruction.rngRead.resultSlot);
+            }
+            if (instruction.opcode == Opcode::Native) {
+                writes.insert(instruction.scalarResult);
+            }
+            if (instruction.opcode == Opcode::Call) {
+                for (ScalarSlot argument: instruction.call.arguments) {
+                    reads.insert(argument);
+                }
+                if (instruction.call.resultSlot != ScalarSlot::None) {
+                    writes.insert(instruction.call.resultSlot);
+                }
+            }
+            if (instruction.opcode == Opcode::RecordAction) {
+                reads.insert(ScalarSlot::ActionCount);
+                reads.insert(ScalarSlot::ActionSlot0);
+                reads.insert(ScalarSlot::ActionSlot1);
+                writes.insert(ScalarSlot::ActionCount);
+                writes.insert(ScalarSlot::ActionSlot0);
+                writes.insert(ScalarSlot::ActionSlot1);
+            }
+            reads.erase(ScalarSlot::None);
+            writes.erase(ScalarSlot::None);
+        }
+
+        bool canonicalEffectVector(const std::vector<ResourceAxis> &values) {
+            return std::is_sorted(values.begin(), values.end()) &&
+                   std::adjacent_find(values.begin(), values.end()) == values.end();
+        }
+
+        bool canonicalEffectVector(const std::vector<StateField> &values) {
+            return std::is_sorted(values.begin(), values.end()) &&
+                   std::adjacent_find(values.begin(), values.end()) == values.end() &&
+                   std::none_of(values.begin(), values.end(), [](StateField value) {
+                       return value == StateField::None || value == StateField::Count;
+                   });
+        }
+
+        bool canonicalEffectVector(const std::vector<ScalarSlot> &values) {
+            return std::is_sorted(values.begin(), values.end()) &&
+                   std::adjacent_find(values.begin(), values.end()) == values.end() &&
+                   std::all_of(values.begin(), values.end(), [](ScalarSlot value) {
+                       return value != ScalarSlot::None && value != ScalarSlot::Count &&
+                              isTurnTransientScalar(value);
+                   });
+        }
+
+        struct ScalarContractSummary {
+            std::set<ScalarSlot> requiredTransient;
+        };
+
+        RegistrationResult validateRoutineContracts(
+            const RuleProgram &program,
+            const RoutineIndex &routineIndex) {
+            std::unordered_map<std::string, RoutineEffects> computedEffects;
+            std::string effectError;
+            if (!computeRoutineEffectMap(program, computedEffects, effectError)) {
+                return rejected(effectError);
+            }
+
+            for (const Routine &routine: program.routines) {
+                std::set<ScalarSlot> parameterSlots;
+                for (const RoutineParameter &parameter: routine.parameters) {
+                    if (parameter.slot == ScalarSlot::None || parameter.slot == ScalarSlot::Count ||
+                        isTurnTransientScalar(parameter.slot) ||
+                        parameter.type != scalarInterfaceType(parameter.slot) ||
+                        !parameterSlots.insert(parameter.slot).second) {
+                        return rejected("routine has an invalid or duplicate typed parameter");
+                    }
+                }
+                if (routine.result.present) {
+                    if (routine.result.slot == ScalarSlot::None || routine.result.slot == ScalarSlot::Count ||
+                        isTurnTransientScalar(routine.result.slot) ||
+                        routine.result.type != scalarInterfaceType(routine.result.slot)) {
+                        return rejected("routine has an invalid typed result");
+                    }
+                } else if (routine.result.slot != ScalarSlot::None) {
+                    return rejected("void routine carries a result slot");
+                }
+                for (const ScalarInitializer &initializer: routine.localInitializers) {
+                    if (!isTurnTransientScalar(initializer.slot) && parameterSlots.contains(initializer.slot)) {
+                        return rejected("routine initializer overwrites a typed parameter at entry");
+                    }
+                }
+
+                const RoutineEffects &declared = routine.declaredEffects;
+                if (!canonicalEffectVector(declared.resourceReads) ||
+                    !canonicalEffectVector(declared.resourceWrites) ||
+                    !canonicalEffectVector(declared.stateReads) ||
+                    !canonicalEffectVector(declared.stateWrites) ||
+                    !canonicalEffectVector(declared.transientReads) ||
+                    !canonicalEffectVector(declared.transientWrites)) {
+                    return rejected("routine has a non-canonical declared read/write set");
+                }
+                if (declared != computedEffects.at(routine.id)) {
+                    return rejected("routine declared reads/writes differ from kernel recomputation");
+                }
+
+                for (const Instruction &instruction: routine.instructions) {
+                    if (instruction.opcode == Opcode::Call) {
+                        const Routine *callee = findRoutine(routineIndex, instruction.callTarget);
+                        if (callee == nullptr || instruction.call.arguments.size() != callee->parameters.size()) {
+                            return rejected("CALL typed argument count does not match callee signature");
+                        }
+                        for (std::size_t index = 0; index < callee->parameters.size(); ++index) {
+                            const ScalarSlot argument = instruction.call.arguments[index];
+                            if (argument == ScalarSlot::None || argument == ScalarSlot::Count ||
+                                scalarInterfaceType(argument) != callee->parameters[index].type) {
+                                return rejected("CALL typed argument does not match callee parameter type");
+                            }
+                        }
+                        if (callee->result.present) {
+                            if (instruction.call.resultSlot == ScalarSlot::None ||
+                                instruction.call.resultSlot == ScalarSlot::Count ||
+                                scalarInterfaceType(instruction.call.resultSlot) != callee->result.type) {
+                                return rejected("CALL result slot does not match callee result type");
+                            }
+                        } else if (instruction.call.resultSlot != ScalarSlot::None) {
+                            return rejected("CALL stores a result from a void callee");
+                        }
+                    } else if (!instruction.call.arguments.empty() ||
+                               instruction.call.resultSlot != ScalarSlot::None) {
+                        return rejected("typed CALL operands attached to a non-CALL opcode");
+                    }
+                }
+            }
+
+            std::unordered_map<std::string, ScalarContractSummary> summaries;
+            std::set<std::string> visiting;
+            std::function<RegistrationResult(const std::string &)> analyze = [&](const std::string &routineId) {
+                if (summaries.contains(routineId)) {
+                    RegistrationResult ok;
+                    ok.accepted = true;
+                    return ok;
+                }
+                if (!visiting.insert(routineId).second) {
+                    return rejected("recursive call graph while checking scalar contracts");
+                }
+                const Routine *routine = findRoutine(routineIndex, routineId);
+                if (routine == nullptr) {
+                    return rejected("missing routine while checking scalar contracts");
+                }
+                for (const Instruction &instruction: routine->instructions) {
+                    if (instruction.opcode == Opcode::Call) {
+                        RegistrationResult child = analyze(instruction.callTarget);
+                        if (!child.accepted) {
+                            return child;
+                        }
+                    }
+                }
+
+                const std::size_t n = routine->instructions.size();
+                std::vector<std::vector<int>> predecessors(n);
+                std::vector<int> indegree(n, 0);
+                for (std::size_t pc = 0; pc < n; ++pc) {
+                    for (int successor: routine->instructions[pc].successors) {
+                        predecessors[successor].push_back(static_cast<int>(pc));
+                        ++indegree[successor];
+                    }
+                }
+                std::vector<int> queue;
+                queue.reserve(n);
+                for (std::size_t pc = 0; pc < n; ++pc) {
+                    if (indegree[pc] == 0) {
+                        queue.push_back(static_cast<int>(pc));
+                    }
+                }
+                std::vector<int> order;
+                for (std::size_t head = 0; head < queue.size(); ++head) {
+                    const int pc = queue[head];
+                    order.push_back(pc);
+                    for (int successor: routine->instructions[pc].successors) {
+                        if (--indegree[successor] == 0) {
+                            queue.push_back(successor);
+                        }
+                    }
+                }
+                if (order.size() != n || order.front() != 0) {
+                    return rejected("routine scalar analysis requires one reachable acyclic entry");
+                }
+
+                std::set<ScalarSlot> requiredTransient;
+                for (;;) {
+                    std::vector<std::set<ScalarSlot>> out(n);
+                    std::set<ScalarSlot> entryDefined = requiredTransient;
+                    for (const RoutineParameter &parameter: routine->parameters) {
+                        entryDefined.insert(parameter.slot);
+                    }
+                    for (const ScalarInitializer &initializer: routine->localInitializers) {
+                        entryDefined.insert(initializer.slot);
+                    }
+                    std::set<ScalarSlot> newlyRequired;
+                    for (int pc: order) {
+                        std::set<ScalarSlot> defined;
+                        if (pc == 0) {
+                            defined = entryDefined;
+                        } else {
+                            bool first = true;
+                            for (int predecessor: predecessors[pc]) {
+                                if (first) {
+                                    defined = out[predecessor];
+                                    first = false;
+                                } else {
+                                    std::set<ScalarSlot> intersection;
+                                    std::set_intersection(
+                                        defined.begin(), defined.end(),
+                                        out[predecessor].begin(), out[predecessor].end(),
+                                        std::inserter(intersection, intersection.end()));
+                                    defined = std::move(intersection);
+                                }
+                            }
+                        }
+
+                        std::set<ScalarSlot> reads;
+                        std::set<ScalarSlot> writes;
+                        const Instruction &instruction = routine->instructions[pc];
+                        directScalarUse(instruction, reads, writes);
+                        if (instruction.opcode == Opcode::Call) {
+                            const ScalarContractSummary &callee = summaries.at(instruction.callTarget);
+                            reads.insert(callee.requiredTransient.begin(), callee.requiredTransient.end());
+                            const Routine *calleeRoutine = findRoutine(routineIndex, instruction.callTarget);
+                            writes.insert(
+                                calleeRoutine->declaredEffects.transientWrites.begin(),
+                                calleeRoutine->declaredEffects.transientWrites.end());
+                        }
+                        for (ScalarSlot read: reads) {
+                            if (defined.contains(read)) {
+                                continue;
+                            }
+                            if (isTurnTransientScalar(read)) {
+                                newlyRequired.insert(read);
+                                defined.insert(read);
+                            } else {
+                                return rejected("routine reads an uninitialized local scalar slot");
+                            }
+                        }
+                        defined.insert(writes.begin(), writes.end());
+                        out[pc] = std::move(defined);
+
+                        if (instruction.opcode == Opcode::Return && routine->result.present &&
+                            !out[pc].contains(routine->result.slot)) {
+                            return rejected("routine RETURN does not define its typed result on every path");
+                        }
+                    }
+                    bool changed = false;
+                    for (ScalarSlot slot: newlyRequired) {
+                        changed |= requiredTransient.insert(slot).second;
+                    }
+                    if (!changed) {
+                        break;
+                    }
+                }
+
+                if (routine->turnRoutine && !requiredTransient.empty()) {
+                    return rejected("TURN entry requires an uninitialized shared transient slot");
+                }
+                summaries.emplace(routineId, ScalarContractSummary{std::move(requiredTransient)});
+                visiting.erase(routineId);
+                RegistrationResult ok;
+                ok.accepted = true;
+                return ok;
+            };
+
+            for (const Routine &routine: program.routines) {
+                RegistrationResult checked = analyze(routine.id);
+                if (!checked.accepted) {
+                    return checked;
+                }
+            }
+
+            RegistrationResult result;
+            result.accepted = true;
+            return result;
+        }
+
         Routine makeTurnRoutine() {
             RuleRoutineBuilder b("turn");
             b.initialize(ScalarSlot::ActionSlot0, 0.0);
@@ -1385,7 +2030,7 @@ namespace d20proof {
             const int evade = b.add(Opcode::SkipRng, "herb:evade-slot", 1);
             const int heal = b.addNative(
                 "native:type-c-heal",
-                ScalarSlot::Amount,
+                ScalarSlot::Damage,
                 {35.0, 35.0, 5.0});
             const int unknown = b.add(Opcode::SkipRng, "herb:post-heal-unknown", 1);
             const int chargeOff = b.addBranch(
@@ -1760,7 +2405,7 @@ namespace d20proof {
             const int evade = b.add(Opcode::SkipRng, "heal:evade-slot", 1);
             const int amount = b.addNative(
                 "native:type-d-heal",
-                ScalarSlot::Amount,
+                ScalarSlot::Damage,
                 {5.0, 35.0});
             const int criticalScaleGate = b.addBranch(
                 "heal:critical-scale?",
@@ -1770,7 +2415,7 @@ namespace d20proof {
                 {RngReadKind::FloatRange, ScalarSlot::Random0, 0, 0, 1.5, 2.0});
             const int applyCritical = b.addScalarUpdate(
                 "heal:amount*=critical-scale",
-                {ScalarUpdateKind::MultiplyBySlot, ScalarSlot::Amount, ScalarSlot::Random0});
+                {ScalarUpdateKind::MultiplyBySlot, ScalarSlot::Damage, ScalarSlot::Random0});
             const int unknown = b.add(Opcode::SkipRng, "heal:post-heal-unknown", 1);
             const int chargeOffSkip = b.addBranch(
                 "heal:hero Charge==OFF for fixed skip",
@@ -2464,7 +3109,7 @@ namespace d20proof {
                 {
                     ResourceUpdateKind::ClampAddSlot,
                     ResourceAxis::HeroHp,
-                    ScalarSlot::Amount,
+                    ScalarSlot::Damage,
                     0,
                     0,
                     65,
@@ -2825,6 +3470,11 @@ namespace d20proof {
             return callCheck;
         }
 
+        if (RegistrationResult contractCheck = validateRoutineContracts(program, routineIndex);
+            !contractCheck.accepted) {
+            return contractCheck;
+        }
+
         RegistrationResult result = StaticBoundComputer(routineIndex, nativeIndex).run(program);
         if (!result.accepted) {
             return result;
@@ -3131,7 +3781,7 @@ namespace d20proof {
                 2,
                 16,
                 true,
-                ScalarSlot::Amount,
+                ScalarSlot::Damage,
                 0,
                 39,
             },
@@ -3144,7 +3794,7 @@ namespace d20proof {
                 1,
                 16,
                 true,
-                ScalarSlot::Amount,
+                ScalarSlot::Damage,
                 0,
                 65,
             },
@@ -3162,6 +3812,12 @@ namespace d20proof {
                 34,
             },
         };
+
+        std::string contractError;
+        if (!configureYo2RoutineContracts(bundle.program, contractError)) {
+            bundle.program.entryRoutine.clear();
+            bundle.program.sourceCorrespondence.push_back("RuleAssembler contract error: " + contractError);
+        }
 
         return bundle;
     }
