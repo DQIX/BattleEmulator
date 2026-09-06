@@ -128,6 +128,30 @@ namespace d20proof {
         std::vector<CompletionCheckpoint> completionCheckpoints;
     };
 
+    enum class MaxPlusValueKind : std::uint8_t {
+        NegativeInfinity,
+        Finite,
+    };
+
+    struct MaxPlusValue {
+        MaxPlusValueKind kind = MaxPlusValueKind::NegativeInfinity;
+        std::int64_t finite = 0;
+
+        [[nodiscard]] static MaxPlusValue negativeInfinity() noexcept {
+            return {};
+        }
+
+        [[nodiscard]] static MaxPlusValue finiteValue(std::int64_t value) noexcept {
+            return {MaxPlusValueKind::Finite, value};
+        }
+
+        [[nodiscard]] bool isNegativeInfinity() const noexcept {
+            return kind == MaxPlusValueKind::NegativeInfinity;
+        }
+
+        bool operator==(const MaxPlusValue &) const = default;
+    };
+
     struct FalseCertificate {
         Problem problem;
         int horizon = 0;
@@ -139,8 +163,8 @@ namespace d20proof {
         int u = 0;
         int v = 0;
         int w = 0;
-        std::vector<std::vector<std::int64_t>> bByRemainingTurns;
-        std::int64_t rootBound = 0;
+        std::vector<std::vector<MaxPlusValue>> bByRemainingTurns;
+        MaxPlusValue rootBound;
         std::int64_t delta = 0;
     };
 

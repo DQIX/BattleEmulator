@@ -70,7 +70,7 @@ namespace d20proof {
             }
 #endif
             const ExactReplayContract &replay = bundle.exactReplay;
-            if (replay.entryPoint != "BattleEmulator::Main" || replay.mode != -1 ||
+            if (replay.entryPoint != "d20proof::ExactReplay::replay" || replay.mode != -1 ||
                 !replay.isSearch || replay.calculateRngOnly ||
                 !replay.oneCommandPerMainCall || !replay.terminalAfterCameraTail) {
                 return rejected("exact replay contract differs from the registered authoritative entry");
@@ -252,7 +252,9 @@ namespace d20proof {
                 if (command.selectableChargeMask == 0 ||
                     (command.selectableChargeMask & ~kChargeMaskAll) != 0 ||
                     command.selectableAcroMask == 0 ||
-                    (command.selectableAcroMask & ~kAcroMaskAll) != 0) {
+                    (command.selectableAcroMask & ~kAcroMaskAll) != 0 ||
+                    command.selectableParalysisMask == 0 ||
+                    (command.selectableParalysisMask & ~kParalysisMaskAll) != 0) {
                     return rejected("command profile has invalid selectable mode mask");
                 }
                 for (const CompletionWeightTerm &term: command.turnEntryCompletionTerms) {
@@ -1073,9 +1075,13 @@ namespace d20proof {
                     comparison(resourceValue(ResourceAxis::EnemyHp), CompareOp::Gt, constantValue(0)),
                 }));
             const int flee = b.addBranch(
-                "ally-slot:prepared_command==FLEE_ALLY",
-                allOf({comparison(stateValue(StateField::CurrentAction), CompareOp::Eq,
-                                  constantValue(BattleEmulator::FLEE_ALLY))}));
+                "ally-slot:FLEE_ALLY and Paralysis==CLEAR and Inactive==OFF",
+                allOf({
+                    comparison(stateValue(StateField::CurrentAction), CompareOp::Eq,
+                               constantValue(BattleEmulator::FLEE_ALLY)),
+                    comparison(stateValue(StateField::Paralysis), CompareOp::Eq, constantValue(0)),
+                    comparison(stateValue(StateField::Inactive), CompareOp::Eq, constantValue(0)),
+                }));
             const int status = b.addCall("call:ally-status", "ally-status");
             const int action = b.addCall("call:ally-action", "ally-action");
             const int record = b.add(Opcode::RecordAction, "ally-slot:append executed action");
@@ -2919,7 +2925,7 @@ namespace d20proof {
         RuleBundle bundle;
         bundle.id = {"yo2_be.d20", 1};
         bundle.exactReplay = {
-            "BattleEmulator::Main",
+            "d20proof::ExactReplay::replay",
             -1,
             true,
             false,
@@ -2944,6 +2950,7 @@ namespace d20proof {
                 0,
                 kChargeMaskAll,
                 kAcroMaskAll,
+                kParalysisMaskAll,
                 {{128, 0, 0, 0}},
             },
             {
@@ -2952,6 +2959,7 @@ namespace d20proof {
                 0,
                 kChargeMaskAll,
                 kAcroMaskAll,
+                kParalysisMaskAll,
                 {{98, 0, 0, 0}},
             },
             {
@@ -2960,6 +2968,7 @@ namespace d20proof {
                 0,
                 kChargeMaskAll,
                 kAcroMaskAll,
+                kParalysisMaskAll,
                 {{64, 0, 0, 0}},
             },
             {
@@ -2968,6 +2977,7 @@ namespace d20proof {
                 0,
                 kChargeMaskAll,
                 kAcroMaskAll,
+                0x0001,
                 {{64, 0, 0, 0}},
             },
             {
@@ -2976,6 +2986,7 @@ namespace d20proof {
                 1,
                 kChargeMaskAll,
                 kAcroMaskAll,
+                kParalysisMaskAll,
                 {{64, 0, 0, 0}, {64, 39, 0, -1}},
             },
             {
@@ -2984,6 +2995,7 @@ namespace d20proof {
                 0,
                 kChargeMaskAll,
                 kAcroMaskAll,
+                kParalysisMaskAll,
                 {{64, 0, 0, 0}, {64, 65, -2, 0}},
             },
             {
@@ -2992,6 +3004,7 @@ namespace d20proof {
                 0,
                 kChargeMaskAll,
                 kAcroMaskAll,
+                kParalysisMaskAll,
                 {{64, 0, 0, 0}, {98, 0, -3, 0}},
             },
             {
@@ -3000,6 +3013,7 @@ namespace d20proof {
                 0,
                 0x00fc,
                 0x0001,
+                kParalysisMaskAll,
                 {{64, 0, 0, 0}},
             },
         };
@@ -3080,12 +3094,18 @@ namespace d20proof {
         };
         bundle.program.sourceCorrespondence = {
             "BattleEmulator.cpp:248-631 Main",
-            "BattleEmulator.cpp:458-595 ally slot FLEE skipTurn before status",
+            "BattleEmulator.cpp:458-595 ally slot; registered FLEE correction gates skipTurn on clear paralysis and active status",
             "BattleEmulator.cpp:368-456 enemy slot",
             "BattleEmulator.cpp:676-1080 callAttackFun",
             "BattleEmulator.cpp:1127-1152 process7A8",
             "BattleEmulator.cpp:1225-1260 ProcessRage",
             "camera.cpp:10-78 camera",
+        };
+        bundle.program.explicitRuleChanges = {
+            "FLEE is not selectable while sleeping or paralyzed; yo2_be v1 rejects sleeping inputs",
+            "At ally execution, FLEE skips the ally slot only when Paralysis=CLEAR and Inactive=OFF",
+            "Enemy-first paralysis/inactive routes through the normal ally status transition; cured paralysis does not restore FLEE",
+            "ExactReplay adapts BattleEmulator::Main to the same corrected FLEE rule without changing production Main semantics",
         };
 
         bundle.nativeContracts = {

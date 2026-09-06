@@ -1344,6 +1344,7 @@ namespace d20proof {
                 witness.minimumTurnUpperBound = winningTurns;
                 witness.reason = "exact witness paired with independently verified D(N-1)=false";
                 witness.provedFalseRootBound = bound.provedFalseRootBound;
+                witness.provedFalseNoAbstractSuccessPath = bound.provedFalseNoAbstractSuccessPath;
                 witness.provedFalseDelta = bound.provedFalseDelta;
                 witness.partitionVersion = bound.partitionVersion;
                 witness.coverageVersion = bound.coverageVersion;
@@ -1601,7 +1602,9 @@ namespace d20proof {
             result.kind = SolveKind::ProvedFalse;
             result.horizon = horizon;
             result.reason = "independently verified max-plus FALSE certificate";
-            result.provedFalseRootBound = falseCheck.certificate.rootBound;
+            result.provedFalseNoAbstractSuccessPath =
+                falseCheck.certificate.rootBound.isNegativeInfinity();
+            result.provedFalseRootBound = falseCheck.certificate.rootBound.finite;
             result.provedFalseDelta = falseCheck.certificate.delta;
             result.partitionVersion = falseCheck.certificate.partitions.partitionVersion;
             result.coverageVersion = falseCheck.certificate.coverageVersion;
@@ -1780,6 +1783,7 @@ namespace d20proof {
                     if (!cacheChanged) {
                         continue;
                     }
+                    ++report.completionResumes;
                     ++report.repairs;
                     return true;
                 }
@@ -1812,6 +1816,7 @@ namespace d20proof {
                         continue;
                     }
                     family = std::move(refined);
+                    ++report.addedPredicates;
                     ++report.repairs;
                     return true;
                 }
@@ -1848,7 +1853,9 @@ namespace d20proof {
                 result.kind = SolveKind::ProvedFalse;
                 result.horizon = horizon;
                 result.reason = "independently verified max-plus FALSE certificate after repair";
-                result.provedFalseRootBound = falseCheck.certificate.rootBound;
+                result.provedFalseNoAbstractSuccessPath =
+                    falseCheck.certificate.rootBound.isNegativeInfinity();
+                result.provedFalseRootBound = falseCheck.certificate.rootBound.finite;
                 result.provedFalseDelta = falseCheck.certificate.delta;
                 result.partitionVersion = falseCheck.certificate.partitions.partitionVersion;
                 result.coverageVersion = falseCheck.certificate.coverageVersion;

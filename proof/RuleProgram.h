@@ -335,6 +335,7 @@ namespace d20proof {
         int minimumHerbs = 0;
         std::uint16_t selectableChargeMask = kChargeMaskAll;
         std::uint16_t selectableAcroMask = kAcroMaskAll;
+        std::uint16_t selectableParalysisMask = kParalysisMaskAll;
         std::vector<CompletionWeightTerm> turnEntryCompletionTerms;
 
         bool operator==(const CommandProfile &) const = default;

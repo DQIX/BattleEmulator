@@ -200,7 +200,6 @@ namespace d20proof {
             CheckedPartition result_;
         };
 
-        constexpr std::int64_t kNegativeInfinity = std::numeric_limits<std::int64_t>::min() / 4;
 
 
         bool chargeBudget(
@@ -228,6 +227,7 @@ namespace d20proof {
             domain.herb.lo = std::max<std::int64_t>(domain.herb.lo, profile->minimumHerbs);
             domain.chargeMask &= profile->selectableChargeMask;
             domain.acroMask &= profile->selectableAcroMask;
+            domain.paralysisMask &= profile->selectableParalysisMask;
             return domain;
         }
 
@@ -588,7 +588,7 @@ namespace d20proof {
             int w,
             std::int64_t &weight) {
             bool any = false;
-            std::int64_t best = kNegativeInfinity;
+            std::int64_t best = 0;
             for (const CompletionWeightTerm &term: edge.weightTerms) {
                 std::int64_t value = 0;
                 const std::pair<int, int> factors[] = {
@@ -929,6 +929,8 @@ namespace d20proof {
                 return (*submittedProofs)[*match];
             }
 
+            ++budget.proofTemplateRequests;
+
             const ProofTemplate *bestTemplate = nullptr;
             auto rank = [](const ProofTemplate &candidate) {
                 if (candidate.kind == RootProofKind::FullyDetailed) {
@@ -959,6 +961,7 @@ namespace d20proof {
                 }
             }
             if (bestTemplate != nullptr) {
+                ++budget.proofTemplateReuseHits;
                 return generatedProof(
                     elapsedTurn,
                     source,
@@ -1650,6 +1653,31 @@ namespace d20proof {
             }
         }
 
+        std::uint64_t supportCells = 0;
+        std::uint64_t detailedEdges = 0;
+        std::uint64_t completionEdges = 0;
+        for (const auto &layer: snapshot.support) {
+            supportCells += layer.size();
+        }
+        for (const auto &layer: snapshot.edgesByElapsedTurn) {
+            for (const CheckedEdge &edge: layer) {
+                if (edge.kind == CheckedEdgeKind::Detailed) {
+                    ++detailedEdges;
+                } else {
+                    ++completionEdges;
+                }
+            }
+        }
+        std::uint64_t completionCases = 0;
+        for (const RootProofRecord &proof: snapshot.proofs) {
+            completionCases += proof.completionCases.size();
+        }
+        budget.supportCells = supportCells;
+        budget.detailedEdges = detailedEdges;
+        budget.completionEdges = completionEdges;
+        budget.proofRoots = snapshot.proofs.size();
+        budget.completionCases = completionCases;
+
         snapshot.check.accepted = true;
         return snapshot;
     }
@@ -1966,9 +1994,19 @@ namespace d20proof {
         struct MaxPlusResult {
             bool accepted = false;
             std::string reason;
-            std::vector<std::vector<std::int64_t>> values;
-            std::int64_t rootBound = kNegativeInfinity;
+            std::vector<std::vector<MaxPlusValue>> values;
+            MaxPlusValue rootBound;
         };
+
+        MaxPlusValue maxValue(const MaxPlusValue &a, const MaxPlusValue &b) noexcept {
+            if (a.isNegativeInfinity()) {
+                return b;
+            }
+            if (b.isNegativeInfinity()) {
+                return a;
+            }
+            return MaxPlusValue::finiteValue(std::max(a.finite, b.finite));
+        }
 
         MaxPlusResult computeMaxPlus(
             const CheckedSnapshot &snapshot,
@@ -1991,34 +2029,40 @@ namespace d20proof {
             }
 
             result.values.resize(static_cast<std::size_t>(horizon) + 1);
-            result.values[0].assign(snapshot.support[horizon].size(), kNegativeInfinity);
+            result.values[0].assign(
+                snapshot.support[horizon].size(),
+                MaxPlusValue::negativeInfinity());
 
             for (int remaining = 1; remaining <= horizon; ++remaining) {
                 const int elapsedTurn = horizon - remaining;
                 const std::vector<CellKey> &sources = snapshot.support[elapsedTurn];
                 const std::vector<CellKey> &nextSources = snapshot.support[elapsedTurn + 1];
-                const std::vector<std::int64_t> &previous = result.values[remaining - 1];
+                const std::vector<MaxPlusValue> &previous = result.values[remaining - 1];
                 if (previous.size() != nextSources.size()) {
                     result.reason = "max-plus previous layer does not match Support";
                     return result;
                 }
 
-                std::map<CellKey, std::int64_t> continuationByCell;
+                std::map<CellKey, MaxPlusValue> continuationByCell;
                 for (std::size_t index = 0; index < nextSources.size(); ++index) {
                     continuationByCell.emplace(nextSources[index], previous[index]);
                 }
 
-                std::vector<std::int64_t> current(sources.size(), kNegativeInfinity);
+                std::vector<MaxPlusValue> current(
+                    sources.size(),
+                    MaxPlusValue::negativeInfinity());
                 for (std::size_t sourceIndex = 0; sourceIndex < sources.size(); ++sourceIndex) {
                     const CellKey &source = sources[sourceIndex];
-                    std::int64_t best = kNegativeInfinity;
+                    MaxPlusValue best = MaxPlusValue::negativeInfinity();
 
                     for (const CheckedEdge &edge: snapshot.edgesByElapsedTurn[elapsedTurn]) {
                         if (!(edge.source == source)) {
                             continue;
                         }
 
-                        std::int64_t continuation = edge.mayReachGoal ? 0 : kNegativeInfinity;
+                        MaxPlusValue continuation = edge.mayReachGoal
+                            ? MaxPlusValue::finiteValue(0)
+                            : MaxPlusValue::negativeInfinity();
                         if (edge.hasContinuingOutput) {
                             if (edge.targets.empty()) {
                                 result.reason = "continuing edge has no checked targets";
@@ -2030,7 +2074,7 @@ namespace d20proof {
                                     result.reason = "checked edge target is missing from next-layer Support";
                                     return result;
                                 }
-                                continuation = std::max(continuation, continuationIt->second);
+                                continuation = maxValue(continuation, continuationIt->second);
                                 if (!chargeBudget(budget, limits, 1, 0)) {
                                     result.reason = "max-plus target scan exceeded proof budget";
                                     return result;
@@ -2038,7 +2082,7 @@ namespace d20proof {
                             }
                         }
 
-                        if (continuation == kNegativeInfinity) {
+                        if (continuation.isNegativeInfinity()) {
                             continue;
                         }
 
@@ -2049,11 +2093,11 @@ namespace d20proof {
                         }
 
                         std::int64_t candidate = 0;
-                        if (!checkedAdd(weight, continuation, candidate)) {
+                        if (!checkedAdd(weight, continuation.finite, candidate)) {
                             result.reason = "max-plus addition overflow";
                             return result;
                         }
-                        best = std::max(best, candidate);
+                        best = maxValue(best, MaxPlusValue::finiteValue(candidate));
 
                         if (!chargeBudget(budget, limits, 1, 0)) {
                             result.reason = "max-plus edge evaluation exceeded proof budget";
@@ -2068,7 +2112,7 @@ namespace d20proof {
                         budget,
                         limits,
                         current.size(),
-                        current.size() * sizeof(std::int64_t))) {
+                        current.size() * sizeof(MaxPlusValue))) {
                     result.reason = "max-plus layer exceeded proof budget";
                     return result;
                 }
@@ -2096,15 +2140,18 @@ namespace d20proof {
 
         bool falseInequality(
             const Problem &problem,
-            std::int64_t rootBound,
+            const MaxPlusValue &rootBound,
             int q,
             int u,
             int v,
             int w,
             std::int64_t &delta,
             std::string &error) {
-            if (rootBound == kNegativeInfinity) {
-                delta = std::numeric_limits<std::int64_t>::max();
+            if (rootBound.isNegativeInfinity()) {
+                // This is the separate "no abstract success path" sufficient
+                // condition.  Do not encode -infinity as an integer or feed it
+                // through ordinary arithmetic.
+                delta = 0;
                 return true;
             }
 
@@ -2114,7 +2161,7 @@ namespace d20proof {
                 return false;
             }
 
-            std::int64_t right = rootBound;
+            std::int64_t right = rootBound.finite;
             const std::pair<int, int> potentialTerms[] = {
                 {u, problem.s0.players[0].hp},
                 {v, problem.s0.players[0].mp},
@@ -2393,6 +2440,58 @@ namespace d20proof {
                 return result;
             }
 
+            RuleBundle changedFleeLegality = makeYo2BeBundleCandidate();
+            bool foundFleeProfile = false;
+            for (CommandProfile &profile: changedFleeLegality.profile.commandProfiles) {
+                if (profile.command == BattleEmulator::FLEE_ALLY) {
+                    profile.selectableParalysisMask = kParalysisMaskAll;
+                    foundFleeProfile = true;
+                    break;
+                }
+            }
+            if (!foundFleeProfile || !expectRegistrationReject(
+                    std::move(changedFleeLegality),
+                    "same-version FLEE paralysis-legality mutation")) {
+                if (!foundFleeProfile) {
+                    result.reason = "registration self-check could not locate FLEE command profile";
+                }
+                return result;
+            }
+
+            RuleBundle changedFleeGate = makeYo2BeBundleCandidate();
+            bool foundFleeGate = false;
+            for (Routine &routine: changedFleeGate.program.routines) {
+                if (routine.id != "ally-slot") {
+                    continue;
+                }
+                for (Instruction &instruction: routine.instructions) {
+                    if (instruction.opcode == Opcode::Branch &&
+                        instruction.label.find("FLEE_ALLY") != std::string::npos &&
+                        !instruction.branchCondition.any.empty() &&
+                        !instruction.branchCondition.any.front().all.empty()) {
+                        instruction.branchCondition.any.front().all.pop_back();
+                        foundFleeGate = true;
+                        break;
+                    }
+                }
+            }
+            if (!foundFleeGate || !expectRegistrationReject(
+                    std::move(changedFleeGate),
+                    "same-version FLEE execution-gate mutation")) {
+                if (!foundFleeGate) {
+                    result.reason = "registration self-check could not locate FLEE execution gate";
+                }
+                return result;
+            }
+
+            RuleBundle changedFleeRuleDeclaration = makeYo2BeBundleCandidate();
+            changedFleeRuleDeclaration.program.explicitRuleChanges.clear();
+            if (!expectRegistrationReject(
+                    std::move(changedFleeRuleDeclaration),
+                    "same-version FLEE explicit-rule declaration mutation")) {
+                return result;
+            }
+
             RuleBundle cyclic = makeYo2BeBundleCandidate();
             cyclic.id = {"yo2_be.registration-cycle-test", 1};
             cyclic.program.routines.front().instructions.front().successors = {0};
@@ -2433,6 +2532,54 @@ namespace d20proof {
         RawState initialState;
         initialState.players[0] = BasePlayers[0];
         initialState.players[1] = BasePlayers[1];
+
+        {
+            RawState paralyzed = initialState;
+            paralyzed.players[0].paralysis = true;
+            paralyzed.players[0].paralysisTurns = 1;
+            if (ExactReplay::isSelectable(bundle, paralyzed, BattleEmulator::FLEE_ALLY)) {
+                result.reason = "FLEE self-check allowed selection while paralyzed";
+                return result;
+            }
+
+            RawState sleeping = initialState;
+            sleeping.players[0].sleeping = true;
+            if (ExactReplay::isSelectable(bundle, sleeping, BattleEmulator::FLEE_ALLY)) {
+                result.reason = "FLEE self-check allowed selection while sleeping";
+                return result;
+            }
+
+            const CommandProfile *fleeProfile = nullptr;
+            for (const CommandProfile &profile: bundle.profile.commandProfiles) {
+                if (profile.command == BattleEmulator::FLEE_ALLY) {
+                    fleeProfile = &profile;
+                    break;
+                }
+            }
+            if (fleeProfile == nullptr || fleeProfile->selectableParalysisMask != 0x0001) {
+                result.reason = "registered FLEE profile does not require clear paralysis at selection";
+                return result;
+            }
+
+            Problem inactiveProblem;
+            inactiveProblem.ruleId = bundle.id;
+            inactiveProblem.seed = 0x13;
+            inactiveProblem.s0 = initialState;
+            inactiveProblem.s0.position = 1;
+            inactiveProblem.s0.nowState = 0;
+            inactiveProblem.s0.players[0].inactive = true;
+            inactiveProblem.startTurn = 0;
+            const ReplayResult fleeReplay = ExactReplay::replay(
+                bundle, inactiveProblem, {BattleEmulator::FLEE_ALLY}, true);
+            const ReplayResult statusReference = ExactReplay::replay(
+                bundle, inactiveProblem, {BattleEmulator::ATTACK_ALLY}, true);
+            if (!fleeReplay.supported || !fleeReplay.valid ||
+                !statusReference.supported || !statusReference.valid ||
+                !sameRawState(fleeReplay.finalState, statusReference.finalState)) {
+                result.reason = "FLEE execution adapter does not preserve the normal inactive-status transition";
+                return result;
+            }
+        }
 
         const Box base = baseBox(bundle, initialState);
         if (base.empty()) {
@@ -2588,6 +2735,48 @@ namespace d20proof {
         BudgetReport stalePartitionBudget;
         if (verifyFalseCertificate(bundle, stalePartition, proofBudget, stalePartitionBudget).accepted) {
             result.reason = "verifier accepted a stale partition_version root";
+            return result;
+        }
+
+        FalseCertificate staleCoverage = falseCheck.certificate;
+        ++staleCoverage.coverageVersion;
+        BudgetReport staleCoverageBudget;
+        if (verifyFalseCertificate(bundle, staleCoverage, proofBudget, staleCoverageBudget).accepted) {
+            result.reason = "verifier accepted a stale coverage_version";
+            return result;
+        }
+
+        FalseCertificate changedRootBound = falseCheck.certificate;
+        if (changedRootBound.rootBound.isNegativeInfinity()) {
+            changedRootBound.rootBound = MaxPlusValue::finiteValue(0);
+        } else {
+            ++changedRootBound.rootBound.finite;
+        }
+        BudgetReport changedRootBudget;
+        if (verifyFalseCertificate(bundle, changedRootBound, proofBudget, changedRootBudget).accepted) {
+            result.reason = "verifier accepted a tampered tagged max-plus root bound";
+            return result;
+        }
+
+        FalseCertificate changedB = falseCheck.certificate;
+        bool changedBEntry = false;
+        for (auto &layer: changedB.bByRemainingTurns) {
+            if (layer.empty()) {
+                continue;
+            }
+            if (layer.front().isNegativeInfinity()) {
+                layer.front() = MaxPlusValue::finiteValue(0);
+            } else {
+                ++layer.front().finite;
+            }
+            changedBEntry = true;
+            break;
+        }
+        BudgetReport changedBBudget;
+        if (!changedBEntry || verifyFalseCertificate(bundle, changedB, proofBudget, changedBBudget).accepted) {
+            result.reason = changedBEntry
+                ? "verifier accepted a tampered tagged max-plus B table"
+                : "self-check certificate unexpectedly has no B-table entries";
             return result;
         }
 

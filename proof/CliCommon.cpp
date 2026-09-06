@@ -101,10 +101,30 @@ namespace d20proof {
         output << " elapsed_ms=" << result.budget.elapsedMs
                 << " work=" << result.budget.work
                 << " bytes=" << result.budget.bytes
+                << " support_cells=" << result.budget.supportCells
+                << " detailed_edges=" << result.budget.detailedEdges
+                << " completion_edges=" << result.budget.completionEdges
+                << " proof_roots=" << result.budget.proofRoots
+                << " completion_cases=" << result.budget.completionCases
+                << " proof_reuse=" << result.budget.proofTemplateReuseHits
+                << '/' << result.budget.proofTemplateRequests
+                << " completion_resumes=" << result.budget.completionResumes
+                << " added_predicates=" << result.budget.addedPredicates
                 << " price_evals=" << result.budget.priceEvaluations
                 << " candidates=" << result.budget.candidates
                 << " scans=" << result.budget.candidateScans
                 << " repairs=" << result.budget.repairs;
+
+        if (result.partitionVersion != 0 || result.coverageVersion != 0) {
+            output << " partition_version=" << result.partitionVersion
+                   << " coverage_version=" << result.coverageVersion;
+            if (result.provedFalseNoAbstractSuccessPath) {
+                output << " false_root=-inf";
+            } else {
+                output << " false_root=" << result.provedFalseRootBound
+                       << " false_delta=" << result.provedFalseDelta;
+            }
+        }
 
         if (!result.commands.empty()) {
             output << " commands=";

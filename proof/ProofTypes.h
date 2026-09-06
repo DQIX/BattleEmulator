@@ -217,6 +217,15 @@ namespace d20proof {
     struct BudgetReport {
         std::uint64_t work = 0;
         std::uint64_t bytes = 0;
+        std::uint64_t supportCells = 0;
+        std::uint64_t detailedEdges = 0;
+        std::uint64_t completionEdges = 0;
+        std::uint64_t proofRoots = 0;
+        std::uint64_t completionCases = 0;
+        std::uint64_t proofTemplateRequests = 0;
+        std::uint64_t proofTemplateReuseHits = 0;
+        std::uint64_t completionResumes = 0;
+        std::uint64_t addedPredicates = 0;
         std::uint32_t candidates = 0;
         std::uint32_t candidateScans = 0;
         std::uint32_t repairs = 0;
@@ -236,6 +245,7 @@ namespace d20proof {
         ReplayResult replay;
         BudgetReport budget;
         std::int64_t provedFalseRootBound = 0;
+        bool provedFalseNoAbstractSuccessPath = false;
         std::int64_t provedFalseDelta = 0;
         std::uint64_t partitionVersion = 0;
         std::uint64_t coverageVersion = 0;

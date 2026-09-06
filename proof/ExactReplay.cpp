@@ -32,6 +32,16 @@ namespace d20proof {
             return static_cast<std::uint16_t>(1u << (hero.specialChargeTurn + 1));
         }
 
+        std::uint16_t paralysisModeBit(const Player &hero) noexcept {
+            if (!hero.paralysis) {
+                return 0x0001;
+            }
+            if (hero.paralysisTurns < -2 || hero.paralysisTurns > 4) {
+                return 0;
+            }
+            return static_cast<std::uint16_t>(1u << (hero.paralysisTurns + 3));
+        }
+
         std::uint16_t acroModeBit(const Player &hero) noexcept {
             if (!hero.acrobaticStar) {
                 return 0x0001;
@@ -111,6 +121,107 @@ namespace d20proof {
             turn.enemyHpAfter = state.players[1].hp;
             turn.stateAfter = state;
         }
+
+        void runMainOneTurn(
+            RawState &state,
+            int command,
+            std::uint64_t seed,
+            BattleResult &battleResult) {
+            int32_t gene[kGeneCapacity] = {};
+            gene[0] = command;
+            gene[1] = -1;
+            BattleEmulator::Main(
+                &state.position,
+                1,
+                gene,
+                state.players,
+                &battleResult,
+                seed,
+                nullptr,
+                nullptr,
+                -1,
+                &state.nowState,
+                true,
+                false);
+        }
+
+        bool isStatusReplacementAction(int action) noexcept {
+            return action == BattleEmulator::PARALYSIS ||
+                   action == BattleEmulator::CURE_PARALYSIS ||
+                   action == BattleEmulator::INACTIVE_ALLY;
+        }
+
+        bool runRegisteredTurn(
+            RawState &state,
+            int command,
+            std::uint64_t seed,
+            std::string &error) {
+            const RawState before = state;
+            BattleResult firstPass;
+            runMainOneTurn(state, command, seed, firstPass);
+
+            if (command != BattleEmulator::FLEE_ALLY) {
+                return true;
+            }
+            if (firstPass.position <= 0) {
+                error = "FLEE exact replay produced no action record";
+                return false;
+            }
+
+            const bool allyFirst = firstPass.initiative[0];
+            bool needsStatusReplay = false;
+            if (allyFirst) {
+                // Selection-time paralysis/sleep is rejected before this point.
+                // Inactive is deliberately an execution-time gate, not a FLEE
+                // selection restriction in the registered yo2_be profile.
+                needsStatusReplay = before.players[0].inactive;
+            } else if (state.players[0].hp > 0 && state.players[1].hp > 0) {
+                // With enemy initiative, Main's optimized FLEE path leaves any
+                // newly-applied inability flag untouched.  Under the registered
+                // rule that flag must instead enter the normal ally-status path.
+                needsStatusReplay = state.players[0].paralysis || state.players[0].inactive;
+            }
+
+            if (state.players[0].sleeping || state.players[1].sleeping) {
+                error = "yo2_be v1 exact replay reached unsupported sleeping state";
+                return false;
+            }
+            if (!needsStatusReplay) {
+                return true;
+            }
+
+            // Do not change BattleEmulator::Main's production shortcut.  Replay
+            // the same raw turn from the same RNG position with a neutral ATTACK
+            // prepared command.  In exactly the states covered here Main's own
+            // status routine replaces that command with PARALYSIS,
+            // CURE_PARALYSIS, or INACTIVE_ALLY before callAttackFun, so ATTACK
+            // itself is never executed.  This is the registered FLEE adapter.
+            state = before;
+            lcg::init(seed, true);
+            BattleResult correctedPass;
+            runMainOneTurn(state, BattleEmulator::ATTACK_ALLY, seed, correctedPass);
+
+            if (correctedPass.position <= 0 || correctedPass.initiative[0] != allyFirst) {
+                error = "FLEE status adapter changed initiative or lost the action record";
+                return false;
+            }
+            int executedAllyAction = -1;
+            for (int index = 0; index < correctedPass.position; ++index) {
+                if (!correctedPass.isEnemy[index]) {
+                    executedAllyAction = correctedPass.actions[index];
+                    break;
+                }
+            }
+            if (!isStatusReplacementAction(executedAllyAction)) {
+                error = "FLEE status adapter failed to enter the registered inability transition";
+                return false;
+            }
+            if (state.players[0].sleeping || state.players[1].sleeping) {
+                error = "yo2_be v1 corrected FLEE replay reached unsupported sleeping state";
+                return false;
+            }
+            return true;
+        }
     } // namespace
 
     bool ExactReplay::isSelectable(
@@ -125,10 +236,15 @@ namespace d20proof {
         const Player &hero = state.players[0];
         const std::uint16_t charge = chargeModeBit(hero);
         const std::uint16_t acro = acroModeBit(hero);
+        const std::uint16_t paralysis = paralysisModeBit(hero);
+        if (command == BattleEmulator::FLEE_ALLY && hero.sleeping) {
+            return false;
+        }
         return hero.mp >= profile->minimumMp &&
                hero.medicinal_herbs_count >= profile->minimumHerbs &&
                charge != 0 && (charge & profile->selectableChargeMask) != 0 &&
-               acro != 0 && (acro & profile->selectableAcroMask) != 0;
+               acro != 0 && (acro & profile->selectableAcroMask) != 0 &&
+               paralysis != 0 && (paralysis & profile->selectableParalysisMask) != 0;
     }
 
     std::string ExactReplay::validateProblem(
@@ -323,24 +439,12 @@ namespace d20proof {
             }
 
             ReplayTurn turn = makeReplayTurnBefore(result.finalState, command);
-            int32_t gene[kGeneCapacity] = {};
-            gene[0] = command;
-            gene[1] = -1;
-
-            BattleResult battleResult;
-            BattleEmulator::Main(
-                &result.finalState.position,
-                1,
-                gene,
-                result.finalState.players,
-                &battleResult,
-                problem.seed,
-                nullptr,
-                nullptr,
-                -1,
-                &result.finalState.nowState,
-                true,
-                false);
+            std::string turnError;
+            if (!runRegisteredTurn(result.finalState, command, problem.seed, turnError)) {
+                result.supported = false;
+                result.reason = std::move(turnError);
+                return result;
+            }
 
             finishReplayTurn(turn, result.finalState);
             result.turns.push_back(turn);
