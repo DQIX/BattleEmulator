@@ -59,6 +59,9 @@ PoCでは補足仕様の第2・13〜16節の固定Box、mode、外包の保存�
 2026-09-06補足。`aaaa.txt` に従い、位置ごとの `Partition[p]`、そのfamilyに対するSupportの全層再構築、
 RuleProgramの登録時の有限実行性検査を明記する。rule_idは変更不可のRuleBundleの登録versionに結びつける。
 定理・近似の方向と、約17ブランチへの横展開の前提設計は維持する。
+同日追記。更新された `aaaa.txt` の指摘を受け、第13節に既知witnessなしのsuffix探索を定義する。
+固定した開始列Zを再実行したrootから勝利列Wを生成し、`Z ++ W` を返すこともPoCの評価対象にする。
+100ms〜15秒は探索・検査込みの実測目標であり、解があれば必ずその時間内に発見するという保証ではない。
 
 **1. 何を判定するか**
 
@@ -96,6 +99,14 @@ Rremaining(pc,stack)はこの検査済み構造から残り上限を合成する
 共通の問題は `Problem=(rule_id, seed, 正確なS0, 開始ターンt0, 観測・行動制約)` とする。
 S0はp・NowState・無効タイマーを含む生の値で照合し、証明用に省略したmodeだけでは比較しない。
 N・H・partitions・価格は共通問題の外に置く。refineしただけで規則のversionを変える必要はない。
+
+開始列Zから探索する場合は、同じRuleBundleでZを正確に実行し、その終端の生状態を `S_Z` とする。
+`position, NowState, Player[0], Player[1], 開始ターン` と将来の観測・行動制約を束縛したProblem_Zを作り、S0=S_Zとして扱う。
+position・NowStateだけからHP・MP・効果等を推定しない。Zの正確な実行・入力不正の扱いは補足仕様第16節に定める。
+既知witnessがない探索では、呼出し側が非負整数のsuffix上限 `H_limit` を明示する。N未取得の段階でH=N-1とは置かない。
+返せるのは `WIN(W)`、`PROVED_FALSE(H_limit,C)`、`UNKNOWN(H_limit,report)` である。
+FALSEはそのrootからH_limit以内に勝てないという結論であり、H_limitより先まで勝てないという意味ではない。
+WINの後に最短性を求める場合、初めてN=|W|として既存のH=N-1の証明へ進む。
 
 入力seedや局面が複数候補なら、全候補について偽を示して初めて入力全体を偽にできる。
 観測がターン途中で終わる場合も、未観測の行動を勝手に確定させない。
@@ -556,7 +567,7 @@ B_H(q_0)\ge\sum_i W_{\tau_i}\ge QE_0-\Phi(S_0).
 一つのセルの不等式が、何億個の実状態へ同時に適用されても、表の要素は一つである。
 部屋に入りきらない個体という概念がない。
 
-検査対象の位置集合を `P_set=[p0,p0+H*Rmax]`、その位置数をPとすると、証明表のセル数は必ず
+検査対象の位置集合を `P_set={p∈Z | p0<=p<=p0+H*Rmax}`、その位置数をPとすると、証明表のセル数は必ず
 
 \[
 n_{\rm cell}=\sum_{p\in P_{\rm set}}|\operatorname{Leaves}(\operatorname{Partition}[p])|\le P K
@@ -750,22 +761,177 @@ theta=0 でDPを一回実行
 
 **13. 実装担当者へ渡す擬似コード**
 
+入口を二つに分ける。`solve_suffix` は既知の勝利列を要求せず、指定H以内のwitnessを探す。
+後述の `decide_bound` は既存の価格・max-plusによる否定証明を優先する入口で、勝利列取得後の最短化にも使う。
+同じRuleBundle、領域演算、被覆、partitions、Supportを共有する。候補列挙の判断は証明の信用基盤へ加えない。
+
+**候補列を作るための初期化と経路の順序。**
+solve_suffixの初期分割は、各位置にBaseBox一葉（local cell id=0）を置くものに固定する。
+必要rootは既存のrebuild_supportが決める。適合する検査済みガードを再利用し、不足rootには登録済みのターン入口COMPLETEを使う。
+入口補完のないprofileでは、kernelの命令順に、真側→偽側、switchのenum順で生成し、許可pcで補完する。
+全非空子を覆う処理を予約できなければUNKNOWNとする。未登録の補完や候補経路だけの被覆で初期化しない。
+`snapshot` は `(problem_key,H,partitions,envelope,Support,checked_coverage,model)` の不変な組とする。
+初期化helperは固定のenvelopeと全位置の木を作り、上記のproviderでrebuild_supportを完了してこの組を返す。
+候補iteratorのrootはSupport[0]の唯一のCellKeyであり、別の代表状態から選ばない。
+
+検査済みの層別グラフに、候補案内用の `L[t,q]` を作る。値はqからGまでの最小の**抽象**残りターン数である。
+継続qについてL[H,q]=+infinityとし、t=H-1から0へ以下を計算する。
+
 ```text
-decide_bound(ctx, H, limits, shared_deadline, checked_cache):
+L[t,q] = min(
+    1                                      # qからGへの項があれば
+    1 + L[t+1,q_out]                        # 全継続項の全行き先q_outについて
+)
+候補がない場合は+infinity。失敗終端は候補にしない。
+```
+
+この表は既存の疎な項・補完の行き先集合を走査して作る生成側の案内表であり、FALSEの証明値Bではない。
+補完のminは、各pの全local cellについてminを作ってp区間へ集約できる。必要なSupportや値の欠落はエラーとする。
+Gを選んだら候補列を終え、成功後の0重み自己辺をコマンド列へ追加しない。
+
+一つの項と一つの行き先を組にした「候補の選択肢」を、各(t,q)で次のキーの昇順に並べる。
+
+```text
+(1 + 行き先のL, 詳細項=0/補完項=1, profileの選択コマンド順,
+ 現model内の項番号, 行き先キー)
+Gの残りLは0、継続はL[t+1,q_out]。+infinityへの選択肢は候補列挙だけで省く。
+行き先キーはG=(0,0,0)、継続=(1,p_out,local_cell_id_out)。
+```
+
+profileの選択コマンド順は第1節の列挙順、横展開では登録した順序を使う。
+項番号は同じsnapshot内で固定し、ガード・case・pcの登録順から付ける。未定義のtie-breakへ任せない。
+具体的にはrootを `(t,p,local_cell_id,b)` 順、その中を証明木の真偽・enum順と補完case_id順に走査して番号を付ける。
+各層の継続先を `(L,p,local_cell_id)` 順に一度整列すると、補完の候補はその配列からp区間に入るものを順に読める。
+詳細項の単一候補と補完ごとの候補列を、上のキーで併合する。補完を全行き先数の実辺へ展開しない。
+範囲外の候補を読み飛ばす費用、整列、併合の比較もworkへ計上する。
+
+`goal_candidate_iterator` はこの順序による深さ優先の経路iteratorとする。
+stackに `(t,q,次の選択肢iterator)` を置き、選択するたびにtを1増やす。Gに到達した経路を一つ返し、
+次回は直前の選択肢の続きから再開する。選択肢が尽きたframeはpopし、rootまで尽きたらEXHAUSTEDとする。
+stack深さと現在の経路長はH以下で、到達した全実状態の木は保存しない。
+Lは各分岐の優先順に用いる。列挙全体の長さ順や、最初に見つかった実witnessの最短性は保証しない。
+
+Wに入れるのは各辺のrootで**選択したコマンドb**である。麻痺等で差し替わった内部actionを選択列へ戻さない。
+途中pcのCOMPLETEも同じ一ターン辺の残りを覆うので、コマンドを追加したり一ターンを二度数えたりしない。
+max-weight pathだけを毎回選ぶ処理とは別に、同じsnapshotでは次の選択肢へ進むことを必須にする。
+
+**正確な再実行、不一致、進展しない場合。**
+候補Wは毎回S_Zから同じ規則・将来制約で再実行する。抽象経路と違った時点を記録しても、
+選択列が合法に続く限りは最初の勝利またはWの終わりまで実行する。別の実経路で勝つWを、ガード不一致だけで捨てない。
+照合順は各ターン入口のp・セル・入力ガード・選択合法性、次に実行後の位置・資源・mode・行き先とする。
+WINは最初の撃破までの列へ切り詰め、正確な再実行記録とProblem_Zを付けて返す。
+checked winning replayのcommandsもこの切り詰めた列とし、`N=commands.length=first_winning_turn` を一致させる。
+違法な次コマンド、敵生存のままの味方死亡、列末で未撃破は候補の失敗である。演算・規則対応の不一致はモデルエラーとして分ける。
+
+失敗した**完全なコマンド列**を、Problem_Zと組にした有限のFailedCommandsへ保存し、完全比較で重複再実行を避ける。
+FailedCommandsには列と失敗種別を保持する。再実行中の生状態と最初の不一致の記録だけを作業領域に置き、全候補の実状態履歴は保存しない。
+同じ列が別の抽象経路で再び現れても再実行しない。partitions変更後も同じProblem_Zならこの結果を使える。
+失敗したWの延長 `W ++ v` は別候補である。Wが失敗したことから、そのprefix・行動・抽象辺を禁止してはならない。
+この記録は候補試行を省くためだけに使い、FALSE用model・Support・合法な辺・被覆からは何も削除しない。
+
+最大8個の新しい候補を試した後、またはiteratorが尽きた時点で、不一致に対する改善を高々一回行う。
+候補ごとの最初の不一致を、経過tが小さい順、同じtなら試行順で調べ、以下で実行可能な最初の改善を選ぶ。
+
+| 最初の不一致 | 機械的な処理 |
+| --- | --- |
+| 補完が選んだG・乱数位置・セル等を具体実行が通らない | そのrootに対応するCOMPLETEのpc・領域から再開する。kernelの命令順と全非空子を保ち、次の許可cutまたはFINISHまで詳細化する |
+| 次の辺（詳細・補完）の入力ガード・選択合法性に実境界状態が入らない | Boxの資源・mode条件を検査し、実値が満たさない最初の原子条件をPartition[p]へ提案する。pはその不一致が生じた境界の実RNG位置とする |
+| t・p・b等の実行条件が一致し、実入力が詳細辺の検査済みガードに入るのに、正確な出力がその更新・行き先に合わない | RuleBundleと再実行の対応等のMODEL_ERROR。通常の架空接続としてrefineして隠さない |
+
+原子条件の選択順は資源E,A,M,I、次に登録mode順とし、資源区間の下端・上端、mode maskの順に調べる。
+下端X>=lはX<=l-1、上端X<=uとmask所属はそのまま用いる。横展開の資源は登録順を使い、端点演算を検査する。
+状態のp自体が予測と違う場合は、それより前の最初の出力不一致を扱い、別位置の木に条件を追加しない。
+
+改善の成功は、分割なら両子非空でleaf数が増えること、補完なら非空領域で検査済みprefixが厳密に進むか詳細葉になることとする。
+同じCOMPLETEを再提出するだけでは成功にしない。K・J・C・残りworkを超える案は適用せず、次の不一致を調べる。
+補完を一部だけ詳細化する場合も、残りの全領域を許可された補完等で被覆する。
+成功したら新世代でSupportをS_Zから全層再構築し、L・候補iterator・項番号を作り直す。古い経路や不一致の参照は破棄する。
+分割対象は不一致時のCellKeyの一葉とし、他の葉・他位置の木を変更しない。repairは元snapshotの両versionと対象root/cutを持つ。
+適用helperは世代を照合し、分割または検査済み記録の更新後にrebuild_supportを呼び、完了した新snapshotだけを公開する。
+適用できる改善がなければ、同じiteratorの続きを試す。候補も改善も尽きた場合はUNKNOWNとし、探索失敗からFALSEは出さない。
+
+**既知witnessなしの探索ループ。**
+`try_false_zero_price` は現在の検査済みmodelにQ=256、全資源価格0を適用し、既存のBのDPと独立検査を行う。
+各snapshotで高々一回、残りの価格評価・検査予算がある場合だけ試す。不等式不成立や試行省略は探索継続である。
+L[root]=+infinityの場合も、案内表の値だけではFALSEにせず、同じmodelで既存の「抽象成功経路なし」の証明を検査する。
+この既定動作に新しい価格最適化器は不要であり、追加の価格探索は既存の第12節の任意の改善とする。
+
+```text
+solve_suffix(ctx_Z, H, limits, budget, checked_cache):
+    validate_exact_input_and_supported_rules(ctx_Z, H)
+    自明な成功・失敗・H=0はkernelで確認してWIN / PROVED_FALSEへ
+    snapshot = initial_checked_snapshot(ctx_Z, H, limits, budget, checked_cache)
+    FailedCommands = empty_bounded_command_records()
+    iterator = none
+
+    while budget permits work:
+        if iterator is none:                       # 初回または完全な再構築の直後
+            result = try_false_zero_price(ctx_Z, H, snapshot, budget)
+            if result is independently checked FALSE: return PROVED_FALSE(H, result.certificate)
+            L = build_goal_distances(snapshot, H, budget)
+            iterator = goal_candidate_iterator(snapshot, L, H, budget)
+
+        failures = empty_list(max_size=8)
+        while failures.size < 8 and budget permits another candidate:
+            path = iterator.next_path(budget)      # 次回も同じ最大経路へ戻らない
+            if path == EXHAUSTED: break
+            W = selected_commands(path)
+            if FailedCommands contains (ctx_Z.problem_key, W): continue
+            replay = exact_replay_and_record_first_mismatch(ctx_Z, W, path, budget)
+            if replay reports model/arithmetic error: return ERROR(replay.reason)
+            if replay is checked winning: return WIN(first_winning_prefix(W), replay)
+            if replay was interrupted: return UNKNOWN(H, budget.report)
+            FailedCommands.insert(ctx_Z.problem_key, W, replay.failure_kind)
+            failures.append(replay.first_mismatch)
+
+        if budget does not permit more work or the cumulative candidate limit is reached:
+            return UNKNOWN(H, budget.report)
+        repair = first_applicable_repair(failures, snapshot, limits, budget)
+        if repair exists:
+            snapshot = apply_repair_and_rebuild_all_support(
+                ctx_Z, H, snapshot, repair, limits, budget, checked_cache)
+            iterator = none
+            continue
+        if iterator is exhausted: return UNKNOWN(H, reason=CANDIDATES_EXHAUSTED)
+        # 改善不能でも、まだある別の候補へ進む。
+    return UNKNOWN(H, budget.report)
+```
+
+この擬似コードの初期化・iterator・不一致処理・改善の選択は直前の規則に従い、未知のwitness生成関数を呼ばない。
+各helperもdeadline・work・byteを検査する。snapshotの構築失敗・中断はUNKNOWN、規則違反や不正な記録はERRORとして上へ返す。
+失敗候補の再実行を省いても、その経路の列挙・比較はworkへ数える。重複候補だけを無制限に走査してはならない。
+既定の累積追加上限は、新規候補2048列、候補の選択肢の走査200万回、成功した改善16回とし、いずれも調整可能な打切り値とする。
+FailedCommands・L・整列済み行き先・iteratorの全容量を既存のbyte上限へ含め、満杯ならUNKNOWNとする。
+これらの上限は候補batch、refine、Hの変更、最短化への移行で取り直さない。100msを含む指定時間でdeadlineを設定できる。
+候補・走査・work・byteの上限到達はUNKNOWNにする。改善回数だけを使い切った場合は、再構築せず残る候補を予算内で列挙する。
+
+Lと行き先索引は全層でO(HPK)、走査用stackは深さHと各frameの有限な項iteratorを持つ。
+候補記録は `候補数×H×コマンドの格納幅` 以下の別枠で計上する。補完の仮想行き先を読む回数も累積Vへ加える。
+抽象経路の総数はHに対して指数的になりうる。固定予算で全候補を列挙できることや、解があればWINになることは主張しない。
+停止規則と候補の進め方を定義した、予算付き三値探索である。
+
+以下は同じグラフを使う、従来の否定証明優先の手続きである。
+そのTRUE_WITH_REPLAY / FALSE_WITH_CERTIFICATE / UNKNOWN_WITH_BOUND_AND_BUDGET_REPORTは、
+それぞれWIN / PROVED_FALSE / UNKNOWNに対応する。MODEL_OR_ARITHMETIC_ERRORはERRORとして扱う。
+
+```text
+decide_bound(ctx, H, limits, budget, checked_cache):
     (S0, seed) = exact_input_from(ctx.Problem)
     validate_exact_input_and_supported_rules(ctx, H)
     if enemyHP(S0)==0: return kernel_check_initial_success(ctx, H)
     if heroHP(S0)==0 or H==0: return kernel_check_trivial_false(ctx, H)
 
-    # 入力・勝利手順取得からの共通deadlineを使い、ここで15秒を取り直さない。
+    # budgetは入力・prefix・勝利手順取得から共通。deadlineも累積workも取り直さない。
     tape = registered_rng_tape(ctx.bundle, seed)
     envelope = kernel_construct_envelopes(ctx, H)
     partitions: PartitionFamily = initial_partition_family(
-        positions=[S0.p, S0.p+H*ctx.bundle.bounds.Rmax],
+        positions=integer_range_inclusive(
+            S0.p,
+            S0.p + H*ctx.bundle.bounds.Rmax),
         base_box=BaseBox(S0), max_leaves_per_position=K)
 
     proof_provider = guard_certificate_provider(
-        ctx, checked_cache, shared_deadline,
+        ctx, checked_cache, budget,
         max_detailed_cases_per_action=J,
         max_completion_terms_per_action=C,
         total_proof_work_limit=V,
@@ -814,7 +980,7 @@ decide_bound(ctx, H, limits, shared_deadline, checked_cache):
             return MODEL_OR_ARITHMETIC_ERROR
 
         P = a_maximizing_abstract_goal_path()
-        replay = exact_replay(ctx, commands(P), shared_deadline)
+        replay = exact_replay(ctx, commands(P), budget)
         if replay is checked winning within H:
             return TRUE_WITH_REPLAY(ctx.problem_key, replay)
 
@@ -856,22 +1022,38 @@ Support・checked_coverage・modelは再構築完了後に同時に差し替え�
 この再構築にも共通deadline・累積V・byte予算を使い、打切り時はUNKNOWNとする。
 自明な結果にもctx.problem_key・対象H・検査記録を持たせ、通常の検査済み結果と同じ形式で返す。
 
-上の手続きは一つのHを調べる。最短性を返す外側の手続きは次とする。
+上の手続きは一つのHを調べる。勝利取得と最短化をつなぐ外側の手続きは次とする。
+candidate_commandsは任意のヒントであり、空・不成立でもsolve_suffixへ進む。候補はH_limit以内の列を受け付ける。
+`Budget` は最外側の入力受理時に一度だけ作り、deadline、累積V、byte、価格評価・候補・走査・改善回数を共有する。
 
 ```text
-prove_minimum(Problem, candidate_commands, limits):
-    deadline = now + limits.total_time  # PoCでは最大15秒。入力受理から計時する。
-    ctx = bind_problem(Problem)         # 補足仕様第16節。不変な登録内容を束縛する。
-    (S0, seed) = exact_input_from(ctx.Problem)
+prove_minimum(Problem, candidate_commands, H_limit, limits, shared_budget=none):
+    budget = Budget(start=now, limits=limits) if shared_budget is none else shared_budget
+    ctx = bind_problem(Problem)
+    validate_exact_input_and_supported_rules(ctx, H_limit)
     checked_cache = new_empty_kernel_cache(ctx.problem_key)
-    if enemyHP(S0)==0: return OPTIMAL(0)
+    if enemyHP(ctx.Problem.S0)==0: return kernel_check_optimal_zero(ctx)
 
-    witness = obtain_and_exactly_replay_candidate(ctx, candidate_commands, deadline)
-    if no checked winning witness: return UNKNOWN_WITH_AVAILABLE_BOUNDS
+    witness = none
+    if candidate_commands is provided:
+        replay = exact_replay(ctx, candidate_commands, budget)
+        if replay reports model/arithmetic error: return ERROR(replay.reason)
+        if replay was interrupted: return UNKNOWN(H_limit, budget.report)
+        if replay is checked winning within H_limit: witness = replay
+        # ヒント不成立は未解決のまま。モデル・算術エラーは別途ERROR。
+    if witness is none:
+        result = solve_suffix(ctx, H_limit, limits, budget, checked_cache)
+        if result is not WIN: return result
+        witness = result.replay
+    return tighten_minimum(ctx, witness, limits, budget, checked_cache)
+
+
+tighten_minimum(ctx, witness, limits, budget, checked_cache):
+    assert witness is exactly checked for ctx.problem_key
     N = first_winning_turn(witness)
-
-    repeat within deadline:
-        result = decide_bound(ctx, N-1, limits, deadline, checked_cache)
+    if N==0: return OPTIMAL(0, witness)
+    repeat within the same budget:
+        result = decide_bound(ctx, N-1, limits, budget, checked_cache)
         if result is checked FALSE:
             assert witness.problem_key == result.problem_key == ctx.problem_key
             assert result.H == first_winning_turn(witness)-1
@@ -881,9 +1063,33 @@ prove_minimum(Problem, candidate_commands, limits):
             witness = result.witness
             N = first_winning_turn(witness)  # 必ず以前のNより小さい。
             continue
-        return UNKNOWN_WITH_CHECKED_TURN_INTERVAL
-    return UNKNOWN_WITH_CHECKED_TURN_INTERVAL
+        if result is ERROR: return ERROR(result.reason, available_witness=witness)
+        break
+    return WIN(witness.commands, witness, minimality=UNKNOWN,
+               turn_interval=previously_checked_lower_bound_or_1 .. N)
+
+
+extend_prefix(Problem_initial, Z, H_limit, limits, prove_minimal=false):
+    budget = Budget(start=now, limits=limits)
+    ctx_initial = bind_problem(Problem_initial)
+    prefix = exact_replay_prefix(ctx_initial, Z, H_limit, budget)
+    if prefix is invalid or unsupported: return its explicit input error
+    if prefix was interrupted: return UNKNOWN(H_limit, reason=PREFIX_BUDGET)
+    ctx_Z = bind_suffix_problem(ctx_initial, prefix, H_limit)  # 生のS_Zと将来制約を束縛
+    cache = new_empty_kernel_cache(ctx_Z.problem_key)
+    result = solve_suffix(ctx_Z, H_limit, limits, budget, cache)
+    if result is WIN and prove_minimal and budget permits work:
+        result = tighten_minimum(ctx_Z, result.replay, limits, budget, cache)
+    return attach_checked_prefix(prefix, ctx_Z, result)       # WINならZ ++ W、条件付き最短性
 ```
+
+exact_replay_prefix・bind_suffix_problem・attach_checked_prefixの検査内容は補足仕様第16節に固定する。
+H_limit未指定、負値、profileのRNG・整数・行動列容量を超える入力はエラーとし、Hを黙って縮めない。
+PoCのlimits.total_timeは正で最大15秒とし、100ms等の短い指定でも全工程に同じdeadlineを適用する。
+探索中はH_limitを増減しない。より長いHは別の明示した問い合わせであり、元のFALSEをその範囲へ延長しない。
+最短化中の予算切れ・UNKNOWNでは既に得たWINと列Wを返す。最短性が未確定という理由で勝利列を失わせない。
+以前に同じ問題で独立検査したd(h)=偽があれば下界h+1を併記でき、それがなければ生存rootの自明な下界1を使う。
+これらの結果の返却用記録も予算に含める。helperの中断は呼出し元へ伝播し、検査途中のWINやFALSEは返さない。
 
 手順取得は最短性の証明の信用基盤に含めず、その再実行だけを検査する。
 `problem_key` は登録照合済みrule_idを含むProblemの全フィールドの比較用表現である。
@@ -939,6 +1145,8 @@ prove_minimum(Problem, candidate_commands, limits):
 | Support | 各層高々 `PK` bitと、現世代のCellKeyへの添字対応 |
 | 局所更新と補完の項 | `O(8PK(J+C))` |
 | ガード証明記録と検査作業領域 | 総byte数を別に制限。辺数から容量を決めつけない |
+| 探索のL・行き先索引 | 全層でO(HPK)。索引の各レコード幅と整列作業領域もbyte上限へ含める |
+| 探索候補・重複記録・iterator | 第13節の候補数・深さH・各frameの項iteratorから計上し、同じbyte上限で制限 |
 | DPの2層 | `2×8PK` byte |
 | 全層の証明値を残す場合 | `(H+1)×8PK` byte |
 | 実状態 | 必要な入力・再実行用だけ。可逆ビットパックの `uint64_t[3]`（24byte）は設計案 |
@@ -953,6 +1161,7 @@ DPのセル総数は全位置のleaf数の和であり、各pの木を一枚のg
 ```text
 入力検査 + 勝利手順取得・再実行 + 乱数準備 + 初回の局所記号実行 + 必要部分の再開
 + 領域制限・接続更新・支持集合・補完用の区間最大表 + 価格DP + 証明ノードと不等式の検査
++ prefix再実行・接続検査 + 探索案内L・候補列挙・重複比較・候補再実行
 ```
 
 巨大な前計算を計時外へ逃がして「5秒で証明」としてはならない。
@@ -1011,9 +1220,21 @@ FLEEについては、行動可能時の引っ越しが残ること、眠り・�
 
 1. 一ターンの規則に沿う証明記録を生成・独立検査し、非空の枝・比較・乱数読みを欠落させた記録を拒否できるか確認する。
 2. セル分割後に既存の更新式を領域制限して再利用できるか確認し、小さい分割で価格0の上限を計算する。
-3. 価格を最適化して、偽を示す余裕が出るか確認する。
-4. 上限を決めている不一致だけを分割し、固定予算内で余裕が改善するか確認する。
-5. 同じ入力の `d(N-1)=偽` と `d(N)=true` を組にして検査し、手順取得・準備込みの時間を測る。
+3. 初期問題・Z・H_limitだけから第13節の候補を生成し、外部の勝利列なしでWを正確に再実行して返せるか確認する。
+4. 価格を最適化して、偽を示す余裕が出るか確認する。
+5. 上限を決めている不一致だけを分割し、固定予算内で余裕が改善するか確認する。
+6. 同じ入力の `d(N-1)=偽` と `d(N)=true` を組にして検査し、prefix・手順取得・準備込みの時間を測る。
+
+探索側の必須の検証例は次とする。以下は将来実装時の条件であり、通過済みの実測報告ではない。
+
+- Zが空、Zの末尾で勝利、Zの末尾で敗北、H_limit=0を別々に扱い、Zの後の境界と将来制約を保持する。
+- 外部witnessなしで候補iteratorが始まり、先頭の架空候補が失敗した後に、後続の実勝利候補へ進める。
+- 抽象経路と途中で食い違っても、同じ合法コマンド列を最後まで実行すると勝つ例をWINとして返す。
+- 同じ完全列が複数の抽象経路で出ても再実行を重複させず、その列の延長や別列は試行できる。
+- K上限等で改善できなくても候補iteratorは継続し、候補枯渇・走査上限・deadlineをFALSEに変換しない。
+- refine後は全SupportとL・iteratorを再構築し、旧modelの項番号や候補経路を流用しない。
+- 予測に使った詳細辺が実入力を含むのに再実行と食い違う場合、MODEL_ERRORを通常のrefineで隠さない。
+- H_limitで得たFALSEをより長いHへ流用せず、最短化の時間切れでも既に得たWを返す。
 
 最初の成功条件を「DPが速く動いた」にしない。
 記号実行と欠落検出の検査が成立し、小さい分割で補完への依存が減ることを先に確認する。
@@ -1029,6 +1250,8 @@ FLEEについては、行動可能時の引っ越しが残ること、眠り・�
 **実装担当者への到達目標**
 
 正確な入力に対して、数百ms〜15秒を目標に第14節で検査できる否定証明と勝利手順の組を返すこと。
+加えて、開始列Zから外部witnessなしでWを生成し、100ms〜15秒の予算でWIN / PROVED_FALSE / UNKNOWNを返す探索入口を評価する。
+探索成功と最短性の確定は別々に計測し、WINだけを最短確定として表示しない。
 それができなければ、到達した上限と、価格・セル・局所被覆のどこで締まらなかったかを返す。
 本書はそのための十分条件と有限予算の算法であり、対象局面での成功を先取りした証明書ではない。
 
@@ -1101,6 +1324,9 @@ MP単調減少は、この定理自体の仮定ではない。
 登録した定数・型・固定プログラムから、補足仕様の小さい領域操作で検査できる形式に限る。
 未登録の効果や実行時MP不足の処理があれば、その問題の証明を受理しない。
 後半系をこの方式へ切り替える設定や実装は追加しない。
+suffix探索の候補順・入力検査・再実行・補完も各profileの登録内容を使う。
+複数の敵行動・予約行動・効果の減算位置・追加資源を、候補生成のためにyo2_beの二枠・四資源へ縮めない。
+候補が選ぶのは一ターンに一つの登録コマンドであり、敵の複数行動を味方が選べる別コマンドとして列挙しない。
 
 計算量も、実際に増える分を計上する。
 合法コマンド数を `B_act`、ターンから決まる異なる実行条件の種類数をFとすると、
