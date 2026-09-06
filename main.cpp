@@ -155,7 +155,7 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 
 		std::string specialAction;
 		if(special != 0 && special != -1){
-			specialAction = BattleEmulator::getActionName(special & 0x3ff);
+			specialAction = BattleEmulator::getActionName(BattleEmulator::HeroActionId(special));
 		}
 
 		// ターンが変わったら、前のターンのデータを出力
@@ -1816,6 +1816,12 @@ int main(int argc, char* argv[]){
 	//THIS DEBUG CODE
 	//0x3f1b3c6c: 30, 62, 33, 37, 49, 62, 62, 62, 37, 33, 34,
 	//0x3c98d058: 30, 62, 62, 62, 37, 62, 37, 33, 34,
+	constexpr int bad_karmour_A = 1;
+	constexpr int Hootingham_Gore = 2;
+	constexpr int bad_karmour_B = 3;
+	static_assert(bad_karmour_A >= 1 && bad_karmour_A <= BattleEmulator::HERO_TARGET_MASK);
+	static_assert(Hootingham_Gore >= 1 && Hootingham_Gore <= BattleEmulator::HERO_TARGET_MASK);
+	static_assert(bad_karmour_B >= 1 && bad_karmour_B <= BattleEmulator::HERO_TARGET_MASK);
 	uint64_t time1 = 0x3c98d058;
 
 	int dummy[100];
@@ -1837,10 +1843,20 @@ int main(int argc, char* argv[]){
 	*/
 	auto* NowState = new uint64_t(0); //エミュレーターの内部ステートを表すint
 
-	Player players1[2];
+	Player players1[4];
 	//int32_t gene1[350] = {0};
 	//THIS DEBUG CODE!
-	int32_t gene1[350] = { 30, 62, 62, 62, 37, 62, 37, 33, 34,     };
+	int32_t gene1[350] = {
+		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::BUFF,
+		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
+		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
+		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
+		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::FULLHEAL,
+		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
+		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::FULLHEAL,
+		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::DOUBLE_UP,
+		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::MULTITHRUST,
+	};
 	//gene1[19-1] = BattleEmulator::DEFENCE;
 	int counter = 0;
 
