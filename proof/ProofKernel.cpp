@@ -9,7 +9,6 @@
 #include <functional>
 #include <iterator>
 #include <limits>
-#include <iostream>
 #include <map>
 #include <set>
 #include <unordered_map>
@@ -1908,31 +1907,21 @@ namespace d20proof {
                 });
             }
             const std::uint64_t indexBytes = templateIndex.size() * sizeof(TemplateLookupEntry);
-            std::uint64_t orderingWork = templateIndex.empty() ? 0 : templateIndex.size() - 1;
-            bool alreadySorted = true;
-            for (std::size_t index = 1; index < templateIndex.size(); ++index) {
-                if (std::tuple{templateIndex[index].key, templateIndex[index].index} <
-                    std::tuple{templateIndex[index - 1].key, templateIndex[index - 1].index}) {
-                    alreadySorted = false;
-                    break;
-                }
-            }
-            if (!alreadySorted) {
-                orderingWork += sortWorkEstimate(templateIndex.size());
-            }
-            if (!chargeBudget(budget, limits, orderingWork, indexBytes)) {
+            if (!chargeBudget(
+                    budget,
+                    limits,
+                    sortWorkEstimate(templateIndex.size()),
+                    indexBytes)) {
                 snapshot.check.reason = "proof-template index exceeded proof budget";
                 return snapshot;
             }
             temporaryBytes.add(indexBytes);
-            if (!alreadySorted) {
-                std::sort(
-                    templateIndex.begin(),
-                    templateIndex.end(),
-                    [](const TemplateLookupEntry &a, const TemplateLookupEntry &b) {
-                        return std::tuple{a.key, a.index} < std::tuple{b.key, b.index};
-                    });
-            }
+            std::sort(
+                templateIndex.begin(),
+                templateIndex.end(),
+                [](const TemplateLookupEntry &a, const TemplateLookupEntry &b) {
+                    return std::tuple{a.key, a.index} < std::tuple{b.key, b.index};
+                });
         }
 
         auto generatedProof = [&](int elapsedTurn,
@@ -2810,17 +2799,6 @@ namespace d20proof {
         std::uint64_t storedModelTerms = 0;
 
         for (int elapsedTurn = 0; elapsedTurn < horizon; ++elapsedTurn) {
-            ScopedBudgetBytes completionCoverageBytes(budget);
-            const std::size_t completionCoverageCount = partitions.trees.size() + 1;
-            const std::uint64_t completionCoverageStorage =
-                completionCoverageCount * sizeof(std::int64_t);
-            if (!chargeBudget(budget, limits, 0, completionCoverageStorage)) {
-                snapshot.check.reason = "COMPLETE Support interval-union storage exceeded proof budget";
-                return snapshot;
-            }
-            completionCoverageBytes.add(completionCoverageStorage);
-            std::vector<std::int64_t> completionCoverageDiff(completionCoverageCount, 0);
-
             for (const CellKey &source: supportSets[elapsedTurn]) {
                 const auto checkedIt = checkedPartitions.find(source.rngPosition);
                 if (checkedIt == checkedPartitions.end()) {
@@ -2877,14 +2855,19 @@ namespace d20proof {
                                 edge)) {
                             return snapshot;
                         }
-                        // TurnEntry is the required root itself.  Its symbolic
-                        // frame is uniquely reconstructible from the retained
-                        // root identity/domain, so retaining one large frame
-                        // per required root only duplicates derivable state.
-                        // Partial COMPLETE cuts still retain their actual
-                        // reached frames below because those are not directly
-                        // reconstructible from the root without replaying the
-                        // detailed prefix.
+                        SymbolicStepper stepper(bundle, problem);
+                        checkpoints.push_back({
+                            elapsedTurn,
+                            source,
+                            command,
+                            CompletionCutId::TurnEntry,
+                            rootDomain,
+                            stepper.makeRootFrame(
+                                elapsedTurn,
+                                command,
+                                source.rngPosition,
+                                rootDomain),
+                        });
                         const Box output = fullTurnOutputEnvelope(bundle, rootDomain, edge.weightTerms);
                         if (output.enemyHp.lo < 0 || output.heroHp.lo < 0 ||
                             output.mp.lo < 0 || output.herb.lo < 0) {
@@ -2989,20 +2972,22 @@ namespace d20proof {
                                 snapshot.check.reason = "COMPLETE edge has explicit targets or an invalid virtual range";
                                 return snapshot;
                             }
-                            const std::int64_t firstIndex =
-                                static_cast<std::int64_t>(edge.firstOutputPosition) - problem.s0.position;
-                            const std::int64_t afterLastIndex =
-                                static_cast<std::int64_t>(edge.lastOutputPosition) - problem.s0.position + 1;
-                            if (firstIndex < 0 || afterLastIndex <= firstIndex ||
-                                static_cast<std::uint64_t>(afterLastIndex) >= completionCoverageCount) {
-                                snapshot.check.reason = "COMPLETE virtual target range escapes the partition family";
-                                return snapshot;
-                            }
-                            ++completionCoverageDiff[static_cast<std::size_t>(firstIndex)];
-                            --completionCoverageDiff[static_cast<std::size_t>(afterLastIndex)];
-                            if (!chargeBudget(budget, limits, 1, 0)) {
-                                snapshot.check.reason = "COMPLETE Support interval-union update exceeded proof budget";
-                                return snapshot;
+                            for (int position = edge.firstOutputPosition;
+                                 position <= edge.lastOutputPosition;
+                                 ++position) {
+                                const auto partitionIt = checkedPartitions.find(position);
+                                if (partitionIt == checkedPartitions.end()) {
+                                    snapshot.check.reason = "COMPLETE virtual target references missing partition";
+                                    return snapshot;
+                                }
+                                for (const auto &[leafId, leafBox]: partitionIt->second.leaves) {
+                                    (void) leafBox;
+                                    if (!insertSupportKey(
+                                            supportSets[elapsedTurn + 1],
+                                            {position, leafId})) {
+                                        return snapshot;
+                                    }
+                                }
                             }
                         } else {
                             for (const CellKey &target: edge.targets) {
@@ -3083,42 +3068,6 @@ namespace d20proof {
                         std::make_move_iterator(checkedEdges.begin()),
                         std::make_move_iterator(checkedEdges.end()));
                 }
-            }
-
-            std::int64_t activeCompletionRanges = 0;
-            for (std::size_t positionIndex = 0;
-                 positionIndex + 1 < completionCoverageDiff.size();
-                 ++positionIndex) {
-                activeCompletionRanges += completionCoverageDiff[positionIndex];
-                if (activeCompletionRanges < 0) {
-                    snapshot.check.reason = "COMPLETE Support interval union became negative";
-                    return snapshot;
-                }
-                if (!chargeBudget(budget, limits, 1, 0)) {
-                    snapshot.check.reason = "COMPLETE Support interval-union scan exceeded proof budget";
-                    return snapshot;
-                }
-                if (activeCompletionRanges == 0) {
-                    continue;
-                }
-                const int position = problem.s0.position + static_cast<int>(positionIndex);
-                const auto partitionIt = checkedPartitions.find(position);
-                if (partitionIt == checkedPartitions.end()) {
-                    snapshot.check.reason = "COMPLETE virtual target references missing partition";
-                    return snapshot;
-                }
-                for (const auto &[leafId, leafBox]: partitionIt->second.leaves) {
-                    (void) leafBox;
-                    if (!insertSupportKey(
-                            supportSets[elapsedTurn + 1],
-                            {position, leafId})) {
-                        return snapshot;
-                    }
-                }
-            }
-            if (activeCompletionRanges + completionCoverageDiff.back() != 0) {
-                snapshot.check.reason = "COMPLETE Support interval union did not close";
-                return snapshot;
             }
         }
 
@@ -3696,163 +3645,6 @@ namespace d20proof {
                     return result;
                 }
 
-                // COMPLETE targets are intervals of RNG positions containing
-                // every leaf of Partition[p].  Build the per-position maximum
-                // once for this layer, then answer each COMPLETE interval with
-                // a range-maximum query.  Re-scanning every CellKey for every
-                // completion edge is both unnecessary and contrary to the
-                // bounded range-table construction required by section 15.
-                struct PositionMaximum {
-                    int rngPosition = 0;
-                    MaxPlusValue value = MaxPlusValue::negativeInfinity();
-                };
-                ScopedBudgetBytes rangeTableBytes(budget);
-                std::vector<PositionMaximum> positionMaximums;
-                const std::uint64_t positionReservationBytes =
-                    nextSources.size() * sizeof(PositionMaximum);
-                if (positionReservationBytes != 0 &&
-                    !chargeBudget(budget, limits, 0, positionReservationBytes)) {
-                    result.reason = "max-plus per-position maximum table exceeded proof budget";
-                    return result;
-                }
-                rangeTableBytes.add(positionReservationBytes);
-                positionMaximums.reserve(nextSources.size());
-
-                for (std::size_t begin = 0; begin < nextSources.size();) {
-                    const int position = nextSources[begin].rngPosition;
-                    std::size_t end = begin + 1;
-                    while (end < nextSources.size() && nextSources[end].rngPosition == position) {
-                        ++end;
-                    }
-                    const PredicatePartition *partition = partitionAt(snapshot.partitions, position);
-                    if (partition == nullptr) {
-                        result.reason = "max-plus position maximum references a missing partition";
-                        return result;
-                    }
-                    std::size_t leafCount = 0;
-                    for (const PartitionNode &node: partition->nodes) {
-                        if (node.leaf) {
-                            ++leafCount;
-                        }
-                    }
-                    if (leafCount != end - begin) {
-                        result.reason = "max-plus COMPLETE support does not contain every partition leaf";
-                        return result;
-                    }
-
-                    MaxPlusValue positionBest = MaxPlusValue::negativeInfinity();
-                    std::uint64_t validationWork = 0;
-                    for (std::size_t index = begin; index < end; ++index) {
-                        bool foundLeaf = false;
-                        for (const PartitionNode &node: partition->nodes) {
-                            ++validationWork;
-                            if (node.leaf && node.localCellId == nextSources[index].localCellId) {
-                                foundLeaf = true;
-                                break;
-                            }
-                        }
-                        if (!foundLeaf) {
-                            result.reason = "max-plus COMPLETE support contains an unregistered partition leaf";
-                            return result;
-                        }
-                        positionBest = maxValue(positionBest, previous[index]);
-                    }
-                    if (!chargeBudget(budget, limits, validationWork + 1, 0)) {
-                        result.reason = "max-plus per-position maximum construction exceeded proof budget";
-                        return result;
-                    }
-                    positionMaximums.push_back({position, positionBest});
-                    begin = end;
-                }
-
-                std::size_t rangeLevels = 0;
-                for (std::size_t n = positionMaximums.size(); n != 0; n >>= 1) {
-                    ++rangeLevels;
-                }
-                const std::size_t positionSpan = positionMaximums.empty()
-                    ? 0
-                    : static_cast<std::size_t>(
-                        positionMaximums.back().rngPosition - positionMaximums.front().rngPosition + 1);
-                const std::uint64_t sparseStorage =
-                    rangeLevels * positionMaximums.size() * sizeof(MaxPlusValue) +
-                    (positionMaximums.size() + 1) * sizeof(std::uint8_t) +
-                    positionSpan * sizeof(std::size_t);
-                if (sparseStorage != 0 &&
-                    !chargeBudget(budget, limits, 0, sparseStorage)) {
-                    result.reason = "max-plus sparse range-maximum table exceeded proof budget";
-                    return result;
-                }
-                rangeTableBytes.add(sparseStorage);
-                std::vector<MaxPlusValue> sparseRangeMaximums(
-                    rangeLevels * positionMaximums.size(),
-                    MaxPlusValue::negativeInfinity());
-                std::vector<std::uint8_t> floorLog2(positionMaximums.size() + 1, 0);
-                std::vector<std::size_t> positionIndex(
-                    positionSpan,
-                    positionMaximums.size());
-                std::uint64_t rangeBuildWork = 0;
-                if (!positionMaximums.empty()) {
-                    const std::size_t width = positionMaximums.size();
-                    for (std::size_t index = 0; index < width; ++index) {
-                        sparseRangeMaximums[index] = positionMaximums[index].value;
-                        positionIndex[static_cast<std::size_t>(
-                            positionMaximums[index].rngPosition - positionMaximums.front().rngPosition)] = index;
-                        ++rangeBuildWork;
-                    }
-                    for (std::size_t length = 2; length <= width; ++length) {
-                        floorLog2[length] = static_cast<std::uint8_t>(floorLog2[length / 2] + 1);
-                        ++rangeBuildWork;
-                    }
-                    for (std::size_t level = 1; level < rangeLevels; ++level) {
-                        const std::size_t span = std::size_t{1} << level;
-                        const std::size_t half = span >> 1;
-                        for (std::size_t index = 0; index + span <= width; ++index) {
-                            sparseRangeMaximums[level * width + index] = maxValue(
-                                sparseRangeMaximums[(level - 1) * width + index],
-                                sparseRangeMaximums[(level - 1) * width + index + half]);
-                            ++rangeBuildWork;
-                        }
-                    }
-                }
-                if (rangeBuildWork != 0 && !chargeBudget(budget, limits, rangeBuildWork, 0)) {
-                    result.reason = "max-plus sparse range-maximum construction exceeded proof budget";
-                    return result;
-                }
-
-                auto completionRangeMaximum = [&](int firstPosition,
-                                                  int lastPosition,
-                                                  MaxPlusValue &maximum) -> bool {
-                    maximum = MaxPlusValue::negativeInfinity();
-                    if (firstPosition > lastPosition || positionMaximums.empty()) {
-                        result.reason = "COMPLETE range has no checked per-position maximum";
-                        return false;
-                    }
-                    const int basePosition = positionMaximums.front().rngPosition;
-                    if (firstPosition < basePosition || lastPosition < basePosition ||
-                        static_cast<std::uint64_t>(lastPosition - basePosition) >= positionIndex.size()) {
-                        result.reason = "COMPLETE range is missing a checked RNG position in next-layer Support";
-                        return false;
-                    }
-                    const std::size_t left = positionIndex[static_cast<std::size_t>(firstPosition - basePosition)];
-                    const std::size_t right = positionIndex[static_cast<std::size_t>(lastPosition - basePosition)];
-                    const std::size_t width = positionMaximums.size();
-                    const std::size_t count = static_cast<std::size_t>(lastPosition - firstPosition + 1);
-                    if (left >= width || right >= width || right < left || right - left + 1 != count) {
-                        result.reason = "COMPLETE range is missing a checked RNG position in next-layer Support";
-                        return false;
-                    }
-                    const std::size_t level = floorLog2[count];
-                    const std::size_t span = std::size_t{1} << level;
-                    maximum = maxValue(
-                        sparseRangeMaximums[level * width + left],
-                        sparseRangeMaximums[level * width + right - span + 1]);
-                    if (!chargeBudget(budget, limits, 1, 0)) {
-                        result.reason = "max-plus COMPLETE range query exceeded proof budget";
-                        return false;
-                    }
-                    return true;
-                };
-
                 std::vector<MaxPlusValue> current(
                     sources.size(),
                     MaxPlusValue::negativeInfinity());
@@ -3894,15 +3686,21 @@ namespace d20proof {
                                     result.reason = "COMPLETE edge has an invalid virtual target representation";
                                     return result;
                                 }
-                                MaxPlusValue rangeMaximum;
-                                if (!completionRangeMaximum(
-                                        edge.firstOutputPosition,
-                                        edge.lastOutputPosition,
-                                        rangeMaximum)) {
-                                    return result;
+                                const CellKey lowerKey{edge.firstOutputPosition, 0};
+                                auto targetIt = std::lower_bound(
+                                    nextSources.begin(), nextSources.end(), lowerKey);
+                                for (; targetIt != nextSources.end() &&
+                                       targetIt->rngPosition <= edge.lastOutputPosition;
+                                     ++targetIt) {
+                                    const std::size_t targetIndex = static_cast<std::size_t>(
+                                        targetIt - nextSources.begin());
+                                    continuation = maxValue(continuation, previous[targetIndex]);
+                                    sawTarget = true;
+                                    if (!chargeBudget(budget, limits, 1, 0)) {
+                                        result.reason = "max-plus virtual COMPLETE target scan exceeded proof budget";
+                                        return result;
+                                    }
                                 }
-                                continuation = maxValue(continuation, rangeMaximum);
-                                sawTarget = true;
                             } else {
                                 if (edge.targets.empty()) {
                                     result.reason = "detailed continuing edge has no checked targets";
@@ -4071,7 +3869,6 @@ namespace d20proof {
             result.check.reason = snapshot.check.reason;
             return result;
         }
-        std::cerr << "D20_WORK after_rebuild=" << budget.work << '\n';
 
         return tryFalseZeroPriceOnSnapshot(
             bundle,
@@ -4115,7 +3912,6 @@ namespace d20proof {
             result.check.reason = maxPlus.reason;
             return result;
         }
-        std::cerr << "D20_WORK after_maxplus=" << budget.work << '\n';
 
         std::int64_t delta = 0;
         std::string inequalityError;
@@ -4664,24 +4460,12 @@ namespace d20proof {
                 nullptr,
                 nullptr,
                 1);
-            if (!reservationSnapshot.check.accepted || reservationSnapshot.coverage.empty()) {
-                result.reason = "completion-reservation self-check could not build a checked root";
+            if (!reservationSnapshot.check.accepted ||
+                reservationSnapshot.completionCheckpoints.empty()) {
+                result.reason = "completion-reservation self-check could not build a checkpoint";
                 return result;
             }
-            const CheckedRootRecord &reservationRoot = reservationSnapshot.coverage.front();
-            SymbolicStepper reservationStepper(bundle, proofProblem);
-            const CompletionCheckpoint checkpoint{
-                reservationRoot.elapsedTurn,
-                reservationRoot.source,
-                reservationRoot.selectedCommand,
-                CompletionCutId::TurnEntry,
-                reservationRoot.rootDomain,
-                reservationStepper.makeRootFrame(
-                    reservationRoot.elapsedTurn,
-                    reservationRoot.selectedCommand,
-                    reservationRoot.source.rngPosition,
-                    reservationRoot.rootDomain),
-            };
+            const CompletionCheckpoint checkpoint = reservationSnapshot.completionCheckpoints.front();
 
             BudgetReport normalResumeBudget;
             ProofTemplate advanced;
