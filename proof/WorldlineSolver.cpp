@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <iostream>
 #include <limits>
 #include <map>
 #include <memory>
@@ -2968,6 +2969,16 @@ namespace d20proof {
                     rejectedCompletionRepairBytes = 0;
                     ++report.completionResumes;
                     ++report.repairs;
+                    std::cerr << "REPAIR completion"
+                              << " n=" << report.repairs
+                              << " t=" << failure.elapsedTurn
+                              << " p=" << failure.step.source.rngPosition
+                              << " cell=" << failure.step.source.localCellId
+                              << " cmd=" << failure.step.selectedCommand
+                              << " cut=" << static_cast<int>(current.cut)
+                              << " pv=" << falseCheck.snapshot.partitions.partitionVersion
+                              << " cv=" << falseCheck.snapshot.coverageVersion
+                              << '\n';
                     return true;
                 }
 
@@ -3038,7 +3049,8 @@ namespace d20proof {
                         &checkedCache.templates,
                         trialCoverageVersion,
                         false,
-                        false);
+                        false,
+                        &falseCheck.snapshot);
                     if (!trialSnapshot.check.accepted) {
                         absorbDiscardedTrial(report, trialBudget, retainedBytesBeforeTrial);
                         if (repairProposalTooLarge(trialSnapshot.check.reason)) {
@@ -3073,6 +3085,20 @@ namespace d20proof {
                     rejectedCompletionRepairBytes = 0;
                     ++report.addedPredicates;
                     ++report.repairs;
+                    std::cerr << "REPAIR guard"
+                              << " n=" << report.repairs
+                              << " t=" << failure.elapsedTurn
+                              << " p=" << failure.step.source.rngPosition
+                              << " cell=" << failure.step.source.localCellId
+                              << " cmd=" << failure.step.selectedCommand
+                              << " pred_kind=" << static_cast<int>(predicate.kind)
+                              << " resource=" << static_cast<int>(predicate.resource)
+                              << " threshold=" << predicate.threshold
+                              << " mode=" << static_cast<int>(predicate.mode)
+                              << " mask=" << predicate.mask
+                              << " pv=" << falseCheck.snapshot.partitions.partitionVersion
+                              << " cv=" << falseCheck.snapshot.coverageVersion
+                              << '\n';
                     return true;
                 }
             }

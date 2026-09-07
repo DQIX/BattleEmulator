@@ -1930,7 +1930,8 @@ namespace d20proof {
         const std::vector<ProofTemplate> *generationTemplates,
         std::uint64_t coverageVersion,
         bool retainDefaultProofRecords,
-        bool retainPartitionFamily) {
+        bool retainPartitionFamily,
+        const CheckedSnapshot *checkedReuseSnapshot) {
         CheckedSnapshot snapshot;
         snapshot.coverageVersion = coverageVersion;
         std::uint64_t checkedProofRoots = 0;
@@ -3184,6 +3185,80 @@ namespace d20proof {
         snapshot.edgesByElapsedTurn.resize(static_cast<std::size_t>(horizon));
         std::uint64_t storedModelTerms = 0;
 
+        auto reuseCheckedTurnEntry = [&](int elapsedTurn,
+                                         const CellKey &source,
+                                         int command,
+                                         const Box &rootDomain,
+                                         CheckedRootRecord &record,
+                                         CheckedEdge &edge) -> std::optional<bool> {
+            if (checkedReuseSnapshot == nullptr || submittedProofs != nullptr ||
+                retainDefaultProofRecords || !checkedReuseSnapshot->check.accepted ||
+                elapsedTurn < 0 ||
+                elapsedTurn >= static_cast<int>(checkedReuseSnapshot->edgesByElapsedTurn.size())) {
+                return false;
+            }
+
+            const std::vector<CheckedEdge> &oldEdges =
+                checkedReuseSnapshot->edgesByElapsedTurn[static_cast<std::size_t>(elapsedTurn)];
+            std::size_t edgeLo = 0;
+            std::size_t edgeHi = oldEdges.size();
+            std::uint64_t lookupWork = 0;
+            while (edgeLo < edgeHi) {
+                ++lookupWork;
+                const std::size_t mid = edgeLo + (edgeHi - edgeLo) / 2;
+                if (oldEdges[mid].source < source) {
+                    edgeLo = mid + 1;
+                } else {
+                    edgeHi = mid;
+                }
+            }
+            const CheckedEdge *oldEdge = nullptr;
+            for (std::size_t index = edgeLo;
+                 index < oldEdges.size() && oldEdges[index].source == source;
+                 ++index) {
+                ++lookupWork;
+                const CheckedEdge &candidate = oldEdges[index];
+                if (candidate.selectedCommand == command &&
+                    candidate.kind == CheckedEdgeKind::Completion &&
+                    candidate.completionCut == CompletionCutId::TurnEntry &&
+                    candidate.rootDomain == rootDomain &&
+                    candidate.useRegisteredTurnEntryTerms &&
+                    candidate.weightTerms.empty() && candidate.targets.empty()) {
+                    oldEdge = &candidate;
+                    break;
+                }
+            }
+            if (!chargeBudget(budget, limits, lookupWork + 1, 0)) {
+                snapshot.check.reason = "checked TurnEntry reuse lookup exceeded proof budget";
+                return std::nullopt;
+            }
+            if (oldEdge == nullptr) {
+                return false;
+            }
+
+            const int envelopeLastPosition = problem.s0.position +
+                                             (elapsedTurn + 1) * bundle.bounds.rMax;
+            if (oldEdge->firstOutputPosition < problem.s0.position ||
+                oldEdge->lastOutputPosition > envelopeLastPosition ||
+                oldEdge->firstOutputPosition > oldEdge->lastOutputPosition ||
+                (oldEdge->hasContinuingOutput && !contains(base, oldEdge->continuingOutput))) {
+                return false;
+            }
+
+            record = {};
+            record.proofKind = RootProofKind::Completion;
+            record.elapsedTurn = elapsedTurn;
+            record.source = source;
+            record.selectedCommand = command;
+            record.rootDomain = rootDomain;
+            record.partitionVersion = partitions.partitionVersion;
+            record.coverageVersion = snapshot.coverageVersion;
+            record.verifiedPc = turnEntrySite->pc;
+            record.verifiedCut = CompletionCutId::TurnEntry;
+            edge = *oldEdge;
+            return true;
+        };
+
         for (int elapsedTurn = 0; elapsedTurn < horizon; ++elapsedTurn) {
             if (!materializeSupportLayer(elapsedTurn)) {
                 return snapshot;
@@ -3260,34 +3335,65 @@ namespace d20proof {
                         continue;
                     }
 
-                    bool generatedDefaultTurnEntry = false;
-                    std::optional<RootProofRecord> proof = acquireRequiredProof(
-                        elapsedTurn,
-                        source,
-                        command,
-                        rootDomain,
-                        templateRangeBegin,
-                        templateRangeEnd,
-                        generatedDefaultTurnEntry);
-                    if (!proof.has_value()) {
-                        return snapshot;
-                    }
-                    const std::uint64_t proofRecordBytes = rootProofRecordBytes(*proof);
-                    ScopedBudgetBytes localProofBytes(budget);
-                    if (!chargeBudget(budget, limits, 0, proofRecordBytes)) {
-                        snapshot.check.reason = "required-root proof record exceeded byte budget";
-                        return snapshot;
-                    }
-                    localProofBytes.add(proofRecordBytes);
-
                     CheckedRootRecord record;
                     std::vector<CheckedEdge> checkedEdges;
                     CheckedEdge defaultTurnEntryEdge;
                     bool usesDefaultTurnEntryEdge = false;
                     std::vector<CompletionCheckpoint> checkpoints;
                     std::uint64_t localDerivedByteCount = 0;
+                    bool generatedDefaultTurnEntry = false;
+                    bool reusedCheckedTurnEntry = false;
+                    std::optional<RootProofRecord> proof;
+                    std::uint64_t proofRecordBytes = 0;
+                    ScopedBudgetBytes localProofBytes(budget);
                     ScopedBudgetBytes localDerivedBytes(budget);
-                    if (proof->kind == RootProofKind::Completion &&
+
+                    const std::optional<bool> reuse = reuseCheckedTurnEntry(
+                        elapsedTurn,
+                        source,
+                        command,
+                        rootDomain,
+                        record,
+                        defaultTurnEntryEdge);
+                    if (!reuse.has_value()) {
+                        return snapshot;
+                    }
+                    if (*reuse) {
+                        reusedCheckedTurnEntry = true;
+                        generatedDefaultTurnEntry = true;
+                        usesDefaultTurnEntryEdge = true;
+                        localDerivedByteCount = checkedRootRecordBytes(record);
+                        localDerivedByteCount = saturatedReservationAdd(
+                            localDerivedByteCount,
+                            checkedEdgeBytes(defaultTurnEntryEdge),
+                            std::numeric_limits<std::uint64_t>::max());
+                        if (!chargeBudget(budget, limits, 0, localDerivedByteCount)) {
+                            snapshot.check.reason = "reused TurnEntry checked output storage exceeded proof budget";
+                            return snapshot;
+                        }
+                        localDerivedBytes.add(localDerivedByteCount);
+                    } else {
+                        proof = acquireRequiredProof(
+                            elapsedTurn,
+                            source,
+                            command,
+                            rootDomain,
+                            templateRangeBegin,
+                            templateRangeEnd,
+                            generatedDefaultTurnEntry);
+                        if (!proof.has_value()) {
+                            return snapshot;
+                        }
+                        proofRecordBytes = rootProofRecordBytes(*proof);
+                        if (!chargeBudget(budget, limits, 0, proofRecordBytes)) {
+                            snapshot.check.reason = "required-root proof record exceeded byte budget";
+                            return snapshot;
+                        }
+                        localProofBytes.add(proofRecordBytes);
+                    }
+
+                    if (!reusedCheckedTurnEntry &&
+                        proof->kind == RootProofKind::Completion &&
                         proof->cut == CompletionCutId::TurnEntry) {
                         CheckedEdge edge;
                         if (!verifyTurnEntryProof(
@@ -3358,7 +3464,7 @@ namespace d20proof {
                             return snapshot;
                         }
                         localDerivedBytes.add(localDerivedByteCount);
-                    } else if (!verifyDetailedProof(
+                    } else if (!reusedCheckedTurnEntry && !verifyDetailedProof(
                                    *proof,
                                    elapsedTurn,
                                    source,
@@ -3369,7 +3475,7 @@ namespace d20proof {
                                    checkpoints,
                                    localDerivedByteCount)) {
                         return snapshot;
-                    } else {
+                    } else if (!reusedCheckedTurnEntry) {
                         // verifyDetailedProof leaves its checked outputs charged
                         // on success; adopt those bytes so later failures in this
                         // root roll them back transactionally.
@@ -3548,10 +3654,14 @@ namespace d20proof {
                         snapshot.check.reason = "checked-root working byte accounting disagrees with retained form";
                         return snapshot;
                     }
+                    const std::size_t proofCompletionCaseCount =
+                        proof.has_value() ? proof->completionCases.size() : 0;
+                    const std::size_t proofDetailedNodeCount =
+                        proof.has_value() ? proof->detailedNodes.size() : 0;
                     if (!chargeBudget(
                             budget,
                             limits,
-                            1 + proof->completionCases.size() + proof->detailedNodes.size() +
+                            1 + proofCompletionCaseCount + proofDetailedNodeCount +
                                 edgeTerms + edgeTargets,
                             0)) {
                         snapshot.check.reason = "root coverage exceeded proof budget";
@@ -3560,12 +3670,13 @@ namespace d20proof {
                     ++checkedProofRoots;
                     checkedCompletionCases += generatedDefaultTurnEntry
                         ? commandProfile.turnEntryCompletionTerms.size()
-                        : proof->completionCases.size();
+                        : proofCompletionCaseCount;
                     const bool retainProofRecord =
-                        submittedProofs != nullptr ||
-                        (retainDefaultProofRecords && !generatedDefaultTurnEntry) ||
-                        proof->kind != RootProofKind::Completion ||
-                        proof->cut != CompletionCutId::TurnEntry;
+                        proof.has_value() &&
+                        (submittedProofs != nullptr ||
+                         (retainDefaultProofRecords && !generatedDefaultTurnEntry) ||
+                         proof->kind != RootProofKind::Completion ||
+                         proof->cut != CompletionCutId::TurnEntry);
                     retainedSnapshotBytes.add(saturatedReservationAdd(
                         retainProofRecord ? proofRecordBytes : 0,
                         derivedRootBytes,
@@ -4148,6 +4259,7 @@ namespace d20proof {
         }
 
         MaxPlusResult computeMaxPlus(
+            const RuleBundle &bundle,
             const CheckedSnapshot &snapshot,
             int horizon,
             int q,
@@ -4740,7 +4852,7 @@ namespace d20proof {
         constexpr int u = 0;
         constexpr int v = 0;
         constexpr int w = 0;
-        MaxPlusResult maxPlus = computeMaxPlus(snapshot, horizon, q, u, v, w, limits, budget);
+        MaxPlusResult maxPlus = computeMaxPlus(bundle, snapshot, horizon, q, u, v, w, limits, budget);
         if (!maxPlus.accepted) {
             result.check.reason = maxPlus.reason;
             return result;
@@ -4883,6 +4995,7 @@ namespace d20proof {
         }
 
         MaxPlusResult maxPlus = computeMaxPlus(
+            bundle,
             snapshot,
             certificate.horizon,
             certificate.q,

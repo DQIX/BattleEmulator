@@ -238,7 +238,8 @@ namespace d20proof {
             const std::vector<ProofTemplate> *generationTemplates = nullptr,
             std::uint64_t coverageVersion = 1,
             bool retainDefaultProofRecords = true,
-            bool retainPartitionFamily = true);
+            bool retainPartitionFamily = true,
+            const CheckedSnapshot *checkedReuseSnapshot = nullptr);
 
         [[nodiscard]] static CheckResult advanceCompletionCheckpoint(
             const RuleBundle &bundle,
