@@ -3185,6 +3185,33 @@ namespace d20proof {
         snapshot.edgesByElapsedTurn.resize(static_cast<std::size_t>(horizon));
         std::uint64_t storedModelTerms = 0;
         const std::size_t commandCount = bundle.profile.heroCommands.size();
+        int maximumCommandValue = -1;
+        for (const int command: bundle.profile.heroCommands) {
+            if (command < 0) {
+                snapshot.check.reason = "registered hero command is negative";
+                return snapshot;
+            }
+            maximumCommandValue = std::max(maximumCommandValue, command);
+        }
+        const std::uint64_t commandSlotBytes = maximumCommandValue < 0
+            ? 0
+            : (static_cast<std::uint64_t>(maximumCommandValue) + 1u) * sizeof(int);
+        if (commandSlotBytes != 0 && !chargeBudget(budget, limits, 0, commandSlotBytes)) {
+            snapshot.check.reason = "dense command-slot lookup exceeded proof budget";
+            return snapshot;
+        }
+        temporaryBytes.add(commandSlotBytes);
+        std::vector<int> commandSlotByValue(
+            maximumCommandValue < 0 ? 0 : static_cast<std::size_t>(maximumCommandValue) + 1u,
+            -1);
+        for (std::size_t slot = 0; slot < commandCount; ++slot) {
+            const int command = bundle.profile.heroCommands[slot];
+            if (commandSlotByValue[static_cast<std::size_t>(command)] != -1) {
+                snapshot.check.reason = "registered hero command list contains a duplicate";
+                return snapshot;
+            }
+            commandSlotByValue[static_cast<std::size_t>(command)] = static_cast<int>(slot);
+        }
 
         auto reuseCheckedTurnEntry = [&](int elapsedTurn,
                                          const CellKey &source,
@@ -3250,6 +3277,8 @@ namespace d20proof {
             int cachedTemplatePosition = std::numeric_limits<int>::min();
             std::size_t cachedTemplateRangeBegin = 0;
             std::size_t cachedTemplateRangeEnd = 0;
+            std::vector<std::size_t> cachedTemplateCommandBegin(commandCount, 0);
+            std::vector<std::size_t> cachedTemplateCommandEnd(commandCount, 0);
             const std::vector<CheckedEdge> *oldReuseLayer = nullptr;
             std::size_t oldReuseCursor = 0;
             std::vector<const CheckedEdge *> reusableForCommand(commandCount, nullptr);
@@ -3339,6 +3368,41 @@ namespace d20proof {
                                std::get<1>(templateIndex[cachedTemplateRangeEnd].key) == source.rngPosition) {
                             ++cachedTemplateRangeEnd;
                         }
+                        std::fill(
+                            cachedTemplateCommandBegin.begin(),
+                            cachedTemplateCommandBegin.end(),
+                            cachedTemplateRangeEnd);
+                        std::fill(
+                            cachedTemplateCommandEnd.begin(),
+                            cachedTemplateCommandEnd.end(),
+                            cachedTemplateRangeEnd);
+                        std::uint64_t commandRangeWork = 0;
+                        for (std::size_t templateLookupIndex = cachedTemplateRangeBegin;
+                             templateLookupIndex < cachedTemplateRangeEnd;
+                             ++templateLookupIndex) {
+                            ++commandRangeWork;
+                            const int templateCommand =
+                                std::get<2>(templateIndex[templateLookupIndex].key);
+                            if (templateCommand < 0 ||
+                                static_cast<std::size_t>(templateCommand) >= commandSlotByValue.size() ||
+                                commandSlotByValue[static_cast<std::size_t>(templateCommand)] < 0) {
+                                snapshot.check.reason =
+                                    "proof-template index contains a command outside registered profile";
+                                return snapshot;
+                            }
+                            const std::size_t slot = static_cast<std::size_t>(
+                                commandSlotByValue[static_cast<std::size_t>(templateCommand)]);
+                            if (cachedTemplateCommandBegin[slot] == cachedTemplateRangeEnd) {
+                                cachedTemplateCommandBegin[slot] = templateLookupIndex;
+                            }
+                            cachedTemplateCommandEnd[slot] = templateLookupIndex + 1;
+                        }
+                        if (commandRangeWork != 0 &&
+                            !chargeBudget(budget, limits, commandRangeWork, 0)) {
+                            snapshot.check.reason =
+                                "proof-template dense command range construction exceeded proof budget";
+                            return snapshot;
+                        }
                     }
                     templateRangeBegin = cachedTemplateRangeBegin;
                     templateRangeEnd = cachedTemplateRangeEnd;
@@ -3371,16 +3435,23 @@ namespace d20proof {
                     ScopedBudgetBytes localProofBytes(budget);
                     ScopedBudgetBytes localDerivedBytes(budget);
 
+                    const std::size_t commandTemplateRangeBegin =
+                        commandIndex < cachedTemplateCommandBegin.size()
+                            ? cachedTemplateCommandBegin[commandIndex]
+                            : templateRangeEnd;
+                    const std::size_t commandTemplateRangeEnd =
+                        commandIndex < cachedTemplateCommandEnd.size()
+                            ? cachedTemplateCommandEnd[commandIndex]
+                            : templateRangeEnd;
+
                     bool strongerTemplateCoversRoot = false;
-                    if (generationTemplates != nullptr && templateRangeBegin < templateRangeEnd) {
+                    if (generationTemplates != nullptr &&
+                        commandTemplateRangeBegin < commandTemplateRangeEnd) {
                         std::uint64_t strongerTemplateScanWork = 0;
-                        for (std::size_t templateLookupIndex = templateRangeBegin;
-                             templateLookupIndex < templateRangeEnd;
+                        for (std::size_t templateLookupIndex = commandTemplateRangeBegin;
+                             templateLookupIndex < commandTemplateRangeEnd;
                              ++templateLookupIndex) {
                             ++strongerTemplateScanWork;
-                            if (std::get<2>(templateIndex[templateLookupIndex].key) != command) {
-                                continue;
-                            }
                             const ProofTemplate &candidate =
                                 (*generationTemplates)[templateIndex[templateLookupIndex].index];
                             if (!contains(candidate.coveredDomain, rootDomain)) {
@@ -3435,8 +3506,8 @@ namespace d20proof {
                             source,
                             command,
                             rootDomain,
-                            templateRangeBegin,
-                            templateRangeEnd,
+                            commandTemplateRangeBegin,
+                            commandTemplateRangeEnd,
                             generatedDefaultTurnEntry);
                         if (!proof.has_value()) {
                             return snapshot;
@@ -4338,6 +4409,25 @@ namespace d20proof {
 
             ScopedBudgetBytes retainedValues(budget);
 
+            if (snapshot.partitions.trees.empty()) {
+                result.reason = "max-plus snapshot has no hotel partitions";
+                return result;
+            }
+            const int firstHotelPosition = snapshot.partitions.trees.front().rngPosition;
+            auto hotelPartitionAt = [&](int position) -> const PredicatePartition * {
+                if (position < firstHotelPosition) {
+                    return nullptr;
+                }
+                const std::uint64_t rawIndex =
+                    static_cast<std::uint64_t>(position - firstHotelPosition);
+                if (rawIndex >= snapshot.partitions.trees.size()) {
+                    return nullptr;
+                }
+                const PredicatePartition &partition =
+                    snapshot.partitions.trees[static_cast<std::size_t>(rawIndex)];
+                return partition.rngPosition == position ? &partition : nullptr;
+            };
+
             result.values.resize(static_cast<std::size_t>(horizon) + 1);
             result.values[0].assign(
                 snapshot.support[horizon].size(),
@@ -4394,35 +4484,25 @@ namespace d20proof {
                     while (end < nextSources.size() && nextSources[end].rngPosition == position) {
                         ++end;
                     }
-                    const PredicatePartition *partition = partitionAt(snapshot.partitions, position);
+                    const PredicatePartition *partition = hotelPartitionAt(position);
                     if (partition == nullptr) {
                         result.reason = "max-plus position maximum references a missing partition";
                         return result;
                     }
                     std::size_t leafCount = 0;
+                    std::uint64_t validationWork = 0;
                     for (const PartitionNode &node: partition->nodes) {
+                        ++validationWork;
                         if (node.leaf) {
                             ++leafCount;
                         }
                     }
                     MaxPlusValue positionBest = MaxPlusValue::negativeInfinity();
-                    std::uint64_t validationWork = 0;
                     for (std::size_t index = begin; index < end; ++index) {
-                        bool foundLeaf = false;
-                        for (const PartitionNode &node: partition->nodes) {
-                            ++validationWork;
-                            if (node.leaf && node.localCellId == nextSources[index].localCellId) {
-                                foundLeaf = true;
-                                break;
-                            }
-                        }
-                        if (!foundLeaf) {
-                            result.reason = "max-plus COMPLETE support contains an unregistered partition leaf";
-                            return result;
-                        }
                         positionBest = maxValue(positionBest, previous[index]);
+                        ++validationWork;
                     }
-                    if (!chargeBudget(budget, limits, validationWork + 1, 0)) {
+                    if (!chargeBudget(budget, limits, validationWork, 0)) {
                         result.reason = "max-plus per-position maximum construction exceeded proof budget";
                         return result;
                     }

@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <iostream>
+
 
 #include <limits>
 #include <map>
@@ -847,68 +849,6 @@ namespace d20proof {
                 return true;
             }
 
-            bool visitSource(
-                std::size_t sequenceId,
-                const CellKey &source,
-                bool &firstVisit) {
-                firstVisit = false;
-                if (sequenceId >= nodes_.size()) {
-                    error_ = "command-prefix source visit is outside the exact command trie";
-                    return false;
-                }
-                std::vector<CellKey> &visited = nodes_[sequenceId].visitedSources;
-                std::size_t lo = 0;
-                std::size_t hi = visited.size();
-                std::uint64_t comparisons = 0;
-                while (lo < hi) {
-                    ++comparisons;
-                    const std::size_t mid = lo + (hi - lo) / 2;
-                    if (visited[mid] < source) {
-                        lo = mid + 1;
-                    } else {
-                        hi = mid;
-                    }
-                }
-                if (!chargeSearchBudget(report_, limits_, comparisons + 1, 0)) {
-                    error_ = "command-prefix source deduplication exceeded proof budget";
-                    return false;
-                }
-                if (lo < visited.size() && visited[lo] == source) {
-                    return true;
-                }
-                const std::uint64_t shifted = visited.size() - lo;
-                if (!chargeSearchBudget(
-                        report_,
-                        limits_,
-                        shifted,
-                        sizeof(CellKey))) {
-                    error_ = "command-prefix source record exceeded proof budget";
-                    return false;
-                }
-                ownedBytes_ += sizeof(CellKey);
-                visitedSourceBytes_ += sizeof(CellKey);
-                visited.insert(visited.begin() + static_cast<std::ptrdiff_t>(lo), source);
-                firstVisit = true;
-                return true;
-            }
-
-            bool resetSourceVisits() {
-                if (visitedSourceBytes_ == 0) {
-                    return true;
-                }
-                if (!chargeSearchBudget(report_, limits_, nodes_.size(), 0)) {
-                    error_ = "command-prefix source generation reset exceeded proof budget";
-                    return false;
-                }
-                for (Node &node: nodes_) {
-                    std::vector<CellKey>().swap(node.visitedSources);
-                }
-                releaseSearchBytes(report_, visitedSourceBytes_);
-                ownedBytes_ -= visitedSourceBytes_;
-                visitedSourceBytes_ = 0;
-                return true;
-            }
-
         private:
             static constexpr std::size_t kNoNode = std::numeric_limits<std::size_t>::max();
             struct Node {
@@ -916,8 +856,8 @@ namespace d20proof {
                 bool failed = false;
                 CandidateFailureKind failure = CandidateFailureKind::NotWon;
                 std::vector<int> completeCommands;
-                std::vector<CellKey> visitedSources;
             };
+
 
             bool appendNode() {
                 const std::uint64_t bytes =
@@ -937,7 +877,6 @@ namespace d20proof {
             BudgetReport &report_;
             std::vector<Node> nodes_;
             std::uint64_t ownedBytes_ = 0;
-            std::uint64_t visitedSourceBytes_ = 0;
             std::string error_;
             bool ready_ = false;
         };
@@ -968,6 +907,11 @@ namespace d20proof {
                 Frame root;
                 root.elapsedTurn = 0;
                 root.source = snapshot.root;
+                if (snapshot_.support.empty() || snapshot_.support[0].size() != 1 ||
+                    !(snapshot_.support[0][0] == snapshot_.root)) {
+                    error_ = "candidate iterator root is not the unique dense Support room";
+                    return;
+                }
                 root.commandSequenceId = 0;
                 if (!buildFrame(root)) {
                     return;
@@ -1054,23 +998,6 @@ namespace d20proof {
                     child.elapsedTurn = frame.elapsedTurn + 1;
                     child.source = choice.target;
                     child.commandSequenceId = childCommandSequenceId;
-                    bool firstSourceVisit = false;
-                    if (!commandSequences_.visitSource(
-                            childCommandSequenceId,
-                            child.source,
-                            firstSourceVisit)) {
-                        reason = commandSequences_.error();
-                        commandPath_.pop_back();
-                        stepPath_.pop_back();
-                        return isBudgetFailure(reason)
-                            ? IteratorStatus::BudgetExceeded
-                            : IteratorStatus::ModelError;
-                    }
-                    if (!firstSourceVisit) {
-                        commandPath_.pop_back();
-                        stepPath_.pop_back();
-                        continue;
-                    }
                     if (!buildFrame(child)) {
                         reason = error_;
                         commandPath_.pop_back();
@@ -2493,6 +2420,7 @@ namespace d20proof {
             report,
             &proofTemplates,
             coverageVersion);
+        std::cerr << "INITIAL_FALSE work=" << report.work << '\n';
         if (deadlineReached(start, budget, report)) {
             SolveResult result = makeFailure(
                 SolveKind::Unknown,
@@ -2599,6 +2527,9 @@ namespace d20proof {
         }
         auto iterator = std::make_unique<GoalCandidateIterator>(
             bundle_, falseCheck.snapshot, distances, commandSequences, horizon, budget, report);
+        std::cerr << "INITIAL_SETUP delta="
+                  << (report.work - initialCandidateSetupWorkStart)
+                  << " work=" << report.work << '\n';
         if (rejectedHint.has_value()) {
             std::size_t sequenceId = 0;
             bool representable = true;
@@ -3112,6 +3043,8 @@ namespace d20proof {
                     rejectedCompletionRepairBytes = 0;
                     ++report.addedPredicates;
                     ++report.repairs;
+                    std::cerr << "REPAIR_POINT n=" << report.repairs
+                              << " work=" << report.work << '\n';
                     return true;
                 }
             }
@@ -3165,6 +3098,9 @@ namespace d20proof {
                             falseCheck.check.reason);
                     }
                     lastCompletedZeroPriceWork = report.work - zeroPriceWorkStart;
+                    std::cerr << "ZERO_PRICE n=" << report.repairs
+                              << " delta=" << lastCompletedZeroPriceWork
+                              << " work=" << report.work << '\n';
                 }
             }
             repairSnapshotPrepared = false;
@@ -3217,14 +3153,12 @@ namespace d20proof {
             iterator.reset();
             releaseSearchBytes(report, distances.chargedBytes);
             distances = std::move(rebuiltDistances);
-            if (!commandSequences.resetSourceVisits()) {
-                return makeCurrentFailure(
-                    isBudgetFailure(commandSequences.error()) ? SolveKind::Unknown : SolveKind::ModelError,
-                    commandSequences.error());
-            }
             iterator = std::make_unique<GoalCandidateIterator>(
                 bundle_, falseCheck.snapshot, distances, commandSequences, horizon, budget, report);
             lastCompletedCandidateSetupWork = report.work - candidateSetupWorkStart;
+            std::cerr << "SETUP_POINT n=" << report.repairs
+                      << " delta=" << lastCompletedCandidateSetupWork
+                      << " work=" << report.work << '\n';
             failures.clear();
             releaseSearchBytes(report, failureBatchBytes);
             failureBatchBytes = 0;
