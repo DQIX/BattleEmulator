@@ -1685,6 +1685,9 @@ namespace d20proof {
             const int allyFirst = b.addCall("call:ally-slot", "ally-slot");
             const int enemyAfterAlly = b.addCall("call:enemy-slot", "enemy-slot");
             const int enemyFirst = b.addCall("call:enemy-slot", "enemy-slot");
+            const int restoreAllyAction = b.addStateUpdate(
+                "turn:restore selected ally command after enemy-first slot",
+                {{StateWriteKind::SetSelectedCommand, StateField::CurrentAction, ScalarSlot::None, 0}});
             const int allyAfterEnemy = b.addCall("call:ally-slot", "ally-slot");
             const int tail = b.addCall("call:turn-tail", "turn-tail");
             const int finish = b.add(Opcode::Finish, "turn:finish");
@@ -1705,7 +1708,8 @@ namespace d20proof {
             b.branch(initiative, allyFirst, enemyFirst);
             b.next(allyFirst, enemyAfterAlly);
             b.next(enemyAfterAlly, tail);
-            b.next(enemyFirst, allyAfterEnemy);
+            b.next(enemyFirst, restoreAllyAction);
+            b.next(restoreAllyAction, allyAfterEnemy);
             b.next(allyAfterEnemy, tail);
             b.next(tail, finish);
             return std::move(b).finish(true);
@@ -3677,8 +3681,8 @@ namespace d20proof {
         bundle.profile.completionSites = {
             {CompletionCutId::TurnEntry, {"turn", 0}},
             {CompletionCutId::AllyDoneEnemyPending, {"turn", 15}},
-            {CompletionCutId::EnemyDoneAllyPending, {"turn", 17}},
-            {CompletionCutId::ActionsDone, {"turn", 18}},
+            {CompletionCutId::EnemyDoneAllyPending, {"turn", 18}},
+            {CompletionCutId::ActionsDone, {"turn", 19}},
         };
 
         bundle.program.entryRoutine = "turn";

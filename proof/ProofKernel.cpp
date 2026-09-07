@@ -552,12 +552,13 @@ namespace d20proof {
             return domain;
         }
 
-        std::vector<CompletionWeightTerm> fullTurnCompletionTerms(
+        const std::vector<CompletionWeightTerm> &fullTurnCompletionTerms(
             const RuleBundle &bundle,
             int command) {
+            static const std::vector<CompletionWeightTerm> emptyTerms;
             const CommandProfile *profile = lookupCommandProfile(bundle.profile, command);
             if (profile == nullptr) {
-                return {};
+                return emptyTerms;
             }
             return profile->turnEntryCompletionTerms;
         }
@@ -2131,8 +2132,10 @@ namespace d20proof {
         auto acquireRequiredProof = [&](int elapsedTurn,
                                         const CellKey &source,
                                         int command,
-                                        const Box &rootDomain)
+                                        const Box &rootDomain,
+                                        bool &generatedDefaultTurnEntry)
             -> std::optional<RootProofRecord> {
+            generatedDefaultTurnEntry = false;
             if (submittedProofs != nullptr) {
                 const SubmittedProofKey key{
                     elapsedTurn,
@@ -2253,12 +2256,24 @@ namespace d20proof {
                 }
                 return proof;
             }
-            return generatedProof(
-                elapsedTurn,
-                source,
-                command,
-                RootProofKind::Completion,
-                CompletionCutId::TurnEntry);
+            // The default provider always submits the canonical TurnEntry
+            // COMPLETE proof.  Keep its case list implicit here: the kernel
+            // derives and checks the canonical cases below, so materializing a
+            // tiny heap-backed vector for every required root only duplicates
+            // kernel-owned data during repeated full Support rebuilds.
+            RootProofRecord proof;
+            proof.kind = RootProofKind::Completion;
+            proof.elapsedTurn = elapsedTurn;
+            proof.source = source;
+            proof.selectedCommand = command;
+            proof.partitionVersion = partitions.partitionVersion;
+            proof.coverageVersion = snapshot.coverageVersion;
+            proof.cut = CompletionCutId::TurnEntry;
+            if (const CompletionSite *site = lookupCompletionSite(bundle.profile, proof.cut)) {
+                proof.expectedPc = site->pc;
+            }
+            generatedDefaultTurnEntry = true;
+            return proof;
         };
 
         auto verifyTurnEntryProof = [&](
@@ -2268,7 +2283,8 @@ namespace d20proof {
             int command,
             const Box &rootDomain,
             CheckedRootRecord &record,
-            CheckedEdge &edge) -> bool {
+            CheckedEdge &edge,
+            bool generatedDefaultTurnEntry) -> bool {
             const CompletionSite *site = lookupCompletionSite(bundle.profile, CompletionCutId::TurnEntry);
             if (proof.kind != RootProofKind::Completion || site == nullptr ||
                 proof.cut != CompletionCutId::TurnEntry || proof.expectedPc != site->pc) {
@@ -2287,21 +2303,37 @@ namespace d20proof {
                 return false;
             }
 
-            const std::vector<CompletionWeightTerm> terms = fullTurnCompletionTerms(bundle, command);
-            if (terms.empty() || terms.size() > limits.maxCompletionTermsPerAction ||
-                proof.completionCases.size() != terms.size()) {
+            const std::vector<CompletionWeightTerm> &terms = fullTurnCompletionTerms(bundle, command);
+            if (terms.empty() || terms.size() > limits.maxCompletionTermsPerAction) {
                 snapshot.check.reason = "turn-entry COMPLETE does not contain every required case_id";
                 return false;
             }
-            std::vector<bool> seenCases(terms.size(), false);
-            for (const CompletionProofCase &proofCase: proof.completionCases) {
-                if (proofCase.caseId >= terms.size() ||
-                    proofCase.targetKind != CompletionTargetKind::AllLeavesInCheckedRange ||
-                    seenCases[proofCase.caseId]) {
-                    snapshot.check.reason = "turn-entry COMPLETE has an invalid, duplicate, or unsupported case";
+            if (generatedDefaultTurnEntry) {
+                if (!proof.completionCases.empty()) {
+                    snapshot.check.reason = "kernel-generated TurnEntry COMPLETE unexpectedly stores explicit cases";
                     return false;
                 }
-                seenCases[proofCase.caseId] = true;
+            } else {
+                if (proof.completionCases.size() != terms.size()) {
+                    snapshot.check.reason = "turn-entry COMPLETE does not contain every required case_id";
+                    return false;
+                }
+                for (std::size_t caseIndex = 0; caseIndex < proof.completionCases.size(); ++caseIndex) {
+                    const CompletionProofCase &proofCase = proof.completionCases[caseIndex];
+                    bool duplicate = false;
+                    for (std::size_t previous = 0; previous < caseIndex; ++previous) {
+                        if (proof.completionCases[previous].caseId == proofCase.caseId) {
+                            duplicate = true;
+                            break;
+                        }
+                    }
+                    if (proofCase.caseId >= terms.size() ||
+                        proofCase.targetKind != CompletionTargetKind::AllLeavesInCheckedRange ||
+                        duplicate) {
+                        snapshot.check.reason = "turn-entry COMPLETE has an invalid, duplicate, or unsupported case";
+                        return false;
+                    }
+                }
             }
 
             const PcStaticBounds *remaining = lookupPcBounds(
@@ -3005,11 +3037,13 @@ namespace d20proof {
                         continue;
                     }
 
+                    bool generatedDefaultTurnEntry = false;
                     std::optional<RootProofRecord> proof = acquireRequiredProof(
                         elapsedTurn,
                         source,
                         command,
-                        rootDomain);
+                        rootDomain,
+                        generatedDefaultTurnEntry);
                     if (!proof.has_value()) {
                         return snapshot;
                     }
@@ -3036,7 +3070,8 @@ namespace d20proof {
                                 command,
                                 rootDomain,
                                 record,
-                                edge)) {
+                                edge,
+                                generatedDefaultTurnEntry)) {
                             return snapshot;
                         }
                         // TurnEntry is the required root itself.  Its symbolic
@@ -3216,7 +3251,10 @@ namespace d20proof {
                     // checked RNG ranges.  Proof coverage remains per-leaf.
                     completionTerms = hasCompletionDpTerm ? 1 : 0;
                     if (detailedTerms > limits.maxDetailedTermsPerAction) {
-                        snapshot.check.reason = "checked detailed term limit J exceeded for one CellKey/action";
+                        snapshot.check.reason =
+                            "checked detailed term limit J exceeded for one CellKey/action: required=" +
+                            std::to_string(detailedTerms) +
+                            ", limit=" + std::to_string(limits.maxDetailedTermsPerAction);
                         return snapshot;
                     }
                     if (completionTerms > limits.maxCompletionTermsPerAction) {

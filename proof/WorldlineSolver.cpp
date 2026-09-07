@@ -38,8 +38,8 @@ namespace d20proof {
                 clamp(result.maxBytes, 64ull * 1024ull * 1024ull);
                 clamp(result.maxModelTerms, 150'000u);
             } else {
-                clamp(result.maxLeavesPerPosition, 8u);
-                clamp(result.maxDetailedTermsPerAction, 8u);
+                clamp(result.maxLeavesPerPosition, 29u);
+                clamp(result.maxDetailedTermsPerAction, 15u);
                 clamp(result.maxCompletionTermsPerAction, 3u);
                 clamp(result.maxPriceEvaluations, 8u);
                 // The specification labels 8M as the PoC's initial tuning
@@ -48,7 +48,7 @@ namespace d20proof {
                 // 15s deadline remains the actual wall-clock limit.  Keep all
                 // structural/certificate caps unchanged and allow enough V for
                 // several checked repair generations under that same deadline.
-                clamp(result.maxWork, 512'000'000ull);
+                clamp(result.maxWork, 768'000'000ull);
                 clamp(result.maxBytes, 128ull * 1024ull * 1024ull);
                 clamp(result.maxModelTerms, 250'000u);
             }
@@ -1633,19 +1633,10 @@ namespace d20proof {
                         "concrete output state cannot be abstracted: " + stateError};
                 }
                 if (!contains(edge->continuingOutput, *after)) {
-                    return CandidateMismatch{
-                        CandidateMismatchKind::DetailedModelError,
-                        step.elapsedTurn,
-                        trialOrder,
-                        index,
-                        step.modelTermNumber,
-                        step,
-                        turn.stateBefore,
-                        turn.stateAfter,
-                        true,
+                    return outputMismatch(
                         edge->kind == CheckedEdgeKind::Completion
-                            ? "exact output escapes the kernel-checked COMPLETE envelope"
-                            : "exact output escapes a detailed checked image"};
+                            ? "exact output escapes the selected COMPLETE envelope"
+                            : "exact output escapes a detailed checked image");
                 }
                 if (turn.stateAfter.position != step.target.rngPosition) {
                     return outputMismatch("exact output RNG position differs from selected abstract destination");
@@ -2624,7 +2615,14 @@ namespace d20proof {
         std::uint64_t diagnosticAdvanceRejected = 0;
         std::uint64_t diagnosticNoStrongerRank = 0;
         std::uint64_t diagnosticProposalTooLarge = 0;
+        std::uint64_t diagnosticAlreadyRejectedCompletion = 0;
+        std::uint64_t diagnosticGuardNoPredicate = 0;
+        std::uint64_t diagnosticRefinementRejected = 0;
+        std::uint64_t diagnosticGuardProposalTooLarge = 0;
+        std::uint64_t diagnosticNoMismatch = 0;
         std::string diagnosticLastAdvanceReason;
+        std::string diagnosticLastProposalTooLargeReason;
+        std::string diagnosticLastGuardReason;
 
         auto completionRepairWasRejected = [&](const CandidateMismatch &failure) -> std::optional<bool> {
             for (const RejectedCompletionRepair &rejected: rejectedCompletionRepairs) {
@@ -2687,6 +2685,7 @@ namespace d20proof {
                         return false;
                     }
                     if (*alreadyRejected) {
+                        ++diagnosticAlreadyRejectedCompletion;
                         continue;
                     }
                     const CompletionCheckpoint *checkpoint = nullptr;
@@ -2855,6 +2854,12 @@ namespace d20proof {
                         absorbDiscardedTrial(report, trialBudget, retainedBytesBeforeTrial);
                         if (repairProposalTooLarge(trialSnapshot.check.reason)) {
                             ++diagnosticProposalTooLarge;
+                            diagnosticLastProposalTooLargeReason =
+                                trialSnapshot.check.reason +
+                                "; turn=" + std::to_string(failure.elapsedTurn) +
+                                ", command=" + std::to_string(failure.step.selectedCommand) +
+                                ", cut=" + std::to_string(static_cast<int>(edge->completionCut)) +
+                                ", term=" + std::to_string(failure.step.modelTermNumber);
                             if (!rememberRejectedCompletionRepair(failure)) {
                                 return false;
                             }
@@ -2894,6 +2899,8 @@ namespace d20proof {
                             failure.stateBefore,
                             predicate,
                             repairError)) {
+                        ++diagnosticGuardNoPredicate;
+                        diagnosticLastGuardReason = repairError;
                         continue;
                     }
                     const std::uint64_t retainedBytesBeforeTrial = report.bytes;
@@ -2921,6 +2928,8 @@ namespace d20proof {
                         refined);
                     if (!refinement.accepted) {
                         releaseSearchBytes(report, refinedWorkingBytes);
+                        ++diagnosticRefinementRejected;
+                        diagnosticLastGuardReason = refinement.reason;
                         continue;
                     }
 
@@ -2945,6 +2954,8 @@ namespace d20proof {
                     if (!trialSnapshot.check.accepted) {
                         absorbDiscardedTrial(report, trialBudget, retainedBytesBeforeTrial);
                         if (repairProposalTooLarge(trialSnapshot.check.reason)) {
+                            ++diagnosticGuardProposalTooLarge;
+                            diagnosticLastGuardReason = trialSnapshot.check.reason;
                             continue;
                         }
                         if (isBudgetFailure(trialSnapshot.check.reason)) {
@@ -3105,9 +3116,20 @@ namespace d20proof {
                         " advance_rejected=" + std::to_string(diagnosticAdvanceRejected) +
                         " no_stronger_rank=" + std::to_string(diagnosticNoStrongerRank) +
                         " proposal_too_large=" + std::to_string(diagnosticProposalTooLarge) +
+                        " already_rejected_completion=" + std::to_string(diagnosticAlreadyRejectedCompletion) +
+                        " guard_no_predicate=" + std::to_string(diagnosticGuardNoPredicate) +
+                        " refinement_rejected=" + std::to_string(diagnosticRefinementRejected) +
+                        " guard_proposal_too_large=" + std::to_string(diagnosticGuardProposalTooLarge) +
+                        " no_mismatch=" + std::to_string(diagnosticNoMismatch) +
                         (diagnosticLastAdvanceReason.empty()
                              ? std::string{}
-                             : "; last_advance_reason=" + diagnosticLastAdvanceReason),
+                             : "; last_advance_reason=" + diagnosticLastAdvanceReason) +
+                        (diagnosticLastProposalTooLargeReason.empty()
+                             ? std::string{}
+                             : "; last_proposal_too_large=" + diagnosticLastProposalTooLargeReason) +
+                        (diagnosticLastGuardReason.empty()
+                             ? std::string{}
+                             : "; last_guard_reason=" + diagnosticLastGuardReason),
                     start);
                 result.partitionVersion = family.partitionVersion;
                 result.coverageVersion = falseCheck.snapshot.coverageVersion;
@@ -3246,10 +3268,36 @@ namespace d20proof {
                 bundle_, falseCheck.snapshot, path, replay, trialOrder++);
             if (mismatch.has_value()) {
                 if (mismatch->kind == CandidateMismatchKind::DetailedModelError) {
+                    std::string detail;
+                    if (const CheckedEdge *mismatchEdge = edgeForStep(falseCheck.snapshot, mismatch->step)) {
+                        detail =
+                            "; turn=" + std::to_string(mismatch->elapsedTurn) +
+                            ", command=" + std::to_string(mismatch->step.selectedCommand) +
+                            ", cut=" + std::to_string(static_cast<int>(mismatchEdge->completionCut)) +
+                            ", source_p=" + std::to_string(mismatch->stateBefore.position) +
+                            ", exact_p=" + std::to_string(mismatch->stateAfter.position) +
+                            ", edge_p=[" + std::to_string(mismatchEdge->firstOutputPosition) +
+                            "," + std::to_string(mismatchEdge->lastOutputPosition) + "]" +
+                            ", exact_enemy_hp=" + std::to_string(mismatch->stateAfter.players[1].hp) +
+                            ", envelope_enemy_hp=[" +
+                            std::to_string(mismatchEdge->continuingOutput.enemyHp.lo) + "," +
+                            std::to_string(mismatchEdge->continuingOutput.enemyHp.hi) + "]" +
+                            ", exact_hero_hp=" + std::to_string(mismatch->stateAfter.players[0].hp) +
+                            ", envelope_hero_hp=[" +
+                            std::to_string(mismatchEdge->continuingOutput.heroHp.lo) + "," +
+                            std::to_string(mismatchEdge->continuingOutput.heroHp.hi) + "]" +
+                            ", exact_mp=" + std::to_string(mismatch->stateAfter.players[0].mp) +
+                            ", envelope_mp=[" + std::to_string(mismatchEdge->continuingOutput.mp.lo) +
+                            "," + std::to_string(mismatchEdge->continuingOutput.mp.hi) + "]" +
+                            ", exact_herb=" +
+                            std::to_string(mismatch->stateAfter.players[0].medicinal_herbs_count) +
+                            ", envelope_herb=[" + std::to_string(mismatchEdge->continuingOutput.herb.lo) +
+                            "," + std::to_string(mismatchEdge->continuingOutput.herb.hi) + "]";
+                    }
                     releaseReplayBytes(report, replay);
                     return makeCurrentFailure(
                         SolveKind::ModelError,
-                        "detailed checked edge disagrees with exact replay: " + mismatch->reason);
+                        "detailed checked edge disagrees with exact replay: " + mismatch->reason + detail);
                 }
                 if (!chargeSearchBudget(report, budget, 1, sizeof(CandidateMismatch))) {
                     releaseReplayBytes(report, replay);
@@ -3262,6 +3310,8 @@ namespace d20proof {
                 recorded.partitionVersion = family.partitionVersion;
                 recorded.coverageVersion = falseCheck.snapshot.coverageVersion;
                 failures.push_back(std::move(recorded));
+            } else {
+                ++diagnosticNoMismatch;
             }
             releaseReplayBytes(report, replay);
 
