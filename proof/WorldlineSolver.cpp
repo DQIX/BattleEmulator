@@ -264,8 +264,24 @@ namespace d20proof {
             return bytes;
         }
 
-        std::uint64_t accountedCheckedCacheBytes(const CheckedKernelCache &cache) {
-            return cache.templates.size() * sizeof(ProofTemplate);
+        void releaseSearchSnapshotCertificateRecords(BudgetReport &report, CheckedSnapshot &snapshot) {
+            std::uint64_t releasedBytes = 0;
+            auto addReleasedBytes = [&](std::uint64_t bytes) {
+                if (bytes > std::numeric_limits<std::uint64_t>::max() - releasedBytes) {
+                    releasedBytes = std::numeric_limits<std::uint64_t>::max();
+                } else {
+                    releasedBytes += bytes;
+                }
+            };
+            for (const RootProofRecord &proof: snapshot.proofs) {
+                addReleasedBytes(accountedRootProofRecordBytes(proof));
+            }
+            for (const CheckedRootRecord &record: snapshot.coverage) {
+                addReleasedBytes(accountedCheckedRootRecordBytes(record));
+            }
+            releaseSearchBytes(report, releasedBytes);
+            std::vector<RootProofRecord>().swap(snapshot.proofs);
+            std::vector<CheckedRootRecord>().swap(snapshot.coverage);
         }
 
         void absorbDiscardedTrial(
@@ -722,10 +738,10 @@ namespace d20proof {
                     error_ = "FailedCommands sequence id is outside the exact command trie";
                     return false;
                 }
-                if (!chargeSearchBudget(report_, limits_, 1, 0)) {
-                    error_ = "FailedCommands exact sequence lookup exceeded proof budget";
-                    return false;
-                }
+                // The iterator has already charged every selected abstract choice
+                // used to derive this canonical exact-command trie id.  Looking up
+                // the failure bit by that id performs no command comparison and is
+                // not another region/path visit, so it must not consume V again.
                 isFailed = nodes_[sequenceId].failed;
                 return true;
             }
@@ -1063,9 +1079,6 @@ namespace d20proof {
                         const std::size_t offset = static_cast<std::size_t>(
                             nextSupport[index].rngPosition - firstPosition);
                         finitePositionPrefix[offset + 1] = 1;
-                    }
-                    for (std::size_t index = 1; index < finitePositionPrefix.size(); ++index) {
-                        finitePositionPrefix[index] += finitePositionPrefix[index - 1] != 0 ? 0 : 0;
                     }
                     // Convert the per-position finite marker into an inclusive-count prefix.
                     std::uint32_t running = 0;
@@ -2427,6 +2440,12 @@ namespace d20proof {
             result.budget = report;
             return result;
         }
+        // This snapshot has already had its one zero-price FALSE attempt.  If
+        // it was not FALSE, candidate generation and mismatch repair use the
+        // checked coverage/model, not the submitted proof-record copies.
+        // Stronger reusable proofs were just retained in checkedCache, while
+        // default TurnEntry proofs are reconstructible from the RuleBundle.
+        releaseSearchSnapshotCertificateRecords(report, falseCheck.snapshot);
         GoalDistances distances = buildGoalDistances(falseCheck.snapshot, horizon, budget, report);
         if (!distances.accepted) {
             releaseSearchBytes(report, distances.chargedBytes);
@@ -2501,6 +2520,7 @@ namespace d20proof {
         std::uint64_t failureBatchBytes = 0;
         std::uint32_t trialOrder = 0;
         std::uint32_t failedCandidatesInBatch = rejectedHint.has_value() ? 1u : 0u;
+        std::uint64_t lastCompletedZeroPriceWork = 0;
 
         auto makeCurrentFailure = [&](SolveKind kind, std::string reason) {
             SolveResult result = makeFailure(kind, horizon, std::move(reason), start);
@@ -2692,16 +2712,54 @@ namespace d20proof {
                     const std::uint64_t trialCoverageVersion = coverageVersion + 1;
                     const std::uint64_t retainedBytesBeforeTrial = report.bytes;
                     const std::uint64_t oldSnapshotBytes = accountedSnapshotBytes(falseCheck.snapshot);
-                    CheckedKernelCache trialCache = checkedCache;
                     BudgetReport trialBudget = report;
-                    const std::uint64_t trialCacheCopyBytes = accountedCheckedCacheBytes(checkedCache);
-                    if (!chargeSearchBudget(trialBudget, budget, 0, trialCacheCopyBytes)) {
+
+                    // A completion repair strengthens one checked template for
+                    // the same (turn, RNG position, command, covered domain).
+                    // Do not clone the entire checked cache just to make this
+                    // one transactional edit: retain the exact old template's
+                    // slot (or the insertion slot) and roll that single edit
+                    // back if rebuilding Support fails.
+                    const auto templateKey = [](const ProofTemplate &value) {
+                        return std::tuple{
+                            value.elapsedTurn,
+                            value.rngPosition,
+                            value.selectedCommand};
+                    };
+                    const auto currentKey = templateKey(current);
+                    std::size_t lo = 0;
+                    std::size_t hi = checkedCache.templates.size();
+                    std::uint64_t rollbackLookupWork = 0;
+                    while (lo < hi) {
+                        ++rollbackLookupWork;
+                        const std::size_t mid = lo + (hi - lo) / 2;
+                        if (templateKey(checkedCache.templates[mid]) < currentKey) {
+                            lo = mid + 1;
+                        } else {
+                            hi = mid;
+                        }
+                    }
+                    std::size_t insertAt = lo;
+                    std::optional<std::size_t> replacedIndex;
+                    std::optional<ProofTemplate> replacedTemplateBefore;
+                    while (insertAt < checkedCache.templates.size() &&
+                           templateKey(checkedCache.templates[insertAt]) == currentKey) {
+                        ++rollbackLookupWork;
+                        if (!replacedIndex.has_value() &&
+                            checkedCache.templates[insertAt].coveredDomain == current.coveredDomain) {
+                            replacedIndex = insertAt;
+                            replacedTemplateBefore = checkedCache.templates[insertAt];
+                        }
+                        ++insertAt;
+                    }
+                    if (!chargeSearchBudget(trialBudget, budget, rollbackLookupWork, 0)) {
                         absorbDiscardedTrial(report, trialBudget, retainedBytesBeforeTrial);
                         return false;
                     }
+                    const std::size_t cacheSizeBefore = checkedCache.templates.size();
                     bool cacheChanged = false;
                     const CheckResult cacheUpdate = ProofKernel::rememberCheckedTemplate(
-                        trialCache,
+                        checkedCache,
                         problem,
                         advanced,
                         budget,
@@ -2719,6 +2777,25 @@ namespace d20proof {
                         continue;
                     }
 
+                    const bool insertedTemplate = checkedCache.templates.size() == cacheSizeBefore + 1;
+                    const bool replacedTemplate = checkedCache.templates.size() == cacheSizeBefore && replacedIndex.has_value();
+                    if (!insertedTemplate && !replacedTemplate) {
+                        absorbDiscardedTrial(report, trialBudget, retainedBytesBeforeTrial);
+                        return std::nullopt;
+                    }
+
+                    auto rollbackTemplate = [&]() {
+                        if (insertedTemplate) {
+                            if (insertAt < checkedCache.templates.size()) {
+                                checkedCache.templates.erase(
+                                    checkedCache.templates.begin() + static_cast<std::ptrdiff_t>(insertAt));
+                            }
+                        } else if (replacedIndex.has_value() && replacedTemplateBefore.has_value() &&
+                                   *replacedIndex < checkedCache.templates.size()) {
+                            checkedCache.templates[*replacedIndex] = *replacedTemplateBefore;
+                        }
+                    };
+
                     CheckedSnapshot trialSnapshot = ProofKernel::rebuildSupport(
                         bundle_,
                         problem,
@@ -2727,9 +2804,11 @@ namespace d20proof {
                         budget,
                         trialBudget,
                         nullptr,
-                        &trialCache.templates,
-                        trialCoverageVersion);
+                        &checkedCache.templates,
+                        trialCoverageVersion,
+                        false);
                     if (!trialSnapshot.check.accepted) {
+                        rollbackTemplate();
                         absorbDiscardedTrial(report, trialBudget, retainedBytesBeforeTrial);
                         if (repairProposalTooLarge(trialSnapshot.check.reason)) {
                             if (!rememberRejectedCompletionRepair(failure)) {
@@ -2745,8 +2824,6 @@ namespace d20proof {
 
                     report = trialBudget;
                     releaseSearchBytes(report, oldSnapshotBytes);
-                    checkedCache = std::move(trialCache);
-                    releaseSearchBytes(report, trialCacheCopyBytes);
                     falseCheck = {};
                     falseCheck.check.accepted = true;
                     falseCheck.snapshot = std::move(trialSnapshot);
@@ -2809,13 +2886,7 @@ namespace d20proof {
                     }
                     const std::uint64_t trialCoverageVersion = coverageVersion + 1;
                     const std::uint64_t oldSnapshotBytes = accountedSnapshotBytes(falseCheck.snapshot);
-                    CheckedKernelCache trialCache = checkedCache;
                     BudgetReport trialBudget = report;
-                    const std::uint64_t trialCacheCopyBytes = accountedCheckedCacheBytes(checkedCache);
-                    if (!chargeSearchBudget(trialBudget, budget, 0, trialCacheCopyBytes)) {
-                        absorbDiscardedTrial(report, trialBudget, retainedBytesBeforeTrial);
-                        return false;
-                    }
                     CheckedSnapshot trialSnapshot = ProofKernel::rebuildSupport(
                         bundle_,
                         problem,
@@ -2824,8 +2895,9 @@ namespace d20proof {
                         budget,
                         trialBudget,
                         nullptr,
-                        &trialCache.templates,
-                        trialCoverageVersion);
+                        &checkedCache.templates,
+                        trialCoverageVersion,
+                        false);
                     if (!trialSnapshot.check.accepted) {
                         absorbDiscardedTrial(report, trialBudget, retainedBytesBeforeTrial);
                         if (repairProposalTooLarge(trialSnapshot.check.reason)) {
@@ -2841,8 +2913,6 @@ namespace d20proof {
                     releaseSearchBytes(report, oldSnapshotBytes);
                     releaseSearchBytes(report, refinedWorkingBytes);
                     family = std::move(refined);
-                    checkedCache = std::move(trialCache);
-                    releaseSearchBytes(report, trialCacheCopyBytes);
                     falseCheck = {};
                     falseCheck.check.accepted = true;
                     falseCheck.snapshot = std::move(trialSnapshot);
@@ -2885,17 +2955,25 @@ namespace d20proof {
                         falseCheck.check.reason);
                 }
             } else {
-                falseCheck = ProofKernel::tryFalseZeroPriceOnSnapshot(
-                    bundle_,
-                    problem,
-                    horizon,
-                    std::move(falseCheck.snapshot),
-                    budget,
-                    report);
-                if (!falseCheck.check.accepted) {
-                    return makeCurrentFailure(
-                        isBudgetFailure(falseCheck.check.reason) ? SolveKind::Unknown : SolveKind::ModelError,
-                        falseCheck.check.reason);
+                const std::uint64_t remainingWork = report.work >= budget.maxWork
+                    ? 0
+                    : budget.maxWork - report.work;
+                if (lastCompletedZeroPriceWork == 0 ||
+                    remainingWork >= lastCompletedZeroPriceWork) {
+                    const std::uint64_t zeroPriceWorkStart = report.work;
+                    falseCheck = ProofKernel::tryFalseZeroPriceOnSnapshot(
+                        bundle_,
+                        problem,
+                        horizon,
+                        std::move(falseCheck.snapshot),
+                        budget,
+                        report);
+                    if (!falseCheck.check.accepted) {
+                        return makeCurrentFailure(
+                            isBudgetFailure(falseCheck.check.reason) ? SolveKind::Unknown : SolveKind::ModelError,
+                            falseCheck.check.reason);
+                    }
+                    lastCompletedZeroPriceWork = report.work - zeroPriceWorkStart;
                 }
             }
             repairSnapshotPrepared = false;
@@ -2926,6 +3004,7 @@ namespace d20proof {
                     isBudgetFailure(cacheUpdate.reason) ? SolveKind::Unknown : SolveKind::ModelError,
                     cacheUpdate.reason);
             }
+            releaseSearchSnapshotCertificateRecords(report, falseCheck.snapshot);
 
             GoalDistances rebuiltDistances = buildGoalDistances(
                 falseCheck.snapshot,

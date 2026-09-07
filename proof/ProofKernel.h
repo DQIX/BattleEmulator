@@ -235,7 +235,8 @@ namespace d20proof {
             BudgetReport &budget,
             const std::vector<RootProofRecord> *submittedProofs = nullptr,
             const std::vector<ProofTemplate> *generationTemplates = nullptr,
-            std::uint64_t coverageVersion = 1);
+            std::uint64_t coverageVersion = 1,
+            bool retainDefaultProofRecords = true);
 
         [[nodiscard]] static CheckResult advanceCompletionCheckpoint(
             const RuleBundle &bundle,
