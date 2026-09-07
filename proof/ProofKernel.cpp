@@ -239,6 +239,40 @@ namespace d20proof {
             return true;
         }
 
+        std::optional<std::uint64_t> nativeInternalWorkAt(
+            const RuleBundle &bundle,
+            const SymbolicFrame &frame,
+            std::string &error) {
+            const Routine *routine = nullptr;
+            for (const Routine &candidate: bundle.program.routines) {
+                if (candidate.id == frame.routineId) {
+                    routine = &candidate;
+                    break;
+                }
+            }
+            if (routine == nullptr || frame.pc < 0 ||
+                frame.pc >= static_cast<int>(routine->instructions.size())) {
+                error = "symbolic frame pc is outside the registered RuleProgram";
+                return std::nullopt;
+            }
+
+            const Instruction &instruction = routine->instructions[frame.pc];
+            if (instruction.opcode != Opcode::Native) {
+                return 0;
+            }
+            for (const NativeContract &contract: bundle.nativeContracts) {
+                if (contract.id == instruction.nativeId) {
+                    if (contract.maxWork < 0) {
+                        error = "registered NATIVE has a negative internal work bound";
+                        return std::nullopt;
+                    }
+                    return static_cast<std::uint64_t>(contract.maxWork);
+                }
+            }
+            error = "symbolic NATIVE references an unregistered contract";
+            return std::nullopt;
+        }
+
         void releaseBudgetBytes(BudgetReport &budget, std::uint64_t bytes) noexcept {
             budget.bytes = bytes >= budget.bytes ? 0 : budget.bytes - bytes;
         }
@@ -1707,6 +1741,18 @@ namespace d20proof {
                     continue;
                 }
 
+                std::string instructionWorkError;
+                const std::optional<std::uint64_t> nativeWork =
+                    nativeInternalWorkAt(bundle, frame, instructionWorkError);
+                if (!nativeWork.has_value()) {
+                    snapshot.check.reason = instructionWorkError;
+                    return false;
+                }
+                if (*nativeWork != 0 && !chargeBudget(budget, limits, *nativeWork, 0)) {
+                    snapshot.check.reason = "NATIVE internal work exceeded proof budget";
+                    return false;
+                }
+
                 SymbolicStepResult step = stepper.step(frame);
                 if (!step.accepted) {
                     snapshot.check.reason = "verify_root symbolic step failed at " + frame.routineId + ":" +
@@ -2111,6 +2157,22 @@ namespace d20proof {
                 // A different registered cut is not the template we are
                 // proposing.  Keep this branch detailed instead of silently
                 // dropping it or inventing a second completion in one root.
+            }
+
+            std::string instructionWorkError;
+            const std::optional<std::uint64_t> nativeWork =
+                nativeInternalWorkAt(bundle, frame, instructionWorkError);
+            if (!nativeWork.has_value()) {
+                budget = reservedBudget;
+                budget.bytes = retainedBytesBeforeReservation;
+                result.reason = instructionWorkError;
+                return result;
+            }
+            if (*nativeWork != 0 && !chargeBudget(reservedBudget, limits, *nativeWork, 0)) {
+                budget = reservedBudget;
+                budget.bytes = retainedBytesBeforeReservation;
+                result.reason = "completion resume NATIVE internal work exceeded proof budget";
+                return result;
             }
 
             SymbolicStepResult step = stepper.step(frame);

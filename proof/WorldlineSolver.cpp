@@ -135,6 +135,30 @@ namespace d20proof {
             return bytes;
         }
 
+        std::uint64_t accountedCheckedCacheBytes(const CheckedKernelCache &cache) {
+            return cache.templates.size() * sizeof(ProofTemplate);
+        }
+
+        std::uint64_t accountedFailedCommandBytes(const std::vector<int> &commands) {
+            // std::map owns one tree node plus one vector object for each entry.
+            // Allocator bookkeeping is implementation-defined; charge a
+            // conservative node payload/pointer allowance in addition to the
+            // command storage instead of counting only the ints.
+            constexpr std::uint64_t treeLinksAndBookkeeping = 4 * sizeof(void *);
+            return sizeof(std::vector<int>) + sizeof(std::uint32_t) +
+                   treeLinksAndBookkeeping + commands.size() * sizeof(int);
+        }
+
+        std::uint64_t failedCommandLookupWork(
+            std::size_t entryCount,
+            std::size_t commandLength) noexcept {
+            std::uint64_t treeComparisons = 1;
+            for (std::size_t n = entryCount + 1; n > 1; n = (n + 1) / 2) {
+                ++treeComparisons;
+            }
+            return treeComparisons * std::max<std::size_t>(1, commandLength);
+        }
+
         void absorbDiscardedTrial(
             BudgetReport &live,
             const BudgetReport &trial,
@@ -1752,8 +1776,10 @@ namespace d20proof {
         std::map<std::vector<int>, CandidateFailureKind> failedCommands;
         if (rejectedHint.has_value()) {
             const std::uint64_t failedHintBytes =
-                sizeof(CandidateFailureKind) + rejectedHint->first.size() * sizeof(int);
-            if (!chargeSearchBudget(report, budget, 1, failedHintBytes)) {
+                accountedFailedCommandBytes(rejectedHint->first);
+            const std::uint64_t lookupWork =
+                failedCommandLookupWork(failedCommands.size(), rejectedHint->first.size());
+            if (!chargeSearchBudget(report, budget, lookupWork, failedHintBytes)) {
                 return makeFailure(
                     SolveKind::Unknown,
                     horizon,
@@ -1893,6 +1919,11 @@ namespace d20proof {
                     const std::uint64_t oldSnapshotBytes = accountedSnapshotBytes(falseCheck.snapshot);
                     CheckedKernelCache trialCache = checkedCache;
                     BudgetReport trialBudget = report;
+                    const std::uint64_t trialCacheCopyBytes = accountedCheckedCacheBytes(checkedCache);
+                    if (!chargeSearchBudget(trialBudget, budget, 0, trialCacheCopyBytes)) {
+                        absorbDiscardedTrial(report, trialBudget, retainedBytesBeforeTrial);
+                        return false;
+                    }
                     bool cacheChanged = false;
                     const CheckResult cacheUpdate = ProofKernel::rememberCheckedTemplate(
                         trialCache,
@@ -1937,6 +1968,7 @@ namespace d20proof {
                     report = trialBudget;
                     releaseSearchBytes(report, oldSnapshotBytes);
                     checkedCache = std::move(trialCache);
+                    releaseSearchBytes(report, trialCacheCopyBytes);
                     falseCheck = {};
                     falseCheck.check.accepted = true;
                     falseCheck.snapshot = std::move(trialSnapshot);
@@ -1998,6 +2030,11 @@ namespace d20proof {
                     const std::uint64_t oldSnapshotBytes = accountedSnapshotBytes(falseCheck.snapshot);
                     CheckedKernelCache trialCache = checkedCache;
                     BudgetReport trialBudget = report;
+                    const std::uint64_t trialCacheCopyBytes = accountedCheckedCacheBytes(checkedCache);
+                    if (!chargeSearchBudget(trialBudget, budget, 0, trialCacheCopyBytes)) {
+                        absorbDiscardedTrial(report, trialBudget, retainedBytesBeforeTrial);
+                        return false;
+                    }
                     CheckedSnapshot trialSnapshot = ProofKernel::rebuildSupport(
                         bundle_,
                         problem,
@@ -2024,6 +2061,7 @@ namespace d20proof {
                     releaseSearchBytes(report, refinedWorkingBytes);
                     family = std::move(refined);
                     checkedCache = std::move(trialCache);
+                    releaseSearchBytes(report, trialCacheCopyBytes);
                     falseCheck = {};
                     falseCheck.check.accepted = true;
                     falseCheck.snapshot = std::move(trialSnapshot);
@@ -2204,6 +2242,13 @@ namespace d20proof {
                 return result;
             }
 
+            const std::uint64_t duplicateLookupWork =
+                failedCommandLookupWork(failedCommands.size(), path.commands.size());
+            if (!chargeSearchBudget(report, budget, duplicateLookupWork, 0)) {
+                return makeCurrentFailure(
+                    SolveKind::Unknown,
+                    "FailedCommands duplicate lookup exceeded proof budget");
+            }
             if (failedCommands.contains(path.commands)) {
                 continue;
             }
@@ -2256,9 +2301,10 @@ namespace d20proof {
                 falseCheck.snapshot,
                 path,
                 replay);
-            const std::uint64_t failedBytes =
-                sizeof(CandidateFailureKind) + path.commands.size() * sizeof(int);
-            if (!chargeSearchBudget(report, budget, 1, failedBytes)) {
+            const std::uint64_t failedBytes = accountedFailedCommandBytes(path.commands);
+            const std::uint64_t insertWork =
+                failedCommandLookupWork(failedCommands.size(), path.commands.size());
+            if (!chargeSearchBudget(report, budget, insertWork, failedBytes)) {
                 SolveResult result = makeFailure(
                     SolveKind::Unknown,
                     horizon,

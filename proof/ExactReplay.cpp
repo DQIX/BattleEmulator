@@ -182,67 +182,49 @@ namespace d20proof {
             std::uint64_t seed,
             std::string &error) {
             const RawState before = state;
-            BattleResult firstPass;
-            runMainOneTurn(state, command, seed, firstPass);
-
             if (command != BattleEmulator::FLEE_ALLY) {
-                return true;
-            }
-            if (firstPass.position <= 0) {
-                error = "FLEE exact replay produced no action record";
-                return false;
-            }
-
-            const bool allyFirst = firstPass.initiative[0];
-            bool needsStatusReplay = false;
-            if (allyFirst) {
-                // Selection-time paralysis/sleep is rejected before this point.
-                // Inactive is deliberately an execution-time gate, not a FLEE
-                // selection restriction in the registered yo2_be profile.
-                needsStatusReplay = before.players[0].inactive;
-            } else if (state.players[0].hp > 0 && state.players[1].hp > 0) {
-                // With enemy initiative, Main's optimized FLEE path leaves any
-                // newly-applied inability flag untouched.  Under the registered
-                // rule that flag must instead enter the normal ally-status path.
-                needsStatusReplay = state.players[0].paralysis || state.players[0].inactive;
-            }
-
-            if (state.players[0].sleeping || state.players[1].sleeping) {
-                error = "yo2_be v1 exact replay reached unsupported sleeping state";
-                return false;
-            }
-            if (!needsStatusReplay) {
+                BattleResult directPass;
+                runMainOneTurn(state, command, seed, directPass);
                 return true;
             }
 
-            // Do not change BattleEmulator::Main's production shortcut.  Replay
-            // the same raw turn from the same RNG position with a neutral ATTACK
-            // prepared command.  In exactly the states covered here Main's own
-            // status routine replaces that command with PARALYSIS,
-            // CURE_PARALYSIS, or INACTIVE_ALLY before callAttackFun, so ATTACK
-            // itself is never executed.  This is the registered FLEE adapter.
+            // Main intentionally has a fast prepared-FLEE shortcut and now
+            // asserts if that shortcut is reached while paralysis/inactive is
+            // active.  That internal shortcut is not the in-game FLEE
+            // selectability rule.  Probe the same turn with ATTACK first.  The
+            // selected command does not affect initiative or an enemy-first
+            // enemy slot.  If the ally slot is replaced by an inability action
+            // (or never runs because battle already ended), the probe is exactly
+            // the registered FLEE execution-time transition.  Otherwise restore
+            // the raw input and execute the real prepared FLEE; the probe has
+            // established that Main's FLEE assert cannot fire at that ally slot.
             state = before;
             lcg::init(seed, true);
-            BattleResult correctedPass;
-            runMainOneTurn(state, BattleEmulator::ATTACK_ALLY, seed, correctedPass);
+            BattleResult probePass;
+            runMainOneTurn(state, BattleEmulator::ATTACK_ALLY, seed, probePass);
 
-            if (correctedPass.position <= 0 || correctedPass.initiative[0] != allyFirst) {
-                error = "FLEE status adapter changed initiative or lost the action record";
-                return false;
-            }
             int executedAllyAction = -1;
-            for (int index = 0; index < correctedPass.position; ++index) {
-                if (!correctedPass.isEnemy[index]) {
-                    executedAllyAction = correctedPass.actions[index];
+            for (int index = 0; index < probePass.position; ++index) {
+                if (!probePass.isEnemy[index]) {
+                    executedAllyAction = probePass.actions[index];
                     break;
                 }
             }
-            if (!isStatusReplacementAction(executedAllyAction)) {
-                error = "FLEE status adapter failed to enter the registered inability transition";
-                return false;
+
+            if (executedAllyAction == -1 || isStatusReplacementAction(executedAllyAction)) {
+                if (state.players[0].sleeping || state.players[1].sleeping) {
+                    error = "yo2_be v1 FLEE status replay reached unsupported sleeping state";
+                    return false;
+                }
+                return true;
             }
+
+            state = before;
+            lcg::init(seed, true);
+            BattleResult fleePass;
+            runMainOneTurn(state, BattleEmulator::FLEE_ALLY, seed, fleePass);
             if (state.players[0].sleeping || state.players[1].sleeping) {
-                error = "yo2_be v1 corrected FLEE replay reached unsupported sleeping state";
+                error = "yo2_be v1 FLEE replay reached unsupported sleeping state";
                 return false;
             }
             return true;
