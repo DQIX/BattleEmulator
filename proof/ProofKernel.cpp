@@ -9,7 +9,6 @@
 #include <functional>
 #include <iterator>
 #include <limits>
-#include <iostream>
 #include <map>
 #include <set>
 #include <unordered_map>
@@ -4071,8 +4070,6 @@ namespace d20proof {
             result.check.reason = snapshot.check.reason;
             return result;
         }
-        std::cerr << "D20_WORK after_rebuild=" << budget.work << '\n';
-
         return tryFalseZeroPriceOnSnapshot(
             bundle,
             problem,
@@ -4115,8 +4112,6 @@ namespace d20proof {
             result.check.reason = maxPlus.reason;
             return result;
         }
-        std::cerr << "D20_WORK after_maxplus=" << budget.work << '\n';
-
         std::int64_t delta = 0;
         std::string inequalityError;
         const bool candidateFalse = falseInequality(
