@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
     // unknown-witness path is still bounded by the same 15s cumulative
     // deadline and all K/J/C/byte/candidate/repair limits, but uses the tuned
     // V ceiling established by measured runs.
-    budget.maxWork = 768'000'000;
+    budget.maxWork = 1'500'000'000;
     budget.maxBytes = 192ull * 1024ull * 1024ull;
     budget.maxLeavesPerPosition = 37;
     budget.maxDetailedTermsPerAction = 20;
@@ -60,8 +60,8 @@ int main(int argc, char **argv) {
     // deadline, so production keeps the semantic 2048 unique-candidate cap
     // but allows more choice scans to reach those candidates.
     budget.maxCandidateScans = 96'000'000;
-    budget.maxCandidates = 512;
-    budget.maxRepairs = 56;
+    budget.maxCandidates = 800;
+    budget.maxRepairs = 84;
     d20proof::WorldlineSolver solver(*bundle);
     const d20proof::Problem problem = d20proof::initialProblem(seed);
     const d20proof::SolveResult result = operation == "minimum"

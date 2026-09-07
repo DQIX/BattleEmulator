@@ -48,7 +48,7 @@ namespace d20proof {
                 // 15s deadline remains the actual wall-clock limit.  Keep all
                 // structural/certificate caps unchanged and allow enough V for
                 // several checked repair generations under that same deadline.
-                clamp(result.maxWork, 768'000'000ull);
+                clamp(result.maxWork, 1'500'000'000ull);
                 clamp(result.maxBytes, 192ull * 1024ull * 1024ull);
                 clamp(result.maxModelTerms, 250'000u);
             }
@@ -378,6 +378,7 @@ namespace d20proof {
                 struct PositionMinimum {
                     int rngPosition = 0;
                     int distance = kInfiniteDistance;
+                    bool complete = false;
                 };
                 struct TemporarySearchBytes {
                     BudgetReport &report;
@@ -408,11 +409,31 @@ namespace d20proof {
                         minimum = std::min(minimum, nextDistances[end]);
                         ++end;
                     }
-                    if (!chargeSearchBudget(report, limits, end - begin, 0)) {
+                    const PredicatePartition *partition = nullptr;
+                    std::uint64_t validationWork = 0;
+                    for (const PredicatePartition &candidate: snapshot.partitions.trees) {
+                        ++validationWork;
+                        if (candidate.rngPosition == position) {
+                            partition = &candidate;
+                            break;
+                        }
+                    }
+                    if (partition == nullptr) {
+                        result.reason = "goal-distance per-position minimum references a missing partition";
+                        return result;
+                    }
+                    std::size_t leafCount = 0;
+                    for (const PartitionNode &node: partition->nodes) {
+                        ++validationWork;
+                        if (node.leaf) {
+                            ++leafCount;
+                        }
+                    }
+                    if (!chargeSearchBudget(report, limits, end - begin + validationWork, 0)) {
                         result.reason = "goal-distance per-position minimum construction exceeded proof budget";
                         return result;
                     }
-                    positionMinimums.push_back({position, minimum});
+                    positionMinimums.push_back({position, minimum, leafCount == end - begin});
                     begin = end;
                 }
 
@@ -427,6 +448,7 @@ namespace d20proof {
                 const std::uint64_t sparseBytes =
                     rangeLevels * positionMinimums.size() * sizeof(int) +
                     (positionMinimums.size() + 1) * sizeof(std::uint8_t) +
+                    (positionMinimums.size() + 1) * sizeof(std::uint32_t) +
                     positionSpan * sizeof(std::size_t);
                 if (sparseBytes != 0 &&
                     !chargeSearchBudget(report, limits, 0, sparseBytes)) {
@@ -438,6 +460,7 @@ namespace d20proof {
                     rangeLevels * positionMinimums.size(),
                     kInfiniteDistance);
                 std::vector<std::uint8_t> floorLog2(positionMinimums.size() + 1, 0);
+                std::vector<std::uint32_t> incompletePrefix(positionMinimums.size() + 1, 0);
                 std::vector<std::size_t> positionIndex(
                     positionSpan,
                     positionMinimums.size());
@@ -448,6 +471,8 @@ namespace d20proof {
                         sparseRangeMinimums[index] = positionMinimums[index].distance;
                         positionIndex[static_cast<std::size_t>(
                             positionMinimums[index].rngPosition - positionMinimums.front().rngPosition)] = index;
+                        incompletePrefix[index + 1] =
+                            incompletePrefix[index] + (positionMinimums[index].complete ? 0u : 1u);
                         ++rangeBuildWork;
                     }
                     for (std::size_t length = 2; length <= width; ++length) {
@@ -491,6 +516,10 @@ namespace d20proof {
                     const std::size_t count = static_cast<std::size_t>(lastPosition - firstPosition + 1);
                     if (left >= width || right >= width || right < left || right - left + 1 != count) {
                         result.reason = "goal-distance COMPLETE range is missing a next-layer RNG position";
+                        return false;
+                    }
+                    if (incompletePrefix[right + 1] != incompletePrefix[left]) {
+                        result.reason = "goal-distance COMPLETE range does not contain every partition leaf";
                         return false;
                     }
                     const std::size_t level = floorLog2[count];
@@ -820,8 +849,26 @@ namespace d20proof {
                     return false;
                 }
                 ownedBytes_ += sizeof(CellKey);
+                visitedSourceBytes_ += sizeof(CellKey);
                 visited.insert(visited.begin() + static_cast<std::ptrdiff_t>(lo), source);
                 firstVisit = true;
+                return true;
+            }
+
+            bool resetSourceVisits() {
+                if (visitedSourceBytes_ == 0) {
+                    return true;
+                }
+                if (!chargeSearchBudget(report_, limits_, nodes_.size(), 0)) {
+                    error_ = "command-prefix source generation reset exceeded proof budget";
+                    return false;
+                }
+                for (Node &node: nodes_) {
+                    std::vector<CellKey>().swap(node.visitedSources);
+                }
+                releaseSearchBytes(report_, visitedSourceBytes_);
+                ownedBytes_ -= visitedSourceBytes_;
+                visitedSourceBytes_ = 0;
                 return true;
             }
 
@@ -853,6 +900,7 @@ namespace d20proof {
             BudgetReport &report_;
             std::vector<Node> nodes_;
             std::uint64_t ownedBytes_ = 0;
+            std::uint64_t visitedSourceBytes_ = 0;
             std::string error_;
             bool ready_ = false;
         };
@@ -3130,6 +3178,11 @@ namespace d20proof {
             iterator.reset();
             releaseSearchBytes(report, distances.chargedBytes);
             distances = std::move(rebuiltDistances);
+            if (!commandSequences.resetSourceVisits()) {
+                return makeCurrentFailure(
+                    isBudgetFailure(commandSequences.error()) ? SolveKind::Unknown : SolveKind::ModelError,
+                    commandSequences.error());
+            }
             iterator = std::make_unique<GoalCandidateIterator>(
                 bundle_, falseCheck.snapshot, distances, commandSequences, horizon, budget, report);
             lastCompletedCandidateSetupWork = report.work - candidateSetupWorkStart;
@@ -3208,6 +3261,47 @@ namespace d20proof {
                         return *result;
                     }
                     continue;
+                }
+                const std::uint64_t exhaustedPartitionVersion =
+                    falseCheck.snapshot.partitions.partitionVersion;
+                const std::uint64_t exhaustedCoverageVersion = falseCheck.snapshot.coverageVersion;
+                iterator.reset();
+                releaseSearchBytes(report, distances.chargedBytes);
+                distances = {};
+                falseCheck = ProofKernel::tryFalseZeroPriceOnSnapshot(
+                    bundle_,
+                    problem,
+                    horizon,
+                    std::move(falseCheck.snapshot),
+                    budget,
+                    report,
+                    true);
+                if (!falseCheck.check.accepted) {
+                    SolveResult result = makeFailure(
+                        isBudgetFailure(falseCheck.check.reason) ? SolveKind::Unknown : SolveKind::ModelError,
+                        horizon,
+                        falseCheck.check.reason,
+                        start);
+                    result.partitionVersion = exhaustedPartitionVersion;
+                    result.coverageVersion = exhaustedCoverageVersion;
+                    result.budget = report;
+                    stampElapsed(result.budget, start);
+                    return result;
+                }
+                if (falseCheck.provedFalse) {
+                    SolveResult result;
+                    result.kind = SolveKind::ProvedFalse;
+                    result.horizon = horizon;
+                    result.reason = "independently verified no-abstract-success-path FALSE certificate";
+                    result.provedFalseNoAbstractSuccessPath = true;
+                    result.provedFalseRootBound = falseCheck.certificate.rootBound.finite;
+                    result.provedFalseDelta = falseCheck.certificate.delta;
+                    result.partitionVersion = falseCheck.certificate.partitions.partitionVersion;
+                    result.coverageVersion = falseCheck.certificate.coverageVersion;
+                    result.budget = report;
+                    bindProblemKey(result, problem);
+                    stampElapsed(result.budget, start);
+                    return result;
                 }
                 return makeCurrentFailure(
                     SolveKind::Unknown,

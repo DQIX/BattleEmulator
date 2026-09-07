@@ -103,6 +103,7 @@ namespace d20proof {
         bool hasContinuingOutput = false;
         bool mayReachGoal = false;
         bool mayReachFailure = false;
+        bool useRegisteredTurnEntryTerms = false;
         std::vector<CellKey> targets;
         std::vector<CompletionWeightTerm> weightTerms;
 
@@ -296,7 +297,8 @@ namespace d20proof {
             int horizon,
             CheckedSnapshot snapshot,
             const ProofBudget &limits,
-            BudgetReport &budget);
+            BudgetReport &budget,
+            bool structuralNoPathOnly = false);
 
         [[nodiscard]] static CheckResult checkTrivialFalse(
             const RuleBundle &bundle,
