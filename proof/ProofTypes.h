@@ -86,6 +86,7 @@ namespace d20proof {
         RawState finalState;
         std::vector<int> checkedCommands;
         std::vector<ReplayTurn> turns;
+        std::uint64_t accountedBytes = 0;
     };
 
     struct PrefixReceipt {

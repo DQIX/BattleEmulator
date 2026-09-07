@@ -36,6 +36,26 @@ namespace d20proof {
         FullyDetailed,
     };
 
+    enum class DetailedProofNodeKind : std::uint8_t {
+        Step,
+        Branch,
+        Switch,
+        Control,
+        Rng,
+        RngSkip,
+        Finish,
+        Complete,
+    };
+
+    struct DetailedProofNode {
+        DetailedProofNodeKind kind = DetailedProofNodeKind::Step;
+        ProgramPoint expectedPc;
+        SymbolicFrame claimedFrame;
+        std::vector<std::uint32_t> children;
+
+        bool operator==(const DetailedProofNode &) const = default;
+    };
+
     struct RootProofRecord {
         RootProofKind kind = RootProofKind::Completion;
         int elapsedTurn = 0;
@@ -46,6 +66,7 @@ namespace d20proof {
         ProgramPoint expectedPc;
         CompletionCutId cut = CompletionCutId::TurnEntry;
         std::vector<CompletionProofCase> completionCases;
+        std::vector<DetailedProofNode> detailedNodes;
 
         bool operator==(const RootProofRecord &) const = default;
     };

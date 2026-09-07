@@ -13,6 +13,28 @@ namespace d20proof {
     namespace {
         constexpr int kGeneCapacity = 350;
 
+        bool chargeReplayBudget(
+            ReplayResult &result,
+            const ProofBudget *limits,
+            BudgetReport *report,
+            std::uint64_t work,
+            std::uint64_t bytes) {
+            if (limits == nullptr || report == nullptr) {
+                return true;
+            }
+            if (limits->hasDeadline && std::chrono::steady_clock::now() >= limits->deadline) {
+                return false;
+            }
+            if (work > limits->maxWork - std::min(report->work, limits->maxWork) ||
+                bytes > limits->maxBytes - std::min(report->bytes, limits->maxBytes)) {
+                return false;
+            }
+            report->work += work;
+            report->bytes += bytes;
+            result.accountedBytes += bytes;
+            return true;
+        }
+
 
         bool fixedStatsMatch(const Player &actual, const Player &expected) noexcept {
             return actual.maxHp == expected.maxHp && actual.atk == expected.atk &&
@@ -364,7 +386,8 @@ namespace d20proof {
         const Problem &problem,
         const std::vector<int> &commands,
         bool rejectCommandsAfterTerminal,
-        const ProofBudget *budget) {
+        const ProofBudget *budget,
+        BudgetReport *report) {
         ReplayResult result;
         result.finalState = problem.s0;
 
@@ -434,6 +457,12 @@ namespace d20proof {
                 break;
             }
 
+            if (!chargeReplayBudget(result, budget, report, 1, 0)) {
+                result.interrupted = true;
+                result.reason = "exact replay exceeded the shared proof work budget";
+                return result;
+            }
+
             const int command = commands[turnIndex];
             const int absoluteTurn = problem.startTurn + static_cast<int>(turnIndex);
             if (!commandAllowedByConstraints(problem, absoluteTurn, command)) {
@@ -459,6 +488,12 @@ namespace d20proof {
             }
 
             finishReplayTurn(turn, result.finalState);
+            constexpr std::uint64_t replayRecordBytes = sizeof(ReplayTurn) + sizeof(int);
+            if (!chargeReplayBudget(result, budget, report, 0, replayRecordBytes)) {
+                result.interrupted = true;
+                result.reason = "exact replay exceeded the shared proof byte budget";
+                return result;
+            }
             result.turns.push_back(turn);
             result.checkedCommands.push_back(command);
 
@@ -516,7 +551,8 @@ namespace d20proof {
         const RuleBundle &bundle,
         const Problem &problem,
         const std::vector<int> &prefix,
-        const ProofBudget *budget) {
+        const ProofBudget *budget,
+        BudgetReport *report) {
         PrefixReceipt receipt;
         receipt.initialProblem = problem;
         receipt.prefix = prefix;
@@ -528,27 +564,29 @@ namespace d20proof {
             return receipt;
         }
 
-        const ReplayResult replayedPrefix = replay(bundle, problem, prefix, true, budget);
+        ReplayResult replayedPrefix = replay(bundle, problem, prefix, true, budget, report);
         if (replayedPrefix.interrupted) {
             receipt.failureKind = SolveKind::Unknown;
             receipt.reason = replayedPrefix.reason;
-            receipt.replay = replayedPrefix;
+            receipt.replay = std::move(replayedPrefix);
             return receipt;
         }
         if (!replayedPrefix.supported) {
             receipt.failureKind = SolveKind::ModelError;
             receipt.reason = replayedPrefix.reason;
+            receipt.replay = std::move(replayedPrefix);
             return receipt;
         }
         if (!replayedPrefix.valid) {
             receipt.failureKind = SolveKind::InvalidPrefix;
             receipt.reason = replayedPrefix.reason;
+            receipt.replay = std::move(replayedPrefix);
             return receipt;
         }
 
-        receipt.replay = replayedPrefix;
         receipt.terminalState = replayedPrefix.finalState;
         receipt.terminalTurn = problem.startTurn + static_cast<int>(replayedPrefix.checkedCommands.size());
+        receipt.replay = std::move(replayedPrefix);
         if (turnFromNowState(receipt.terminalState.nowState) != receipt.terminalTurn) {
             receipt.failureKind = SolveKind::ModelError;
             receipt.reason = "prefix turn accounting disagrees with NowState";

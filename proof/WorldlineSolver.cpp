@@ -91,6 +91,16 @@ namespace d20proof {
             report.bytes = bytes >= report.bytes ? 0 : report.bytes - bytes;
         }
 
+        void releaseReplayBytes(BudgetReport &report, ReplayResult &replay) {
+            releaseSearchBytes(report, replay.accountedBytes);
+            replay.accountedBytes = 0;
+        }
+
+        void releasePrefixReceiptBytes(BudgetReport &report, PrefixReceipt &receipt) {
+            releaseReplayBytes(report, receipt.replay);
+            releaseSearchBytes(report, receipt.prefix.size() * sizeof(int));
+        }
+
         std::uint64_t accountedPartitionFamilyBytes(const PartitionFamily &family) {
             std::uint64_t bytes = 0;
             auto add = [&](std::uint64_t amount) {
@@ -107,6 +117,58 @@ namespace d20proof {
             return bytes;
         }
 
+        std::uint64_t accountedSymbolicFrameBytes(const SymbolicFrame &frame) {
+            std::uint64_t bytes = sizeof(SymbolicFrame);
+            auto add = [&](std::uint64_t amount) {
+                if (amount > std::numeric_limits<std::uint64_t>::max() - bytes) {
+                    bytes = std::numeric_limits<std::uint64_t>::max();
+                } else {
+                    bytes += amount;
+                }
+            };
+            add(frame.routineId.size());
+            add(frame.callStack.size() * sizeof(ReturnAddress));
+            for (const ReturnAddress &address: frame.callStack) {
+                add(address.routineId.size());
+            }
+            return bytes;
+        }
+
+        std::uint64_t accountedDetailedProofNodeBytes(const DetailedProofNode &node) {
+            std::uint64_t bytes = sizeof(DetailedProofNode);
+            auto add = [&](std::uint64_t amount) {
+                if (amount > std::numeric_limits<std::uint64_t>::max() - bytes) {
+                    bytes = std::numeric_limits<std::uint64_t>::max();
+                } else {
+                    bytes += amount;
+                }
+            };
+            const std::uint64_t frameBytes = accountedSymbolicFrameBytes(node.claimedFrame);
+            if (frameBytes >= sizeof(SymbolicFrame)) {
+                add(frameBytes - sizeof(SymbolicFrame));
+            }
+            add(node.expectedPc.routineId.size());
+            add(node.children.size() * sizeof(std::uint32_t));
+            return bytes;
+        }
+
+        std::uint64_t accountedRootProofRecordBytes(const RootProofRecord &proof) {
+            std::uint64_t bytes = sizeof(RootProofRecord);
+            auto add = [&](std::uint64_t amount) {
+                if (amount > std::numeric_limits<std::uint64_t>::max() - bytes) {
+                    bytes = std::numeric_limits<std::uint64_t>::max();
+                } else {
+                    bytes += amount;
+                }
+            };
+            add(proof.expectedPc.routineId.size());
+            add(proof.completionCases.size() * sizeof(CompletionProofCase));
+            for (const DetailedProofNode &node: proof.detailedNodes) {
+                add(accountedDetailedProofNodeBytes(node));
+            }
+            return bytes;
+        }
+
         std::uint64_t accountedSnapshotBytes(const CheckedSnapshot &snapshot) {
             std::uint64_t bytes = accountedPartitionFamilyBytes(snapshot.partitions);
             auto add = [&](std::uint64_t amount) {
@@ -116,9 +178,8 @@ namespace d20proof {
                     bytes += amount;
                 }
             };
-            add(snapshot.proofs.size() * sizeof(RootProofRecord));
             for (const RootProofRecord &proof: snapshot.proofs) {
-                add(proof.completionCases.size() * sizeof(CompletionProofCase));
+                add(accountedRootProofRecordBytes(proof));
             }
             add(snapshot.coverage.size() * sizeof(CheckedRootRecord));
             add(snapshot.completionCheckpoints.size() * sizeof(CompletionCheckpoint));
@@ -1180,12 +1241,13 @@ namespace d20proof {
         }
 
         SolveResult attachCheckedPrefix(
-            const PrefixReceipt &receipt,
+            PrefixReceipt receipt,
             const Problem &suffixProblem,
             SolveResult result,
             const ProofBudget &limits,
             Clock::time_point start) {
             if (!receipt.valid || !receipt.observationsChecked) {
+                releasePrefixReceiptBytes(result.budget, receipt);
                 result.kind = SolveKind::ModelError;
                 result.reason = "prefix attachment received an unchecked PrefixReceipt";
                 stampElapsed(result.budget, start);
@@ -1200,20 +1262,24 @@ namespace d20proof {
                 receipt.terminalTurn != suffixProblem.startTurn ||
                 receipt.initialProblem.ruleId != suffixProblem.ruleId ||
                 receipt.initialProblem.seed != suffixProblem.seed) {
+                releasePrefixReceiptBytes(result.budget, receipt);
                 result.kind = SolveKind::ModelError;
                 result.reason = "prefix/suffix raw-state, turn, rule, seed, or future-constraint connection mismatch";
                 stampElapsed(result.budget, start);
                 return result;
             }
             if (result.hasProblemKey && !sameProblemKey(result.problemKey, suffixProblem)) {
+                releasePrefixReceiptBytes(result.budget, receipt);
                 result.kind = SolveKind::ModelError;
                 result.reason = "suffix result belongs to a different problem_key";
                 stampElapsed(result.budget, start);
                 return result;
             }
-            const std::uint64_t attachmentBytes =
-                sizeof(PrefixReceipt) + receipt.prefix.size() * sizeof(int);
+            const std::uint64_t joinedPrefixBytes =
+                result.kind == SolveKind::Win ? receipt.prefix.size() * sizeof(int) : 0;
+            const std::uint64_t attachmentBytes = sizeof(PrefixReceipt) + joinedPrefixBytes;
             if (!chargeSearchBudget(result.budget, limits, 1, attachmentBytes)) {
+                releasePrefixReceiptBytes(result.budget, receipt);
                 result.kind = SolveKind::Unknown;
                 result.reason = "prefix attachment exceeded the shared proof budget";
                 result.prefixConnected = false;
@@ -1223,12 +1289,12 @@ namespace d20proof {
 
             bindProblemKey(result, suffixProblem);
             result.prefixConnected = true;
-            result.prefixReceipt = receipt;
             if (result.kind == SolveKind::Win) {
                 std::vector<int> joined = receipt.prefix;
                 joined.insert(joined.end(), result.commands.begin(), result.commands.end());
                 result.commands = std::move(joined);
             }
+            result.prefixReceipt = std::move(receipt);
             stampElapsed(result.budget, start);
             return result;
         }
@@ -1317,7 +1383,7 @@ namespace d20proof {
             result.firstWinningTurn = 0;
             result.minimumTurnLowerBound = 0;
             result.minimumTurnUpperBound = 0;
-            result.replay = ExactReplay::replay(bundle_, problem, {}, true, &limits);
+            result.replay = ExactReplay::replay(bundle_, problem, {}, true, &limits, &report);
             result.budget = report;
             bindProblemKey(result, problem);
             stampElapsed(result.budget, start);
@@ -1364,23 +1430,15 @@ namespace d20proof {
             return error;
         }
 
-        if (!chargeSearchBudget(
-                witness.budget,
-                budget,
-                witness.commands.size() + 1,
-                0)) {
-            witness.minimality = MinimalityKind::Unknown;
-            witness.reason = "exact witness retained; fresh TRUE replay could not fit the shared proof budget";
-            stampElapsed(witness.budget, start);
-            return witness;
-        }
         ReplayResult freshWitness = ExactReplay::replay(
             bundle_,
             problem,
             witness.commands,
             true,
-            &budget);
+            &budget,
+            &witness.budget);
         if (freshWitness.interrupted) {
+            releaseReplayBytes(witness.budget, freshWitness);
             witness.minimality = MinimalityKind::Unknown;
             witness.reason = "exact witness retained; fresh TRUE replay exhausted the shared deadline";
             stampElapsed(witness.budget, start);
@@ -1396,10 +1454,12 @@ namespace d20proof {
             error.commands = witness.commands;
             error.replay = std::move(freshWitness);
             error.budget = witness.budget;
+            releaseReplayBytes(error.budget, witness.replay);
             bindProblemKey(error, problem);
             stampElapsed(error.budget, start);
             return error;
         }
+        releaseReplayBytes(witness.budget, witness.replay);
         witness.replay = std::move(freshWitness);
 
         int winningTurns = witness.firstWinningTurn;
@@ -1553,7 +1613,7 @@ namespace d20proof {
             result.kind = SolveKind::Win;
             result.horizon = horizon;
             result.firstWinningTurn = 0;
-            result.replay = ExactReplay::replay(bundle_, problem, {}, true, &budget);
+            result.replay = ExactReplay::replay(bundle_, problem, {}, true, &budget, &report);
             result.budget = report;
             bindProblemKey(result, problem);
             stampElapsed(result.budget, start);
@@ -1602,23 +1662,11 @@ namespace d20proof {
                 stampElapsed(result.budget, start);
                 return result;
             }
-            if (!chargeSearchBudget(
-                    report,
-                    budget,
-                    candidateHint.size() + 1,
-                    candidateHint.size() * sizeof(int))) {
-                SolveResult result = makeFailure(
-                    SolveKind::Unknown,
-                    horizon,
-                    "candidate hint exceeded shared proof budget",
-                    start);
-                result.budget = report;
-                stampElapsed(result.budget, start);
-                return result;
-            }
-            ReplayResult candidateReplay = ExactReplay::replay(bundle_, problem, candidateHint, false, &budget);
+            ReplayResult candidateReplay = ExactReplay::replay(
+                bundle_, problem, candidateHint, false, &budget, &report);
             ++report.candidates;
             if (candidateReplay.interrupted) {
+                releaseReplayBytes(report, candidateReplay);
                 SolveResult result = makeFailure(
                     SolveKind::Unknown,
                     horizon,
@@ -1629,6 +1677,7 @@ namespace d20proof {
                 return result;
             }
             if (!candidateReplay.supported) {
+                releaseReplayBytes(report, candidateReplay);
                 SolveResult result = makeFailure(SolveKind::ModelError, horizon, candidateReplay.reason, start);
                 result.budget = report;
                 stampElapsed(result.budget, start);
@@ -1656,6 +1705,7 @@ namespace d20proof {
                 hintFailure = CandidateFailureKind::Lost;
             }
             rejectedHint = std::pair{candidateHint, hintFailure};
+            releaseReplayBytes(report, candidateReplay);
             if (deadlineReached(start, budget, report)) {
                 SolveResult result = makeFailure(
                     SolveKind::Unknown,
@@ -2253,9 +2303,11 @@ namespace d20proof {
                 continue;
             }
 
-            ReplayResult replay = ExactReplay::replay(bundle_, problem, path.commands, false, &budget);
+            ReplayResult replay = ExactReplay::replay(
+                bundle_, problem, path.commands, false, &budget, &report);
             ++report.candidates;
             if (replay.interrupted) {
+                releaseReplayBytes(report, replay);
                 SolveResult result = makeFailure(
                     SolveKind::Unknown,
                     horizon,
@@ -2268,6 +2320,7 @@ namespace d20proof {
                 return result;
             }
             if (!replay.supported) {
+                releaseReplayBytes(report, replay);
                 SolveResult result = makeFailure(
                     SolveKind::ModelError,
                     horizon,
@@ -2305,6 +2358,7 @@ namespace d20proof {
             const std::uint64_t insertWork =
                 failedCommandLookupWork(failedCommands.size(), path.commands.size());
             if (!chargeSearchBudget(report, budget, insertWork, failedBytes)) {
+                releaseReplayBytes(report, replay);
                 SolveResult result = makeFailure(
                     SolveKind::Unknown,
                     horizon,
@@ -2323,11 +2377,13 @@ namespace d20proof {
                 bundle_, falseCheck.snapshot, path, replay, trialOrder++);
             if (mismatch.has_value()) {
                 if (mismatch->kind == CandidateMismatchKind::DetailedModelError) {
+                    releaseReplayBytes(report, replay);
                     return makeCurrentFailure(
                         SolveKind::ModelError,
                         "detailed checked edge disagrees with exact replay: " + mismatch->reason);
                 }
                 if (!chargeSearchBudget(report, budget, 1, sizeof(CandidateMismatch))) {
+                    releaseReplayBytes(report, replay);
                     return makeCurrentFailure(
                         SolveKind::Unknown,
                         "candidate mismatch batch exceeded proof budget");
@@ -2338,6 +2394,7 @@ namespace d20proof {
                 recorded.coverageVersion = falseCheck.snapshot.coverageVersion;
                 failures.push_back(std::move(recorded));
             }
+            releaseReplayBytes(report, replay);
 
             if (failedCandidatesInBatch >= 8) {
                 const std::optional<bool> repaired = tryOneRepair();
@@ -2371,9 +2428,11 @@ namespace d20proof {
         const ProofBudget limits = effectiveProofBudget(budget, start);
         BudgetReport report;
 
-        PrefixReceipt receipt = ExactReplay::replayPrefix(bundle_, initialProblem, prefix, &limits);
+        PrefixReceipt receipt = ExactReplay::replayPrefix(
+            bundle_, initialProblem, prefix, &limits, &report);
         if (!receipt.valid) {
             if (receipt.failureKind == SolveKind::Unknown) {
+                releaseReplayBytes(report, receipt.replay);
                 SolveResult interrupted = makeFailure(
                     SolveKind::Unknown,
                     horizon,
@@ -2388,26 +2447,30 @@ namespace d20proof {
                 receipt.failureKind == SolveKind::ModelError
                     ? receipt.failureKind
                     : SolveKind::InvalidPrefix;
-            return makeFailure(failureKind, horizon, receipt.reason, start);
+            releaseReplayBytes(report, receipt.replay);
+            SolveResult invalid = makeFailure(failureKind, horizon, receipt.reason, start);
+            invalid.budget = report;
+            stampElapsed(invalid.budget, start);
+            return invalid;
         }
-        const std::uint64_t prefixBytes =
-            receipt.prefix.size() * sizeof(int) +
-            receipt.replay.turns.size() * sizeof(ReplayTurn);
+        const std::uint64_t prefixBytes = receipt.prefix.size() * sizeof(int);
         if (!chargeSearchBudget(
                 report,
                 limits,
-                receipt.replay.turns.size(),
+                0,
                 prefixBytes)) {
+            releaseReplayBytes(report, receipt.replay);
             SolveResult result = makeFailure(
                 SolveKind::Unknown,
                 horizon,
-                "prefix replay exceeded shared proof budget",
+                "prefix receipt exceeded shared proof byte budget",
                 start);
             result.budget = report;
             stampElapsed(result.budget, start);
             return result;
         }
         if (deadlineReached(start, limits, report)) {
+            releasePrefixReceiptBytes(report, receipt);
             SolveResult result = makeFailure(
                 SolveKind::Unknown,
                 horizon,
@@ -2421,6 +2484,7 @@ namespace d20proof {
         Problem suffixProblem = ExactReplay::bindSuffixProblem(initialProblem, receipt);
         const std::string suffixValidation = ExactReplay::validateProblem(bundle_, suffixProblem, horizon);
         if (!suffixValidation.empty()) {
+            releasePrefixReceiptBytes(report, receipt);
             SolveResult invalid = makeFailure(
                 SolveKind::UnsupportedInput,
                 horizon,
@@ -2440,15 +2504,18 @@ namespace d20proof {
                 result.minimumTurnUpperBound = 0;
                 result.reason = "prefix already reaches the goal; minimum suffix length is zero";
             }
-            result.replay = ExactReplay::replay(bundle_, suffixProblem, {}, true, &limits);
+            result.replay = ExactReplay::replay(
+                bundle_, suffixProblem, {}, true, &limits, &report);
             result.budget = report;
             bindProblemKey(result, suffixProblem);
-            return attachCheckedPrefix(receipt, suffixProblem, std::move(result), limits, start);
+            return attachCheckedPrefix(
+                std::move(receipt), suffixProblem, std::move(result), limits, start);
         }
 
         CheckedKernelCache checkedCache;
         if (const CheckResult cacheCheck = ProofKernel::bindCheckedCache(checkedCache, suffixProblem);
             !cacheCheck.accepted) {
+            releasePrefixReceiptBytes(report, receipt);
             SolveResult invalid = makeFailure(
                 SolveKind::ModelError,
                 horizon,
@@ -2474,6 +2541,7 @@ namespace d20proof {
                 start,
                 checkedCache);
         }
-        return attachCheckedPrefix(receipt, suffixProblem, std::move(result), limits, start);
+        return attachCheckedPrefix(
+            std::move(receipt), suffixProblem, std::move(result), limits, start);
     }
 } // namespace d20proof

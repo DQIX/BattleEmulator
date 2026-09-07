@@ -273,6 +273,50 @@ namespace d20proof {
             return std::nullopt;
         }
 
+        const Instruction *instructionAt(
+            const RuleBundle &bundle,
+            const SymbolicFrame &frame,
+            std::string &error) {
+            for (const Routine &routine: bundle.program.routines) {
+                if (routine.id != frame.routineId) {
+                    continue;
+                }
+                if (frame.pc < 0 || frame.pc >= static_cast<int>(routine.instructions.size())) {
+                    error = "proof frame pc is outside the registered routine";
+                    return nullptr;
+                }
+                return &routine.instructions[frame.pc];
+            }
+            error = "proof frame routine is outside the registered RuleProgram";
+            return nullptr;
+        }
+
+        DetailedProofNodeKind detailedNodeKindForOpcode(Opcode opcode) noexcept {
+            switch (opcode) {
+                case Opcode::Branch:
+                    return DetailedProofNodeKind::Branch;
+                case Opcode::Switch:
+                    return DetailedProofNodeKind::Switch;
+                case Opcode::Call:
+                case Opcode::Return:
+                    return DetailedProofNodeKind::Control;
+                case Opcode::ReadRng:
+                    return DetailedProofNodeKind::Rng;
+                case Opcode::SkipRng:
+                    return DetailedProofNodeKind::RngSkip;
+                case Opcode::Finish:
+                    return DetailedProofNodeKind::Finish;
+                case Opcode::Step:
+                case Opcode::Native:
+                case Opcode::ResourceUpdate:
+                case Opcode::ModeUpdate:
+                case Opcode::ScalarUpdate:
+                case Opcode::RecordAction:
+                    return DetailedProofNodeKind::Step;
+            }
+            return DetailedProofNodeKind::Step;
+        }
+
         void releaseBudgetBytes(BudgetReport &budget, std::uint64_t bytes) noexcept {
             budget.bytes = bytes >= budget.bytes ? 0 : budget.bytes - bytes;
         }
@@ -322,6 +366,60 @@ namespace d20proof {
             return bytes;
         }
 
+        std::uint64_t symbolicFrameRecordBytes(const SymbolicFrame &frame) noexcept {
+            std::uint64_t bytes = sizeof(SymbolicFrame);
+            auto add = [&](std::uint64_t amount) {
+                if (amount > std::numeric_limits<std::uint64_t>::max() - bytes) {
+                    bytes = std::numeric_limits<std::uint64_t>::max();
+                } else {
+                    bytes += amount;
+                }
+            };
+            add(frame.routineId.size());
+            add(frame.callStack.size() * sizeof(ReturnAddress));
+            for (const ReturnAddress &address: frame.callStack) {
+                add(address.routineId.size());
+            }
+            return bytes;
+        }
+
+        std::uint64_t detailedProofNodeBytes(const DetailedProofNode &node) noexcept {
+            std::uint64_t bytes = sizeof(DetailedProofNode);
+            auto add = [&](std::uint64_t amount) {
+                if (amount > std::numeric_limits<std::uint64_t>::max() - bytes) {
+                    bytes = std::numeric_limits<std::uint64_t>::max();
+                } else {
+                    bytes += amount;
+                }
+            };
+            // SymbolicFrame is already part of sizeof(DetailedProofNode); only
+            // count its dynamically owned storage here.
+            const std::uint64_t frameBytes = symbolicFrameRecordBytes(node.claimedFrame);
+            if (frameBytes >= sizeof(SymbolicFrame)) {
+                add(frameBytes - sizeof(SymbolicFrame));
+            }
+            add(node.expectedPc.routineId.size());
+            add(node.children.size() * sizeof(std::uint32_t));
+            return bytes;
+        }
+
+        std::uint64_t rootProofRecordBytes(const RootProofRecord &proof) noexcept {
+            std::uint64_t bytes = sizeof(RootProofRecord);
+            auto add = [&](std::uint64_t amount) {
+                if (amount > std::numeric_limits<std::uint64_t>::max() - bytes) {
+                    bytes = std::numeric_limits<std::uint64_t>::max();
+                } else {
+                    bytes += amount;
+                }
+            };
+            add(proof.expectedPc.routineId.size());
+            add(proof.completionCases.size() * sizeof(CompletionProofCase));
+            for (const DetailedProofNode &node: proof.detailedNodes) {
+                add(detailedProofNodeBytes(node));
+            }
+            return bytes;
+        }
+
         std::uint64_t snapshotAccountedBytes(const CheckedSnapshot &snapshot) noexcept {
             std::uint64_t bytes = partitionFamilyBytes(snapshot.partitions);
             auto add = [&](std::uint64_t amount) {
@@ -331,9 +429,8 @@ namespace d20proof {
                     bytes += amount;
                 }
             };
-            add(snapshot.proofs.size() * sizeof(RootProofRecord));
             for (const RootProofRecord &proof: snapshot.proofs) {
-                add(proof.completionCases.size() * sizeof(CompletionProofCase));
+                add(rootProofRecordBytes(proof));
             }
             add(snapshot.coverage.size() * sizeof(CheckedRootRecord));
             add(snapshot.completionCheckpoints.size() * sizeof(CompletionCheckpoint));
@@ -674,6 +771,457 @@ namespace d20proof {
             return CompletionCutId::TurnEntry;
         }
 
+        struct ReservationControlState {
+            int routineIndex = -1;
+            int pc = -1;
+            std::vector<std::pair<int, int>> returnStack;
+        };
+
+        struct ReservationControlStateLess {
+            bool operator()(const ReservationControlState &a, const ReservationControlState &b) const noexcept {
+                if (a.routineIndex != b.routineIndex) {
+                    return a.routineIndex < b.routineIndex;
+                }
+                if (a.pc != b.pc) {
+                    return a.pc < b.pc;
+                }
+                return a.returnStack < b.returnStack;
+            }
+        };
+
+        struct FirstCutSummary {
+            std::uint8_t firstCutMask = 0;
+            bool mayFinishWithoutCut = false;
+        };
+
+        struct ReservationMemoValue {
+            bool visiting = false;
+            bool ready = false;
+            std::uint64_t work = 0;
+        };
+
+        int reservationRoutineIndex(const RuleProgram &program, std::string_view id) {
+            for (std::size_t index = 0; index < program.routines.size(); ++index) {
+                if (program.routines[index].id == id) {
+                    return static_cast<int>(index);
+                }
+            }
+            return -1;
+        }
+
+        std::uint64_t saturatedReservationAdd(
+            std::uint64_t a,
+            std::uint64_t b,
+            std::uint64_t cap) noexcept {
+            if (a >= cap || b >= cap || b > cap - a) {
+                return cap;
+            }
+            return a + b;
+        }
+
+        std::uint64_t saturatedReservationMultiply(
+            std::uint64_t a,
+            std::uint64_t b,
+            std::uint64_t cap) noexcept {
+            if (a == 0 || b == 0) {
+                return 0;
+            }
+            if (a >= cap || b >= cap || a > cap / b) {
+                return cap;
+            }
+            return a * b;
+        }
+
+        std::uint64_t branchPieceUpperBound(
+            const BranchCondition &condition,
+            std::uint64_t cap) noexcept {
+            std::uint64_t pieces = 1;
+            for (const ConditionClause &clause: condition.any) {
+                for ([[maybe_unused]] const Comparison &comparison: clause.all) {
+                    pieces = saturatedReservationMultiply(pieces, 3, cap);
+                    if (pieces >= cap) {
+                        return cap;
+                    }
+                }
+            }
+            return pieces;
+        }
+
+        std::uint64_t instructionFrameUpperBound(
+            const Instruction &instruction,
+            std::uint64_t cap) noexcept {
+            switch (instruction.opcode) {
+                case Opcode::Branch:
+                    return branchPieceUpperBound(instruction.branchCondition, cap);
+                case Opcode::Switch:
+                    return instruction.switchOperand.kind == SwitchSourceKind::CurrentAction
+                        ? 8u
+                        : 1u;
+                case Opcode::ReadRng:
+                    return instruction.rngRead.kind == RngReadKind::PercentCameraRemaining
+                        ? 6u
+                        : 1u;
+                case Opcode::ResourceUpdate:
+                    return instruction.resourceUpdate.kind == ResourceUpdateKind::AddConstant
+                        ? 1u
+                        : 3u;
+                case Opcode::RecordAction:
+                    return 8u;
+                case Opcode::Step:
+                case Opcode::Call:
+                case Opcode::Return:
+                case Opcode::Finish:
+                case Opcode::SkipRng:
+                case Opcode::Native:
+                case Opcode::ModeUpdate:
+                case Opcode::ScalarUpdate:
+                    return 1u;
+            }
+            return cap;
+        }
+
+        std::optional<std::uint64_t> nativeWorkForReservation(
+            const RuleBundle &bundle,
+            const Instruction &instruction,
+            std::string &error) {
+            if (instruction.opcode != Opcode::Native) {
+                return 0;
+            }
+            for (const NativeContract &contract: bundle.nativeContracts) {
+                if (contract.id == instruction.nativeId) {
+                    if (contract.maxWork < 0) {
+                        error = "registered NATIVE has a negative internal work bound";
+                        return std::nullopt;
+                    }
+                    return static_cast<std::uint64_t>(contract.maxWork);
+                }
+            }
+            error = "reservation planner found an unregistered NATIVE contract";
+            return std::nullopt;
+        }
+
+        bool reservationSuccessors(
+            const RuleBundle &bundle,
+            const ReservationControlState &state,
+            const Instruction &instruction,
+            std::vector<ReservationControlState> &successors,
+            std::string &error) {
+            successors.clear();
+            if (state.routineIndex < 0 || state.routineIndex >= static_cast<int>(bundle.program.routines.size())) {
+                error = "reservation planner references an invalid routine";
+                return false;
+            }
+            switch (instruction.opcode) {
+                case Opcode::Finish:
+                    return true;
+                case Opcode::Call: {
+                    if (instruction.successors.size() != 1) {
+                        error = "reservation planner found CALL without one return pc";
+                        return false;
+                    }
+                    const int callee = reservationRoutineIndex(bundle.program, instruction.callTarget);
+                    if (callee < 0) {
+                        error = "reservation planner found an unresolved CALL target";
+                        return false;
+                    }
+                    ReservationControlState child;
+                    child.routineIndex = callee;
+                    child.pc = 0;
+                    child.returnStack = state.returnStack;
+                    child.returnStack.emplace_back(state.routineIndex, instruction.successors.front());
+                    if (child.returnStack.size() > static_cast<std::size_t>(bundle.bounds.maximumCallDepth)) {
+                        error = "reservation planner exceeded registered call depth";
+                        return false;
+                    }
+                    successors.push_back(std::move(child));
+                    return true;
+                }
+                case Opcode::Return: {
+                    if (state.returnStack.empty()) {
+                        error = "reservation planner reached RETURN with empty stack";
+                        return false;
+                    }
+                    ReservationControlState child = state;
+                    const auto [routineIndex, pc] = child.returnStack.back();
+                    child.returnStack.pop_back();
+                    child.routineIndex = routineIndex;
+                    child.pc = pc;
+                    successors.push_back(std::move(child));
+                    return true;
+                }
+                default:
+                    break;
+            }
+            if (instruction.successors.empty()) {
+                error = "reservation planner found a nonterminal instruction without successor";
+                return false;
+            }
+            for (int pc: instruction.successors) {
+                ReservationControlState child = state;
+                child.pc = pc;
+                successors.push_back(std::move(child));
+            }
+            return true;
+        }
+
+        std::uint64_t reservationStateBytes(const ReservationControlState &state) noexcept {
+            return sizeof(ReservationControlState) +
+                   state.returnStack.size() * sizeof(std::pair<int, int>) +
+                   sizeof(ReservationMemoValue) + 4 * sizeof(void *);
+        }
+
+        bool remainingConcreteWorkBound(
+            const RuleBundle &bundle,
+            const SymbolicFrame &frame,
+            std::uint64_t &remaining,
+            std::string &error) {
+            remaining = 0;
+            auto addPc = [&](const std::string &routineId, int pc) -> bool {
+                const PcStaticBounds *bounds = lookupPcBounds(bundle.bounds, routineId, pc);
+                if (bounds == nullptr) {
+                    error = "missing static work bound for completion resume point";
+                    return false;
+                }
+                if (bounds->maximumWork > std::numeric_limits<std::uint64_t>::max() - remaining) {
+                    error = "static work bound overflow for completion resume point";
+                    return false;
+                }
+                remaining += bounds->maximumWork;
+                return true;
+            };
+            if (!addPc(frame.routineId, frame.pc)) {
+                return false;
+            }
+            for (auto it = frame.callStack.rbegin(); it != frame.callStack.rend(); ++it) {
+                if (!addPc(it->routineId, it->pc)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        bool reserveCompletionProofWork(
+            const RuleBundle &bundle,
+            const SymbolicFrame &frame,
+            CompletionCutId currentCut,
+            const ProofBudget &limits,
+            BudgetReport &budget,
+            std::uint64_t &requiredWork,
+            std::string &error) {
+            ReservationControlState root;
+            root.routineIndex = reservationRoutineIndex(bundle.program, frame.routineId);
+            root.pc = frame.pc;
+            if (root.routineIndex < 0) {
+                error = "completion reservation root routine is not registered";
+                return false;
+            }
+            root.returnStack.reserve(frame.callStack.size());
+            for (const ReturnAddress &address: frame.callStack) {
+                const int routineIndex = reservationRoutineIndex(bundle.program, address.routineId);
+                if (routineIndex < 0) {
+                    error = "completion reservation stack contains an unregistered routine";
+                    return false;
+                }
+                root.returnStack.emplace_back(routineIndex, address.pc);
+            }
+            if (root.returnStack.size() > static_cast<std::size_t>(bundle.bounds.maximumCallDepth)) {
+                error = "completion reservation root exceeds registered call depth";
+                return false;
+            }
+
+            const std::uint64_t cap = limits.maxWork == std::numeric_limits<std::uint64_t>::max()
+                ? limits.maxWork
+                : limits.maxWork + 1;
+            std::uint64_t temporaryBytes = 0;
+            auto releaseTemporary = [&]() {
+                releaseBudgetBytes(budget, temporaryBytes);
+                temporaryBytes = 0;
+            };
+
+            std::map<ReservationControlState, FirstCutSummary, ReservationControlStateLess> firstCutMemo;
+            std::set<ReservationControlState, ReservationControlStateLess> firstCutVisiting;
+            std::function<std::optional<FirstCutSummary>(const ReservationControlState &)> firstCuts =
+                [&](const ReservationControlState &state) -> std::optional<FirstCutSummary> {
+                    if (const auto found = firstCutMemo.find(state); found != firstCutMemo.end()) {
+                        return found->second;
+                    }
+                    if (firstCutVisiting.contains(state)) {
+                        error = "completion reservation found a control cycle";
+                        return std::nullopt;
+                    }
+                    const std::uint64_t stateBytes = reservationStateBytes(state);
+                    if (!chargeBudget(budget, limits, 1, stateBytes)) {
+                        error = "completion reservation analysis exceeded proof budget";
+                        return std::nullopt;
+                    }
+                    temporaryBytes += stateBytes;
+                    firstCutVisiting.insert(state);
+
+                    if (state.routineIndex < 0 || state.routineIndex >= static_cast<int>(bundle.program.routines.size())) {
+                        error = "completion reservation references an invalid routine";
+                        return std::nullopt;
+                    }
+                    const Routine &routine = bundle.program.routines[state.routineIndex];
+                    if (state.pc < 0 || state.pc >= static_cast<int>(routine.instructions.size())) {
+                        error = "completion reservation references an invalid pc";
+                        return std::nullopt;
+                    }
+                    const ProgramPoint point{routine.id, state.pc};
+                    bool isCut = false;
+                    const CompletionCutId cut = cutForPoint(bundle.profile, point, isCut);
+                    FirstCutSummary summary;
+                    if (isCut && cut != currentCut) {
+                        summary.firstCutMask = static_cast<std::uint8_t>(1u << static_cast<unsigned>(cut));
+                    } else {
+                        const Instruction &instruction = routine.instructions[state.pc];
+                        if (instruction.opcode == Opcode::Finish) {
+                            summary.mayFinishWithoutCut = true;
+                        } else {
+                            std::vector<ReservationControlState> children;
+                            if (!reservationSuccessors(bundle, state, instruction, children, error)) {
+                                return std::nullopt;
+                            }
+                            for (const ReservationControlState &child: children) {
+                                const std::optional<FirstCutSummary> childSummary = firstCuts(child);
+                                if (!childSummary.has_value()) {
+                                    return std::nullopt;
+                                }
+                                summary.firstCutMask |= childSummary->firstCutMask;
+                                summary.mayFinishWithoutCut =
+                                    summary.mayFinishWithoutCut || childSummary->mayFinishWithoutCut;
+                            }
+                        }
+                    }
+                    firstCutVisiting.erase(state);
+                    firstCutMemo.emplace(state, summary);
+                    return summary;
+                };
+
+            const std::optional<FirstCutSummary> rootSummary = firstCuts(root);
+            if (!rootSummary.has_value()) {
+                releaseTemporary();
+                return false;
+            }
+
+            auto workForTarget = [&](std::optional<CompletionCutId> target) -> std::optional<std::uint64_t> {
+                std::map<ReservationControlState, ReservationMemoValue, ReservationControlStateLess> memo;
+                std::function<std::optional<std::uint64_t>(const ReservationControlState &)> visit =
+                    [&](const ReservationControlState &state) -> std::optional<std::uint64_t> {
+                        auto found = memo.find(state);
+                        if (found != memo.end()) {
+                            if (found->second.visiting) {
+                                error = "completion reservation found a control cycle";
+                                return std::nullopt;
+                            }
+                            if (found->second.ready) {
+                                return found->second.work;
+                            }
+                        } else {
+                            const std::uint64_t stateBytes = reservationStateBytes(state);
+                            if (!chargeBudget(budget, limits, 1, stateBytes)) {
+                                error = "completion reservation analysis exceeded proof budget";
+                                return std::nullopt;
+                            }
+                            temporaryBytes += stateBytes;
+                            ReservationMemoValue initial;
+                            initial.visiting = true;
+                            found = memo.emplace(state, initial).first;
+                        }
+
+                        if (state.routineIndex < 0 || state.routineIndex >= static_cast<int>(bundle.program.routines.size())) {
+                            error = "completion reservation references an invalid routine";
+                            return std::nullopt;
+                        }
+                        const Routine &routine = bundle.program.routines[state.routineIndex];
+                        if (state.pc < 0 || state.pc >= static_cast<int>(routine.instructions.size())) {
+                            error = "completion reservation references an invalid pc";
+                            return std::nullopt;
+                        }
+                        const ProgramPoint point{routine.id, state.pc};
+                        bool isCut = false;
+                        const CompletionCutId cut = cutForPoint(bundle.profile, point, isCut);
+                        if (target.has_value() && isCut && cut == *target) {
+                            found->second.visiting = false;
+                            found->second.ready = true;
+                            found->second.work = 0;
+                            return 0;
+                        }
+
+                        const Instruction &instruction = routine.instructions[state.pc];
+                        const std::optional<std::uint64_t> nativeWork =
+                            nativeWorkForReservation(bundle, instruction, error);
+                        if (!nativeWork.has_value()) {
+                            return std::nullopt;
+                        }
+                        const std::uint64_t frameCount = instructionFrameUpperBound(instruction, cap);
+                        std::uint64_t ownWork = saturatedReservationAdd(1, *nativeWork, cap);
+                        ownWork = saturatedReservationAdd(ownWork, frameCount, cap);
+                        if (instruction.opcode == Opcode::Finish) {
+                            found->second.visiting = false;
+                            found->second.ready = true;
+                            found->second.work = ownWork;
+                            return ownWork;
+                        }
+
+                        std::vector<ReservationControlState> children;
+                        if (!reservationSuccessors(bundle, state, instruction, children, error)) {
+                            return std::nullopt;
+                        }
+                        std::uint64_t childMaximum = 0;
+                        for (const ReservationControlState &child: children) {
+                            const std::optional<std::uint64_t> childWork = visit(child);
+                            if (!childWork.has_value()) {
+                                return std::nullopt;
+                            }
+                            childMaximum = std::max(childMaximum, *childWork);
+                        }
+                        const std::uint64_t descendants =
+                            saturatedReservationMultiply(frameCount, childMaximum, cap);
+                        const std::uint64_t total = saturatedReservationAdd(ownWork, descendants, cap);
+                        found->second.visiting = false;
+                        found->second.ready = true;
+                        found->second.work = total;
+                        return total;
+                    };
+                return visit(root);
+            };
+
+            requiredWork = 0;
+            for (unsigned rawCut = 0; rawCut < 4; ++rawCut) {
+                if ((rootSummary->firstCutMask & (1u << rawCut)) == 0) {
+                    continue;
+                }
+                const std::optional<std::uint64_t> candidate =
+                    workForTarget(static_cast<CompletionCutId>(rawCut));
+                if (!candidate.has_value()) {
+                    releaseTemporary();
+                    return false;
+                }
+                requiredWork = std::max(requiredWork, *candidate);
+            }
+            if (rootSummary->mayFinishWithoutCut) {
+                const std::optional<std::uint64_t> candidate = workForTarget(std::nullopt);
+                if (!candidate.has_value()) {
+                    releaseTemporary();
+                    return false;
+                }
+                requiredWork = std::max(requiredWork, *candidate);
+            }
+            releaseTemporary();
+
+            const std::uint64_t remainingWork =
+                budget.work >= limits.maxWork ? 0 : limits.maxWork - budget.work;
+            if (requiredWork > remainingWork) {
+                error = "completion resume cannot reserve proof work to the next registered cut";
+                return false;
+            }
+            if (deadlineExceeded(limits, budget)) {
+                error = "completion resume cannot reserve work before the shared deadline";
+                return false;
+            }
+            return true;
+        }
+
         const PredicatePartition *partitionAt(const PartitionFamily &family, int position) {
             for (const PredicatePartition &partition: family.trees) {
                 if (partition.rngPosition == position) {
@@ -768,6 +1316,165 @@ namespace d20proof {
 
         bool sameCellVector(const std::vector<CellKey> &a, const std::vector<CellKey> &b) {
             return a == b;
+        }
+
+        bool buildDetailedProofTree(
+            const RuleBundle &bundle,
+            const Problem &problem,
+            const SymbolicFrame &rootFrame,
+            RootProofKind proofKind,
+            CompletionCutId completionCut,
+            const ProofBudget &limits,
+            BudgetReport &budget,
+            std::vector<DetailedProofNode> &nodes,
+            std::string &error) {
+            nodes.clear();
+            if (proofKind == RootProofKind::Completion &&
+                completionCut == CompletionCutId::TurnEntry) {
+                error = "turn-entry COMPLETE does not use a detailed proof tree";
+                return false;
+            }
+
+            const CompletionSite *completionSite = nullptr;
+            if (proofKind == RootProofKind::Completion) {
+                completionSite = lookupCompletionSite(bundle.profile, completionCut);
+                if (completionSite == nullptr) {
+                    error = "detailed proof tree references an unregistered COMPLETE cut";
+                    return false;
+                }
+            }
+
+            SymbolicStepper stepper(bundle, problem);
+            ScopedBudgetBytes temporaryBytes(budget);
+            std::vector<std::uint32_t> pending;
+
+            auto appendNode = [&](const SymbolicFrame &frame, std::uint32_t &index) -> bool {
+                if (nodes.size() >= std::numeric_limits<std::uint32_t>::max()) {
+                    error = "detailed proof tree node index overflow";
+                    return false;
+                }
+                DetailedProofNode node;
+                node.expectedPc = stepper.point(frame);
+                node.claimedFrame = frame;
+                const std::uint64_t bytes = detailedProofNodeBytes(node);
+                if (!chargeBudget(budget, limits, 0, bytes)) {
+                    error = "detailed proof tree generation exceeded byte budget";
+                    return false;
+                }
+                temporaryBytes.add(bytes);
+                index = static_cast<std::uint32_t>(nodes.size());
+                nodes.push_back(std::move(node));
+                return true;
+            };
+
+            std::uint32_t rootIndex = 0;
+            if (!appendNode(rootFrame, rootIndex) || rootIndex != 0) {
+                if (error.empty()) {
+                    error = "detailed proof tree could not create its root";
+                }
+                return false;
+            }
+            if (!chargeBudget(budget, limits, 0, sizeof(std::uint32_t))) {
+                error = "detailed proof tree work stack exceeded byte budget";
+                return false;
+            }
+            temporaryBytes.add(sizeof(std::uint32_t));
+            pending.push_back(rootIndex);
+
+            while (!pending.empty()) {
+                const std::uint32_t nodeIndex = pending.back();
+                pending.pop_back();
+                temporaryBytes.release(sizeof(std::uint32_t));
+                if (nodeIndex >= nodes.size()) {
+                    error = "detailed proof tree generator produced an invalid node index";
+                    return false;
+                }
+                if (!chargeBudget(budget, limits, 1, 0)) {
+                    error = "detailed proof tree generation exceeded work budget";
+                    return false;
+                }
+
+                const SymbolicFrame frame = nodes[nodeIndex].claimedFrame;
+                if (completionSite != nullptr && stepper.point(frame) == completionSite->pc) {
+                    nodes[nodeIndex].kind = DetailedProofNodeKind::Complete;
+                    continue;
+                }
+
+                const Instruction *instruction = instructionAt(bundle, frame, error);
+                if (instruction == nullptr) {
+                    return false;
+                }
+                nodes[nodeIndex].kind = detailedNodeKindForOpcode(instruction->opcode);
+
+                std::string nativeError;
+                const std::optional<std::uint64_t> nativeWork =
+                    nativeInternalWorkAt(bundle, frame, nativeError);
+                if (!nativeWork.has_value()) {
+                    error = nativeError;
+                    return false;
+                }
+                if (*nativeWork != 0 && !chargeBudget(budget, limits, *nativeWork, 0)) {
+                    error = "detailed proof tree NATIVE generation exceeded work budget";
+                    return false;
+                }
+
+                SymbolicStepResult step = stepper.step(frame);
+                if (!step.accepted) {
+                    error = "detailed proof tree symbolic generation failed at " +
+                            frame.routineId + ":" + std::to_string(frame.pc) + ": " + step.reason;
+                    return false;
+                }
+                if (step.finished) {
+                    if (instruction->opcode != Opcode::Finish || step.frames.size() != 1 ||
+                        !(step.frames.front() == frame)) {
+                        error = "detailed proof FINISH generation disagrees with SymbolicStepper";
+                        return false;
+                    }
+                    nodes[nodeIndex].kind = DetailedProofNodeKind::Finish;
+                    continue;
+                }
+                if (step.frames.empty()) {
+                    error = "nonterminal detailed proof instruction produced no nonempty child";
+                    return false;
+                }
+                if (!chargeBudget(budget, limits, step.frames.size(), 0)) {
+                    error = "detailed proof child generation exceeded work budget";
+                    return false;
+                }
+
+                std::vector<std::uint32_t> childIndices;
+                childIndices.reserve(step.frames.size());
+                for (const SymbolicFrame &childFrame: step.frames) {
+                    std::uint32_t childIndex = 0;
+                    if (!appendNode(childFrame, childIndex)) {
+                        return false;
+                    }
+                    childIndices.push_back(childIndex);
+                }
+                const std::uint64_t childIndexBytes =
+                    childIndices.size() * sizeof(std::uint32_t);
+                if (!chargeBudget(budget, limits, 0, childIndexBytes)) {
+                    error = "detailed proof child-index storage exceeded byte budget";
+                    return false;
+                }
+                temporaryBytes.add(childIndexBytes);
+                nodes[nodeIndex].children = childIndices;
+
+                for (auto it = childIndices.rbegin(); it != childIndices.rend(); ++it) {
+                    if (!chargeBudget(budget, limits, 0, sizeof(std::uint32_t))) {
+                        error = "detailed proof work stack exceeded byte budget";
+                        return false;
+                    }
+                    temporaryBytes.add(sizeof(std::uint32_t));
+                    pending.push_back(*it);
+                }
+            }
+
+            if (nodes.empty()) {
+                error = "detailed proof tree generation produced no nodes";
+                return false;
+            }
+            return true;
         }
     } // namespace
 
@@ -1255,12 +1962,36 @@ namespace d20proof {
             }
             if (bestTemplate != nullptr) {
                 ++budget.proofTemplateReuseHits;
-                return generatedProof(
+                RootProofRecord proof = generatedProof(
                     elapsedTurn,
                     source,
                     command,
                     bestTemplate->kind,
                     bestTemplate->cut);
+                if (proof.kind == RootProofKind::FullyDetailed ||
+                    proof.cut != CompletionCutId::TurnEntry) {
+                    SymbolicStepper stepper(bundle, problem);
+                    const SymbolicFrame rootFrame = stepper.makeRootFrame(
+                        elapsedTurn,
+                        command,
+                        source.rngPosition,
+                        rootDomain);
+                    std::string treeError;
+                    if (!buildDetailedProofTree(
+                            bundle,
+                            problem,
+                            rootFrame,
+                            proof.kind,
+                            proof.cut,
+                            limits,
+                            budget,
+                            proof.detailedNodes,
+                            treeError)) {
+                        snapshot.check.reason = treeError;
+                        return std::nullopt;
+                    }
+                }
+                return proof;
             }
             return generatedProof(
                 elapsedTurn,
@@ -1282,6 +2013,10 @@ namespace d20proof {
             if (proof.kind != RootProofKind::Completion || site == nullptr ||
                 proof.cut != CompletionCutId::TurnEntry || proof.expectedPc != site->pc) {
                 snapshot.check.reason = "COMPLETE cut_id or expected_pc is not the registered turn-entry site";
+                return false;
+            }
+            if (!proof.detailedNodes.empty()) {
+                snapshot.check.reason = "turn-entry COMPLETE must not contain a detailed proof tree";
                 return false;
             }
             if (proof.elapsedTurn != elapsedTurn || !(proof.source == source) ||
@@ -1383,6 +2118,10 @@ namespace d20proof {
                 snapshot.check.reason = "detailed root identity differs from the kernel-required root";
                 return false;
             }
+            if (proof.detailedNodes.empty()) {
+                snapshot.check.reason = "detailed root is missing its proof-node tree";
+                return false;
+            }
 
             record.proofKind = proof.kind;
             record.elapsedTurn = elapsedTurn;
@@ -1397,14 +2136,30 @@ namespace d20proof {
             record.verifiedCut = proof.cut;
 
             SymbolicStepper stepper(bundle, problem);
-            std::vector<SymbolicFrame> pending;
-            pending.push_back(stepper.makeRootFrame(elapsedTurn, command, source.rngPosition, rootDomain));
+            struct PendingDetailedNode {
+                SymbolicFrame frame;
+                std::uint32_t nodeIndex = 0;
+            };
+            std::vector<PendingDetailedNode> pending;
+            const SymbolicFrame requiredRoot = stepper.makeRootFrame(
+                elapsedTurn,
+                command,
+                source.rngPosition,
+                rootDomain);
+            pending.push_back({requiredRoot, 0});
             ScopedBudgetBytes pendingBytes(budget);
-            if (!chargeBudget(budget, limits, 0, sizeof(SymbolicFrame))) {
+            if (!chargeBudget(budget, limits, 0, sizeof(PendingDetailedNode))) {
                 snapshot.check.reason = "detailed verify_root stack exceeded proof budget";
                 return false;
             }
-            pendingBytes.add(sizeof(SymbolicFrame));
+            pendingBytes.add(sizeof(PendingDetailedNode));
+            ScopedBudgetBytes visitedBytes(budget);
+            std::vector<std::uint8_t> visited(proof.detailedNodes.size(), 0);
+            if (!chargeBudget(budget, limits, 0, visited.size())) {
+                snapshot.check.reason = "detailed proof visited-set exceeded proof budget";
+                return false;
+            }
+            visitedBytes.add(visited.size());
             bool reachedCut = proof.kind == RootProofKind::FullyDetailed;
 
             auto addCheckedOutput = [&](const SymbolicFrame &frame,
@@ -1664,15 +2419,33 @@ namespace d20proof {
             };
 
             while (!pending.empty()) {
-                SymbolicFrame frame = std::move(pending.back());
+                PendingDetailedNode pendingNode = std::move(pending.back());
                 pending.pop_back();
-                pendingBytes.release(sizeof(SymbolicFrame));
+                pendingBytes.release(sizeof(PendingDetailedNode));
+                if (pendingNode.nodeIndex >= proof.detailedNodes.size() ||
+                    visited[pendingNode.nodeIndex] != 0) {
+                    snapshot.check.reason = "detailed proof tree has an invalid, shared, or cyclic child reference";
+                    return false;
+                }
+                visited[pendingNode.nodeIndex] = 1;
+                const DetailedProofNode &proofNode = proof.detailedNodes[pendingNode.nodeIndex];
+                SymbolicFrame frame = std::move(pendingNode.frame);
+                if (proofNode.expectedPc != stepper.point(frame) ||
+                    !(proofNode.claimedFrame == frame)) {
+                    snapshot.check.reason = "detailed proof-node pc or payload disagrees with the recomputed Frame";
+                    return false;
+                }
                 if (!chargeBudget(budget, limits, 1, 0)) {
                     snapshot.check.reason = "detailed verify_root exceeded proof budget";
                     return false;
                 }
 
                 if (site != nullptr && stepper.point(frame) == site->pc) {
+                    if (proofNode.kind != DetailedProofNodeKind::Complete ||
+                        !proofNode.children.empty()) {
+                        snapshot.check.reason = "partial COMPLETE proof node is missing, mis-typed, or has children beyond the cut";
+                        return false;
+                    }
                     reachedCut = true;
 
                     Box current;
@@ -1741,6 +2514,18 @@ namespace d20proof {
                     continue;
                 }
 
+                if (proofNode.kind == DetailedProofNodeKind::Complete) {
+                    snapshot.check.reason = "detailed proof uses COMPLETE at an unregistered or wrong cut";
+                    return false;
+                }
+
+                std::string instructionError;
+                const Instruction *instruction = instructionAt(bundle, frame, instructionError);
+                if (instruction == nullptr) {
+                    snapshot.check.reason = instructionError;
+                    return false;
+                }
+
                 std::string instructionWorkError;
                 const std::optional<std::uint64_t> nativeWork =
                     nativeInternalWorkAt(bundle, frame, instructionWorkError);
@@ -1759,6 +2544,12 @@ namespace d20proof {
                                             std::to_string(frame.pc) + ": " + step.reason;
                     return false;
                 }
+                const DetailedProofNodeKind expectedKind =
+                    detailedNodeKindForOpcode(instruction->opcode);
+                if (proofNode.kind != expectedKind) {
+                    snapshot.check.reason = "detailed proof-node kind disagrees with the registered opcode";
+                    return false;
+                }
                 ScopedBudgetBytes stepBytes(budget);
                 const std::uint64_t producedBytes = step.frames.size() * sizeof(SymbolicFrame);
                 if (producedBytes != 0) {
@@ -1769,6 +2560,12 @@ namespace d20proof {
                     stepBytes.add(producedBytes);
                 }
                 if (step.finished) {
+                    if (proofNode.kind != DetailedProofNodeKind::Finish ||
+                        !proofNode.children.empty() || step.frames.size() != 1 ||
+                        !(step.frames.front() == frame)) {
+                        snapshot.check.reason = "FINISH proof node or terminal payload disagrees with SymbolicStepper";
+                        return false;
+                    }
                     for (const SymbolicFrame &finished: step.frames) {
                         if (!addExactFinishedOutput(finished)) {
                             return false;
@@ -1776,14 +2573,29 @@ namespace d20proof {
                     }
                     continue;
                 }
-                for (auto child = step.frames.rbegin(); child != step.frames.rend(); ++child) {
-                    if (!chargeBudget(budget, limits, 0, sizeof(SymbolicFrame))) {
+                if (proofNode.children.size() != step.frames.size()) {
+                    snapshot.check.reason = "detailed proof omitted or invented a nonempty symbolic child";
+                    return false;
+                }
+                for (std::size_t childIndex = step.frames.size(); childIndex > 0; --childIndex) {
+                    const std::size_t index = childIndex - 1;
+                    const std::uint32_t proofChild = proofNode.children[index];
+                    if (proofChild >= proof.detailedNodes.size()) {
+                        snapshot.check.reason = "detailed proof child index is outside the submitted tree";
+                        return false;
+                    }
+                    if (!chargeBudget(budget, limits, 0, sizeof(PendingDetailedNode))) {
                         snapshot.check.reason = "detailed verify_root stack exceeded proof budget";
                         return false;
                     }
-                    pendingBytes.add(sizeof(SymbolicFrame));
-                    pending.push_back(std::move(*child));
+                    pendingBytes.add(sizeof(PendingDetailedNode));
+                    pending.push_back({std::move(step.frames[index]), proofChild});
                 }
+            }
+
+            if (std::find(visited.begin(), visited.end(), static_cast<std::uint8_t>(0)) != visited.end()) {
+                snapshot.check.reason = "detailed proof contains unreachable or unreferenced proof nodes";
+                return false;
             }
 
             if (!reachedCut) {
@@ -1979,8 +2791,7 @@ namespace d20proof {
                     storedModelTerms += edgeTerms;
 
                     const std::uint64_t rootBytes =
-                        sizeof(RootProofRecord) +
-                        proof->completionCases.size() * sizeof(CompletionProofCase) +
+                        rootProofRecordBytes(*proof) +
                         sizeof(CheckedRootRecord) +
                         checkedEdges.size() * sizeof(CheckedEdge) +
                         edgeTerms * sizeof(CompletionWeightTerm) +
@@ -1989,7 +2800,8 @@ namespace d20proof {
                     if (!chargeBudget(
                             budget,
                             limits,
-                            1 + proof->completionCases.size() + edgeTerms + edgeTargets,
+                            1 + proof->completionCases.size() + proof->detailedNodes.size() +
+                                edgeTerms + edgeTargets,
                             rootBytes)) {
                         snapshot.check.reason = "root coverage exceeded proof budget";
                         return snapshot;
@@ -2111,6 +2923,34 @@ namespace d20proof {
         if (currentSite == nullptr || currentSite->pc != checkpointPoint) {
             result.reason = "checkpoint pc does not match its registered COMPLETE cut";
             return result;
+        }
+
+        std::uint64_t onePathRemainingWork = 0;
+        std::string workBoundError;
+        if (!remainingConcreteWorkBound(
+                bundle,
+                checkpoint.frame,
+                onePathRemainingWork,
+                workBoundError)) {
+            result.reason = workBoundError;
+            return result;
+        }
+        const std::uint64_t remainingGlobalWork =
+            budget.work >= limits.maxWork ? 0 : limits.maxWork - budget.work;
+        if (remainingGlobalWork <= onePathRemainingWork) {
+            std::uint64_t requiredResumeWork = 0;
+            std::string reservationError;
+            if (!reserveCompletionProofWork(
+                    bundle,
+                    checkpoint.frame,
+                    checkpoint.cut,
+                    limits,
+                    budget,
+                    requiredResumeWork,
+                    reservationError)) {
+                result.reason = reservationError;
+                return result;
+            }
         }
 
         SymbolicStepper stepper(bundle, problem);
@@ -3326,6 +4166,216 @@ namespace d20proof {
             result.reason = "partition validator accepted a position with more than K leaves";
             return result;
         }
+
+        {
+            BudgetReport reservationBuildBudget;
+            CheckedSnapshot reservationSnapshot = rebuildSupport(
+                bundle,
+                proofProblem,
+                1,
+                proofFamily,
+                proofBudget,
+                reservationBuildBudget,
+                nullptr,
+                nullptr,
+                1);
+            if (!reservationSnapshot.check.accepted ||
+                reservationSnapshot.completionCheckpoints.empty()) {
+                result.reason = "completion-reservation self-check could not build a checkpoint";
+                return result;
+            }
+            const CompletionCheckpoint checkpoint = reservationSnapshot.completionCheckpoints.front();
+
+            BudgetReport normalResumeBudget;
+            ProofTemplate advanced;
+            const CheckResult normalAdvance = advanceCompletionCheckpoint(
+                bundle,
+                proofProblem,
+                checkpoint,
+                proofBudget,
+                normalResumeBudget,
+                advanced);
+            if (!normalAdvance.accepted ||
+                (advanced.kind == RootProofKind::Completion && advanced.cut == checkpoint.cut)) {
+                result.reason = "completion-reservation self-check did not advance with ordinary budget";
+                return result;
+            }
+
+            if (advanced.kind != RootProofKind::Completion ||
+                advanced.cut == CompletionCutId::TurnEntry) {
+                result.reason = "completion-reservation self-check did not reach a registered partial COMPLETE cut";
+                return result;
+            }
+
+            {
+                const std::vector<ProofTemplate> advancedTemplates{advanced};
+                ProofBudget partialProofBudget = proofBudget;
+                partialProofBudget.maxDetailedTermsPerAction = 64;
+                partialProofBudget.maxCompletionTermsPerAction = 64;
+                BudgetReport partialBudget;
+                FalseCheckResult partialFalse = tryFalseZeroPrice(
+                    bundle,
+                    proofProblem,
+                    1,
+                    proofFamily,
+                    partialProofBudget,
+                    partialBudget,
+                    &advancedTemplates,
+                    1);
+                if (!partialFalse.check.accepted || !partialFalse.provedFalse) {
+                    result.reason = "partial COMPLETE self-check could not build an independently verified H=1 certificate: " + partialFalse.check.reason;
+                    return result;
+                }
+
+                auto partialProof = std::find_if(
+                    partialFalse.certificate.proofs.begin(),
+                    partialFalse.certificate.proofs.end(),
+                    [](const RootProofRecord &proof) {
+                        return proof.kind == RootProofKind::Completion &&
+                               proof.cut != CompletionCutId::TurnEntry;
+                    });
+                if (partialProof == partialFalse.certificate.proofs.end()) {
+                    result.reason = "partial COMPLETE self-check certificate did not retain the advanced cut";
+                    return result;
+                }
+                const std::size_t partialIndex = static_cast<std::size_t>(
+                    partialProof - partialFalse.certificate.proofs.begin());
+
+                FalseCertificate partialMissingCase = partialFalse.certificate;
+                if (partialMissingCase.proofs[partialIndex].completionCases.empty()) {
+                    result.reason = "partial COMPLETE self-check unexpectedly has no completion cases";
+                    return result;
+                }
+                partialMissingCase.proofs[partialIndex].completionCases.pop_back();
+                BudgetReport partialMissingCaseBudget;
+                if (verifyFalseCertificate(
+                        bundle,
+                        partialMissingCase,
+                        partialProofBudget,
+                        partialMissingCaseBudget).accepted) {
+                    result.reason = "verifier accepted a partial COMPLETE node with a missing case_id";
+                    return result;
+                }
+
+                FalseCertificate partialWrongPc = partialFalse.certificate;
+                ++partialWrongPc.proofs[partialIndex].expectedPc.instructionIndex;
+                BudgetReport partialWrongPcBudget;
+                if (verifyFalseCertificate(
+                        bundle,
+                        partialWrongPc,
+                        partialProofBudget,
+                        partialWrongPcBudget).accepted) {
+                    result.reason = "verifier accepted a partial COMPLETE node at an unregistered pc";
+                    return result;
+                }
+
+                if (partialProof->detailedNodes.empty()) {
+                    result.reason = "partial COMPLETE self-check did not serialize its detailed proof-node tree";
+                    return result;
+                }
+
+                std::size_t branchingNodeIndex = partialProof->detailedNodes.size();
+                for (std::size_t index = 0; index < partialProof->detailedNodes.size(); ++index) {
+                    if (partialProof->detailedNodes[index].kind == DetailedProofNodeKind::Branch &&
+                        partialProof->detailedNodes[index].children.size() > 1) {
+                        branchingNodeIndex = index;
+                        break;
+                    }
+                }
+                if (branchingNodeIndex == partialProof->detailedNodes.size()) {
+                    result.reason = "partial COMPLETE self-check could not locate a nontrivial branch proof node";
+                    return result;
+                }
+
+                FalseCertificate missingBranchChild = partialFalse.certificate;
+                missingBranchChild.proofs[partialIndex]
+                    .detailedNodes[branchingNodeIndex]
+                    .children.pop_back();
+                BudgetReport missingBranchBudget;
+                if (verifyFalseCertificate(
+                        bundle,
+                        missingBranchChild,
+                        partialProofBudget,
+                        missingBranchBudget).accepted) {
+                    result.reason = "verifier accepted a detailed proof with a missing nonempty branch child";
+                    return result;
+                }
+
+                FalseCertificate changedBranchDomain = partialFalse.certificate;
+                const std::uint32_t branchChild = changedBranchDomain.proofs[partialIndex]
+                    .detailedNodes[branchingNodeIndex]
+                    .children.front();
+                if (branchChild >= changedBranchDomain.proofs[partialIndex].detailedNodes.size()) {
+                    result.reason = "partial COMPLETE self-check branch child index is invalid";
+                    return result;
+                }
+                ++changedBranchDomain.proofs[partialIndex]
+                    .detailedNodes[branchChild]
+                    .claimedFrame.inputDomain.enemyHp.lo;
+                BudgetReport changedBranchDomainBudget;
+                if (verifyFalseCertificate(
+                        bundle,
+                        changedBranchDomain,
+                        partialProofBudget,
+                        changedBranchDomainBudget).accepted) {
+                    result.reason = "verifier accepted a detailed proof with a tampered branch-domain boundary";
+                    return result;
+                }
+
+                std::size_t rngNodeIndex = partialProof->detailedNodes.size();
+                for (std::size_t index = 0; index < partialProof->detailedNodes.size(); ++index) {
+                    const DetailedProofNode &node = partialProof->detailedNodes[index];
+                    if ((node.kind == DetailedProofNodeKind::Rng ||
+                         node.kind == DetailedProofNodeKind::RngSkip) &&
+                        !node.children.empty()) {
+                        rngNodeIndex = index;
+                        break;
+                    }
+                }
+                if (rngNodeIndex == partialProof->detailedNodes.size()) {
+                    result.reason = "partial COMPLETE self-check could not locate an RNG proof node";
+                    return result;
+                }
+                FalseCertificate changedRngPayload = partialFalse.certificate;
+                const std::uint32_t rngChild = changedRngPayload.proofs[partialIndex]
+                    .detailedNodes[rngNodeIndex]
+                    .children.front();
+                if (rngChild >= changedRngPayload.proofs[partialIndex].detailedNodes.size()) {
+                    result.reason = "partial COMPLETE self-check RNG child index is invalid";
+                    return result;
+                }
+                ++changedRngPayload.proofs[partialIndex]
+                    .detailedNodes[rngChild]
+                    .claimedFrame.rngPosition;
+                BudgetReport changedRngBudget;
+                if (verifyFalseCertificate(
+                        bundle,
+                        changedRngPayload,
+                        partialProofBudget,
+                        changedRngBudget).accepted) {
+                    result.reason = "verifier accepted a detailed proof with a tampered RNG-position payload";
+                    return result;
+                }
+            }
+
+            ProofBudget tinyResumeLimit = proofBudget;
+            tinyResumeLimit.maxWork = 1;
+            BudgetReport tinyResumeBudget;
+            ProofTemplate unpublished;
+            unpublished.elapsedTurn = -999;
+            const CheckResult tinyAdvance = advanceCompletionCheckpoint(
+                bundle,
+                proofProblem,
+                checkpoint,
+                tinyResumeLimit,
+                tinyResumeBudget,
+                unpublished);
+            if (tinyAdvance.accepted || unpublished.elapsedTurn != -999 || tinyResumeBudget.bytes != 0) {
+                result.reason = "completion-reservation self-check published a template without reserved work";
+                return result;
+            }
+        }
+
         FalseCheckResult falseCheck = tryFalseZeroPrice(
             bundle,
             proofProblem,
@@ -3418,6 +4468,67 @@ namespace d20proof {
                 &expiredBudgetLimit);
             if (!interruptedReplay.interrupted || interruptedReplay.valid) {
                 result.reason = "expired-deadline exact replay self-check did not interrupt";
+                return result;
+            }
+        }
+
+        {
+            ProofBudget noReplayWork = proofBudget;
+            noReplayWork.maxWork = 0;
+            BudgetReport replayBudget;
+            const ReplayResult blockedReplay = ExactReplay::replay(
+                bundle,
+                proofProblem,
+                {BattleEmulator::ATTACK_ALLY},
+                true,
+                &noReplayWork,
+                &replayBudget);
+            if (!blockedReplay.interrupted || replayBudget.work != 0 ||
+                replayBudget.bytes != 0 || blockedReplay.accountedBytes != 0) {
+                result.reason = "exact replay work-budget self-check did not reject before the first turn";
+                return result;
+            }
+
+            ProofBudget noReplayBytes = proofBudget;
+            noReplayBytes.maxWork = 1;
+            noReplayBytes.maxBytes = 1;
+            replayBudget = {};
+            const ReplayResult byteBlockedReplay = ExactReplay::replay(
+                bundle,
+                proofProblem,
+                {BattleEmulator::ATTACK_ALLY},
+                true,
+                &noReplayBytes,
+                &replayBudget);
+            if (!byteBlockedReplay.interrupted || replayBudget.work != 1 ||
+                replayBudget.bytes != 0 || byteBlockedReplay.accountedBytes != 0) {
+                result.reason = "exact replay byte-budget self-check retained an uncommitted replay record";
+                return result;
+            }
+
+            ProofBudget oneReplayTurn = proofBudget;
+            oneReplayTurn.maxWork = 1;
+            replayBudget = {};
+            ReplayResult checkedReplay = ExactReplay::replay(
+                bundle,
+                proofProblem,
+                {BattleEmulator::ATTACK_ALLY},
+                true,
+                &oneReplayTurn,
+                &replayBudget);
+            const std::uint64_t expectedReplayBytes =
+                checkedReplay.turns.size() * (sizeof(ReplayTurn) + sizeof(int));
+            if (checkedReplay.interrupted || !checkedReplay.supported || !checkedReplay.valid ||
+                checkedReplay.turns.size() != 1 || replayBudget.work != 1 ||
+                replayBudget.bytes != expectedReplayBytes ||
+                checkedReplay.accountedBytes != expectedReplayBytes) {
+                result.reason = "exact replay shared-budget accounting self-check failed";
+                return result;
+            }
+            releaseBudgetBytes(replayBudget, checkedReplay.accountedBytes);
+            checkedReplay.accountedBytes = 0;
+            if (replayBudget.bytes != 0 || replayBudget.work != 1) {
+                result.reason = "exact replay byte release changed cumulative work or leaked bytes";
                 return result;
             }
         }
