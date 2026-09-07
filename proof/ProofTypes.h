@@ -99,6 +99,7 @@ namespace d20proof {
         RawState terminalState;
         int terminalTurn = 0;
         ReplayResult replay;
+        std::uint64_t accountedBytes = 0;
     };
 
     struct Interval {
@@ -238,8 +239,11 @@ namespace d20proof {
         std::uint64_t addedPredicates = 0;
         std::uint32_t candidates = 0;
         std::uint32_t candidateScans = 0;
+        std::uint32_t duplicateCandidateSkips = 0;
         std::uint32_t repairs = 0;
         std::uint32_t priceEvaluations = 0;
+        int prefixReplayMs = -1;
+        int firstWinMs = -1;
         int elapsedMs = 0;
     };
 

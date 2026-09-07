@@ -2314,10 +2314,6 @@ namespace d20proof {
                                 snapshot.check.reason = "COMPLETE output references missing partition";
                                 return false;
                             }
-                            for (const auto &[leafId, leafBox]: partitionIt->second.leaves) {
-                                (void) leafBox;
-                                edge.targets.push_back({position, leafId});
-                            }
                         }
                     } else {
                         if (firstPosition != lastPosition) {
@@ -2340,8 +2336,10 @@ namespace d20proof {
                         }
                     }
                 }
-                std::sort(edge.targets.begin(), edge.targets.end());
-                edge.targets.erase(std::unique(edge.targets.begin(), edge.targets.end()), edge.targets.end());
+                if (!completion) {
+                    std::sort(edge.targets.begin(), edge.targets.end());
+                    edge.targets.erase(std::unique(edge.targets.begin(), edge.targets.end()), edge.targets.end());
+                }
                 const std::uint64_t edgeBytes = checkedEdgeBytes(edge);
                 if (!chargeBudget(budget, limits, 0, edgeBytes)) {
                     snapshot.check.reason = "checked symbolic edge storage exceeded proof budget";
@@ -2897,15 +2895,7 @@ namespace d20proof {
                                     snapshot.check.reason = "COMPLETE output references missing partition";
                                     return snapshot;
                                 }
-                                for (const auto &[leafId, leafBox]: outputPartition->second.leaves) {
-                                    (void) leafBox;
-                                    edge.targets.push_back({outputPosition, leafId});
-                                }
                             }
-                            std::sort(edge.targets.begin(), edge.targets.end());
-                            edge.targets.erase(
-                                std::unique(edge.targets.begin(), edge.targets.end()),
-                                edge.targets.end());
                         }
                         checkedEdges.push_back(std::move(edge));
                         localDerivedByteCount = checkedRootRecordBytes(record);
@@ -2949,6 +2939,26 @@ namespace d20proof {
                     std::size_t detailedTerms = 0;
                     std::size_t completionTerms = 0;
                     for (const CheckedEdge &edge: checkedEdges) {
+                        if (edge.kind == CheckedEdgeKind::Completion) {
+                            if (!edge.targets.empty() ||
+                                (edge.hasContinuingOutput &&
+                                 edge.firstOutputPosition > edge.lastOutputPosition)) {
+                                snapshot.check.reason = "COMPLETE edge violates virtual-target representation";
+                                return snapshot;
+                            }
+                        } else if (edge.hasContinuingOutput) {
+                            if (edge.targets.empty() ||
+                                edge.firstOutputPosition != edge.lastOutputPosition ||
+                                std::any_of(
+                                    edge.targets.begin(),
+                                    edge.targets.end(),
+                                    [&](const CellKey &target) {
+                                        return target.rngPosition != edge.firstOutputPosition;
+                                    })) {
+                                snapshot.check.reason = "detailed continuing edge violates explicit-target representation";
+                                return snapshot;
+                            }
+                        }
                         edgeTargets += edge.targets.size();
                         edgeTerms += edge.weightTerms.size();
                         if (edge.kind == CheckedEdgeKind::Detailed) {
@@ -2956,9 +2966,34 @@ namespace d20proof {
                         } else {
                             completionTerms += edge.weightTerms.size();
                         }
-                        for (const CellKey &target: edge.targets) {
-                            if (!insertSupportKey(supportSets[elapsedTurn + 1], target)) {
+                        if (edge.hasContinuingOutput && edge.kind == CheckedEdgeKind::Completion) {
+                            if (!edge.targets.empty() ||
+                                edge.firstOutputPosition > edge.lastOutputPosition) {
+                                snapshot.check.reason = "COMPLETE edge has explicit targets or an invalid virtual range";
                                 return snapshot;
+                            }
+                            for (int position = edge.firstOutputPosition;
+                                 position <= edge.lastOutputPosition;
+                                 ++position) {
+                                const auto partitionIt = checkedPartitions.find(position);
+                                if (partitionIt == checkedPartitions.end()) {
+                                    snapshot.check.reason = "COMPLETE virtual target references missing partition";
+                                    return snapshot;
+                                }
+                                for (const auto &[leafId, leafBox]: partitionIt->second.leaves) {
+                                    (void) leafBox;
+                                    if (!insertSupportKey(
+                                            supportSets[elapsedTurn + 1],
+                                            {position, leafId})) {
+                                        return snapshot;
+                                    }
+                                }
+                            }
+                        } else {
+                            for (const CellKey &target: edge.targets) {
+                                if (!insertSupportKey(supportSets[elapsedTurn + 1], target)) {
+                                    return snapshot;
+                                }
                             }
                         }
                     }
@@ -3644,32 +3679,59 @@ namespace d20proof {
                             ? MaxPlusValue::finiteValue(0)
                             : MaxPlusValue::negativeInfinity();
                         if (edge.hasContinuingOutput) {
-                            if (edge.targets.empty()) {
-                                result.reason = "continuing edge has no checked targets";
-                                return result;
-                            }
-                            for (const CellKey &target: edge.targets) {
-                                std::size_t lo = 0;
-                                std::size_t hi = nextSources.size();
-                                std::uint64_t comparisons = 0;
-                                while (lo < hi) {
-                                    ++comparisons;
-                                    const std::size_t mid = lo + (hi - lo) / 2;
-                                    if (nextSources[mid] < target) {
-                                        lo = mid + 1;
-                                    } else {
-                                        hi = mid;
+                            bool sawTarget = false;
+                            if (edge.kind == CheckedEdgeKind::Completion) {
+                                if (!edge.targets.empty() ||
+                                    edge.firstOutputPosition > edge.lastOutputPosition) {
+                                    result.reason = "COMPLETE edge has an invalid virtual target representation";
+                                    return result;
+                                }
+                                const CellKey lowerKey{edge.firstOutputPosition, 0};
+                                auto targetIt = std::lower_bound(
+                                    nextSources.begin(), nextSources.end(), lowerKey);
+                                for (; targetIt != nextSources.end() &&
+                                       targetIt->rngPosition <= edge.lastOutputPosition;
+                                     ++targetIt) {
+                                    const std::size_t targetIndex = static_cast<std::size_t>(
+                                        targetIt - nextSources.begin());
+                                    continuation = maxValue(continuation, previous[targetIndex]);
+                                    sawTarget = true;
+                                    if (!chargeBudget(budget, limits, 1, 0)) {
+                                        result.reason = "max-plus virtual COMPLETE target scan exceeded proof budget";
+                                        return result;
                                     }
                                 }
-                                if (lo >= nextSources.size() || !(nextSources[lo] == target)) {
-                                    result.reason = "checked edge target is missing from next-layer Support";
+                            } else {
+                                if (edge.targets.empty()) {
+                                    result.reason = "detailed continuing edge has no checked targets";
                                     return result;
                                 }
-                                continuation = maxValue(continuation, previous[lo]);
-                                if (!chargeBudget(budget, limits, 1, 0)) {
-                                    result.reason = "max-plus target scan exceeded proof budget";
-                                    return result;
+                                for (const CellKey &target: edge.targets) {
+                                    std::size_t lo = 0;
+                                    std::size_t hi = nextSources.size();
+                                    while (lo < hi) {
+                                        const std::size_t mid = lo + (hi - lo) / 2;
+                                        if (nextSources[mid] < target) {
+                                            lo = mid + 1;
+                                        } else {
+                                            hi = mid;
+                                        }
+                                    }
+                                    if (lo >= nextSources.size() || !(nextSources[lo] == target)) {
+                                        result.reason = "checked detailed edge target is missing from next-layer Support";
+                                        return result;
+                                    }
+                                    continuation = maxValue(continuation, previous[lo]);
+                                    sawTarget = true;
+                                    if (!chargeBudget(budget, limits, 1, 0)) {
+                                        result.reason = "max-plus target scan exceeded proof budget";
+                                        return result;
+                                    }
                                 }
+                            }
+                            if (!sawTarget) {
+                                result.reason = "continuing edge has no checked or virtual target";
+                                return result;
                             }
                         }
 

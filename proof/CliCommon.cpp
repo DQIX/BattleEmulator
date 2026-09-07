@@ -113,7 +113,15 @@ namespace d20proof {
                 << " price_evals=" << result.budget.priceEvaluations
                 << " candidates=" << result.budget.candidates
                 << " scans=" << result.budget.candidateScans
+                << " duplicate_skips=" << result.budget.duplicateCandidateSkips
                 << " repairs=" << result.budget.repairs;
+
+        if (result.budget.prefixReplayMs >= 0) {
+            output << " prefix_replay_ms=" << result.budget.prefixReplayMs;
+        }
+        if (result.budget.firstWinMs >= 0) {
+            output << " first_win_ms=" << result.budget.firstWinMs;
+        }
 
         if (result.partitionVersion != 0 || result.coverageVersion != 0) {
             output << " partition_version=" << result.partitionVersion

@@ -554,8 +554,6 @@ namespace d20proof {
         const ProofBudget *budget,
         BudgetReport *report) {
         PrefixReceipt receipt;
-        receipt.initialProblem = problem;
-        receipt.prefix = prefix;
 
         const std::string validationError = validateProblem(bundle, problem, static_cast<int>(prefix.size()));
         if (!validationError.empty()) {
@@ -593,6 +591,11 @@ namespace d20proof {
             return receipt;
         }
 
+        // Do not duplicate the immutable input problem/prefix while the exact
+        // replay is running.  The caller accounts these retained receipt
+        // records against the shared byte budget before suffix work starts.
+        receipt.initialProblem = problem;
+        receipt.prefix = prefix;
         receipt.observationsChecked = true;
         receipt.valid = true;
         receipt.failureKind = SolveKind::Win;

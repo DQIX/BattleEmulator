@@ -56,6 +56,14 @@ namespace d20proof {
                 std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count());
         }
 
+        void stampFirstWin(BudgetReport &report, Clock::time_point start) {
+            if (report.firstWinMs >= 0) {
+                return;
+            }
+            stampElapsed(report, start);
+            report.firstWinMs = report.elapsedMs;
+        }
+
         bool isBudgetFailure(const std::string &reason) {
             return reason.find("budget") != std::string::npos ||
                    reason.find("proof work") != std::string::npos ||
@@ -98,7 +106,42 @@ namespace d20proof {
 
         void releasePrefixReceiptBytes(BudgetReport &report, PrefixReceipt &receipt) {
             releaseReplayBytes(report, receipt.replay);
-            releaseSearchBytes(report, receipt.prefix.size() * sizeof(int));
+            releaseSearchBytes(report, receipt.accountedBytes);
+            receipt.accountedBytes = 0;
+        }
+
+        std::uint64_t accountedProblemDynamicBytes(const Problem &problem) noexcept {
+            std::uint64_t bytes = problem.ruleId.registryNamespace.size();
+            auto add = [&](std::uint64_t amount) {
+                if (amount > std::numeric_limits<std::uint64_t>::max() - bytes) {
+                    bytes = std::numeric_limits<std::uint64_t>::max();
+                } else {
+                    bytes += amount;
+                }
+            };
+            add(problem.constraints.actions.size() * sizeof(ActionConstraint));
+            for (const ActionConstraint &constraint: problem.constraints.actions) {
+                add(constraint.allowedCommands.size() * sizeof(int));
+            }
+            add(problem.constraints.observations.size() * sizeof(BoundaryObservation));
+            return bytes;
+        }
+
+        std::uint64_t accountedPrefixReceiptBytes(const PrefixReceipt &receipt) noexcept {
+            std::uint64_t bytes = sizeof(PrefixReceipt);
+            auto add = [&](std::uint64_t amount) {
+                if (amount > std::numeric_limits<std::uint64_t>::max() - bytes) {
+                    bytes = std::numeric_limits<std::uint64_t>::max();
+                } else {
+                    bytes += amount;
+                }
+            };
+            add(receipt.reason.size());
+            add(accountedProblemDynamicBytes(receipt.initialProblem));
+            add(receipt.prefix.size() * sizeof(int));
+            // receipt.replay's dynamically retained turn/command records are
+            // already charged by ExactReplay::chargeReplayBudget.
+            return bytes;
         }
 
         std::uint64_t accountedPartitionFamilyBytes(const PartitionFamily &family) {
@@ -276,6 +319,17 @@ namespace d20proof {
             return static_cast<std::size_t>(found - cells.begin());
         }
 
+        bool edgeContainsCandidateTarget(const CheckedEdge &edge, const CellKey &target) {
+            if (!edge.hasContinuingOutput) {
+                return false;
+            }
+            if (edge.kind == CheckedEdgeKind::Completion) {
+                return target.rngPosition >= edge.firstOutputPosition &&
+                       target.rngPosition <= edge.lastOutputPosition;
+            }
+            return std::binary_search(edge.targets.begin(), edge.targets.end(), target);
+        }
+
         struct GoalDistances {
             bool accepted = false;
             std::string reason;
@@ -342,19 +396,48 @@ namespace d20proof {
                         if (edge.mayReachGoal) {
                             best = 1;
                         }
-                        for (const CellKey &target: edge.targets) {
-                            const std::optional<std::size_t> targetIndex = cellIndex(next, target);
-                            if (!targetIndex || *targetIndex >= nextDistances.size()) {
-                                result.reason = "goal-distance edge target is missing from Support";
+                        if (edge.hasContinuingOutput && edge.kind == CheckedEdgeKind::Completion) {
+                            if (!edge.targets.empty() ||
+                                edge.firstOutputPosition > edge.lastOutputPosition) {
+                                result.reason = "goal-distance saw an invalid COMPLETE virtual target range";
                                 return result;
                             }
-                            const int destinationDistance = nextDistances[*targetIndex];
-                            if (destinationDistance < kInfiniteDistance - 1) {
-                                best = std::min(best, destinationDistance + 1);
+                            const CellKey lowerKey{edge.firstOutputPosition, 0};
+                            auto targetIt = std::lower_bound(next.begin(), next.end(), lowerKey);
+                            bool sawTarget = false;
+                            for (; targetIt != next.end() &&
+                                   targetIt->rngPosition <= edge.lastOutputPosition;
+                                 ++targetIt) {
+                                const std::size_t targetIndex = static_cast<std::size_t>(targetIt - next.begin());
+                                const int destinationDistance = nextDistances[targetIndex];
+                                if (destinationDistance < kInfiniteDistance - 1) {
+                                    best = std::min(best, destinationDistance + 1);
+                                }
+                                sawTarget = true;
+                                if (!chargeSearchBudget(report, limits, 1, 0)) {
+                                    result.reason = "goal-distance virtual COMPLETE target scan exceeded proof budget";
+                                    return result;
+                                }
                             }
-                            if (!chargeSearchBudget(report, limits, 1, 0)) {
-                                result.reason = "goal-distance target scan exceeded proof budget";
+                            if (!sawTarget) {
+                                result.reason = "goal-distance COMPLETE range has no next-layer Support target";
                                 return result;
+                            }
+                        } else {
+                            for (const CellKey &target: edge.targets) {
+                                const std::optional<std::size_t> targetIndex = cellIndex(next, target);
+                                if (!targetIndex || *targetIndex >= nextDistances.size()) {
+                                    result.reason = "goal-distance edge target is missing from Support";
+                                    return result;
+                                }
+                                const int destinationDistance = nextDistances[*targetIndex];
+                                if (destinationDistance < kInfiniteDistance - 1) {
+                                    best = std::min(best, destinationDistance + 1);
+                                }
+                                if (!chargeSearchBudget(report, limits, 1, 0)) {
+                                    result.reason = "goal-distance target scan exceeded proof budget";
+                                    return result;
+                                }
                             }
                         }
                     }
@@ -660,6 +743,13 @@ namespace d20proof {
                      edgeIndex < edges.size() && edges[edgeIndex].source == frame.source;
                      ++edgeIndex) {
                     const CheckedEdge &edge = edges[edgeIndex];
+                    if (edge.kind == CheckedEdgeKind::Completion &&
+                        (!edge.targets.empty() ||
+                         (edge.hasContinuingOutput &&
+                          edge.firstOutputPosition > edge.lastOutputPosition))) {
+                        error_ = "checked COMPLETE edge uses an invalid explicit/virtual target representation";
+                        return false;
+                    }
                     const int profileOrder = commandOrder(bundle_, edge.selectedCommand);
                     if (profileOrder == std::numeric_limits<int>::max()) {
                         error_ = "checked model contains a command outside registered profile";
@@ -704,7 +794,7 @@ namespace d20proof {
                         error_ = "candidate target scan exceeded proof budget";
                         return ChoiceStatus::BudgetExceeded;
                     }
-                    if (!std::binary_search(edge.targets.begin(), edge.targets.end(), destination.key)) {
+                    if (!edgeContainsCandidateTarget(edge, destination.key)) {
                         continue;
                     }
                     cursor.targetHead = CandidateChoice{
@@ -1302,8 +1392,7 @@ namespace d20proof {
             }
             const std::uint64_t joinedPrefixBytes =
                 result.kind == SolveKind::Win ? receipt.prefix.size() * sizeof(int) : 0;
-            const std::uint64_t attachmentBytes = sizeof(PrefixReceipt) + joinedPrefixBytes;
-            if (!chargeSearchBudget(result.budget, limits, 1, attachmentBytes)) {
+            if (!chargeSearchBudget(result.budget, limits, 1, joinedPrefixBytes)) {
                 releasePrefixReceiptBytes(result.budget, receipt);
                 result.kind = SolveKind::Unknown;
                 result.reason = "prefix attachment exceeded the shared proof budget";
@@ -1383,6 +1472,13 @@ namespace d20proof {
                 "total_time must be 1..15000 ms",
                 start);
         }
+        if (horizonLimit < 0) {
+            return makeFailure(
+                SolveKind::InvalidInput,
+                horizonLimit,
+                "negative H_limit",
+                start);
+        }
         const std::string validationError = ExactReplay::validateProblem(
             bundle_, problem, horizonLimit);
         if (!validationError.empty()) {
@@ -1409,6 +1505,7 @@ namespace d20proof {
             result.minimumTurnLowerBound = 0;
             result.minimumTurnUpperBound = 0;
             result.replay = ExactReplay::replay(bundle_, problem, {}, true, &limits, &report);
+            stampFirstWin(report, start);
             result.budget = report;
             bindProblemKey(result, problem);
             stampElapsed(result.budget, start);
@@ -1537,10 +1634,12 @@ namespace d20proof {
 
             if (bound.kind == SolveKind::Win) {
                 if (bound.firstWinningTurn < 0 || bound.firstWinningTurn >= winningTurns ||
-                    !bound.replay.won) {
+                    !bound.replay.won || !bound.hasProblemKey ||
+                    !sameProblemKey(bound.problemKey, problem) ||
+                    bound.horizon != winningTurns - 1) {
                     SolveResult error = bound;
                     error.kind = SolveKind::ModelError;
-                    error.reason = "tighten_minimum received a non-shortening checked witness";
+                    error.reason = "tighten_minimum received a non-shortening or disconnected checked witness";
                     error.commands = witness.commands;
                     error.replay = witness.replay;
                     error.minimality = MinimalityKind::Unknown;
@@ -1627,6 +1726,13 @@ namespace d20proof {
                 "total_time must be 1..15000 ms",
                 start);
         }
+        if (horizon < 0) {
+            return makeFailure(
+                SolveKind::InvalidInput,
+                horizon,
+                "negative H_limit",
+                start);
+        }
 
         const std::string validationError = ExactReplay::validateProblem(bundle_, problem, horizon);
         if (!validationError.empty()) {
@@ -1639,6 +1745,7 @@ namespace d20proof {
             result.horizon = horizon;
             result.firstWinningTurn = 0;
             result.replay = ExactReplay::replay(bundle_, problem, {}, true, &budget, &report);
+            stampFirstWin(report, start);
             result.budget = report;
             bindProblemKey(result, problem);
             stampElapsed(result.budget, start);
@@ -1718,6 +1825,7 @@ namespace d20proof {
                     candidateHint.begin(),
                     candidateHint.begin() + candidateReplay.firstWinningTurn);
                 result.replay = std::move(candidateReplay);
+                stampFirstWin(report, start);
                 result.budget = report;
                 bindProblemKey(result, problem);
                 stampElapsed(result.budget, start);
@@ -2325,6 +2433,7 @@ namespace d20proof {
                     "FailedCommands duplicate lookup exceeded proof budget");
             }
             if (failedCommands.contains(path.commands)) {
+                ++report.duplicateCandidateSkips;
                 continue;
             }
 
@@ -2369,6 +2478,7 @@ namespace d20proof {
                 result.replay = std::move(replay);
                 result.partitionVersion = family.partitionVersion;
                 result.coverageVersion = falseCheck.snapshot.coverageVersion;
+                stampFirstWin(report, start);
                 result.budget = report;
                 bindProblemKey(result, problem);
                 stampElapsed(result.budget, start);
@@ -2453,8 +2563,27 @@ namespace d20proof {
         const ProofBudget limits = effectiveProofBudget(budget, start);
         BudgetReport report;
 
+        if (limits.totalTimeMs <= 0 || limits.totalTimeMs > 15000) {
+            return makeFailure(
+                SolveKind::InvalidInput,
+                horizon,
+                "total_time must be 1..15000 ms",
+                start);
+        }
+        if (horizon < 0) {
+            return makeFailure(
+                SolveKind::InvalidInput,
+                horizon,
+                "negative H_limit",
+                start);
+        }
+
+        const Clock::time_point prefixReplayStart = Clock::now();
         PrefixReceipt receipt = ExactReplay::replayPrefix(
             bundle_, initialProblem, prefix, &limits, &report);
+        report.prefixReplayMs = static_cast<int>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                Clock::now() - prefixReplayStart).count());
         if (!receipt.valid) {
             if (receipt.failureKind == SolveKind::Unknown) {
                 releaseReplayBytes(report, receipt.replay);
@@ -2478,12 +2607,12 @@ namespace d20proof {
             stampElapsed(invalid.budget, start);
             return invalid;
         }
-        const std::uint64_t prefixBytes = receipt.prefix.size() * sizeof(int);
+        const std::uint64_t receiptBytes = accountedPrefixReceiptBytes(receipt);
         if (!chargeSearchBudget(
                 report,
                 limits,
                 0,
-                prefixBytes)) {
+                receiptBytes)) {
             releaseReplayBytes(report, receipt.replay);
             SolveResult result = makeFailure(
                 SolveKind::Unknown,
@@ -2494,6 +2623,7 @@ namespace d20proof {
             stampElapsed(result.budget, start);
             return result;
         }
+        receipt.accountedBytes = receiptBytes;
         if (deadlineReached(start, limits, report)) {
             releasePrefixReceiptBytes(report, receipt);
             SolveResult result = makeFailure(
@@ -2531,6 +2661,7 @@ namespace d20proof {
             }
             result.replay = ExactReplay::replay(
                 bundle_, suffixProblem, {}, true, &limits, &report);
+            stampFirstWin(report, start);
             result.budget = report;
             bindProblemKey(result, suffixProblem);
             return attachCheckedPrefix(
