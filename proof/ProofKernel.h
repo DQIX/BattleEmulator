@@ -262,6 +262,19 @@ namespace d20proof {
             const std::vector<ProofTemplate> *generationTemplates = nullptr,
             std::uint64_t coverageVersion = 1);
 
+        // Apply the optional zero-price max-plus check to an already rebuilt,
+        // checked snapshot.  If the price-evaluation cap is exhausted, this
+        // returns the snapshot unchanged and accepted so witness search can
+        // continue; price exhaustion is never itself a FALSE proof or a reason
+        // to discard a valid checked model.
+        [[nodiscard]] static FalseCheckResult tryFalseZeroPriceOnSnapshot(
+            const RuleBundle &bundle,
+            const Problem &problem,
+            int horizon,
+            CheckedSnapshot snapshot,
+            const ProofBudget &limits,
+            BudgetReport &budget);
+
         [[nodiscard]] static CheckResult checkTrivialFalse(
             const RuleBundle &bundle,
             const Problem &problem,

@@ -13,7 +13,9 @@ namespace d20proof {
         using Clock = std::chrono::steady_clock;
         constexpr int kInfiniteDistance = std::numeric_limits<int>::max() / 4;
 
-        ProofBudget effectiveProofBudget(const ProofBudget &requested) {
+        ProofBudget effectiveProofBudget(
+            const ProofBudget &requested,
+            Clock::time_point start) {
             ProofBudget result = requested;
             auto clamp = [](auto &value, auto maximum) {
                 value = std::min(value, static_cast<decltype(value)>(maximum));
@@ -44,6 +46,8 @@ namespace d20proof {
                 clamp(result.maxBytes, 128ull * 1024ull * 1024ull);
                 clamp(result.maxModelTerms, 250'000u);
             }
+            result.hasDeadline = true;
+            result.deadline = start + std::chrono::milliseconds(result.totalTimeMs);
             return result;
         }
 
@@ -55,7 +59,11 @@ namespace d20proof {
         bool isBudgetFailure(const std::string &reason) {
             return reason.find("budget") != std::string::npos ||
                    reason.find("proof work") != std::string::npos ||
-                   reason.find("proof bytes") != std::string::npos;
+                   reason.find("proof bytes") != std::string::npos ||
+                   reason.find("limit exceeded") != std::string::npos ||
+                   reason.find("limit reached") != std::string::npos ||
+                   reason.find("total_time") != std::string::npos ||
+                   reason.find("deadline") != std::string::npos;
         }
 
         bool chargeSearchBudget(
@@ -63,6 +71,11 @@ namespace d20proof {
             const ProofBudget &limits,
             std::uint64_t work,
             std::uint64_t bytes) {
+            if (limits.hasDeadline && Clock::now() >= limits.deadline) {
+                const auto start = limits.deadline - std::chrono::milliseconds(limits.totalTimeMs);
+                stampElapsed(report, start);
+                return false;
+            }
             if (work > limits.maxWork - std::min(report.work, limits.maxWork)) {
                 return false;
             }
@@ -76,6 +89,68 @@ namespace d20proof {
 
         void releaseSearchBytes(BudgetReport &report, std::uint64_t bytes) {
             report.bytes = bytes >= report.bytes ? 0 : report.bytes - bytes;
+        }
+
+        std::uint64_t accountedPartitionFamilyBytes(const PartitionFamily &family) {
+            std::uint64_t bytes = 0;
+            auto add = [&](std::uint64_t amount) {
+                if (amount > std::numeric_limits<std::uint64_t>::max() - bytes) {
+                    bytes = std::numeric_limits<std::uint64_t>::max();
+                } else {
+                    bytes += amount;
+                }
+            };
+            add(family.trees.size() * sizeof(PredicatePartition));
+            for (const PredicatePartition &tree: family.trees) {
+                add(tree.nodes.size() * sizeof(PartitionNode));
+            }
+            return bytes;
+        }
+
+        std::uint64_t accountedSnapshotBytes(const CheckedSnapshot &snapshot) {
+            std::uint64_t bytes = accountedPartitionFamilyBytes(snapshot.partitions);
+            auto add = [&](std::uint64_t amount) {
+                if (amount > std::numeric_limits<std::uint64_t>::max() - bytes) {
+                    bytes = std::numeric_limits<std::uint64_t>::max();
+                } else {
+                    bytes += amount;
+                }
+            };
+            add(snapshot.proofs.size() * sizeof(RootProofRecord));
+            for (const RootProofRecord &proof: snapshot.proofs) {
+                add(proof.completionCases.size() * sizeof(CompletionProofCase));
+            }
+            add(snapshot.coverage.size() * sizeof(CheckedRootRecord));
+            add(snapshot.completionCheckpoints.size() * sizeof(CompletionCheckpoint));
+            for (const auto &layer: snapshot.edgesByElapsedTurn) {
+                add(layer.size() * sizeof(CheckedEdge));
+                for (const CheckedEdge &edge: layer) {
+                    add(edge.weightTerms.size() * sizeof(CompletionWeightTerm));
+                    add(edge.targets.size() * sizeof(CellKey));
+                }
+            }
+            for (const auto &layer: snapshot.support) {
+                add(layer.size() * sizeof(CellKey));
+            }
+            return bytes;
+        }
+
+        void absorbDiscardedTrial(
+            BudgetReport &live,
+            const BudgetReport &trial,
+            std::uint64_t retainedBytes) {
+            const std::uint64_t supportCells = live.supportCells;
+            const std::uint64_t detailedEdges = live.detailedEdges;
+            const std::uint64_t completionEdges = live.completionEdges;
+            const std::uint64_t proofRoots = live.proofRoots;
+            const std::uint64_t completionCases = live.completionCases;
+            live = trial;
+            live.bytes = retainedBytes;
+            live.supportCells = supportCells;
+            live.detailedEdges = detailedEdges;
+            live.completionEdges = completionEdges;
+            live.proofRoots = proofRoots;
+            live.completionCases = completionCases;
         }
 
         bool deadlineReached(Clock::time_point start, const ProofBudget &limits, BudgetReport &report) {
@@ -95,6 +170,7 @@ namespace d20proof {
             bool accepted = false;
             std::string reason;
             std::vector<std::vector<int>> values;
+            std::uint64_t chargedBytes = 0;
         };
 
         GoalDistances buildGoalDistances(
@@ -120,6 +196,7 @@ namespace d20proof {
                 result.reason = "goal-distance terminal layer exceeded proof budget";
                 return result;
             }
+            result.chargedBytes += result.values[horizon].size() * sizeof(int);
 
             for (int elapsedTurn = horizon - 1; elapsedTurn >= 0; --elapsedTurn) {
                 const std::vector<CellKey> &sources = snapshot.support[elapsedTurn];
@@ -129,10 +206,29 @@ namespace d20proof {
 
                 for (std::size_t sourceIndex = 0; sourceIndex < sources.size(); ++sourceIndex) {
                     int best = kInfiniteDistance;
-                    for (const CheckedEdge &edge: snapshot.edgesByElapsedTurn[elapsedTurn]) {
-                        if (!(edge.source == sources[sourceIndex])) {
-                            continue;
+                    const CellKey &source = sources[sourceIndex];
+                    const std::vector<CheckedEdge> &layerEdges =
+                        snapshot.edgesByElapsedTurn[elapsedTurn];
+                    std::size_t edgeLo = 0;
+                    std::size_t edgeHi = layerEdges.size();
+                    std::uint64_t edgeComparisons = 0;
+                    while (edgeLo < edgeHi) {
+                        ++edgeComparisons;
+                        const std::size_t mid = edgeLo + (edgeHi - edgeLo) / 2;
+                        if (layerEdges[mid].source < source) {
+                            edgeLo = mid + 1;
+                        } else {
+                            edgeHi = mid;
                         }
+                    }
+                    if (!chargeSearchBudget(report, limits, 1, 0)) {
+                        result.reason = "goal-distance source-edge lookup exceeded proof budget";
+                        return result;
+                    }
+                    for (std::size_t edgeIndex = edgeLo;
+                         edgeIndex < layerEdges.size() && layerEdges[edgeIndex].source == source;
+                         ++edgeIndex) {
+                        const CheckedEdge &edge = layerEdges[edgeIndex];
                         if (edge.mayReachGoal) {
                             best = 1;
                         }
@@ -163,6 +259,7 @@ namespace d20proof {
                     result.reason = "goal-distance layer exceeded proof budget";
                     return result;
                 }
+                result.chargedBytes += current.size() * sizeof(int);
                 result.values[elapsedTurn] = std::move(current);
             }
 
@@ -268,6 +365,10 @@ namespace d20proof {
                 ready_ = true;
             }
 
+            ~GoalCandidateIterator() {
+                releaseSearchBytes(report_, ownedBytes_);
+            }
+
             IteratorStatus next(CandidatePath &path, std::string &reason) {
                 path = {};
                 if (!ready_) {
@@ -300,7 +401,7 @@ namespace d20proof {
                         const std::uint64_t frameBytes =
                             frame.edgeCursors.size() * sizeof(EdgeCursor);
                         stack_.pop_back();
-                        releaseSearchBytes(report_, frameBytes);
+                        releaseOwnedBytes(frameBytes);
                         if (hadIncomingStep) {
                             commandPath_.pop_back();
                             stepPath_.pop_back();
@@ -340,9 +441,6 @@ namespace d20proof {
                     child.elapsedTurn = frame.elapsedTurn + 1;
                     child.source = choice.target;
                     if (!buildFrame(child)) {
-                        releaseSearchBytes(
-                            report_,
-                            child.edgeCursors.size() * sizeof(EdgeCursor));
                         reason = error_;
                         commandPath_.pop_back();
                         stepPath_.pop_back();
@@ -420,6 +518,7 @@ namespace d20proof {
                         error_ = "candidate destination index exceeded proof budget";
                         return false;
                     }
+                    ownedBytes_ += ordered.size() * sizeof(OrderedDestination);
                 }
                 return true;
             }
@@ -430,12 +529,27 @@ namespace d20proof {
                     return false;
                 }
                 const std::vector<CheckedEdge> &edges = snapshot_.edgesByElapsedTurn[frame.elapsedTurn];
-
-                for (std::size_t edgeIndex = 0; edgeIndex < edges.size(); ++edgeIndex) {
-                    const CheckedEdge &edge = edges[edgeIndex];
-                    if (!(edge.source == frame.source)) {
-                        continue;
+                std::size_t edgeLo = 0;
+                std::size_t edgeHi = edges.size();
+                std::uint64_t comparisons = 0;
+                while (edgeLo < edgeHi) {
+                    ++comparisons;
+                    const std::size_t mid = edgeLo + (edgeHi - edgeLo) / 2;
+                    if (edges[mid].source < frame.source) {
+                        edgeLo = mid + 1;
+                    } else {
+                        edgeHi = mid;
                     }
+                }
+                if (!chargeSearchBudget(report_, limits_, 1, 0)) {
+                    error_ = "candidate source-edge lookup exceeded proof budget";
+                    return false;
+                }
+
+                for (std::size_t edgeIndex = edgeLo;
+                     edgeIndex < edges.size() && edges[edgeIndex].source == frame.source;
+                     ++edgeIndex) {
+                    const CheckedEdge &edge = edges[edgeIndex];
                     const int profileOrder = commandOrder(bundle_, edge.selectedCommand);
                     if (profileOrder == std::numeric_limits<int>::max()) {
                         error_ = "checked model contains a command outside registered profile";
@@ -451,7 +565,14 @@ namespace d20proof {
                     error_ = "candidate frame construction exceeded proof budget";
                     return false;
                 }
+                ownedBytes_ += frame.edgeCursors.size() * sizeof(EdgeCursor);
                 return true;
+            }
+
+            void releaseOwnedBytes(std::uint64_t bytes) {
+                const std::uint64_t released = std::min(bytes, ownedBytes_);
+                releaseSearchBytes(report_, released);
+                ownedBytes_ -= released;
             }
 
             ChoiceStatus ensureTargetHead(Frame &frame, EdgeCursor &cursor) {
@@ -563,6 +684,7 @@ namespace d20proof {
             std::vector<CandidateStep> stepPath_;
             std::string error_;
             bool ready_ = false;
+            std::uint64_t ownedBytes_ = 0;
         };
 
         enum class CandidateFailureKind {
@@ -589,6 +711,8 @@ namespace d20proof {
             RawState stateAfter;
             bool hasStateAfter = false;
             std::string reason;
+            std::uint64_t partitionVersion = 0;
+            std::uint64_t coverageVersion = 0;
         };
 
         const PredicatePartition *partitionAt(const PartitionFamily &partitions, int position) {
@@ -1092,7 +1216,7 @@ namespace d20proof {
         const ProofBudget &budget,
         const std::vector<int> &candidateHint) const {
         const Clock::time_point start = Clock::now();
-        const ProofBudget limits = effectiveProofBudget(budget);
+        const ProofBudget limits = effectiveProofBudget(budget, start);
         CheckedKernelCache checkedCache;
         if (const CheckResult cacheCheck = ProofKernel::bindCheckedCache(checkedCache, problem);
             !cacheCheck.accepted) {
@@ -1118,7 +1242,7 @@ namespace d20proof {
         const ProofBudget &budget,
         const std::vector<int> &candidateHint) const {
         const Clock::time_point start = Clock::now();
-        const ProofBudget limits = effectiveProofBudget(budget);
+        const ProofBudget limits = effectiveProofBudget(budget, start);
         BudgetReport report;
         CheckedKernelCache checkedCache;
         if (const CheckResult cacheCheck = ProofKernel::bindCheckedCache(checkedCache, problem);
@@ -1169,7 +1293,7 @@ namespace d20proof {
             result.firstWinningTurn = 0;
             result.minimumTurnLowerBound = 0;
             result.minimumTurnUpperBound = 0;
-            result.replay = ExactReplay::replay(bundle_, problem, {}, true);
+            result.replay = ExactReplay::replay(bundle_, problem, {}, true, &limits);
             result.budget = report;
             bindProblemKey(result, problem);
             stampElapsed(result.budget, start);
@@ -1230,7 +1354,14 @@ namespace d20proof {
             bundle_,
             problem,
             witness.commands,
-            true);
+            true,
+            &budget);
+        if (freshWitness.interrupted) {
+            witness.minimality = MinimalityKind::Unknown;
+            witness.reason = "exact witness retained; fresh TRUE replay exhausted the shared deadline";
+            stampElapsed(witness.budget, start);
+            return witness;
+        }
         if (!freshWitness.supported || !freshWitness.valid || !freshWitness.won ||
             freshWitness.firstWinningTurn != witness.firstWinningTurn) {
             SolveResult error = makeFailure(
@@ -1398,7 +1529,7 @@ namespace d20proof {
             result.kind = SolveKind::Win;
             result.horizon = horizon;
             result.firstWinningTurn = 0;
-            result.replay = ExactReplay::replay(bundle_, problem, {}, true);
+            result.replay = ExactReplay::replay(bundle_, problem, {}, true, &budget);
             result.budget = report;
             bindProblemKey(result, problem);
             stampElapsed(result.budget, start);
@@ -1461,8 +1592,18 @@ namespace d20proof {
                 stampElapsed(result.budget, start);
                 return result;
             }
-            ReplayResult candidateReplay = ExactReplay::replay(bundle_, problem, candidateHint, false);
+            ReplayResult candidateReplay = ExactReplay::replay(bundle_, problem, candidateHint, false, &budget);
             ++report.candidates;
+            if (candidateReplay.interrupted) {
+                SolveResult result = makeFailure(
+                    SolveKind::Unknown,
+                    horizon,
+                    candidateReplay.reason,
+                    start);
+                result.budget = report;
+                stampElapsed(result.budget, start);
+                return result;
+            }
             if (!candidateReplay.supported) {
                 SolveResult result = makeFailure(SolveKind::ModelError, horizon, candidateReplay.reason, start);
                 result.budget = report;
@@ -1582,6 +1723,7 @@ namespace d20proof {
 
         GoalDistances distances = buildGoalDistances(falseCheck.snapshot, horizon, budget, report);
         if (!distances.accepted) {
+            releaseSearchBytes(report, distances.chargedBytes);
             SolveResult result;
             result.kind = isBudgetFailure(distances.reason) ? SolveKind::Unknown : SolveKind::ModelError;
             result.horizon = horizon;
@@ -1621,6 +1763,7 @@ namespace d20proof {
             failedCommands.emplace(rejectedHint->first, rejectedHint->second);
         }
         std::vector<CandidateMismatch> failures;
+        std::uint64_t failureBatchBytes = 0;
         std::uint32_t trialOrder = 0;
         std::uint32_t failedCandidatesInBatch = rejectedHint.has_value() ? 1u : 0u;
 
@@ -1673,6 +1816,14 @@ namespace d20proof {
             return 0;
         };
 
+        auto repairProposalTooLarge = [](const std::string &reason) {
+            return reason.find("detailed term limit J exceeded") != std::string::npos ||
+                   reason.find("completion term limit C exceeded") != std::string::npos ||
+                   reason.find("partition leaf limit exceeded") != std::string::npos;
+        };
+
+        bool repairSnapshotPrepared = false;
+
         auto tryOneRepair = [&]() -> std::optional<bool> {
             if (failures.empty() || report.repairs >= budget.maxRepairs) {
                 return false;
@@ -1686,6 +1837,10 @@ namespace d20proof {
                 });
 
             for (const CandidateMismatch &failure: failures) {
+                if (failure.partitionVersion != family.partitionVersion ||
+                    failure.coverageVersion != falseCheck.snapshot.coverageVersion) {
+                    return std::nullopt;
+                }
                 const CheckedEdge *edge = edgeForStep(falseCheck.snapshot, failure.step);
                 if (edge == nullptr) {
                     return std::nullopt;
@@ -1729,23 +1884,64 @@ namespace d20proof {
                     if (templateRank(advanced) <= templateRank(current)) {
                         continue;
                     }
+
+                    if (coverageVersion == std::numeric_limits<std::uint64_t>::max()) {
+                        return std::nullopt;
+                    }
+                    const std::uint64_t trialCoverageVersion = coverageVersion + 1;
+                    const std::uint64_t retainedBytesBeforeTrial = report.bytes;
+                    const std::uint64_t oldSnapshotBytes = accountedSnapshotBytes(falseCheck.snapshot);
+                    CheckedKernelCache trialCache = checkedCache;
+                    BudgetReport trialBudget = report;
                     bool cacheChanged = false;
                     const CheckResult cacheUpdate = ProofKernel::rememberCheckedTemplate(
-                        checkedCache,
+                        trialCache,
                         problem,
                         advanced,
                         budget,
-                        report,
+                        trialBudget,
                         cacheChanged);
                     if (!cacheUpdate.accepted) {
+                        absorbDiscardedTrial(report, trialBudget, retainedBytesBeforeTrial);
                         if (isBudgetFailure(cacheUpdate.reason)) {
                             return false;
                         }
                         return std::nullopt;
                     }
                     if (!cacheChanged) {
+                        absorbDiscardedTrial(report, trialBudget, retainedBytesBeforeTrial);
                         continue;
                     }
+
+                    CheckedSnapshot trialSnapshot = ProofKernel::rebuildSupport(
+                        bundle_,
+                        problem,
+                        horizon,
+                        family,
+                        budget,
+                        trialBudget,
+                        nullptr,
+                        &trialCache.templates,
+                        trialCoverageVersion);
+                    if (!trialSnapshot.check.accepted) {
+                        absorbDiscardedTrial(report, trialBudget, retainedBytesBeforeTrial);
+                        if (repairProposalTooLarge(trialSnapshot.check.reason)) {
+                            continue;
+                        }
+                        if (isBudgetFailure(trialSnapshot.check.reason)) {
+                            return false;
+                        }
+                        return std::nullopt;
+                    }
+
+                    report = trialBudget;
+                    releaseSearchBytes(report, oldSnapshotBytes);
+                    checkedCache = std::move(trialCache);
+                    falseCheck = {};
+                    falseCheck.check.accepted = true;
+                    falseCheck.snapshot = std::move(trialSnapshot);
+                    coverageVersion = trialCoverageVersion;
+                    repairSnapshotPrepared = true;
                     ++report.completionResumes;
                     ++report.repairs;
                     return true;
@@ -1766,6 +1962,20 @@ namespace d20proof {
                             repairError)) {
                         continue;
                     }
+                    const std::uint64_t retainedBytesBeforeTrial = report.bytes;
+                    const std::uint64_t refinedWorkingBytes =
+                        accountedPartitionFamilyBytes(family) + 2 * sizeof(PartitionNode);
+                    std::uint64_t refinementWork = family.trees.size() + 1;
+                    for (const PredicatePartition &tree: family.trees) {
+                        refinementWork += tree.nodes.size();
+                    }
+                    if (!chargeSearchBudget(
+                            report,
+                            budget,
+                            refinementWork,
+                            refinedWorkingBytes)) {
+                        return false;
+                    }
                     PartitionFamily refined;
                     const CheckResult refinement = ProofKernel::refineLeaf(
                         family,
@@ -1776,9 +1986,49 @@ namespace d20proof {
                         budget.maxLeavesPerPosition,
                         refined);
                     if (!refinement.accepted) {
+                        releaseSearchBytes(report, refinedWorkingBytes);
                         continue;
                     }
+
+                    if (coverageVersion == std::numeric_limits<std::uint64_t>::max()) {
+                        releaseSearchBytes(report, refinedWorkingBytes);
+                        return std::nullopt;
+                    }
+                    const std::uint64_t trialCoverageVersion = coverageVersion + 1;
+                    const std::uint64_t oldSnapshotBytes = accountedSnapshotBytes(falseCheck.snapshot);
+                    CheckedKernelCache trialCache = checkedCache;
+                    BudgetReport trialBudget = report;
+                    CheckedSnapshot trialSnapshot = ProofKernel::rebuildSupport(
+                        bundle_,
+                        problem,
+                        horizon,
+                        refined,
+                        budget,
+                        trialBudget,
+                        nullptr,
+                        &trialCache.templates,
+                        trialCoverageVersion);
+                    if (!trialSnapshot.check.accepted) {
+                        absorbDiscardedTrial(report, trialBudget, retainedBytesBeforeTrial);
+                        if (repairProposalTooLarge(trialSnapshot.check.reason)) {
+                            continue;
+                        }
+                        if (isBudgetFailure(trialSnapshot.check.reason)) {
+                            return false;
+                        }
+                        return std::nullopt;
+                    }
+
+                    report = trialBudget;
+                    releaseSearchBytes(report, oldSnapshotBytes);
+                    releaseSearchBytes(report, refinedWorkingBytes);
                     family = std::move(refined);
+                    checkedCache = std::move(trialCache);
+                    falseCheck = {};
+                    falseCheck.check.accepted = true;
+                    falseCheck.snapshot = std::move(trialSnapshot);
+                    coverageVersion = trialCoverageVersion;
+                    repairSnapshotPrepared = true;
                     ++report.addedPredicates;
                     ++report.repairs;
                     return true;
@@ -1788,29 +2038,45 @@ namespace d20proof {
         };
 
         auto rebuildAfterRepair = [&]() -> std::optional<SolveResult> {
-            if (coverageVersion == std::numeric_limits<std::uint64_t>::max()) {
-                return makeCurrentFailure(SolveKind::ModelError, "coverage_version overflow");
+            if (!repairSnapshotPrepared) {
+                if (coverageVersion == std::numeric_limits<std::uint64_t>::max()) {
+                    return makeCurrentFailure(SolveKind::ModelError, "coverage_version overflow");
+                }
+                ++coverageVersion;
+                falseCheck = ProofKernel::tryFalseZeroPrice(
+                    bundle_,
+                    problem,
+                    horizon,
+                    family,
+                    budget,
+                    report,
+                    &proofTemplates,
+                    coverageVersion);
+                if (deadlineReached(start, budget, report)) {
+                    return makeCurrentFailure(
+                        SolveKind::Unknown,
+                        "repair rebuild exhausted total_time");
+                }
+                if (!falseCheck.check.accepted) {
+                    return makeCurrentFailure(
+                        isBudgetFailure(falseCheck.check.reason) ? SolveKind::Unknown : SolveKind::ModelError,
+                        falseCheck.check.reason);
+                }
+            } else {
+                falseCheck = ProofKernel::tryFalseZeroPriceOnSnapshot(
+                    bundle_,
+                    problem,
+                    horizon,
+                    std::move(falseCheck.snapshot),
+                    budget,
+                    report);
+                if (!falseCheck.check.accepted) {
+                    return makeCurrentFailure(
+                        isBudgetFailure(falseCheck.check.reason) ? SolveKind::Unknown : SolveKind::ModelError,
+                        falseCheck.check.reason);
+                }
             }
-            ++coverageVersion;
-            falseCheck = ProofKernel::tryFalseZeroPrice(
-                bundle_,
-                problem,
-                horizon,
-                family,
-                budget,
-                report,
-                &proofTemplates,
-                coverageVersion);
-            if (deadlineReached(start, budget, report)) {
-                return makeCurrentFailure(
-                    SolveKind::Unknown,
-                    "repair rebuild exhausted total_time");
-            }
-            if (!falseCheck.check.accepted) {
-                return makeCurrentFailure(
-                    isBudgetFailure(falseCheck.check.reason) ? SolveKind::Unknown : SolveKind::ModelError,
-                    falseCheck.check.reason);
-            }
+            repairSnapshotPrepared = false;
             if (falseCheck.provedFalse) {
                 SolveResult result;
                 result.kind = SolveKind::ProvedFalse;
@@ -1839,20 +2105,30 @@ namespace d20proof {
                     cacheUpdate.reason);
             }
 
-            distances = buildGoalDistances(falseCheck.snapshot, horizon, budget, report);
-            if (!distances.accepted) {
+            GoalDistances rebuiltDistances = buildGoalDistances(
+                falseCheck.snapshot,
+                horizon,
+                budget,
+                report);
+            if (!rebuiltDistances.accepted) {
+                releaseSearchBytes(report, rebuiltDistances.chargedBytes);
                 return makeCurrentFailure(
-                    isBudgetFailure(distances.reason) ? SolveKind::Unknown : SolveKind::ModelError,
-                    distances.reason);
+                    isBudgetFailure(rebuiltDistances.reason) ? SolveKind::Unknown : SolveKind::ModelError,
+                    rebuiltDistances.reason);
             }
             if (deadlineReached(start, budget, report)) {
                 return makeCurrentFailure(
                     SolveKind::Unknown,
                     "repair goal-distance rebuild exhausted total_time");
             }
+            iterator.reset();
+            releaseSearchBytes(report, distances.chargedBytes);
+            distances = std::move(rebuiltDistances);
             iterator = std::make_unique<GoalCandidateIterator>(
                 bundle_, falseCheck.snapshot, distances, horizon, budget, report);
             failures.clear();
+            releaseSearchBytes(report, failureBatchBytes);
+            failureBatchBytes = 0;
             failedCandidatesInBatch = 0;
             return std::nullopt;
         };
@@ -1932,8 +2208,20 @@ namespace d20proof {
                 continue;
             }
 
-            ReplayResult replay = ExactReplay::replay(bundle_, problem, path.commands, false);
+            ReplayResult replay = ExactReplay::replay(bundle_, problem, path.commands, false, &budget);
             ++report.candidates;
+            if (replay.interrupted) {
+                SolveResult result = makeFailure(
+                    SolveKind::Unknown,
+                    horizon,
+                    replay.reason,
+                    start);
+                result.partitionVersion = family.partitionVersion;
+                result.coverageVersion = falseCheck.snapshot.coverageVersion;
+                result.budget = report;
+                stampElapsed(result.budget, start);
+                return result;
+            }
             if (!replay.supported) {
                 SolveResult result = makeFailure(
                     SolveKind::ModelError,
@@ -1998,7 +2286,11 @@ namespace d20proof {
                         SolveKind::Unknown,
                         "candidate mismatch batch exceeded proof budget");
                 }
-                failures.push_back(*mismatch);
+                failureBatchBytes += sizeof(CandidateMismatch);
+                CandidateMismatch recorded = *mismatch;
+                recorded.partitionVersion = family.partitionVersion;
+                recorded.coverageVersion = falseCheck.snapshot.coverageVersion;
+                failures.push_back(std::move(recorded));
             }
 
             if (failedCandidatesInBatch >= 8) {
@@ -2015,6 +2307,8 @@ namespace d20proof {
                     continue;
                 }
                 failures.clear();
+                releaseSearchBytes(report, failureBatchBytes);
+                failureBatchBytes = 0;
                 failedCandidatesInBatch = 0;
             }
         }
@@ -2028,11 +2322,21 @@ namespace d20proof {
         const std::vector<int> &candidateHint,
         bool proveMinimal) const {
         const Clock::time_point start = Clock::now();
-        const ProofBudget limits = effectiveProofBudget(budget);
+        const ProofBudget limits = effectiveProofBudget(budget, start);
         BudgetReport report;
 
-        PrefixReceipt receipt = ExactReplay::replayPrefix(bundle_, initialProblem, prefix);
+        PrefixReceipt receipt = ExactReplay::replayPrefix(bundle_, initialProblem, prefix, &limits);
         if (!receipt.valid) {
+            if (receipt.failureKind == SolveKind::Unknown) {
+                SolveResult interrupted = makeFailure(
+                    SolveKind::Unknown,
+                    horizon,
+                    receipt.reason.empty() ? "prefix replay exhausted total_time" : receipt.reason,
+                    start);
+                interrupted.budget = report;
+                stampElapsed(interrupted.budget, start);
+                return interrupted;
+            }
             const SolveKind failureKind =
                 receipt.failureKind == SolveKind::UnsupportedInput ||
                 receipt.failureKind == SolveKind::ModelError
@@ -2090,7 +2394,7 @@ namespace d20proof {
                 result.minimumTurnUpperBound = 0;
                 result.reason = "prefix already reaches the goal; minimum suffix length is zero";
             }
-            result.replay = ExactReplay::replay(bundle_, suffixProblem, {}, true);
+            result.replay = ExactReplay::replay(bundle_, suffixProblem, {}, true, &limits);
             result.budget = report;
             bindProblemKey(result, suffixProblem);
             return attachCheckedPrefix(receipt, suffixProblem, std::move(result), limits, start);

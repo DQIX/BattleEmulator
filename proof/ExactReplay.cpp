@@ -381,9 +381,15 @@ namespace d20proof {
         const RuleBundle &bundle,
         const Problem &problem,
         const std::vector<int> &commands,
-        bool rejectCommandsAfterTerminal) {
+        bool rejectCommandsAfterTerminal,
+        const ProofBudget *budget) {
         ReplayResult result;
         result.finalState = problem.s0;
+
+        auto deadlineReached = [&]() {
+            return budget != nullptr && budget->hasDeadline &&
+                   std::chrono::steady_clock::now() >= budget->deadline;
+        };
 
         const std::string validationError = validateProblem(bundle, problem, static_cast<int>(commands.size()));
         if (!validationError.empty()) {
@@ -391,6 +397,12 @@ namespace d20proof {
             return result;
         }
         result.supported = true;
+
+        if (deadlineReached()) {
+            result.interrupted = true;
+            result.reason = "exact replay exhausted total_time";
+            return result;
+        }
 
         if (!checkBoundaryObservation(
                 problem,
@@ -420,7 +432,18 @@ namespace d20proof {
 
         lcg::init(problem.seed, true);
 
+        if (deadlineReached()) {
+            result.interrupted = true;
+            result.reason = "exact replay exhausted total_time";
+            return result;
+        }
+
         for (std::size_t turnIndex = 0; turnIndex < commands.size(); ++turnIndex) {
+            if (deadlineReached()) {
+                result.interrupted = true;
+                result.reason = "exact replay exhausted total_time";
+                return result;
+            }
             if (battleIsTerminal(result.finalState)) {
                 if (rejectCommandsAfterTerminal) {
                     result.reason = "command requested after terminal battle state";
@@ -477,6 +500,12 @@ namespace d20proof {
                 return result;
             }
 
+            if (deadlineReached()) {
+                result.interrupted = true;
+                result.reason = "exact replay exhausted total_time";
+                return result;
+            }
+
             if (result.finalState.players[1].hp == 0) {
                 result.won = true;
                 result.firstWinningTurn = static_cast<int>(turnIndex) + 1;
@@ -504,7 +533,8 @@ namespace d20proof {
     PrefixReceipt ExactReplay::replayPrefix(
         const RuleBundle &bundle,
         const Problem &problem,
-        const std::vector<int> &prefix) {
+        const std::vector<int> &prefix,
+        const ProofBudget *budget) {
         PrefixReceipt receipt;
         receipt.initialProblem = problem;
         receipt.prefix = prefix;
@@ -516,7 +546,13 @@ namespace d20proof {
             return receipt;
         }
 
-        const ReplayResult replayedPrefix = replay(bundle, problem, prefix, true);
+        const ReplayResult replayedPrefix = replay(bundle, problem, prefix, true, budget);
+        if (replayedPrefix.interrupted) {
+            receipt.failureKind = SolveKind::Unknown;
+            receipt.reason = replayedPrefix.reason;
+            receipt.replay = replayedPrefix;
+            return receipt;
+        }
         if (!replayedPrefix.supported) {
             receipt.failureKind = SolveKind::ModelError;
             receipt.reason = replayedPrefix.reason;

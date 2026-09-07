@@ -2,6 +2,7 @@
 
 #include "../Player.h"
 
+#include <chrono>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -77,6 +78,7 @@ namespace d20proof {
     struct ReplayResult {
         bool valid = false;
         bool supported = false;
+        bool interrupted = false;
         bool won = false;
         bool lost = false;
         int firstWinningTurn = -1;
@@ -213,6 +215,12 @@ namespace d20proof {
         std::uint32_t maxCompletionTermsPerAction = 3;
         std::uint32_t maxPriceEvaluations = 8;
         std::uint32_t maxModelTerms = 250'000;
+
+        // Set exactly once by the outer solver when a timed proof/search starts.
+        // Direct kernel self-checks may leave this unset; production proof calls
+        // inherit one shared steady-clock deadline from the outermost request.
+        bool hasDeadline = false;
+        std::chrono::steady_clock::time_point deadline{};
     };
 
     struct BudgetReport {

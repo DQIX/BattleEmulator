@@ -23,12 +23,14 @@ namespace d20proof {
             const RuleBundle &bundle,
             const Problem &problem,
             const std::vector<int> &commands,
-            bool rejectCommandsAfterTerminal);
+            bool rejectCommandsAfterTerminal,
+            const ProofBudget *budget = nullptr);
 
         [[nodiscard]] static PrefixReceipt replayPrefix(
             const RuleBundle &bundle,
             const Problem &problem,
-            const std::vector<int> &prefix);
+            const std::vector<int> &prefix,
+            const ProofBudget *budget = nullptr);
 
         [[nodiscard]] static Problem bindSuffixProblem(
             const Problem &initialProblem,
