@@ -2,7 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
-#include <iostream>
+
 #include <limits>
 #include <map>
 #include <memory>
@@ -354,6 +354,48 @@ namespace d20proof {
                 return result;
             }
 
+            struct TemporarySearchBytes {
+                BudgetReport &report;
+                std::uint64_t bytes = 0;
+                ~TemporarySearchBytes() {
+                    releaseSearchBytes(report, bytes);
+                }
+            } partitionIndexBytes{report};
+            const int firstHotelPosition = snapshot.root.rngPosition;
+            const std::size_t hotelCount = snapshot.partitions.trees.size();
+            const std::uint64_t hotelIndexStorage =
+                hotelCount * sizeof(const PredicatePartition *);
+            if (!chargeSearchBudget(
+                    report,
+                    limits,
+                    hotelCount,
+                    hotelIndexStorage)) {
+                result.reason = "goal-distance hotel partition index exceeded proof budget";
+                return result;
+            }
+            partitionIndexBytes.bytes += hotelIndexStorage;
+            std::vector<const PredicatePartition *> partitionByHotel(hotelCount, nullptr);
+            for (const PredicatePartition &partition: snapshot.partitions.trees) {
+                if (partition.rngPosition < firstHotelPosition) {
+                    result.reason = "goal-distance partition precedes the first hotel";
+                    return result;
+                }
+                const std::uint64_t offset = static_cast<std::uint64_t>(
+                    partition.rngPosition - firstHotelPosition);
+                if (offset >= partitionByHotel.size() || partitionByHotel[offset] != nullptr) {
+                    result.reason = "goal-distance partition family is not a unique contiguous hotel index";
+                    return result;
+                }
+                partitionByHotel[static_cast<std::size_t>(offset)] = &partition;
+            }
+            if (std::any_of(
+                    partitionByHotel.begin(),
+                    partitionByHotel.end(),
+                    [](const PredicatePartition *partition) { return partition == nullptr; })) {
+                result.reason = "goal-distance partition family has a missing hotel";
+                return result;
+            }
+
             result.values.resize(static_cast<std::size_t>(horizon) + 1);
             result.finiteEdges.resize(static_cast<std::size_t>(horizon));
             result.values[horizon].assign(snapshot.support[horizon].size(), kInfiniteDistance);
@@ -381,13 +423,7 @@ namespace d20proof {
                     int distance = kInfiniteDistance;
                     bool complete = false;
                 };
-                struct TemporarySearchBytes {
-                    BudgetReport &report;
-                    std::uint64_t bytes = 0;
-                    ~TemporarySearchBytes() {
-                        releaseSearchBytes(report, bytes);
-                    }
-                } temporaryBytes{report};
+                TemporarySearchBytes temporaryBytes{report};
 
                 // COMPLETE destinations contain every checked CellKey for a
                 // contiguous RNG-position interval.  Collapse each position
@@ -412,11 +448,11 @@ namespace d20proof {
                     }
                     const PredicatePartition *partition = nullptr;
                     std::uint64_t validationWork = 0;
-                    for (const PredicatePartition &candidate: snapshot.partitions.trees) {
-                        ++validationWork;
-                        if (candidate.rngPosition == position) {
-                            partition = &candidate;
-                            break;
+                    if (position >= firstHotelPosition) {
+                        const std::uint64_t offset = static_cast<std::uint64_t>(
+                            position - firstHotelPosition);
+                        if (offset < partitionByHotel.size()) {
+                            partition = partitionByHotel[static_cast<std::size_t>(offset)];
                         }
                     }
                     if (partition == nullptr) {
@@ -2916,7 +2952,8 @@ namespace d20proof {
                         &checkedCache.templates,
                         trialCoverageVersion,
                         false,
-                        false);
+                        false,
+                        &falseCheck.snapshot);
                     if (!trialSnapshot.check.accepted) {
                         rollbackTemplate();
                         absorbDiscardedTrial(report, trialBudget, retainedBytesBeforeTrial);
@@ -2969,16 +3006,6 @@ namespace d20proof {
                     rejectedCompletionRepairBytes = 0;
                     ++report.completionResumes;
                     ++report.repairs;
-                    std::cerr << "REPAIR completion"
-                              << " n=" << report.repairs
-                              << " t=" << failure.elapsedTurn
-                              << " p=" << failure.step.source.rngPosition
-                              << " cell=" << failure.step.source.localCellId
-                              << " cmd=" << failure.step.selectedCommand
-                              << " cut=" << static_cast<int>(current.cut)
-                              << " pv=" << falseCheck.snapshot.partitions.partitionVersion
-                              << " cv=" << falseCheck.snapshot.coverageVersion
-                              << '\n';
                     return true;
                 }
 
@@ -3085,20 +3112,6 @@ namespace d20proof {
                     rejectedCompletionRepairBytes = 0;
                     ++report.addedPredicates;
                     ++report.repairs;
-                    std::cerr << "REPAIR guard"
-                              << " n=" << report.repairs
-                              << " t=" << failure.elapsedTurn
-                              << " p=" << failure.step.source.rngPosition
-                              << " cell=" << failure.step.source.localCellId
-                              << " cmd=" << failure.step.selectedCommand
-                              << " pred_kind=" << static_cast<int>(predicate.kind)
-                              << " resource=" << static_cast<int>(predicate.resource)
-                              << " threshold=" << predicate.threshold
-                              << " mode=" << static_cast<int>(predicate.mode)
-                              << " mask=" << predicate.mask
-                              << " pv=" << falseCheck.snapshot.partitions.partitionVersion
-                              << " cv=" << falseCheck.snapshot.coverageVersion
-                              << '\n';
                     return true;
                 }
             }

@@ -3184,55 +3184,29 @@ namespace d20proof {
         };
         snapshot.edgesByElapsedTurn.resize(static_cast<std::size_t>(horizon));
         std::uint64_t storedModelTerms = 0;
+        const std::size_t commandCount = bundle.profile.heroCommands.size();
 
         auto reuseCheckedTurnEntry = [&](int elapsedTurn,
                                          const CellKey &source,
                                          int command,
                                          const Box &rootDomain,
+                                         const CheckedEdge *oldEdge,
                                          CheckedRootRecord &record,
                                          CheckedEdge &edge) -> std::optional<bool> {
-            if (checkedReuseSnapshot == nullptr || submittedProofs != nullptr ||
+            if (oldEdge == nullptr || checkedReuseSnapshot == nullptr || submittedProofs != nullptr ||
                 retainDefaultProofRecords || !checkedReuseSnapshot->check.accepted ||
-                elapsedTurn < 0 ||
-                elapsedTurn >= static_cast<int>(checkedReuseSnapshot->edgesByElapsedTurn.size())) {
+                elapsedTurn < 0 || elapsedTurn >= horizon) {
                 return false;
             }
-
-            const std::vector<CheckedEdge> &oldEdges =
-                checkedReuseSnapshot->edgesByElapsedTurn[static_cast<std::size_t>(elapsedTurn)];
-            std::size_t edgeLo = 0;
-            std::size_t edgeHi = oldEdges.size();
-            std::uint64_t lookupWork = 0;
-            while (edgeLo < edgeHi) {
-                ++lookupWork;
-                const std::size_t mid = edgeLo + (edgeHi - edgeLo) / 2;
-                if (oldEdges[mid].source < source) {
-                    edgeLo = mid + 1;
-                } else {
-                    edgeHi = mid;
-                }
-            }
-            const CheckedEdge *oldEdge = nullptr;
-            for (std::size_t index = edgeLo;
-                 index < oldEdges.size() && oldEdges[index].source == source;
-                 ++index) {
-                ++lookupWork;
-                const CheckedEdge &candidate = oldEdges[index];
-                if (candidate.selectedCommand == command &&
-                    candidate.kind == CheckedEdgeKind::Completion &&
-                    candidate.completionCut == CompletionCutId::TurnEntry &&
-                    candidate.rootDomain == rootDomain &&
-                    candidate.useRegisteredTurnEntryTerms &&
-                    candidate.weightTerms.empty() && candidate.targets.empty()) {
-                    oldEdge = &candidate;
-                    break;
-                }
-            }
-            if (!chargeBudget(budget, limits, lookupWork + 1, 0)) {
+            if (!chargeBudget(budget, limits, 1, 0)) {
                 snapshot.check.reason = "checked TurnEntry reuse lookup exceeded proof budget";
                 return std::nullopt;
             }
-            if (oldEdge == nullptr) {
+            if (oldEdge->selectedCommand != command || oldEdge->source != source ||
+                oldEdge->kind != CheckedEdgeKind::Completion ||
+                oldEdge->completionCut != CompletionCutId::TurnEntry ||
+                oldEdge->rootDomain != rootDomain || !oldEdge->useRegisteredTurnEntryTerms ||
+                !oldEdge->weightTerms.empty() || !oldEdge->targets.empty()) {
                 return false;
             }
 
@@ -3276,6 +3250,14 @@ namespace d20proof {
             int cachedTemplatePosition = std::numeric_limits<int>::min();
             std::size_t cachedTemplateRangeBegin = 0;
             std::size_t cachedTemplateRangeEnd = 0;
+            const std::vector<CheckedEdge> *oldReuseLayer = nullptr;
+            std::size_t oldReuseCursor = 0;
+            std::vector<const CheckedEdge *> reusableForCommand(commandCount, nullptr);
+            if (checkedReuseSnapshot != nullptr && submittedProofs == nullptr &&
+                !retainDefaultProofRecords && checkedReuseSnapshot->check.accepted &&
+                elapsedTurn < static_cast<int>(checkedReuseSnapshot->edgesByElapsedTurn.size())) {
+                oldReuseLayer = &checkedReuseSnapshot->edgesByElapsedTurn[static_cast<std::size_t>(elapsedTurn)];
+            }
 
             for (const CellKey &source: snapshot.support[elapsedTurn]) {
                 const CheckedPartition *checkedPartition = checkedPartitionAt(source.rngPosition);
@@ -3287,6 +3269,47 @@ namespace d20proof {
                 if (cell == nullptr) {
                     snapshot.check.reason = "Support references an undefined local cell";
                     return snapshot;
+                }
+
+                std::fill(reusableForCommand.begin(), reusableForCommand.end(), nullptr);
+                if (oldReuseLayer != nullptr) {
+                    std::uint64_t reuseScanWork = 0;
+                    while (oldReuseCursor < oldReuseLayer->size() &&
+                           (*oldReuseLayer)[oldReuseCursor].source < source) {
+                        ++oldReuseCursor;
+                        ++reuseScanWork;
+                    }
+                    std::size_t scan = oldReuseCursor;
+                    while (scan < oldReuseLayer->size() && (*oldReuseLayer)[scan].source == source) {
+                        const CheckedEdge &candidate = (*oldReuseLayer)[scan];
+                        ++scan;
+                        ++reuseScanWork;
+                        if (candidate.kind != CheckedEdgeKind::Completion ||
+                            candidate.completionCut != CompletionCutId::TurnEntry ||
+                            !candidate.useRegisteredTurnEntryTerms ||
+                            !candidate.weightTerms.empty() || !candidate.targets.empty()) {
+                            continue;
+                        }
+                        for (std::size_t slot = 0; slot < commandCount; ++slot) {
+                            if (bundle.profile.heroCommands[slot] != candidate.selectedCommand) {
+                                continue;
+                            }
+                            if (reusableForCommand[slot] != nullptr) {
+                                snapshot.check.reason =
+                                    "checked TurnEntry reuse contains duplicate canonical roots for one hotel room";
+                                return snapshot;
+                            }
+                            reusableForCommand[slot] = &candidate;
+                            break;
+                        }
+                    }
+                    if (scan != oldReuseCursor) {
+                        oldReuseCursor = scan;
+                    }
+                    if (reuseScanWork != 0 && !chargeBudget(budget, limits, reuseScanWork, 0)) {
+                        snapshot.check.reason = "checked TurnEntry hotel merge scan exceeded proof budget";
+                        return snapshot;
+                    }
                 }
 
                 std::size_t templateRangeBegin = 0;
@@ -3348,13 +3371,47 @@ namespace d20proof {
                     ScopedBudgetBytes localProofBytes(budget);
                     ScopedBudgetBytes localDerivedBytes(budget);
 
-                    const std::optional<bool> reuse = reuseCheckedTurnEntry(
-                        elapsedTurn,
-                        source,
-                        command,
-                        rootDomain,
-                        record,
-                        defaultTurnEntryEdge);
+                    bool strongerTemplateCoversRoot = false;
+                    if (generationTemplates != nullptr && templateRangeBegin < templateRangeEnd) {
+                        std::uint64_t strongerTemplateScanWork = 0;
+                        for (std::size_t templateLookupIndex = templateRangeBegin;
+                             templateLookupIndex < templateRangeEnd;
+                             ++templateLookupIndex) {
+                            ++strongerTemplateScanWork;
+                            if (std::get<2>(templateIndex[templateLookupIndex].key) != command) {
+                                continue;
+                            }
+                            const ProofTemplate &candidate =
+                                (*generationTemplates)[templateIndex[templateLookupIndex].index];
+                            if (!contains(candidate.coveredDomain, rootDomain)) {
+                                continue;
+                            }
+                            if (candidate.kind == RootProofKind::FullyDetailed ||
+                                candidate.cut != CompletionCutId::TurnEntry) {
+                                strongerTemplateCoversRoot = true;
+                                break;
+                            }
+                        }
+                        if (strongerTemplateScanWork != 0 &&
+                            !chargeBudget(budget, limits, strongerTemplateScanWork, 0)) {
+                            snapshot.check.reason =
+                                "checked TurnEntry stronger-template guard exceeded proof budget";
+                            return snapshot;
+                        }
+                    }
+
+                    const std::optional<bool> reuse = strongerTemplateCoversRoot
+                        ? std::optional<bool>{false}
+                        : reuseCheckedTurnEntry(
+                            elapsedTurn,
+                            source,
+                            command,
+                            rootDomain,
+                            commandIndex < reusableForCommand.size()
+                                ? reusableForCommand[commandIndex]
+                                : nullptr,
+                            record,
+                            defaultTurnEntryEdge);
                     if (!reuse.has_value()) {
                         return snapshot;
                     }
