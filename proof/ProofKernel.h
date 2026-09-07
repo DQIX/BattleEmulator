@@ -236,7 +236,8 @@ namespace d20proof {
             const std::vector<RootProofRecord> *submittedProofs = nullptr,
             const std::vector<ProofTemplate> *generationTemplates = nullptr,
             std::uint64_t coverageVersion = 1,
-            bool retainDefaultProofRecords = true);
+            bool retainDefaultProofRecords = true,
+            bool retainPartitionFamily = true);
 
         [[nodiscard]] static CheckResult advanceCompletionCheckpoint(
             const RuleBundle &bundle,

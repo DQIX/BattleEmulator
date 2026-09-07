@@ -38,8 +38,8 @@ namespace d20proof {
                 clamp(result.maxBytes, 64ull * 1024ull * 1024ull);
                 clamp(result.maxModelTerms, 150'000u);
             } else {
-                clamp(result.maxLeavesPerPosition, 29u);
-                clamp(result.maxDetailedTermsPerAction, 15u);
+                clamp(result.maxLeavesPerPosition, 37u);
+                clamp(result.maxDetailedTermsPerAction, 20u);
                 clamp(result.maxCompletionTermsPerAction, 3u);
                 clamp(result.maxPriceEvaluations, 8u);
                 // The specification labels 8M as the PoC's initial tuning
@@ -49,7 +49,7 @@ namespace d20proof {
                 // structural/certificate caps unchanged and allow enough V for
                 // several checked repair generations under that same deadline.
                 clamp(result.maxWork, 768'000'000ull);
-                clamp(result.maxBytes, 128ull * 1024ull * 1024ull);
+                clamp(result.maxBytes, 192ull * 1024ull * 1024ull);
                 clamp(result.maxModelTerms, 250'000u);
             }
             result.hasDeadline = true;
@@ -2446,6 +2446,13 @@ namespace d20proof {
             return result;
         }
 
+        // The checked snapshot is the owner of the current partition family.
+        // The initial builder input is no longer needed after rebuildSupport
+        // has produced that snapshot; keeping both deep copies would make
+        // transactional repair peaks count memory that is not part of the
+        // snapshot model itself.
+        family = {};
+
         const std::uint64_t initialCandidateSetupWorkStart = report.work;
         if (const CheckResult cacheUpdate = ProofKernel::rememberCheckedSnapshot(
                 checkedCache,
@@ -2475,7 +2482,7 @@ namespace d20proof {
             result.kind = isBudgetFailure(distances.reason) ? SolveKind::Unknown : SolveKind::ModelError;
             result.horizon = horizon;
             result.reason = distances.reason;
-            result.partitionVersion = family.partitionVersion;
+            result.partitionVersion = falseCheck.snapshot.partitions.partitionVersion;
             result.coverageVersion = falseCheck.snapshot.coverageVersion;
             result.budget = report;
             stampElapsed(result.budget, start);
@@ -2487,7 +2494,7 @@ namespace d20proof {
                 horizon,
                 "goal-distance construction exhausted total_time",
                 start);
-            result.partitionVersion = family.partitionVersion;
+            result.partitionVersion = falseCheck.snapshot.partitions.partitionVersion;
             result.coverageVersion = falseCheck.snapshot.coverageVersion;
             result.budget = report;
             stampElapsed(result.budget, start);
@@ -2549,7 +2556,7 @@ namespace d20proof {
 
         auto makeCurrentFailure = [&](SolveKind kind, std::string reason) {
             SolveResult result = makeFailure(kind, horizon, std::move(reason), start);
-            result.partitionVersion = family.partitionVersion;
+            result.partitionVersion = falseCheck.snapshot.partitions.partitionVersion;
             result.coverageVersion = falseCheck.snapshot.coverageVersion;
             result.budget = report;
             stampElapsed(result.budget, start);
@@ -2557,7 +2564,7 @@ namespace d20proof {
         };
 
         auto checkedCellDomain = [&](const CellKey &source, Box &domain, std::string &error) -> bool {
-            const PredicatePartition *partition = partitionAt(family, source.rngPosition);
+            const PredicatePartition *partition = partitionAt(falseCheck.snapshot.partitions, source.rngPosition);
             if (partition == nullptr) {
                 error = "repair source partition is missing";
                 return false;
@@ -2616,6 +2623,8 @@ namespace d20proof {
         std::uint64_t diagnosticNoStrongerRank = 0;
         std::uint64_t diagnosticProposalTooLarge = 0;
         std::uint64_t diagnosticAlreadyRejectedCompletion = 0;
+        std::uint64_t diagnosticCacheUnchanged = 0;
+        std::uint64_t diagnosticRepairBudgetFailure = 0;
         std::uint64_t diagnosticGuardNoPredicate = 0;
         std::uint64_t diagnosticRefinementRejected = 0;
         std::uint64_t diagnosticGuardProposalTooLarge = 0;
@@ -2623,6 +2632,8 @@ namespace d20proof {
         std::string diagnosticLastAdvanceReason;
         std::string diagnosticLastProposalTooLargeReason;
         std::string diagnosticLastGuardReason;
+        std::string diagnosticLastRepairBudgetReason;
+        std::string diagnosticLastRepairBudgetIdentity;
 
         auto completionRepairWasRejected = [&](const CandidateMismatch &failure) -> std::optional<bool> {
             for (const RejectedCompletionRepair &rejected: rejectedCompletionRepairs) {
@@ -2670,7 +2681,7 @@ namespace d20proof {
                 });
 
             for (const CandidateMismatch &failure: failures) {
-                if (failure.partitionVersion != family.partitionVersion ||
+                if (failure.partitionVersion != falseCheck.snapshot.partitions.partitionVersion ||
                     failure.coverageVersion != falseCheck.snapshot.coverageVersion) {
                     return std::nullopt;
                 }
@@ -2730,6 +2741,8 @@ namespace d20proof {
                         bundle_, problem, *checkpoint, budget, report, advanced);
                     if (!advance.accepted) {
                         if (isBudgetFailure(advance.reason)) {
+                            ++diagnosticRepairBudgetFailure;
+                            diagnosticLastRepairBudgetReason = advance.reason;
                             return false;
                         }
                         ++diagnosticAdvanceRejected;
@@ -2796,6 +2809,8 @@ namespace d20proof {
                     }
                     if (!chargeSearchBudget(trialBudget, budget, rollbackLookupWork, 0)) {
                         absorbDiscardedTrial(report, trialBudget, retainedBytesBeforeTrial);
+                        ++diagnosticRepairBudgetFailure;
+                        diagnosticLastRepairBudgetReason = "completion rollback lookup budget";
                         return false;
                     }
                     const std::size_t cacheSizeBefore = checkedCache.templates.size();
@@ -2810,12 +2825,15 @@ namespace d20proof {
                     if (!cacheUpdate.accepted) {
                         absorbDiscardedTrial(report, trialBudget, retainedBytesBeforeTrial);
                         if (isBudgetFailure(cacheUpdate.reason)) {
+                            ++diagnosticRepairBudgetFailure;
+                            diagnosticLastRepairBudgetReason = cacheUpdate.reason;
                             return false;
                         }
                         return std::nullopt;
                     }
                     if (!cacheChanged) {
                         absorbDiscardedTrial(report, trialBudget, retainedBytesBeforeTrial);
+                        ++diagnosticCacheUnchanged;
                         continue;
                     }
 
@@ -2842,12 +2860,13 @@ namespace d20proof {
                         bundle_,
                         problem,
                         horizon,
-                        family,
+                        falseCheck.snapshot.partitions,
                         budget,
                         trialBudget,
                         nullptr,
                         &checkedCache.templates,
                         trialCoverageVersion,
+                        false,
                         false);
                     if (!trialSnapshot.check.accepted) {
                         rollbackTemplate();
@@ -2866,13 +2885,31 @@ namespace d20proof {
                             continue;
                         }
                         if (isBudgetFailure(trialSnapshot.check.reason)) {
+                            ++diagnosticRepairBudgetFailure;
+                            diagnosticLastRepairBudgetReason = trialSnapshot.check.reason;
+                            diagnosticLastRepairBudgetIdentity =
+                                "completion turn=" + std::to_string(failure.elapsedTurn) +
+                                ",p=" + std::to_string(failure.step.source.rngPosition) +
+                                ",cell=" + std::to_string(failure.step.source.localCellId) +
+                                ",command=" + std::to_string(failure.step.selectedCommand) +
+                                ",term=" + std::to_string(failure.step.modelTermNumber);
+                            if (trialSnapshot.check.reason ==
+                                "Support materialization exceeded proof budget") {
+                                if (!rememberRejectedCompletionRepair(failure)) {
+                                    return false;
+                                }
+                                continue;
+                            }
                             return false;
                         }
                         return std::nullopt;
                     }
 
+                    const std::uint64_t retainedPartitionBytes =
+                        accountedPartitionFamilyBytes(falseCheck.snapshot.partitions);
+                    trialSnapshot.partitions = std::move(falseCheck.snapshot.partitions);
                     report = trialBudget;
-                    releaseSearchBytes(report, oldSnapshotBytes);
+                    releaseSearchBytes(report, oldSnapshotBytes - retainedPartitionBytes);
                     falseCheck = {};
                     falseCheck.check.accepted = true;
                     falseCheck.snapshot = std::move(trialSnapshot);
@@ -2905,9 +2942,9 @@ namespace d20proof {
                     }
                     const std::uint64_t retainedBytesBeforeTrial = report.bytes;
                     const std::uint64_t refinedWorkingBytes =
-                        accountedPartitionFamilyBytes(family) + 2 * sizeof(PartitionNode);
-                    std::uint64_t refinementWork = family.trees.size() + 1;
-                    for (const PredicatePartition &tree: family.trees) {
+                        accountedPartitionFamilyBytes(falseCheck.snapshot.partitions) + 2 * sizeof(PartitionNode);
+                    std::uint64_t refinementWork = falseCheck.snapshot.partitions.trees.size() + 1;
+                    for (const PredicatePartition &tree: falseCheck.snapshot.partitions.trees) {
                         refinementWork += tree.nodes.size();
                     }
                     if (!chargeSearchBudget(
@@ -2915,11 +2952,13 @@ namespace d20proof {
                             budget,
                             refinementWork,
                             refinedWorkingBytes)) {
+                        ++diagnosticRepairBudgetFailure;
+                        diagnosticLastRepairBudgetReason = "guard refinement working budget";
                         return false;
                     }
                     PartitionFamily refined;
                     const CheckResult refinement = ProofKernel::refineLeaf(
-                        family,
+                        falseCheck.snapshot.partitions,
                         ProofKernel::baseBox(bundle_, problem.s0),
                         failure.step.source.rngPosition,
                         failure.step.source.localCellId,
@@ -2950,6 +2989,7 @@ namespace d20proof {
                         nullptr,
                         &checkedCache.templates,
                         trialCoverageVersion,
+                        false,
                         false);
                     if (!trialSnapshot.check.accepted) {
                         absorbDiscardedTrial(report, trialBudget, retainedBytesBeforeTrial);
@@ -2959,15 +2999,22 @@ namespace d20proof {
                             continue;
                         }
                         if (isBudgetFailure(trialSnapshot.check.reason)) {
+                            ++diagnosticRepairBudgetFailure;
+                            diagnosticLastRepairBudgetReason = trialSnapshot.check.reason;
+                            diagnosticLastRepairBudgetIdentity =
+                                "guard turn=" + std::to_string(failure.elapsedTurn) +
+                                ",p=" + std::to_string(failure.step.source.rngPosition) +
+                                ",cell=" + std::to_string(failure.step.source.localCellId) +
+                                ",command=" + std::to_string(failure.step.selectedCommand) +
+                                ",term=" + std::to_string(failure.step.modelTermNumber);
                             return false;
                         }
                         return std::nullopt;
                     }
 
+                    trialSnapshot.partitions = std::move(refined);
                     report = trialBudget;
                     releaseSearchBytes(report, oldSnapshotBytes);
-                    releaseSearchBytes(report, refinedWorkingBytes);
-                    family = std::move(refined);
                     falseCheck = {};
                     falseCheck.check.accepted = true;
                     falseCheck.snapshot = std::move(trialSnapshot);
@@ -2994,7 +3041,7 @@ namespace d20proof {
                     bundle_,
                     problem,
                     horizon,
-                    family,
+                    falseCheck.snapshot.partitions,
                     budget,
                     report,
                     &proofTemplates,
@@ -3100,7 +3147,7 @@ namespace d20proof {
                     horizon,
                     "candidate search exhausted total_time",
                     start);
-                result.partitionVersion = family.partitionVersion;
+                result.partitionVersion = falseCheck.snapshot.partitions.partitionVersion;
                 result.coverageVersion = falseCheck.snapshot.coverageVersion;
                 result.budget = report;
                 stampElapsed(result.budget, start);
@@ -3117,6 +3164,8 @@ namespace d20proof {
                         " no_stronger_rank=" + std::to_string(diagnosticNoStrongerRank) +
                         " proposal_too_large=" + std::to_string(diagnosticProposalTooLarge) +
                         " already_rejected_completion=" + std::to_string(diagnosticAlreadyRejectedCompletion) +
+                        " cache_unchanged=" + std::to_string(diagnosticCacheUnchanged) +
+                        " repair_budget_failure=" + std::to_string(diagnosticRepairBudgetFailure) +
                         " guard_no_predicate=" + std::to_string(diagnosticGuardNoPredicate) +
                         " refinement_rejected=" + std::to_string(diagnosticRefinementRejected) +
                         " guard_proposal_too_large=" + std::to_string(diagnosticGuardProposalTooLarge) +
@@ -3129,9 +3178,15 @@ namespace d20proof {
                              : "; last_proposal_too_large=" + diagnosticLastProposalTooLargeReason) +
                         (diagnosticLastGuardReason.empty()
                              ? std::string{}
-                             : "; last_guard_reason=" + diagnosticLastGuardReason),
+                             : "; last_guard_reason=" + diagnosticLastGuardReason) +
+                        (diagnosticLastRepairBudgetReason.empty()
+                             ? std::string{}
+                             : "; last_repair_budget_reason=" + diagnosticLastRepairBudgetReason) +
+                        (diagnosticLastRepairBudgetIdentity.empty()
+                             ? std::string{}
+                             : "; last_repair_budget_identity=" + diagnosticLastRepairBudgetIdentity),
                     start);
-                result.partitionVersion = family.partitionVersion;
+                result.partitionVersion = falseCheck.snapshot.partitions.partitionVersion;
                 result.coverageVersion = falseCheck.snapshot.coverageVersion;
                 result.budget = report;
                 stampElapsed(result.budget, start);
@@ -3156,7 +3211,33 @@ namespace d20proof {
                 }
                 return makeCurrentFailure(
                     SolveKind::Unknown,
-                    "candidate iterator exhausted; search exhaustion is not a FALSE proof");
+                    "candidate iterator exhausted; search exhaustion is not a FALSE proof; repair_diag no_checkpoint=" +
+                        std::to_string(diagnosticNoCheckpoint) +
+                        " advance_rejected=" + std::to_string(diagnosticAdvanceRejected) +
+                        " no_stronger_rank=" + std::to_string(diagnosticNoStrongerRank) +
+                        " proposal_too_large=" + std::to_string(diagnosticProposalTooLarge) +
+                        " already_rejected_completion=" + std::to_string(diagnosticAlreadyRejectedCompletion) +
+                        " cache_unchanged=" + std::to_string(diagnosticCacheUnchanged) +
+                        " repair_budget_failure=" + std::to_string(diagnosticRepairBudgetFailure) +
+                        " guard_no_predicate=" + std::to_string(diagnosticGuardNoPredicate) +
+                        " refinement_rejected=" + std::to_string(diagnosticRefinementRejected) +
+                        " guard_proposal_too_large=" + std::to_string(diagnosticGuardProposalTooLarge) +
+                        " no_mismatch=" + std::to_string(diagnosticNoMismatch) +
+                        (diagnosticLastAdvanceReason.empty()
+                             ? std::string{}
+                             : "; last_advance_reason=" + diagnosticLastAdvanceReason) +
+                        (diagnosticLastProposalTooLargeReason.empty()
+                             ? std::string{}
+                             : "; last_proposal_too_large=" + diagnosticLastProposalTooLargeReason) +
+                        (diagnosticLastGuardReason.empty()
+                             ? std::string{}
+                             : "; last_guard_reason=" + diagnosticLastGuardReason) +
+                        (diagnosticLastRepairBudgetReason.empty()
+                             ? std::string{}
+                             : "; last_repair_budget_reason=" + diagnosticLastRepairBudgetReason) +
+                        (diagnosticLastRepairBudgetIdentity.empty()
+                             ? std::string{}
+                             : "; last_repair_budget_identity=" + diagnosticLastRepairBudgetIdentity));
             }
             if (iteratorStatus == IteratorStatus::BudgetExceeded) {
                 SolveResult result = makeFailure(
@@ -3164,7 +3245,7 @@ namespace d20proof {
                     horizon,
                     iteratorReason,
                     start);
-                result.partitionVersion = family.partitionVersion;
+                result.partitionVersion = falseCheck.snapshot.partitions.partitionVersion;
                 result.coverageVersion = falseCheck.snapshot.coverageVersion;
                 result.budget = report;
                 stampElapsed(result.budget, start);
@@ -3176,7 +3257,7 @@ namespace d20proof {
                     horizon,
                     iteratorReason,
                     start);
-                result.partitionVersion = family.partitionVersion;
+                result.partitionVersion = falseCheck.snapshot.partitions.partitionVersion;
                 result.coverageVersion = falseCheck.snapshot.coverageVersion;
                 result.budget = report;
                 stampElapsed(result.budget, start);
@@ -3204,7 +3285,7 @@ namespace d20proof {
                     horizon,
                     replay.reason,
                     start);
-                result.partitionVersion = family.partitionVersion;
+                result.partitionVersion = falseCheck.snapshot.partitions.partitionVersion;
                 result.coverageVersion = falseCheck.snapshot.coverageVersion;
                 result.budget = report;
                 stampElapsed(result.budget, start);
@@ -3217,7 +3298,7 @@ namespace d20proof {
                     horizon,
                     replay.reason,
                     start);
-                result.partitionVersion = family.partitionVersion;
+                result.partitionVersion = falseCheck.snapshot.partitions.partitionVersion;
                 result.coverageVersion = falseCheck.snapshot.coverageVersion;
                 result.budget = report;
                 stampElapsed(result.budget, start);
@@ -3233,7 +3314,7 @@ namespace d20proof {
                     path.commands.begin() + replay.firstWinningTurn);
                 replay.checkedCommands = result.commands;
                 result.replay = std::move(replay);
-                result.partitionVersion = family.partitionVersion;
+                result.partitionVersion = falseCheck.snapshot.partitions.partitionVersion;
                 result.coverageVersion = falseCheck.snapshot.coverageVersion;
                 stampFirstWin(report, start);
                 result.budget = report;
@@ -3256,7 +3337,7 @@ namespace d20proof {
                     horizon,
                     commandSequences.error(),
                     start);
-                result.partitionVersion = family.partitionVersion;
+                result.partitionVersion = falseCheck.snapshot.partitions.partitionVersion;
                 result.coverageVersion = falseCheck.snapshot.coverageVersion;
                 result.budget = report;
                 stampElapsed(result.budget, start);
@@ -3307,7 +3388,7 @@ namespace d20proof {
                 }
                 failureBatchBytes += sizeof(CandidateMismatch);
                 CandidateMismatch recorded = *mismatch;
-                recorded.partitionVersion = family.partitionVersion;
+                recorded.partitionVersion = falseCheck.snapshot.partitions.partitionVersion;
                 recorded.coverageVersion = falseCheck.snapshot.coverageVersion;
                 failures.push_back(std::move(recorded));
             } else {

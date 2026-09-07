@@ -52,15 +52,16 @@ int main(int argc, char **argv) {
     // deadline and all K/J/C/byte/candidate/repair limits, but uses the tuned
     // V ceiling established by measured runs.
     budget.maxWork = 768'000'000;
-    budget.maxLeavesPerPosition = 29;
-    budget.maxDetailedTermsPerAction = 15;
+    budget.maxBytes = 192ull * 1024ull * 1024ull;
+    budget.maxLeavesPerPosition = 37;
+    budget.maxDetailedTermsPerAction = 20;
     // The 2M candidate-choice cap is likewise an explicitly adjustable PoC
     // cutoff.  Abstract-path duplication can consume it well before the 15s
     // deadline, so production keeps the semantic 2048 unique-candidate cap
     // but allows more choice scans to reach those candidates.
     budget.maxCandidateScans = 96'000'000;
     budget.maxCandidates = 512;
-    budget.maxRepairs = 32;
+    budget.maxRepairs = 56;
     d20proof::WorldlineSolver solver(*bundle);
     const d20proof::Problem problem = d20proof::initialProblem(seed);
     const d20proof::SolveResult result = operation == "minimum"

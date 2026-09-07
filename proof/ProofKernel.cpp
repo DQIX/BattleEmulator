@@ -539,16 +539,12 @@ namespace d20proof {
             return static_cast<std::uint64_t>(count) * levels;
         }
 
-        Box selectableDomain(const RuleBundle &bundle, Box domain, int command) {
-            const CommandProfile *profile = lookupCommandProfile(bundle.profile, command);
-            if (profile == nullptr) {
-                return {};
-            }
-            domain.mp.lo = std::max<std::int64_t>(domain.mp.lo, profile->minimumMp);
-            domain.herb.lo = std::max<std::int64_t>(domain.herb.lo, profile->minimumHerbs);
-            domain.chargeMask &= profile->selectableChargeMask;
-            domain.acroMask &= profile->selectableAcroMask;
-            domain.paralysisMask &= profile->selectableParalysisMask;
+        Box selectableDomain(const CommandProfile &profile, Box domain) {
+            domain.mp.lo = std::max<std::int64_t>(domain.mp.lo, profile.minimumMp);
+            domain.herb.lo = std::max<std::int64_t>(domain.herb.lo, profile.minimumHerbs);
+            domain.chargeMask &= profile.selectableChargeMask;
+            domain.acroMask &= profile.selectableAcroMask;
+            domain.paralysisMask &= profile.selectableParalysisMask;
             return domain;
         }
 
@@ -1914,7 +1910,8 @@ namespace d20proof {
         const std::vector<RootProofRecord> *submittedProofs,
         const std::vector<ProofTemplate> *generationTemplates,
         std::uint64_t coverageVersion,
-        bool retainDefaultProofRecords) {
+        bool retainDefaultProofRecords,
+        bool retainPartitionFamily) {
         CheckedSnapshot snapshot;
         snapshot.coverageVersion = coverageVersion;
         std::uint64_t checkedProofRoots = 0;
@@ -2098,6 +2095,22 @@ namespace d20proof {
             }
         }
 
+        const CompletionSite *turnEntrySite = lookupCompletionSite(
+            bundle.profile,
+            CompletionCutId::TurnEntry);
+        if (turnEntrySite == nullptr) {
+            snapshot.check.reason = "registered TurnEntry COMPLETE site is missing";
+            return snapshot;
+        }
+        const PcStaticBounds *turnEntryRemaining = lookupPcBounds(
+            bundle.bounds,
+            turnEntrySite->pc.routineId,
+            turnEntrySite->pc.instructionIndex);
+        if (turnEntryRemaining == nullptr) {
+            snapshot.check.reason = "registered TurnEntry COMPLETE site has no kernel-computed pc bounds";
+            return snapshot;
+        }
+
         auto generatedProof = [&](int elapsedTurn,
                                   const CellKey &source,
                                   int command,
@@ -2269,9 +2282,7 @@ namespace d20proof {
             proof.partitionVersion = partitions.partitionVersion;
             proof.coverageVersion = snapshot.coverageVersion;
             proof.cut = CompletionCutId::TurnEntry;
-            if (const CompletionSite *site = lookupCompletionSite(bundle.profile, proof.cut)) {
-                proof.expectedPc = site->pc;
-            }
+            proof.expectedPc = turnEntrySite->pc;
             generatedDefaultTurnEntry = true;
             return proof;
         };
@@ -2285,9 +2296,8 @@ namespace d20proof {
             CheckedRootRecord &record,
             CheckedEdge &edge,
             bool generatedDefaultTurnEntry) -> bool {
-            const CompletionSite *site = lookupCompletionSite(bundle.profile, CompletionCutId::TurnEntry);
-            if (proof.kind != RootProofKind::Completion || site == nullptr ||
-                proof.cut != CompletionCutId::TurnEntry || proof.expectedPc != site->pc) {
+            if (proof.kind != RootProofKind::Completion ||
+                proof.cut != CompletionCutId::TurnEntry || proof.expectedPc != turnEntrySite->pc) {
                 snapshot.check.reason = "COMPLETE cut_id or expected_pc is not the registered turn-entry site";
                 return false;
             }
@@ -2336,15 +2346,6 @@ namespace d20proof {
                 }
             }
 
-            const PcStaticBounds *remaining = lookupPcBounds(
-                bundle.bounds,
-                site->pc.routineId,
-                site->pc.instructionIndex);
-            if (remaining == nullptr) {
-                snapshot.check.reason = "registered COMPLETE site has no kernel-computed pc bounds";
-                return false;
-            }
-
             record.proofKind = proof.kind;
             record.elapsedTurn = elapsedTurn;
             record.source = source;
@@ -2352,7 +2353,7 @@ namespace d20proof {
             record.rootDomain = rootDomain;
             record.partitionVersion = partitions.partitionVersion;
             record.coverageVersion = snapshot.coverageVersion;
-            record.verifiedPc = site->pc;
+            record.verifiedPc = turnEntrySite->pc;
             record.verifiedCut = proof.cut;
 
             edge.kind = CheckedEdgeKind::Completion;
@@ -2366,7 +2367,7 @@ namespace d20proof {
             const int envelopeLastPosition = problem.s0.position +
                                              (elapsedTurn + 1) * bundle.bounds.rMax;
             edge.firstOutputPosition = source.rngPosition;
-            edge.lastOutputPosition = source.rngPosition + remaining->maximumRngReads;
+            edge.lastOutputPosition = source.rngPosition + turnEntryRemaining->maximumRngReads;
             if (edge.firstOutputPosition < problem.s0.position ||
                 edge.lastOutputPosition > envelopeLastPosition ||
                 edge.firstOutputPosition > edge.lastOutputPosition) {
@@ -3027,12 +3028,16 @@ namespace d20proof {
                     return snapshot;
                 }
 
-                for (int command: bundle.profile.heroCommands) {
+                for (std::size_t commandIndex = 0;
+                     commandIndex < bundle.profile.heroCommands.size();
+                     ++commandIndex) {
+                    const int command = bundle.profile.heroCommands[commandIndex];
+                    const CommandProfile &commandProfile = bundle.profile.commandProfiles[commandIndex];
                     const int absoluteTurn = problem.startTurn + elapsedTurn;
                     if (!commandAllowedByConstraints(problem, absoluteTurn, command)) {
                         continue;
                     }
-                    const Box rootDomain = selectableDomain(bundle, *cell, command);
+                    const Box rootDomain = selectableDomain(commandProfile, *cell);
                     if (rootDomain.empty()) {
                         continue;
                     }
@@ -3307,10 +3312,12 @@ namespace d20proof {
                         return snapshot;
                     }
                     ++checkedProofRoots;
-                    checkedCompletionCases += proof->completionCases.size();
+                    checkedCompletionCases += generatedDefaultTurnEntry
+                        ? commandProfile.turnEntryCompletionTerms.size()
+                        : proof->completionCases.size();
                     const bool retainProofRecord =
                         submittedProofs != nullptr ||
-                        retainDefaultProofRecords ||
+                        (retainDefaultProofRecords && !generatedDefaultTurnEntry) ||
                         proof->kind != RootProofKind::Completion ||
                         proof->cut != CompletionCutId::TurnEntry;
                     retainedSnapshotBytes.add(saturatedReservationAdd(
@@ -3428,17 +3435,19 @@ namespace d20proof {
         budget.proofRoots = checkedProofRoots;
         budget.completionCases = checkedCompletionCases;
 
-        const std::uint64_t partitionBytes = partitionFamilyBytes(partitions);
-        std::uint64_t partitionWork = partitions.trees.size();
-        for (const PredicatePartition &tree: partitions.trees) {
-            partitionWork += tree.nodes.size();
+        if (retainPartitionFamily) {
+            const std::uint64_t partitionBytes = partitionFamilyBytes(partitions);
+            std::uint64_t partitionWork = partitions.trees.size();
+            for (const PredicatePartition &tree: partitions.trees) {
+                partitionWork += tree.nodes.size();
+            }
+            if (!chargeBudget(budget, limits, partitionWork, partitionBytes)) {
+                snapshot.check.reason = "snapshot partition-family storage exceeded proof budget";
+                return snapshot;
+            }
+            retainedSnapshotBytes.add(partitionBytes);
+            snapshot.partitions = partitions;
         }
-        if (!chargeBudget(budget, limits, partitionWork, partitionBytes)) {
-            snapshot.check.reason = "snapshot partition-family storage exceeded proof budget";
-            return snapshot;
-        }
-        retainedSnapshotBytes.add(partitionBytes);
-        snapshot.partitions = partitions;
 
         snapshot.check.accepted = true;
         retainedSnapshotBytes.disarm();
