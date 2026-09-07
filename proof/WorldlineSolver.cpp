@@ -8,6 +8,8 @@
 #include <set>
 #include <tuple>
 
+#include <iostream>
+
 namespace d20proof {
     namespace {
         using Clock = std::chrono::steady_clock;
@@ -268,26 +270,6 @@ namespace d20proof {
             return cache.templates.size() * sizeof(ProofTemplate);
         }
 
-        std::uint64_t accountedFailedCommandBytes(const std::vector<int> &commands) {
-            // std::map owns one tree node plus one vector object for each entry.
-            // Allocator bookkeeping is implementation-defined; charge a
-            // conservative node payload/pointer allowance in addition to the
-            // command storage instead of counting only the ints.
-            constexpr std::uint64_t treeLinksAndBookkeeping = 4 * sizeof(void *);
-            return sizeof(std::vector<int>) + sizeof(std::uint32_t) +
-                   treeLinksAndBookkeeping + commands.size() * sizeof(int);
-        }
-
-        std::uint64_t failedCommandLookupWork(
-            std::size_t entryCount,
-            std::size_t commandLength) noexcept {
-            std::uint64_t treeComparisons = 1;
-            for (std::size_t n = entryCount + 1; n > 1; n = (n + 1) / 2) {
-                ++treeComparisons;
-            }
-            return treeComparisons * std::max<std::size_t>(1, commandLength);
-        }
-
         void absorbDiscardedTrial(
             BudgetReport &live,
             const BudgetReport &trial,
@@ -366,6 +348,140 @@ namespace d20proof {
                 const std::vector<CellKey> &sources = snapshot.support[elapsedTurn];
                 const std::vector<CellKey> &next = snapshot.support[elapsedTurn + 1];
                 const std::vector<int> &nextDistances = result.values[elapsedTurn + 1];
+                if (nextDistances.size() != next.size()) {
+                    result.reason = "goal-distance next layer does not match Support";
+                    return result;
+                }
+
+                struct PositionMinimum {
+                    int rngPosition = 0;
+                    int distance = kInfiniteDistance;
+                };
+                struct TemporarySearchBytes {
+                    BudgetReport &report;
+                    std::uint64_t bytes = 0;
+                    ~TemporarySearchBytes() {
+                        releaseSearchBytes(report, bytes);
+                    }
+                } temporaryBytes{report};
+
+                // COMPLETE destinations contain every checked CellKey for a
+                // contiguous RNG-position interval.  Collapse each position
+                // to its exact minimum once, then answer each completion edge
+                // with a range minimum instead of rescanning the same layer.
+                const std::uint64_t positionBytes = next.size() * sizeof(PositionMinimum);
+                if (positionBytes != 0 &&
+                    !chargeSearchBudget(report, limits, 0, positionBytes)) {
+                    result.reason = "goal-distance per-position table exceeded proof budget";
+                    return result;
+                }
+                temporaryBytes.bytes += positionBytes;
+                std::vector<PositionMinimum> positionMinimums;
+                positionMinimums.reserve(next.size());
+                for (std::size_t begin = 0; begin < next.size();) {
+                    const int position = next[begin].rngPosition;
+                    std::size_t end = begin + 1;
+                    int minimum = nextDistances[begin];
+                    while (end < next.size() && next[end].rngPosition == position) {
+                        minimum = std::min(minimum, nextDistances[end]);
+                        ++end;
+                    }
+                    if (!chargeSearchBudget(report, limits, end - begin, 0)) {
+                        result.reason = "goal-distance per-position minimum construction exceeded proof budget";
+                        return result;
+                    }
+                    positionMinimums.push_back({position, minimum});
+                    begin = end;
+                }
+
+                std::size_t rangeLevels = 0;
+                for (std::size_t n = positionMinimums.size(); n != 0; n >>= 1) {
+                    ++rangeLevels;
+                }
+                const std::size_t positionSpan = positionMinimums.empty()
+                    ? 0
+                    : static_cast<std::size_t>(
+                        positionMinimums.back().rngPosition - positionMinimums.front().rngPosition + 1);
+                const std::uint64_t sparseBytes =
+                    rangeLevels * positionMinimums.size() * sizeof(int) +
+                    (positionMinimums.size() + 1) * sizeof(std::uint8_t) +
+                    positionSpan * sizeof(std::size_t);
+                if (sparseBytes != 0 &&
+                    !chargeSearchBudget(report, limits, 0, sparseBytes)) {
+                    result.reason = "goal-distance sparse range-minimum table exceeded proof budget";
+                    return result;
+                }
+                temporaryBytes.bytes += sparseBytes;
+                std::vector<int> sparseRangeMinimums(
+                    rangeLevels * positionMinimums.size(),
+                    kInfiniteDistance);
+                std::vector<std::uint8_t> floorLog2(positionMinimums.size() + 1, 0);
+                std::vector<std::size_t> positionIndex(
+                    positionSpan,
+                    positionMinimums.size());
+                std::uint64_t rangeBuildWork = 0;
+                if (!positionMinimums.empty()) {
+                    const std::size_t width = positionMinimums.size();
+                    for (std::size_t index = 0; index < width; ++index) {
+                        sparseRangeMinimums[index] = positionMinimums[index].distance;
+                        positionIndex[static_cast<std::size_t>(
+                            positionMinimums[index].rngPosition - positionMinimums.front().rngPosition)] = index;
+                        ++rangeBuildWork;
+                    }
+                    for (std::size_t length = 2; length <= width; ++length) {
+                        floorLog2[length] = static_cast<std::uint8_t>(floorLog2[length / 2] + 1);
+                        ++rangeBuildWork;
+                    }
+                    for (std::size_t level = 1; level < rangeLevels; ++level) {
+                        const std::size_t span = std::size_t{1} << level;
+                        const std::size_t half = span >> 1;
+                        for (std::size_t index = 0; index + span <= width; ++index) {
+                            sparseRangeMinimums[level * width + index] = std::min(
+                                sparseRangeMinimums[(level - 1) * width + index],
+                                sparseRangeMinimums[(level - 1) * width + index + half]);
+                            ++rangeBuildWork;
+                        }
+                    }
+                }
+                if (rangeBuildWork != 0 &&
+                    !chargeSearchBudget(report, limits, rangeBuildWork, 0)) {
+                    result.reason = "goal-distance sparse range-minimum construction exceeded proof budget";
+                    return result;
+                }
+
+                auto completionRangeMinimum = [&](int firstPosition,
+                                                  int lastPosition,
+                                                  int &minimum) -> bool {
+                    minimum = kInfiniteDistance;
+                    if (firstPosition > lastPosition || positionMinimums.empty()) {
+                        result.reason = "goal-distance COMPLETE range has no next-layer Support target";
+                        return false;
+                    }
+                    const int basePosition = positionMinimums.front().rngPosition;
+                    if (firstPosition < basePosition || lastPosition < basePosition ||
+                        static_cast<std::uint64_t>(lastPosition - basePosition) >= positionIndex.size()) {
+                        result.reason = "goal-distance COMPLETE range is missing a next-layer RNG position";
+                        return false;
+                    }
+                    const std::size_t left = positionIndex[static_cast<std::size_t>(firstPosition - basePosition)];
+                    const std::size_t right = positionIndex[static_cast<std::size_t>(lastPosition - basePosition)];
+                    const std::size_t width = positionMinimums.size();
+                    const std::size_t count = static_cast<std::size_t>(lastPosition - firstPosition + 1);
+                    if (left >= width || right >= width || right < left || right - left + 1 != count) {
+                        result.reason = "goal-distance COMPLETE range is missing a next-layer RNG position";
+                        return false;
+                    }
+                    const std::size_t level = floorLog2[count];
+                    const std::size_t span = std::size_t{1} << level;
+                    minimum = std::min(
+                        sparseRangeMinimums[level * width + left],
+                        sparseRangeMinimums[level * width + right - span + 1]);
+                    if (!chargeSearchBudget(report, limits, 1, 0)) {
+                        result.reason = "goal-distance COMPLETE range query exceeded proof budget";
+                        return false;
+                    }
+                    return true;
+                };
                 std::vector<int> current(sources.size(), kInfiniteDistance);
 
                 for (std::size_t sourceIndex = 0; sourceIndex < sources.size(); ++sourceIndex) {
@@ -402,26 +518,15 @@ namespace d20proof {
                                 result.reason = "goal-distance saw an invalid COMPLETE virtual target range";
                                 return result;
                             }
-                            const CellKey lowerKey{edge.firstOutputPosition, 0};
-                            auto targetIt = std::lower_bound(next.begin(), next.end(), lowerKey);
-                            bool sawTarget = false;
-                            for (; targetIt != next.end() &&
-                                   targetIt->rngPosition <= edge.lastOutputPosition;
-                                 ++targetIt) {
-                                const std::size_t targetIndex = static_cast<std::size_t>(targetIt - next.begin());
-                                const int destinationDistance = nextDistances[targetIndex];
-                                if (destinationDistance < kInfiniteDistance - 1) {
-                                    best = std::min(best, destinationDistance + 1);
-                                }
-                                sawTarget = true;
-                                if (!chargeSearchBudget(report, limits, 1, 0)) {
-                                    result.reason = "goal-distance virtual COMPLETE target scan exceeded proof budget";
-                                    return result;
-                                }
-                            }
-                            if (!sawTarget) {
-                                result.reason = "goal-distance COMPLETE range has no next-layer Support target";
+                            int destinationDistance = kInfiniteDistance;
+                            if (!completionRangeMinimum(
+                                    edge.firstOutputPosition,
+                                    edge.lastOutputPosition,
+                                    destinationDistance)) {
                                 return result;
+                            }
+                            if (destinationDistance < kInfiniteDistance - 1) {
+                                best = std::min(best, destinationDistance + 1);
                             }
                         } else {
                             for (const CellKey &target: edge.targets) {
@@ -516,6 +621,7 @@ namespace d20proof {
         struct CandidatePath {
             std::vector<int> commands;
             std::vector<CandidateStep> steps;
+            std::size_t commandSequenceId = 0;
         };
 
         enum class IteratorStatus {
@@ -530,18 +636,150 @@ namespace d20proof {
             CellKey key;
         };
 
+        class CommandSequenceTrie {
+        public:
+            CommandSequenceTrie(
+                std::size_t commandCount,
+                const ProofBudget &limits,
+                BudgetReport &report)
+                : commandCount_(commandCount), limits_(limits), report_(report) {
+                if (commandCount_ == 0) {
+                    error_ = "command-sequence trie requires a nonempty command alphabet";
+                    return;
+                }
+                if (!appendNode()) {
+                    if (error_.empty()) {
+                        error_ = "command-sequence trie root exceeded proof budget";
+                    }
+                    return;
+                }
+                ready_ = true;
+            }
+
+            ~CommandSequenceTrie() {
+                releaseSearchBytes(report_, ownedBytes_);
+            }
+
+            bool ready() const noexcept {
+                return ready_;
+            }
+
+            const std::string &error() const noexcept {
+                return error_;
+            }
+
+            bool extend(
+                std::size_t parentId,
+                int commandSlot,
+                std::size_t &childId) {
+                if (parentId >= nodes_.size() || commandSlot < 0 ||
+                    static_cast<std::size_t>(commandSlot) >= commandCount_) {
+                    error_ = "command-sequence trie received an invalid parent or command slot";
+                    return false;
+                }
+                if (!chargeSearchBudget(report_, limits_, 1, 0)) {
+                    error_ = "command-sequence trie traversal exceeded proof budget";
+                    return false;
+                }
+                const std::size_t slot = static_cast<std::size_t>(commandSlot);
+                childId = nodes_[parentId].children[slot];
+                if (childId != kNoNode) {
+                    return true;
+                }
+                const std::size_t stableParent = parentId;
+                if (!appendNode()) {
+                    if (error_.empty()) {
+                        error_ = "command-sequence trie growth exceeded proof budget";
+                    }
+                    return false;
+                }
+                childId = nodes_.size() - 1;
+                nodes_[stableParent].children[slot] = childId;
+                return true;
+            }
+
+            bool failed(std::size_t sequenceId, bool &isFailed) {
+                if (sequenceId >= nodes_.size()) {
+                    error_ = "FailedCommands sequence id is outside the exact command trie";
+                    return false;
+                }
+                if (!chargeSearchBudget(report_, limits_, 1, 0)) {
+                    error_ = "FailedCommands exact sequence lookup exceeded proof budget";
+                    return false;
+                }
+                isFailed = nodes_[sequenceId].failed;
+                return true;
+            }
+
+            bool rememberFailure(
+                std::size_t sequenceId,
+                const std::vector<int> &commands,
+                CandidateFailureKind failure) {
+                if (sequenceId >= nodes_.size()) {
+                    error_ = "FailedCommands sequence id is outside the exact command trie";
+                    return false;
+                }
+                Node &node = nodes_[sequenceId];
+                if (node.failed) {
+                    return true;
+                }
+                const std::uint64_t commandBytes = commands.size() * sizeof(int);
+                if (!chargeSearchBudget(report_, limits_, 1, commandBytes)) {
+                    error_ = "FailedCommands exact sequence record exceeded proof budget";
+                    return false;
+                }
+                ownedBytes_ += commandBytes;
+                node.failed = true;
+                node.failure = failure;
+                node.completeCommands = commands;
+                return true;
+            }
+
+        private:
+            static constexpr std::size_t kNoNode = std::numeric_limits<std::size_t>::max();
+            struct Node {
+                std::vector<std::size_t> children;
+                bool failed = false;
+                CandidateFailureKind failure = CandidateFailureKind::NotWon;
+                std::vector<int> completeCommands;
+            };
+
+            bool appendNode() {
+                const std::uint64_t bytes =
+                    sizeof(Node) + commandCount_ * sizeof(std::size_t);
+                if (!chargeSearchBudget(report_, limits_, 0, bytes)) {
+                    return false;
+                }
+                ownedBytes_ += bytes;
+                Node node;
+                node.children.assign(commandCount_, kNoNode);
+                nodes_.push_back(std::move(node));
+                return true;
+            }
+
+            std::size_t commandCount_ = 0;
+            const ProofBudget &limits_;
+            BudgetReport &report_;
+            std::vector<Node> nodes_;
+            std::uint64_t ownedBytes_ = 0;
+            std::string error_;
+            bool ready_ = false;
+        };
+
         class GoalCandidateIterator {
         public:
             GoalCandidateIterator(
                 const RuleBundle &bundle,
                 const CheckedSnapshot &snapshot,
                 const GoalDistances &distances,
+                CommandSequenceTrie &commandSequences,
                 int horizon,
                 const ProofBudget &limits,
                 BudgetReport &report)
                 : bundle_(bundle),
                   snapshot_(snapshot),
                   distances_(distances),
+                  commandSequences_(commandSequences),
                   horizon_(horizon),
                   limits_(limits),
                   report_(report) {
@@ -551,6 +789,7 @@ namespace d20proof {
                 Frame root;
                 root.elapsedTurn = 0;
                 root.source = snapshot.root;
+                root.commandSequenceId = 0;
                 if (!buildFrame(root)) {
                     return;
                 }
@@ -615,10 +854,23 @@ namespace d20proof {
                     step.target = choice.target;
                     commandPath_.push_back(choice.selectedCommand);
                     stepPath_.push_back(step);
+                    std::size_t childCommandSequenceId = 0;
+                    if (!commandSequences_.extend(
+                            frame.commandSequenceId,
+                            choice.commandOrder,
+                            childCommandSequenceId)) {
+                        reason = commandSequences_.error();
+                        commandPath_.pop_back();
+                        stepPath_.pop_back();
+                        return isBudgetFailure(reason)
+                            ? IteratorStatus::BudgetExceeded
+                            : IteratorStatus::ModelError;
+                    }
 
                     if (choice.goal) {
                         path.commands = commandPath_;
                         path.steps = stepPath_;
+                        path.commandSequenceId = childCommandSequenceId;
                         commandPath_.pop_back();
                         stepPath_.pop_back();
                         return IteratorStatus::Path;
@@ -633,6 +885,7 @@ namespace d20proof {
                     Frame child;
                     child.elapsedTurn = frame.elapsedTurn + 1;
                     child.source = choice.target;
+                    child.commandSequenceId = childCommandSequenceId;
                     if (!buildFrame(child)) {
                         reason = error_;
                         commandPath_.pop_back();
@@ -665,6 +918,7 @@ namespace d20proof {
             struct Frame {
                 int elapsedTurn = 0;
                 CellKey source;
+                std::size_t commandSequenceId = 0;
                 std::vector<EdgeCursor> edgeCursors;
             };
 
@@ -875,6 +1129,7 @@ namespace d20proof {
             const RuleBundle &bundle_;
             const CheckedSnapshot &snapshot_;
             const GoalDistances &distances_;
+            CommandSequenceTrie &commandSequences_;
             int horizon_ = 0;
             const ProofBudget &limits_;
             BudgetReport &report_;
@@ -1927,6 +2182,7 @@ namespace d20proof {
             result.budget = report;
             return result;
         }
+        std::cerr << "D20_WORK after_cache=" << report.work << '\n';
 
         GoalDistances distances = buildGoalDistances(falseCheck.snapshot, horizon, budget, report);
         if (!distances.accepted) {
@@ -1941,6 +2197,7 @@ namespace d20proof {
             stampElapsed(result.budget, start);
             return result;
         }
+        std::cerr << "D20_WORK after_goal=" << report.work << '\n';
         if (deadlineReached(start, budget, report)) {
             SolveResult result = makeFailure(
                 SolveKind::Unknown,
@@ -1956,20 +2213,104 @@ namespace d20proof {
 
         auto iterator = std::make_unique<GoalCandidateIterator>(
             bundle_, falseCheck.snapshot, distances, horizon, budget, report);
-        std::map<std::vector<int>, CandidateFailureKind> failedCommands;
+        std::cerr << "D20_WORK after_iterator=" << report.work << '\n';
+        constexpr std::size_t kNoTrieNode = std::numeric_limits<std::size_t>::max();
+        struct FailedCommandTrieNode {
+            std::vector<std::size_t> children;
+            bool terminal = false;
+            CandidateFailureKind failure = CandidateFailureKind::NotWon;
+            std::vector<int> completeCommands;
+        };
+        std::unordered_map<int, std::size_t> failedCommandSlots;
+        for (std::size_t index = 0; index < bundle_.profile.heroCommands.size(); ++index) {
+            failedCommandSlots.emplace(bundle_.profile.heroCommands[index], index);
+        }
+        const std::uint64_t failedTrieNodeBytes =
+            sizeof(FailedCommandTrieNode) +
+            bundle_.profile.heroCommands.size() * sizeof(std::size_t);
+        std::vector<FailedCommandTrieNode> failedCommandTrie;
+        auto appendFailedTrieNode = [&]() -> bool {
+            if (!chargeSearchBudget(report, budget, 0, failedTrieNodeBytes)) {
+                return false;
+            }
+            FailedCommandTrieNode node;
+            node.children.assign(bundle_.profile.heroCommands.size(), kNoTrieNode);
+            failedCommandTrie.push_back(std::move(node));
+            return true;
+        };
+        if (!appendFailedTrieNode()) {
+            return makeFailure(
+                SolveKind::Unknown,
+                horizon,
+                "FailedCommands trie root exceeded proof budget",
+                start);
+        }
+        auto failedCommandContains = [&](const std::vector<int> &commands,
+                                         bool &contains) -> bool {
+            contains = false;
+            std::size_t nodeIndex = 0;
+            for (int command: commands) {
+                if (!chargeSearchBudget(report, budget, 1, 0)) {
+                    return false;
+                }
+                const auto slotIt = failedCommandSlots.find(command);
+                if (slotIt == failedCommandSlots.end()) {
+                    return true;
+                }
+                const std::size_t childIndex =
+                    failedCommandTrie[nodeIndex].children[slotIt->second];
+                if (childIndex == kNoTrieNode) {
+                    return true;
+                }
+                nodeIndex = childIndex;
+            }
+            contains = failedCommandTrie[nodeIndex].terminal;
+            return true;
+        };
+        auto insertFailedCommand = [&](const std::vector<int> &commands,
+                                       CandidateFailureKind failure) -> bool {
+            std::size_t nodeIndex = 0;
+            for (int command: commands) {
+                if (!chargeSearchBudget(report, budget, 1, 0)) {
+                    return false;
+                }
+                const auto slotIt = failedCommandSlots.find(command);
+                if (slotIt == failedCommandSlots.end()) {
+                    return false;
+                }
+                std::size_t childIndex = failedCommandTrie[nodeIndex].children[slotIt->second];
+                if (childIndex == kNoTrieNode) {
+                    const std::size_t parentIndex = nodeIndex;
+                    const std::size_t slot = slotIt->second;
+                    if (!appendFailedTrieNode()) {
+                        return false;
+                    }
+                    childIndex = failedCommandTrie.size() - 1;
+                    failedCommandTrie[parentIndex].children[slot] = childIndex;
+                }
+                nodeIndex = childIndex;
+            }
+            FailedCommandTrieNode &terminal = failedCommandTrie[nodeIndex];
+            if (terminal.terminal) {
+                return true;
+            }
+            const std::uint64_t commandBytes = commands.size() * sizeof(int);
+            if (!chargeSearchBudget(report, budget, 1, commandBytes)) {
+                return false;
+            }
+            terminal.terminal = true;
+            terminal.failure = failure;
+            terminal.completeCommands = commands;
+            return true;
+        };
         if (rejectedHint.has_value()) {
-            const std::uint64_t failedHintBytes =
-                accountedFailedCommandBytes(rejectedHint->first);
-            const std::uint64_t lookupWork =
-                failedCommandLookupWork(failedCommands.size(), rejectedHint->first.size());
-            if (!chargeSearchBudget(report, budget, lookupWork, failedHintBytes)) {
+            if (!insertFailedCommand(rejectedHint->first, rejectedHint->second)) {
                 return makeFailure(
                     SolveKind::Unknown,
                     horizon,
                     "failed candidate hint could not fit FailedCommands budget",
                     start);
             }
-            failedCommands.emplace(rejectedHint->first, rejectedHint->second);
         }
         std::vector<CandidateMismatch> failures;
         std::uint64_t failureBatchBytes = 0;
@@ -2032,6 +2373,47 @@ namespace d20proof {
         };
 
         bool repairSnapshotPrepared = false;
+        struct RejectedCompletionRepair {
+            std::uint64_t partitionVersion = 0;
+            std::uint64_t coverageVersion = 0;
+            int elapsedTurn = 0;
+            std::size_t modelTermNumber = 0;
+        };
+        std::vector<RejectedCompletionRepair> rejectedCompletionRepairs;
+        std::uint64_t rejectedCompletionRepairBytes = 0;
+
+        auto completionRepairWasRejected = [&](const CandidateMismatch &failure) -> std::optional<bool> {
+            for (const RejectedCompletionRepair &rejected: rejectedCompletionRepairs) {
+                if (!chargeSearchBudget(report, budget, 1, 0)) {
+                    return std::nullopt;
+                }
+                if (rejected.partitionVersion == failure.partitionVersion &&
+                    rejected.coverageVersion == failure.coverageVersion &&
+                    rejected.elapsedTurn == failure.elapsedTurn &&
+                    rejected.modelTermNumber == failure.step.modelTermNumber) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        auto rememberRejectedCompletionRepair = [&](const CandidateMismatch &failure) -> bool {
+            if (!chargeSearchBudget(
+                    report,
+                    budget,
+                    1,
+                    sizeof(RejectedCompletionRepair))) {
+                return false;
+            }
+            rejectedCompletionRepairs.push_back({
+                failure.partitionVersion,
+                failure.coverageVersion,
+                failure.elapsedTurn,
+                failure.step.modelTermNumber,
+            });
+            rejectedCompletionRepairBytes += sizeof(RejectedCompletionRepair);
+            return true;
+        };
 
         auto tryOneRepair = [&]() -> std::optional<bool> {
             if (failures.empty() || report.repairs >= budget.maxRepairs) {
@@ -2056,18 +2438,43 @@ namespace d20proof {
                 }
 
                 if (failure.kind == CandidateMismatchKind::Completion) {
+                    const std::optional<bool> alreadyRejected = completionRepairWasRejected(failure);
+                    if (!alreadyRejected.has_value()) {
+                        return false;
+                    }
+                    if (*alreadyRejected) {
+                        continue;
+                    }
                     const CompletionCheckpoint *checkpoint = nullptr;
-                    for (const CompletionCheckpoint &candidate: falseCheck.snapshot.completionCheckpoints) {
-                        if (candidate.elapsedTurn != failure.elapsedTurn ||
-                            !(candidate.source == failure.step.source) ||
-                            candidate.selectedCommand != failure.step.selectedCommand ||
-                            candidate.cut != edge->completionCut) {
-                            continue;
-                        }
-                        if (contains(candidate.frame.inputDomain, edge->rootDomain) &&
-                            contains(edge->rootDomain, candidate.frame.inputDomain)) {
-                            checkpoint = &candidate;
-                            break;
+                    std::optional<CompletionCheckpoint> reconstructedTurnEntry;
+                    if (edge->completionCut == CompletionCutId::TurnEntry) {
+                        SymbolicStepper stepper(bundle_, problem);
+                        reconstructedTurnEntry = CompletionCheckpoint{
+                            failure.elapsedTurn,
+                            failure.step.source,
+                            failure.step.selectedCommand,
+                            CompletionCutId::TurnEntry,
+                            edge->rootDomain,
+                            stepper.makeRootFrame(
+                                failure.elapsedTurn,
+                                failure.step.selectedCommand,
+                                failure.step.source.rngPosition,
+                                edge->rootDomain),
+                        };
+                        checkpoint = &*reconstructedTurnEntry;
+                    } else {
+                        for (const CompletionCheckpoint &candidate: falseCheck.snapshot.completionCheckpoints) {
+                            if (candidate.elapsedTurn != failure.elapsedTurn ||
+                                !(candidate.source == failure.step.source) ||
+                                candidate.selectedCommand != failure.step.selectedCommand ||
+                                candidate.cut != edge->completionCut) {
+                                continue;
+                            }
+                            if (contains(candidate.frame.inputDomain, edge->rootDomain) &&
+                                contains(edge->rootDomain, candidate.frame.inputDomain)) {
+                                checkpoint = &candidate;
+                                break;
+                            }
                         }
                     }
                     if (checkpoint == nullptr) {
@@ -2075,8 +2482,17 @@ namespace d20proof {
                     }
 
                     ProofTemplate advanced;
+                    const std::uint64_t advanceWorkBefore = report.work;
                     const CheckResult advance = ProofKernel::advanceCompletionCheckpoint(
                         bundle_, problem, *checkpoint, budget, report, advanced);
+                    std::cerr << "D20_REPAIR advance_delta="
+                              << (report.work - advanceWorkBefore)
+                              << " accepted=" << (advance.accepted ? 1 : 0)
+                              << " reason=\"" << advance.reason << "\""
+                              << " t=" << failure.elapsedTurn
+                              << " p=" << failure.step.source.rngPosition
+                              << " cmd=" << failure.step.selectedCommand
+                              << " cut=" << static_cast<int>(edge->completionCut) << '\n';
                     if (!advance.accepted) {
                         if (isBudgetFailure(advance.reason)) {
                             return false;
@@ -2127,6 +2543,7 @@ namespace d20proof {
                         continue;
                     }
 
+                    const std::uint64_t rebuildWorkBefore = trialBudget.work;
                     CheckedSnapshot trialSnapshot = ProofKernel::rebuildSupport(
                         bundle_,
                         problem,
@@ -2137,9 +2554,20 @@ namespace d20proof {
                         nullptr,
                         &trialCache.templates,
                         trialCoverageVersion);
+                    std::cerr << "D20_REPAIR rebuild_delta="
+                              << (trialBudget.work - rebuildWorkBefore)
+                              << " accepted=" << (trialSnapshot.check.accepted ? 1 : 0)
+                              << " reason=\"" << trialSnapshot.check.reason << "\""
+                              << " t=" << failure.elapsedTurn
+                              << " p=" << failure.step.source.rngPosition
+                              << " cmd=" << failure.step.selectedCommand
+                              << " cut=" << static_cast<int>(edge->completionCut) << '\n';
                     if (!trialSnapshot.check.accepted) {
                         absorbDiscardedTrial(report, trialBudget, retainedBytesBeforeTrial);
                         if (repairProposalTooLarge(trialSnapshot.check.reason)) {
+                            if (!rememberRejectedCompletionRepair(failure)) {
+                                return false;
+                            }
                             continue;
                         }
                         if (isBudgetFailure(trialSnapshot.check.reason)) {
@@ -2157,6 +2585,9 @@ namespace d20proof {
                     falseCheck.snapshot = std::move(trialSnapshot);
                     coverageVersion = trialCoverageVersion;
                     repairSnapshotPrepared = true;
+                    releaseSearchBytes(report, rejectedCompletionRepairBytes);
+                    rejectedCompletionRepairs.clear();
+                    rejectedCompletionRepairBytes = 0;
                     ++report.completionResumes;
                     ++report.repairs;
                     return true;
@@ -2250,6 +2681,9 @@ namespace d20proof {
                     falseCheck.snapshot = std::move(trialSnapshot);
                     coverageVersion = trialCoverageVersion;
                     repairSnapshotPrepared = true;
+                    releaseSearchBytes(report, rejectedCompletionRepairBytes);
+                    rejectedCompletionRepairs.clear();
+                    rejectedCompletionRepairBytes = 0;
                     ++report.addedPredicates;
                     ++report.repairs;
                     return true;
@@ -2425,14 +2859,13 @@ namespace d20proof {
                 return result;
             }
 
-            const std::uint64_t duplicateLookupWork =
-                failedCommandLookupWork(failedCommands.size(), path.commands.size());
-            if (!chargeSearchBudget(report, budget, duplicateLookupWork, 0)) {
+            bool duplicateCommand = false;
+            if (!failedCommandContains(path.commands, duplicateCommand)) {
                 return makeCurrentFailure(
                     SolveKind::Unknown,
                     "FailedCommands duplicate lookup exceeded proof budget");
             }
-            if (failedCommands.contains(path.commands)) {
+            if (duplicateCommand) {
                 ++report.duplicateCandidateSkips;
                 continue;
             }
@@ -2489,10 +2922,7 @@ namespace d20proof {
                 falseCheck.snapshot,
                 path,
                 replay);
-            const std::uint64_t failedBytes = accountedFailedCommandBytes(path.commands);
-            const std::uint64_t insertWork =
-                failedCommandLookupWork(failedCommands.size(), path.commands.size());
-            if (!chargeSearchBudget(report, budget, insertWork, failedBytes)) {
+            if (!insertFailedCommand(path.commands, failure)) {
                 releaseReplayBytes(report, replay);
                 SolveResult result = makeFailure(
                     SolveKind::Unknown,
@@ -2505,7 +2935,6 @@ namespace d20proof {
                 stampElapsed(result.budget, start);
                 return result;
             }
-            failedCommands.emplace(path.commands, failure);
             ++failedCandidatesInBatch;
 
             const std::optional<CandidateMismatch> mismatch = firstCandidateMismatch(
@@ -2532,7 +2961,11 @@ namespace d20proof {
             releaseReplayBytes(report, replay);
 
             if (failedCandidatesInBatch >= 8) {
+                std::cerr << "D20_WORK repair_before=" << report.work
+                          << " failures=" << failures.size() << '\n';
                 const std::optional<bool> repaired = tryOneRepair();
+                std::cerr << "D20_WORK repair_after=" << report.work
+                          << " result=" << (repaired.has_value() ? (*repaired ? 1 : 0) : -1) << '\n';
                 if (!repaired.has_value()) {
                     return makeCurrentFailure(
                         SolveKind::ModelError,
