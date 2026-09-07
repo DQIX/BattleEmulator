@@ -169,6 +169,27 @@ namespace d20proof {
             return bytes;
         }
 
+        std::uint64_t accountedCheckedRootRecordBytes(const CheckedRootRecord &record) {
+            std::uint64_t bytes = sizeof(CheckedRootRecord);
+            if (record.verifiedPc.routineId.size() > std::numeric_limits<std::uint64_t>::max() - bytes) {
+                return std::numeric_limits<std::uint64_t>::max();
+            }
+            return bytes + record.verifiedPc.routineId.size();
+        }
+
+        std::uint64_t accountedCompletionCheckpointBytes(const CompletionCheckpoint &checkpoint) {
+            std::uint64_t bytes = sizeof(CompletionCheckpoint);
+            const std::uint64_t frameBytes = accountedSymbolicFrameBytes(checkpoint.frame);
+            if (frameBytes < sizeof(SymbolicFrame)) {
+                return std::numeric_limits<std::uint64_t>::max();
+            }
+            const std::uint64_t dynamicFrameBytes = frameBytes - sizeof(SymbolicFrame);
+            if (dynamicFrameBytes > std::numeric_limits<std::uint64_t>::max() - bytes) {
+                return std::numeric_limits<std::uint64_t>::max();
+            }
+            return bytes + dynamicFrameBytes;
+        }
+
         std::uint64_t accountedSnapshotBytes(const CheckedSnapshot &snapshot) {
             std::uint64_t bytes = accountedPartitionFamilyBytes(snapshot.partitions);
             auto add = [&](std::uint64_t amount) {
@@ -181,8 +202,12 @@ namespace d20proof {
             for (const RootProofRecord &proof: snapshot.proofs) {
                 add(accountedRootProofRecordBytes(proof));
             }
-            add(snapshot.coverage.size() * sizeof(CheckedRootRecord));
-            add(snapshot.completionCheckpoints.size() * sizeof(CompletionCheckpoint));
+            for (const CheckedRootRecord &record: snapshot.coverage) {
+                add(accountedCheckedRootRecordBytes(record));
+            }
+            for (const CompletionCheckpoint &checkpoint: snapshot.completionCheckpoints) {
+                add(accountedCompletionCheckpointBytes(checkpoint));
+            }
             for (const auto &layer: snapshot.edgesByElapsedTurn) {
                 add(layer.size() * sizeof(CheckedEdge));
                 for (const CheckedEdge &edge: layer) {

@@ -383,6 +383,40 @@ namespace d20proof {
             return bytes;
         }
 
+        std::uint64_t symbolicFrameVectorBytes(const std::vector<SymbolicFrame> &frames) noexcept {
+            std::uint64_t bytes = 0;
+            for (const SymbolicFrame &frame: frames) {
+                const std::uint64_t frameBytes = symbolicFrameRecordBytes(frame);
+                if (frameBytes > std::numeric_limits<std::uint64_t>::max() - bytes) {
+                    return std::numeric_limits<std::uint64_t>::max();
+                }
+                bytes += frameBytes;
+            }
+            return bytes;
+        }
+
+        std::uint64_t outputLeafClassificationVectorBytes(
+            const std::vector<OutputLeafClassification> &leaves) noexcept {
+            std::uint64_t bytes = 0;
+            for (const OutputLeafClassification &leaf: leaves) {
+                std::uint64_t leafBytes = sizeof(OutputLeafClassification);
+                const std::uint64_t frameBytes = symbolicFrameRecordBytes(leaf.frame);
+                if (frameBytes < sizeof(SymbolicFrame)) {
+                    return std::numeric_limits<std::uint64_t>::max();
+                }
+                const std::uint64_t dynamicFrameBytes = frameBytes - sizeof(SymbolicFrame);
+                if (dynamicFrameBytes > std::numeric_limits<std::uint64_t>::max() - leafBytes) {
+                    return std::numeric_limits<std::uint64_t>::max();
+                }
+                leafBytes += dynamicFrameBytes;
+                if (leafBytes > std::numeric_limits<std::uint64_t>::max() - bytes) {
+                    return std::numeric_limits<std::uint64_t>::max();
+                }
+                bytes += leafBytes;
+            }
+            return bytes;
+        }
+
         std::uint64_t detailedProofNodeBytes(const DetailedProofNode &node) noexcept {
             std::uint64_t bytes = sizeof(DetailedProofNode);
             auto add = [&](std::uint64_t amount) {
@@ -420,6 +454,41 @@ namespace d20proof {
             return bytes;
         }
 
+        std::uint64_t checkedRootRecordBytes(const CheckedRootRecord &record) noexcept {
+            if (record.verifiedPc.routineId.size() > std::numeric_limits<std::uint64_t>::max() -
+                                                      sizeof(CheckedRootRecord)) {
+                return std::numeric_limits<std::uint64_t>::max();
+            }
+            return sizeof(CheckedRootRecord) + record.verifiedPc.routineId.size();
+        }
+
+        std::uint64_t completionCheckpointBytes(const CompletionCheckpoint &checkpoint) noexcept {
+            std::uint64_t bytes = sizeof(CompletionCheckpoint);
+            const std::uint64_t frameBytes = symbolicFrameRecordBytes(checkpoint.frame);
+            if (frameBytes < sizeof(SymbolicFrame)) {
+                return std::numeric_limits<std::uint64_t>::max();
+            }
+            const std::uint64_t dynamicFrameBytes = frameBytes - sizeof(SymbolicFrame);
+            if (dynamicFrameBytes > std::numeric_limits<std::uint64_t>::max() - bytes) {
+                return std::numeric_limits<std::uint64_t>::max();
+            }
+            return bytes + dynamicFrameBytes;
+        }
+
+        std::uint64_t checkedEdgeBytes(const CheckedEdge &edge) noexcept {
+            std::uint64_t bytes = sizeof(CheckedEdge);
+            const std::uint64_t targetBytes = edge.targets.size() * sizeof(CellKey);
+            const std::uint64_t termBytes = edge.weightTerms.size() * sizeof(CompletionWeightTerm);
+            if (targetBytes > std::numeric_limits<std::uint64_t>::max() - bytes) {
+                return std::numeric_limits<std::uint64_t>::max();
+            }
+            bytes += targetBytes;
+            if (termBytes > std::numeric_limits<std::uint64_t>::max() - bytes) {
+                return std::numeric_limits<std::uint64_t>::max();
+            }
+            return bytes + termBytes;
+        }
+
         std::uint64_t snapshotAccountedBytes(const CheckedSnapshot &snapshot) noexcept {
             std::uint64_t bytes = partitionFamilyBytes(snapshot.partitions);
             auto add = [&](std::uint64_t amount) {
@@ -432,8 +501,12 @@ namespace d20proof {
             for (const RootProofRecord &proof: snapshot.proofs) {
                 add(rootProofRecordBytes(proof));
             }
-            add(snapshot.coverage.size() * sizeof(CheckedRootRecord));
-            add(snapshot.completionCheckpoints.size() * sizeof(CompletionCheckpoint));
+            for (const CheckedRootRecord &record: snapshot.coverage) {
+                add(checkedRootRecordBytes(record));
+            }
+            for (const CompletionCheckpoint &checkpoint: snapshot.completionCheckpoints) {
+                add(completionCheckpointBytes(checkpoint));
+            }
             for (const auto &layer: snapshot.edgesByElapsedTurn) {
                 add(layer.size() * sizeof(CheckedEdge));
                 for (const CheckedEdge &edge: layer) {
@@ -1394,7 +1467,7 @@ namespace d20proof {
                     return false;
                 }
 
-                const SymbolicFrame frame = nodes[nodeIndex].claimedFrame;
+                const SymbolicFrame &frame = nodes[nodeIndex].claimedFrame;
                 if (completionSite != nullptr && stepper.point(frame) == completionSite->pc) {
                     nodes[nodeIndex].kind = DetailedProofNodeKind::Complete;
                     continue;
@@ -1424,6 +1497,15 @@ namespace d20proof {
                             frame.routineId + ":" + std::to_string(frame.pc) + ": " + step.reason;
                     return false;
                 }
+                ScopedBudgetBytes stepFrameBytes(budget);
+                const std::uint64_t generatedFrameBytes = symbolicFrameVectorBytes(step.frames);
+                if (generatedFrameBytes != 0) {
+                    if (!chargeBudget(budget, limits, 0, generatedFrameBytes)) {
+                        error = "detailed proof child materialization exceeded byte budget";
+                        return false;
+                    }
+                    stepFrameBytes.add(generatedFrameBytes);
+                }
                 if (step.finished) {
                     if (instruction->opcode != Opcode::Finish || step.frames.size() != 1 ||
                         !(step.frames.front() == frame)) {
@@ -1442,6 +1524,13 @@ namespace d20proof {
                     return false;
                 }
 
+                const std::uint64_t childIndexBytes =
+                    step.frames.size() * sizeof(std::uint32_t);
+                if (!chargeBudget(budget, limits, 0, childIndexBytes)) {
+                    error = "detailed proof temporary child-index storage exceeded byte budget";
+                    return false;
+                }
+                temporaryBytes.add(childIndexBytes);
                 std::vector<std::uint32_t> childIndices;
                 childIndices.reserve(step.frames.size());
                 for (const SymbolicFrame &childFrame: step.frames) {
@@ -1451,8 +1540,6 @@ namespace d20proof {
                     }
                     childIndices.push_back(childIndex);
                 }
-                const std::uint64_t childIndexBytes =
-                    childIndices.size() * sizeof(std::uint32_t);
                 if (!chargeBudget(budget, limits, 0, childIndexBytes)) {
                     error = "detailed proof child-index storage exceeded byte budget";
                     return false;
@@ -2091,7 +2178,9 @@ namespace d20proof {
                                        const Box &rootDomain,
                                        CheckedRootRecord &record,
                                        std::vector<CheckedEdge> &edges,
-                                       std::vector<CompletionCheckpoint> &checkpoints) -> bool {
+                                       std::vector<CompletionCheckpoint> &checkpoints,
+                                       std::uint64_t &checkedOutputBytes) -> bool {
+            checkedOutputBytes = 0;
             const CompletionSite *site = nullptr;
             std::vector<CompletionWeightTerm> remainingTerms;
             if (proof.kind == RootProofKind::Completion) {
@@ -2134,25 +2223,46 @@ namespace d20proof {
                 ? site->pc
                 : ProgramPoint{bundle.program.entryRoutine, 0};
             record.verifiedCut = proof.cut;
+            ScopedBudgetBytes outputBytes(budget);
+            const std::uint64_t recordBytes = checkedRootRecordBytes(record);
+            if (!chargeBudget(budget, limits, 0, recordBytes)) {
+                snapshot.check.reason = "detailed checked-root record exceeded proof budget";
+                return false;
+            }
+            outputBytes.add(recordBytes);
 
             SymbolicStepper stepper(bundle, problem);
             struct PendingDetailedNode {
                 SymbolicFrame frame;
                 std::uint32_t nodeIndex = 0;
             };
+            auto pendingDetailedNodeBytes = [](const PendingDetailedNode &node) noexcept {
+                std::uint64_t bytes = sizeof(PendingDetailedNode);
+                const std::uint64_t frameBytes = symbolicFrameRecordBytes(node.frame);
+                if (frameBytes < sizeof(SymbolicFrame)) {
+                    return std::numeric_limits<std::uint64_t>::max();
+                }
+                const std::uint64_t dynamicFrameBytes = frameBytes - sizeof(SymbolicFrame);
+                if (dynamicFrameBytes > std::numeric_limits<std::uint64_t>::max() - bytes) {
+                    return std::numeric_limits<std::uint64_t>::max();
+                }
+                return bytes + dynamicFrameBytes;
+            };
             std::vector<PendingDetailedNode> pending;
-            const SymbolicFrame requiredRoot = stepper.makeRootFrame(
+            SymbolicFrame requiredRoot = stepper.makeRootFrame(
                 elapsedTurn,
                 command,
                 source.rngPosition,
                 rootDomain);
-            pending.push_back({requiredRoot, 0});
             ScopedBudgetBytes pendingBytes(budget);
-            if (!chargeBudget(budget, limits, 0, sizeof(PendingDetailedNode))) {
+            PendingDetailedNode rootPending{std::move(requiredRoot), 0};
+            const std::uint64_t rootPendingBytes = pendingDetailedNodeBytes(rootPending);
+            if (!chargeBudget(budget, limits, 0, rootPendingBytes)) {
                 snapshot.check.reason = "detailed verify_root stack exceeded proof budget";
                 return false;
             }
-            pendingBytes.add(sizeof(PendingDetailedNode));
+            pendingBytes.add(rootPendingBytes);
+            pending.push_back(std::move(rootPending));
             ScopedBudgetBytes visitedBytes(budget);
             std::vector<std::uint8_t> visited(proof.detailedNodes.size(), 0);
             if (!chargeBudget(budget, limits, 0, visited.size())) {
@@ -2232,6 +2342,12 @@ namespace d20proof {
                 }
                 std::sort(edge.targets.begin(), edge.targets.end());
                 edge.targets.erase(std::unique(edge.targets.begin(), edge.targets.end()), edge.targets.end());
+                const std::uint64_t edgeBytes = checkedEdgeBytes(edge);
+                if (!chargeBudget(budget, limits, 0, edgeBytes)) {
+                    snapshot.check.reason = "checked symbolic edge storage exceeded proof budget";
+                    return false;
+                }
+                outputBytes.add(edgeBytes);
                 edges.push_back(std::move(edge));
                 return true;
             };
@@ -2277,6 +2393,12 @@ namespace d20proof {
                     edge.mayReachGoal = goal;
                     edge.mayReachFailure = failure;
                     edge.weightTerms = {weight};
+                    const std::uint64_t edgeBytes = checkedEdgeBytes(edge);
+                    if (!chargeBudget(budget, limits, 0, edgeBytes)) {
+                        snapshot.check.reason = "exact terminal edge storage exceeded proof budget";
+                        return false;
+                    }
+                    outputBytes.add(edgeBytes);
                     edges.push_back(std::move(edge));
                     return true;
                 };
@@ -2297,8 +2419,10 @@ namespace d20proof {
                     return false;
                 }
                 ScopedBudgetBytes enemySplitBytes(budget);
-                const std::uint64_t enemySplitStorage =
-                    (goalFrames.size() + enemyAliveFrames.size()) * sizeof(SymbolicFrame);
+                const std::uint64_t enemySplitStorage = saturatedReservationAdd(
+                    symbolicFrameVectorBytes(goalFrames),
+                    symbolicFrameVectorBytes(enemyAliveFrames),
+                    std::numeric_limits<std::uint64_t>::max());
                 if (enemySplitStorage != 0) {
                     if (!chargeBudget(
                             budget,
@@ -2333,8 +2457,10 @@ namespace d20proof {
                         return false;
                     }
                     ScopedBudgetBytes heroSplitBytes(budget);
-                    const std::uint64_t heroSplitStorage =
-                        (failureFrames.size() + continuingFrames.size()) * sizeof(SymbolicFrame);
+                    const std::uint64_t heroSplitStorage = saturatedReservationAdd(
+                        symbolicFrameVectorBytes(failureFrames),
+                        symbolicFrameVectorBytes(continuingFrames),
+                        std::numeric_limits<std::uint64_t>::max());
                     if (heroSplitStorage != 0) {
                         if (!chargeBudget(
                                 budget,
@@ -2377,16 +2503,17 @@ namespace d20proof {
                             return false;
                         }
                         ScopedBudgetBytes classifiedBytes(budget);
+                        const std::uint64_t classifiedStorage =
+                            outputLeafClassificationVectorBytes(classified);
                         if (!chargeBudget(
                                 budget,
                                 limits,
                                 classified.size(),
-                                classified.size() * sizeof(OutputLeafClassification))) {
+                                classifiedStorage)) {
                             snapshot.check.reason = "detailed output classification exceeded proof budget";
                             return false;
                         }
-                        classifiedBytes.add(
-                            classified.size() * sizeof(OutputLeafClassification));
+                        classifiedBytes.add(classifiedStorage);
                         for (const OutputLeafClassification &leaf: classified) {
                             Box leafOutput;
                             CompletionWeightTerm weight;
@@ -2411,6 +2538,12 @@ namespace d20proof {
                             edge.hasContinuingOutput = true;
                             edge.targets.push_back({leaf.frame.rngPosition, leaf.localCellId});
                             edge.weightTerms = {weight};
+                            const std::uint64_t edgeBytes = checkedEdgeBytes(edge);
+                            if (!chargeBudget(budget, limits, 0, edgeBytes)) {
+                                snapshot.check.reason = "classified detailed edge storage exceeded proof budget";
+                                return false;
+                            }
+                            outputBytes.add(edgeBytes);
                             edges.push_back(std::move(edge));
                         }
                     }
@@ -2419,9 +2552,9 @@ namespace d20proof {
             };
 
             while (!pending.empty()) {
+                const std::uint64_t currentPendingBytes = pendingDetailedNodeBytes(pending.back());
                 PendingDetailedNode pendingNode = std::move(pending.back());
                 pending.pop_back();
-                pendingBytes.release(sizeof(PendingDetailedNode));
                 if (pendingNode.nodeIndex >= proof.detailedNodes.size() ||
                     visited[pendingNode.nodeIndex] != 0) {
                     snapshot.check.reason = "detailed proof tree has an invalid, shared, or cyclic child reference";
@@ -2483,7 +2616,21 @@ namespace d20proof {
                         return false;
                     }
 
-                    checkpoints.push_back({elapsedTurn, source, command, proof.cut, rootDomain, frame});
+                    CompletionCheckpoint checkpoint{
+                        elapsedTurn,
+                        source,
+                        command,
+                        proof.cut,
+                        rootDomain,
+                        frame,
+                    };
+                    const std::uint64_t checkpointBytes = completionCheckpointBytes(checkpoint);
+                    if (!chargeBudget(budget, limits, 0, checkpointBytes)) {
+                        snapshot.check.reason = "partial COMPLETE checkpoint storage exceeded proof budget";
+                        return false;
+                    }
+                    outputBytes.add(checkpointBytes);
+                    checkpoints.push_back(std::move(checkpoint));
                     for (const CompletionWeightTerm &remaining: remainingTerms) {
                         CompletionWeightTerm total;
                         if (!addCompletionTerm(prefix, remaining, total, frameError)) {
@@ -2511,6 +2658,7 @@ namespace d20proof {
                             return false;
                         }
                     }
+                    pendingBytes.release(currentPendingBytes);
                     continue;
                 }
 
@@ -2551,7 +2699,7 @@ namespace d20proof {
                     return false;
                 }
                 ScopedBudgetBytes stepBytes(budget);
-                const std::uint64_t producedBytes = step.frames.size() * sizeof(SymbolicFrame);
+                const std::uint64_t producedBytes = symbolicFrameVectorBytes(step.frames);
                 if (producedBytes != 0) {
                     if (!chargeBudget(budget, limits, step.frames.size(), producedBytes)) {
                         snapshot.check.reason = "symbolic child materialization exceeded proof budget";
@@ -2571,6 +2719,7 @@ namespace d20proof {
                             return false;
                         }
                     }
+                    pendingBytes.release(currentPendingBytes);
                     continue;
                 }
                 if (proofNode.children.size() != step.frames.size()) {
@@ -2584,13 +2733,16 @@ namespace d20proof {
                         snapshot.check.reason = "detailed proof child index is outside the submitted tree";
                         return false;
                     }
-                    if (!chargeBudget(budget, limits, 0, sizeof(PendingDetailedNode))) {
+                    PendingDetailedNode childPending{std::move(step.frames[index]), proofChild};
+                    const std::uint64_t childPendingBytes = pendingDetailedNodeBytes(childPending);
+                    if (!chargeBudget(budget, limits, 0, childPendingBytes)) {
                         snapshot.check.reason = "detailed verify_root stack exceeded proof budget";
                         return false;
                     }
-                    pendingBytes.add(sizeof(PendingDetailedNode));
-                    pending.push_back({std::move(step.frames[index]), proofChild});
+                    pendingBytes.add(childPendingBytes);
+                    pending.push_back(std::move(childPending));
                 }
+                pendingBytes.release(currentPendingBytes);
             }
 
             if (std::find(visited.begin(), visited.end(), static_cast<std::uint8_t>(0)) != visited.end()) {
@@ -2606,6 +2758,8 @@ namespace d20proof {
                 snapshot.check.reason = "detailed verify_root produced no checked outputs";
                 return false;
             }
+            checkedOutputBytes = outputBytes.bytes();
+            outputBytes.disarm();
             return true;
         };
 
@@ -2669,7 +2823,7 @@ namespace d20proof {
                         continue;
                     }
 
-                    const std::optional<RootProofRecord> proof = acquireRequiredProof(
+                    std::optional<RootProofRecord> proof = acquireRequiredProof(
                         elapsedTurn,
                         source,
                         command,
@@ -2677,10 +2831,19 @@ namespace d20proof {
                     if (!proof.has_value()) {
                         return snapshot;
                     }
+                    const std::uint64_t proofRecordBytes = rootProofRecordBytes(*proof);
+                    ScopedBudgetBytes localProofBytes(budget);
+                    if (!chargeBudget(budget, limits, 0, proofRecordBytes)) {
+                        snapshot.check.reason = "required-root proof record exceeded byte budget";
+                        return snapshot;
+                    }
+                    localProofBytes.add(proofRecordBytes);
 
                     CheckedRootRecord record;
                     std::vector<CheckedEdge> checkedEdges;
                     std::vector<CompletionCheckpoint> checkpoints;
+                    std::uint64_t localDerivedByteCount = 0;
+                    ScopedBudgetBytes localDerivedBytes(budget);
                     if (proof->kind == RootProofKind::Completion &&
                         proof->cut == CompletionCutId::TurnEntry) {
                         CheckedEdge edge;
@@ -2745,6 +2908,24 @@ namespace d20proof {
                                 edge.targets.end());
                         }
                         checkedEdges.push_back(std::move(edge));
+                        localDerivedByteCount = checkedRootRecordBytes(record);
+                        for (const CheckedEdge &checkedEdge: checkedEdges) {
+                            localDerivedByteCount = saturatedReservationAdd(
+                                localDerivedByteCount,
+                                checkedEdgeBytes(checkedEdge),
+                                std::numeric_limits<std::uint64_t>::max());
+                        }
+                        for (const CompletionCheckpoint &checkpoint: checkpoints) {
+                            localDerivedByteCount = saturatedReservationAdd(
+                                localDerivedByteCount,
+                                completionCheckpointBytes(checkpoint),
+                                std::numeric_limits<std::uint64_t>::max());
+                        }
+                        if (!chargeBudget(budget, limits, 0, localDerivedByteCount)) {
+                            snapshot.check.reason = "turn-entry checked output storage exceeded proof budget";
+                            return snapshot;
+                        }
+                        localDerivedBytes.add(localDerivedByteCount);
                     } else if (!verifyDetailedProof(
                                    *proof,
                                    elapsedTurn,
@@ -2753,8 +2934,14 @@ namespace d20proof {
                                    rootDomain,
                                    record,
                                    checkedEdges,
-                                   checkpoints)) {
+                                   checkpoints,
+                                   localDerivedByteCount)) {
                         return snapshot;
+                    } else {
+                        // verifyDetailedProof leaves its checked outputs charged
+                        // on success; adopt those bytes so later failures in this
+                        // root roll them back transactionally.
+                        localDerivedBytes.add(localDerivedByteCount);
                     }
 
                     std::size_t edgeTargets = 0;
@@ -2790,25 +2977,52 @@ namespace d20proof {
                     }
                     storedModelTerms += edgeTerms;
 
-                    const std::uint64_t rootBytes =
-                        rootProofRecordBytes(*proof) +
-                        sizeof(CheckedRootRecord) +
-                        checkedEdges.size() * sizeof(CheckedEdge) +
-                        edgeTerms * sizeof(CompletionWeightTerm) +
-                        edgeTargets * sizeof(CellKey) +
-                        checkpoints.size() * sizeof(CompletionCheckpoint);
+                    constexpr std::uint64_t byteCap = std::numeric_limits<std::uint64_t>::max();
+                    std::uint64_t checkpointBytes = 0;
+                    for (const CompletionCheckpoint &checkpoint: checkpoints) {
+                        checkpointBytes = saturatedReservationAdd(
+                            checkpointBytes,
+                            completionCheckpointBytes(checkpoint),
+                            byteCap);
+                    }
+                    std::uint64_t derivedRootBytes = checkedRootRecordBytes(record);
+                    derivedRootBytes = saturatedReservationAdd(
+                        derivedRootBytes,
+                        checkedEdges.size() * sizeof(CheckedEdge),
+                        byteCap);
+                    derivedRootBytes = saturatedReservationAdd(
+                        derivedRootBytes,
+                        edgeTerms * sizeof(CompletionWeightTerm),
+                        byteCap);
+                    derivedRootBytes = saturatedReservationAdd(
+                        derivedRootBytes,
+                        edgeTargets * sizeof(CellKey),
+                        byteCap);
+                    derivedRootBytes = saturatedReservationAdd(
+                        derivedRootBytes,
+                        checkpointBytes,
+                        byteCap);
+                    if (derivedRootBytes != localDerivedByteCount) {
+                        snapshot.check.reason = "checked-root working byte accounting disagrees with retained form";
+                        return snapshot;
+                    }
                     if (!chargeBudget(
                             budget,
                             limits,
                             1 + proof->completionCases.size() + proof->detailedNodes.size() +
                                 edgeTerms + edgeTargets,
-                            rootBytes)) {
+                            0)) {
                         snapshot.check.reason = "root coverage exceeded proof budget";
                         return snapshot;
                     }
-                    retainedSnapshotBytes.add(rootBytes);
+                    retainedSnapshotBytes.add(saturatedReservationAdd(
+                        proofRecordBytes,
+                        derivedRootBytes,
+                        byteCap));
+                    localProofBytes.disarm();
+                    localDerivedBytes.disarm();
 
-                    snapshot.proofs.push_back(*proof);
+                    snapshot.proofs.push_back(std::move(*proof));
                     snapshot.coverage.push_back(std::move(record));
                     snapshot.completionCheckpoints.insert(
                         snapshot.completionCheckpoints.end(),
@@ -2959,7 +3173,8 @@ namespace d20proof {
         std::optional<CompletionCutId> nextCut;
         const std::uint64_t retainedBytesBeforeReservation = budget.bytes;
         BudgetReport reservedBudget = budget;
-        if (!chargeBudget(reservedBudget, limits, 0, sizeof(SymbolicFrame))) {
+        const std::uint64_t initialPendingBytes = symbolicFrameRecordBytes(pending.back());
+        if (!chargeBudget(reservedBudget, limits, 0, initialPendingBytes)) {
             budget = reservedBudget;
             budget.bytes = retainedBytesBeforeReservation;
             result.reason = "completion resume stack exceeded proof budget";
@@ -2972,9 +3187,9 @@ namespace d20proof {
         // been checked through FINISH.  Work/bytes/time spent while making
         // that reservation are still charged even when it cannot complete.
         while (!pending.empty()) {
+            const std::uint64_t currentFrameBytes = symbolicFrameRecordBytes(pending.back());
             SymbolicFrame frame = std::move(pending.back());
             pending.pop_back();
-            releaseBudgetBytes(reservedBudget, sizeof(SymbolicFrame));
             if (!chargeBudget(reservedBudget, limits, 1, 0)) {
                 budget = reservedBudget;
                 budget.bytes = retainedBytesBeforeReservation;
@@ -2992,6 +3207,7 @@ namespace d20proof {
                 if (cut == *nextCut) {
                     // This entire nonempty branch is covered by the selected
                     // stronger COMPLETE site; do not execute beyond the cut.
+                    releaseBudgetBytes(reservedBudget, currentFrameBytes);
                     continue;
                 }
                 // A different registered cut is not the template we are
@@ -3023,7 +3239,7 @@ namespace d20proof {
                                 frame.routineId + ":" + std::to_string(frame.pc) + ": " + step.reason;
                 return result;
             }
-            const std::uint64_t producedBytes = step.frames.size() * sizeof(SymbolicFrame);
+            const std::uint64_t producedBytes = symbolicFrameVectorBytes(step.frames);
             if (producedBytes != 0 &&
                 !chargeBudget(reservedBudget, limits, step.frames.size(), producedBytes)) {
                 budget = reservedBudget;
@@ -3033,10 +3249,12 @@ namespace d20proof {
             }
             if (step.finished) {
                 releaseBudgetBytes(reservedBudget, producedBytes);
+                releaseBudgetBytes(reservedBudget, currentFrameBytes);
                 continue;
             }
             for (auto child = step.frames.rbegin(); child != step.frames.rend(); ++child) {
-                if (!chargeBudget(reservedBudget, limits, 0, sizeof(SymbolicFrame))) {
+                const std::uint64_t childBytes = symbolicFrameRecordBytes(*child);
+                if (!chargeBudget(reservedBudget, limits, 0, childBytes)) {
                     budget = reservedBudget;
                     budget.bytes = retainedBytesBeforeReservation;
                     result.reason = "completion resume stack exceeded proof budget";
@@ -3045,6 +3263,7 @@ namespace d20proof {
                 pending.push_back(std::move(*child));
             }
             releaseBudgetBytes(reservedBudget, producedBytes);
+            releaseBudgetBytes(reservedBudget, currentFrameBytes);
         }
 
         // Commit the reservation only after the whole required segment has
