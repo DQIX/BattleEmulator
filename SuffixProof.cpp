@@ -11,10 +11,15 @@ bool exactStep(const Problem& p,const RegisteredRules& rules,BattleState& state,
     if(selectable(point,command).empty()) return false;
     auto leaves=step(rules,point,state.position,command,budget);
     if(leaves.size()!=1) throw std::logic_error("singleton rule execution is not deterministic");
-    const auto& leaf=leaves[0];if(leaf.terminal==Terminal::Invalid) return false;
+    const auto& leaf=leaves[0];
+    if(leaf.terminal==Terminal::Invalid) throw std::logic_error("Invalid on selectable replay input");
     budget.tick();const auto beforeTurn=(state.nowState>>12)&0xfffff;
     int32_t gene[350]={command};
-    BattleEmulator::Main(&state.position,1,gene,state.players,nullptr,p.seed,nullptr,nullptr,-2,&state.nowState,true);
+    auto raw=state;bool rejectedFlee=false;
+    BattleEmulator::Main(&raw.position,1,gene,raw.players,nullptr,p.seed,nullptr,nullptr,-2,&raw.nowState,true,false,&rejectedFlee);
+    if(rejectedFlee!=(leaf.terminal==Terminal::ForbiddenFlee)) throw std::logic_error("skipTurn assertion correspondence");
+    if(rejectedFlee) return false;
+    state=raw;
     if(state.position!=leaf.position || !(alpha(state)==image(point,leaf.output)) ||
         ((state.nowState>>12)&0xfffff)!=beforeTurn+1)
         throw std::logic_error("RuleProgram disagrees with exact BattleEmulator replay");
@@ -30,6 +35,7 @@ class CandidateIterator {
     std::vector<std::vector<int>> destinations;
     std::vector<CandidateFrame> stack;
     std::vector<Choice> path;
+    std::vector<Choice> yielded;
     void scan() {
         budget.tick();if(++budget.candidateScans>budget.limits.maxCandidateScans) throw Exhausted{};
     }
@@ -73,7 +79,7 @@ public:
         }
         if(m.horizon>0) stack.push_back(frame(0,m.root));
     }
-    std::optional<std::vector<Choice>> next() {
+    const std::vector<Choice>* next() {
         while(!stack.empty()) {
             auto& f=stack.back();int best=-1;
             for(int i=0;i<int(f.cursors.size());++i) {
@@ -83,10 +89,10 @@ public:
             if(best<0) {stack.pop_back();if(!path.empty()) path.pop_back();continue;}
             const auto c=f.cursors[best];Choice choice{f.source,c.edge,c.target};
             int nextTurn=f.turn+1;advance(f,f.cursors[best],false);
-            if(choice.target==-1) {auto result=path;result.push_back(choice);return result;}
+            if(choice.target==-1) {yielded=path;yielded.push_back(choice);return &yielded;}
             path.push_back(choice);stack.push_back(frame(nextTurn,choice.target));
         }
-        return std::nullopt;
+        return nullptr;
     }
 };
 struct Repair {
@@ -95,21 +101,21 @@ struct Repair {
     int command=0;
     Box domain;
     bool completion=false;
-    std::optional<Predicate> predicate;
+    std::unique_ptr<Predicate> predicate;
     Box point;
 };
-std::optional<Predicate> separating(const Box& expected,const Box& actual) {
+std::unique_ptr<Predicate> separating(const Box& expected,const Box& actual) {
     for(int j=0;j<4;++j) {
-        if(actual.resource[j].lo<expected.resource[j].lo) return Predicate{j,add(expected.resource[j].lo,-1),0};
-        if(actual.resource[j].hi>expected.resource[j].hi) return Predicate{j,expected.resource[j].hi,0};
+        if(actual.resource[j].lo<expected.resource[j].lo) return std::make_unique<Predicate>(Predicate{j,add(expected.resource[j].lo,-1),0});
+        if(actual.resource[j].hi>expected.resource[j].hi) return std::make_unique<Predicate>(Predicate{j,expected.resource[j].hi,0});
     }
-    for(int j=0;j<6;++j) if(actual.mode[j]&~expected.mode[j]) return Predicate{j+4,0,expected.mode[j]};
-    return std::nullopt;
+    for(int j=0;j<6;++j) if(actual.mode[j]&~expected.mode[j]) return std::make_unique<Predicate>(Predicate{j+4,0,expected.mode[j]});
+    return nullptr;
 }
 struct Replay {
     bool win=false;
     std::vector<int> commands;
-    std::optional<Repair> repair;
+    std::unique_ptr<Repair> repair;
 };
 Replay replayCandidate(const Problem& p,const RegisteredRules& rules,const Model& model,
                        const Partitions& partitions,const std::vector<Choice>& path,Budget& budget) {
@@ -120,11 +126,11 @@ Replay replayCandidate(const Problem& p,const RegisteredRules& rules,const Model
         const auto actual=CellKey{state.position,partitions.at(state.position).classify(point)};
         if(!result.repair && state.position==model.cells[choice.source].position) {
             if(auto predicate=separating(edge.guard,point))
-                result.repair=Repair{t,actual,edge.command,{},false,predicate,point};
+                result.repair=std::make_unique<Repair>(Repair{t,actual,edge.command,{},false,std::move(predicate),point});
         }
         if(state.players[0].hp==0 || !exactStep(p,rules,state,edge.command,budget)) {
             if(!result.repair && edge.completion)
-                result.repair=Repair{t,model.cells[choice.source],edge.command,edge.guard,true,{},point};
+                result.repair=std::make_unique<Repair>(Repair{t,model.cells[choice.source],edge.command,edge.guard,true,{},point});
             return result;
         }
         result.commands.push_back(edge.command);
@@ -133,7 +139,7 @@ Replay replayCandidate(const Problem& p,const RegisteredRules& rules,const Model
         bool destinationMatches=choice.target==-1?win:(!win && !dead &&
             model.cells[choice.target]==CellKey{state.position,partitions.at(state.position).classify(alpha(state))});
         if(!result.repair && edge.completion && !destinationMatches)
-            result.repair=Repair{t,model.cells[choice.source],edge.command,edge.guard,true,{},point};
+            result.repair=std::make_unique<Repair>(Repair{t,model.cells[choice.source],edge.command,edge.guard,true,{},point});
         if(!edge.completion && beforePosition==model.cells[choice.source].position && edge.guard.contains(point) && !destinationMatches)
             throw std::logic_error("verified detailed edge disagrees with replay destination");
         if(win) {result.win=true;return result;}
@@ -153,16 +159,16 @@ Plane maximizingPlane(const Problem& p,const Model& m,const DynamicProgram& dp,P
         bool found=false;
         for(const auto& e:m.edges[q]) {
             budget.tick();if(e.dead) continue;
-            Bound continuation=e.goal?Bound{0}:std::nullopt;int target=-1;
+            Bound continuation=e.goal?0:unreachable;int target=-1;
             if(e.completion) {
                 for(int out:m.support[t+1]) {
                     budget.tick();int pos=m.cells[out].position;
                     if(pos<e.firstPosition || pos>e.lastPosition) continue;
                     const auto value=dp.bound[t+1][out];
-                    if(value && (!continuation || *value>*continuation)) {continuation=value;target=out;}
+                    if(value>continuation) {continuation=value;target=out;}
                 }
             } else if(!e.goal) {continuation=dp.bound[t+1][e.target];target=e.target;}
-            if(continuation && add(edgeWeight(e,prices),*continuation)==dp.bound[t][q]) {
+            if(continuation!=unreachable && extendBound(edgeWeight(e,prices),continuation)==dp.bound[t][q]) {
                 for(int j=0;j<4;++j) gain[j]=add(gain[j],e.gain[j]);
                 q=target;found=true;break;
             }
@@ -214,11 +220,40 @@ Result run(const Problem& p,int horizon,const RegisteredRules& rules,Budget& bud
     Result result;result.problem=p;validateProblem(p,horizon,rules);
     if(p.root.players[1].hp==0) {result.status=Status::Optimal;result.minimum=0;return result;}
     if(horizon==0 || p.root.players[0].hp==0) {
-        result.certificate=Certificate{rules.version,p,horizon,{},{},{},{}};
+        result.certificate=std::make_unique<Certificate>(Certificate{rules.version,p,horizon,{},{},{},{},rules.identity});
         if(!verifyFalse(p,*result.certificate,budget)) throw std::logic_error("trivial false rejected");
         result.status=Status::ProvedFalse;result.provedFalseThrough=horizon;return result;
     }
     lcg::init(p.seed,true);
+    // A local Box proof can close a suffix without rebuilding the deliberately
+    // coarse all-mode graph. The same registered transitions and raw witness
+    // replay bind both sides of the adjacent-turn result.
+    if(budget.limits.regional) {
+        auto regional=searchRegions(p,horizon,rules,budget,[&](std::span<const int> commands) {
+            auto raw=p.root;
+            for(std::size_t i=0;i<commands.size();++i) {
+                if(raw.players[0].hp==0 || !exactStep(p,rules,raw,commands[i],budget) ||
+                   (raw.players[1].hp==0 && i+1!=commands.size()))
+                    throw std::logic_error("regional witness rejected by exact replay");
+            }
+            if(raw.players[1].hp!=0) throw std::logic_error("regional witness did not win");
+        });
+        result.statistics.cells=regional.rooms;result.statistics.edges=regional.transitions;
+        if(!regional.commands.empty()) {
+            result.commands=std::move(regional.commands);result.status=Status::Win;
+        }
+        if(regional.negative) {
+            result.regionCertificate=std::move(regional.negative);
+            result.provedFalseThrough=regional.provedFalseThrough;
+            if(result.commands.empty()) result.status=Status::ProvedFalse;
+            else if(result.provedFalseThrough==int(result.commands.size())-1) {
+                result.status=Status::Optimal;result.minimum=int(result.commands.size());
+            }
+        }
+        if(result.status!=Status::Unknown) return result;
+        result.detail="regional proof time/work/space budget exhausted";
+        return result;
+    }
     Partitions partitions(p,horizon,rules);Coverage coverage;
     std::set<std::vector<int>> failed;
     std::vector<int> witness;
@@ -241,9 +276,9 @@ Result run(const Problem& p,int horizon,const RegisteredRules& rules,Budget& bud
                 falseCandidate=excludesWin(p,dp,prices);
             }
             if(falseCandidate) {
-                Certificate certificate{rules.version,p,horizon,std::move(partitions),std::move(coverage),prices,std::move(dp.bound)};
+                Certificate certificate{rules.version,p,horizon,std::move(partitions),std::move(coverage),prices,std::move(dp.bound),rules.identity};
                 if(!verifyFalse(p,certificate,budget)) throw std::logic_error("independent false verification rejected");
-                result.certificate=std::move(certificate);result.provedFalseThrough=horizon;
+                result.certificate=std::make_unique<Certificate>(std::move(certificate));result.provedFalseThrough=horizon;
                 result.commands=witness;result.status=witness.empty()?Status::ProvedFalse:Status::Optimal;
                 if(!witness.empty()) result.minimum=int(witness.size());
                 return result;
@@ -278,14 +313,14 @@ Result run(const Problem& p,int horizon,const RegisteredRules& rules,Budget& bud
                         partitions.trees.resize(partitions.lastPosition-partitions.firstPosition+1);
                         ++partitions.version;
                         if(horizon==0) {
-                            Certificate certificate{rules.version,p,0,{},{},{},{}};
+                            Certificate certificate{rules.version,p,0,{},{},{},{},rules.identity};
                             if(!verifyFalse(p,certificate,budget)) throw std::logic_error("zero bound rejected");
-                            result.certificate=std::move(certificate);result.status=Status::Optimal;
+                            result.certificate=std::make_unique<Certificate>(std::move(certificate));result.status=Status::Optimal;
                             result.minimum=1;result.provedFalseThrough=0;return result;
                         }
                         rebuild=true;break;
                     }
-                    failed.insert(std::move(commands));if(replay.repair) repairs.push_back(*replay.repair);
+                    failed.insert(std::move(commands));if(replay.repair) repairs.push_back(std::move(*replay.repair));
                     budget.memory(model.bytes()+coverage.bytes()+failed.size()*std::size_t(budget.limits.maxTurns+1)*8);
                 }
                 if(rebuild) break;

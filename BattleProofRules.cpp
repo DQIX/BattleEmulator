@@ -50,14 +50,15 @@ public:
     }
     void define(int id,Body body) {a.begin(id);body();a.ret();a.end();}
     void dispatch(int slot,const std::vector<std::pair<int,int>>& cases) {
-        for(auto [value,routine]:cases) eq(slot,value,[&]{a.call(routine);a.ret();});
-        a.reject();
+        for(std::size_t i=0;i+1<cases.size();++i) {
+            auto [value,routine]=cases[i];eq(slot,value,[&]{a.call(routine);a.ret();});
+        }
+        a.call(cases.back().second);
     }
 };
 RuleProgram assembleBattle() {
     Builder b;auto& a=b.a;
     const int turn=a.declare("Main/TurnFlow");
-    const int legal=a.declare("selection/legal-eight-commands");
     const int ally=a.declare("Main/ally-slot");
     const int enemy=a.declare("Main/enemy-slot");
     const int selectEnemy=a.declare("Main/enemy-selection-and-replacement");
@@ -83,17 +84,6 @@ RuleProgram assembleBattle() {
     const int camera=a.declare("camera::Main/two-slots");
     const int freeCamera=a.declare("camera::onFreeCameraMove");
 
-    b.define(legal,[&] {
-        b.eq(Command,B::HEAL,[&]{b.le(M,1,[&]{a.reject();});a.ret();});
-        b.eq(Command,B::CRACK_ALLY,[&]{b.le(M,2,[&]{a.reject();});a.ret();});
-        b.eq(Command,B::MEDICINAL_HERBS,[&]{b.le(I,0,[&]{a.reject();});a.ret();});
-        b.eq(Command,B::ACROBATIC_STAR,[&]{
-            b.le(Charge,0,[&]{a.reject();});b.le(Acro,0,[]{},[&]{a.reject();});a.ret();
-        });
-        b.eq(Command,B::FLEE_ALLY,[&]{b.mobile([&]{a.ret();},[&]{a.reject();});});
-        for(int c:{B::ATTACK_ALLY,B::DRAGON_SLASH,B::DEFENCE}) b.eq(Command,c,[&]{a.ret();});
-        a.reject();
-    });
     b.define(record,[&] {
         b.eq(ActionCount,0,[&]{a.copy(Action0,Action);},[&]{a.copy(Action1,Action);});
         a.addConstant(ActionCount,ActionCount,1);
@@ -258,7 +248,9 @@ RuleProgram assembleBattle() {
     });
     b.define(ally,[&]{
         b.le(E,0,[&]{a.ret();});b.le(A,0,[&]{a.ret();});a.copy(Action,Prepared);
-        b.eq(Action,B::FLEE_ALLY,[&]{b.mobile([&]{a.ret();},[&]{a.reject();});});
+        // The user's unchanged emulator assertion is the entire FLEE rule.
+        // It is represented explicitly, never as a generic discarded Invalid.
+        b.eq(Action,B::FLEE_ALLY,[&]{Instruction check;check.op=Op::FleeGuard;a.emit(check);a.ret();});
         b.eq(Para,5,[&]{a.skip(1);},[&]{
             a.set(Action,B::PARALYSIS);a.addConstant(Para,Para,-1);
             b.le(Para,0,[&]{
@@ -298,7 +290,6 @@ RuleProgram assembleBattle() {
         }
     });
     a.begin(turn);
-    a.call(legal);
     b.le(Charge,-1,[]{},[&]{a.addConstant(Charge,Charge,-1);});
     a.set(Defence,0);a.set(Action0,0);a.set(Action1,0);a.set(ActionCount,0);
     a.native(Initiative,Native::Initiative,{});a.skip(1);a.copy(Prepared,Command);

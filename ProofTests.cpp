@@ -16,15 +16,22 @@ void checkRegistration() {
     invalid.routines[0].code[0].op=Op::Jump;invalid.routines[0].code[0].yes=0;
     bool rejected=false;try {registerRules(invalid);} catch(const std::invalid_argument&) {rejected=true;}
     require(rejected,"cycle was registered");
+    invalid.routines[0].code[0].op=Op::Reject;rejected=false;
+    try {registerRules(invalid);} catch(const std::invalid_argument&) {rejected=true;}
+    require(rejected,"generic Reject was registered");
     auto rules=battleRules();require(rules->maxDraws>0 && rules->maxDepth>0,"missing computed execution bounds");
     std::cout<<"registered: RNG <= "<<rules->maxDraws<<", steps <= "<<rules->maxSteps<<", depth <= "<<rules->maxDepth<<'\n';
 }
 void compare(const RegisteredRules& rules,std::uint64_t seed,const BattleState& source,int command,Budget& budget) {
-    const auto point=alpha(source);auto leaves=step(rules,point,source.position,command,budget);
+    const auto point=alpha(source);if(selectable(point,command).empty()) return;
+    auto leaves=step(rules,point,source.position,command,budget);
     require(leaves.size()==1,"concrete execution must have one terminal leaf");
-    if(leaves[0].terminal==Terminal::Invalid) return;
+    require(leaves[0].terminal!=Terminal::Invalid,"legal input became Invalid");
     auto actual=source;int32_t gene[350]={command};
-    BattleEmulator::Main(&actual.position,1,gene,actual.players,nullptr,seed,nullptr,nullptr,-2,&actual.nowState,true);
+    bool rejectedFlee=false;
+    BattleEmulator::Main(&actual.position,1,gene,actual.players,nullptr,seed,nullptr,nullptr,-2,&actual.nowState,true,false,&rejectedFlee);
+    require(rejectedFlee==(leaves[0].terminal==Terminal::ForbiddenFlee),"asserted FLEE mismatch was hidden");
+    if(rejectedFlee) return;
     if(actual.position!=leaves[0].position || !(alpha(actual)==image(point,leaves[0].output))) {
         const auto predicted=image(point,leaves[0].output);
         std::cerr<<"differential mismatch seed="<<seed<<" p="<<source.position<<" command="<<command
@@ -69,7 +76,8 @@ void checkIntervalCoverage() {
                     ++count;
                     auto single=step(*rules,point,s.position,command,budget);
                     require(single.size()==1 && single[0].terminal==leaf.terminal,"interval terminal disagreement");
-                    if(leaf.terminal!=Terminal::Invalid)
+                    require(leaf.terminal!=Terminal::Invalid,"Invalid interval leaf");
+                    if(leaf.terminal!=Terminal::ForbiddenFlee)
                         require(single[0].position==leaf.position && image(point,single[0].output)==image(point,leaf.output),"interval update disagreement");
                 }
                 require(count==1,"nonempty input is missing or multiply covered");
@@ -89,21 +97,23 @@ void checkMaxPlusAndPartitions() {
     m.cells={{1,0},{2,0},{3,0}};m.cellIndex={{0},{1},{2}};m.support={{0},{1},{2}};m.edges.resize(3);
     Edge flee;flee.command=53;flee.target=1;m.edges[0].push_back(flee);
     Edge win;win.goal=true;win.gain={456,0,0,0};m.edges[1].push_back(win);
-    auto dp=maxPlus(m,{},budget);require(dp.root && *dp.root==256*456,"zero-weight FLEE edge lost");
+    auto dp=maxPlus(m,{},budget);require(dp.root==256*456,"zero-weight FLEE edge lost");
     require(!excludesWin(p,dp,{}),"winning graph was declared false");
     m.edges[1][0].goal=false;m.edges[1][0].target=2;
-    dp=maxPlus(m,{},budget);require(!dp.root,"live B0 must be negative infinity");
+    dp=maxPlus(m,{},budget);require(dp.root==unreachable,"live B0 must be negative infinity");
     std::cout<<"position-local partitions and max-plus terminal initialization passed\n";
 }
 void checkSearchAndCertificates() {
-    auto limits=testLimits();limits.maxTurns=4;
+    auto limits=testLimits();limits.maxTurns=4;limits.regional=false;
     Problem p{0x1234567,initialState()};p.root.players[1].hp=200;
     auto negative=solveSuffix(p,1,limits);
-    require(negative.status==Status::ProvedFalse && negative.certificate.has_value(),negative.detail.c_str());
+    require(negative.status==Status::ProvedFalse && negative.certificate!=nullptr,negative.detail.c_str());
     Budget verifyBudget(limits);require(verifyFalse(p,*negative.certificate,verifyBudget),"fresh verifier rejected valid false");
     auto damaged=*negative.certificate;damaged.coverage.records.erase(damaged.coverage.records.begin());
     bool rejected=false;try {Budget b(limits);rejected=!verifyFalse(p,damaged,b);} catch(const std::exception&) {rejected=true;}
     require(rejected,"missing legal command root was accepted");
+    damaged=*negative.certificate;damaged.ruleIdentity.program.routines[0].code[0].immediate++;
+    Budget identityBudget(limits);require(!verifyFalse(p,damaged,identityBudget),"same version with different program accepted");
     auto wrong=p;wrong.root.players[0].specialChargeTurn-=1;Budget wrongBudget(limits);
     require(!verifyFalse(wrong,*negative.certificate,wrongBudget),"raw root binding omitted inactive timer");
     p.root.players[1].hp=1;
@@ -118,6 +128,13 @@ void checkSearchAndCertificates() {
         <<" refinements="<<multi.statistics.refinements<<" work="<<multi.statistics.work<<" detail="<<multi.detail<<std::endl;
     require(multi.status==Status::Optimal && multi.minimum>=1,"multi-turn unknown-root proof did not finish");
     require(replayWin(p,multi.commands,limits),"multi-turn witness replay failed");
+    limits.regional=true;
+    auto regional=solveSuffix(p,3,limits);
+    require(regional.status==Status::Optimal && regional.regionCertificate!=nullptr,regional.detail.c_str());
+    Budget rb(limits);require(verifyRegions(p,*regional.regionCertificate,rb),"independent regional verification failed");
+    require(replayWin(p,regional.commands,limits),"regional witness replay failed");
+    auto badRegion=*regional.regionCertificate;badRegion.nodes[badRegion.root].children.fill(-1);
+    Budget br(limits);require(!verifyRegions(p,badRegion,br),"missing regional obligations accepted");
     limits.time=std::chrono::milliseconds(0);auto unknown=solveSuffix(p,1,limits);
     require(unknown.status==Status::Unknown,"deadline exhaustion was not UNKNOWN");
     std::cout<<"unknown-root search, adjacent false proof, witness and prefix binding passed\n";

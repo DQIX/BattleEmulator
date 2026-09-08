@@ -13,7 +13,7 @@ enum class Native { Percent, Initiative, AttackDamage, HerbDamage, SpellDamage,
                     CriticalAttack, CriticalSpell, HalfDamage, VictimDamage,
                     ParalysisRelease, ChargeChance };
 enum class Op { Set, Copy, Add, CompareLE, Jump, Call, Return, RandomSkip, NativeCall,
-                Finish, Reject };
+                Finish, Reject, FleeGuard };
 struct Instruction {
     Op op=Op::Reject;
     int dst=0, x=0, y=0;
@@ -22,17 +22,28 @@ struct Instruction {
     Native native=Native::Percent;
     std::vector<int> args;
     std::string source;
+    bool operator==(const Instruction&) const = default;
 };
-struct Routine { std::string name;std::vector<Instruction> code; };
-struct RuleProgram { std::vector<Routine> routines;int entry=0; };
+struct Routine { std::string name;std::vector<Instruction> code;bool operator==(const Routine&) const = default; };
+struct RuleProgram { std::vector<Routine> routines;int entry=0;bool operator==(const RuleProgram&) const = default; };
+struct RuleIdentity {
+    std::string registry="yo2_be/asserted-turn";
+    std::uint64_t version=2;
+    RuleProgram program;
+    // Explicit semantic ABI versions, not source-file hashes.
+    std::array<unsigned,5> contracts{1,1,2,1,1}; // native, profile, assertion, alpha, replay
+    bool operator==(const RuleIdentity&) const = default;
+};
 struct RegisteredRules {
     const RuleProgram program;
     const int maxDraws;
     const std::uint64_t maxSteps;
     const unsigned maxDepth;
     const std::uint64_t version;
+    const RuleIdentity identity;
 };
 struct Limits {
+    bool regional=true;
     int maxTurns=30;
     unsigned maxCellsPerPosition=32;
     unsigned maxLeavesPerRoot=8192;
@@ -67,7 +78,7 @@ Int evaluateNative(Native native,std::span<const Int> arguments,int& position);
 unsigned nativeDraws(Native native);
 unsigned nativeArity(Native native);
 
-enum class Terminal { Continue, Goal, Dead, Invalid };
+enum class Terminal { Continue, Goal, Dead, Invalid, ForbiddenFlee };
 struct Leaf {
     Box guard;
     std::array<Value,10> output;
@@ -77,6 +88,10 @@ struct Leaf {
 };
 std::vector<Leaf> step(const RegisteredRules& rules,const Box& input,int position,
                        int command,Budget& budget);
+// Follow one concrete point while retaining the full input guard and affine
+// output of its execution path. The returned guard is subsequently verified.
+Leaf trace(const RegisteredRules& rules,const Box& domain,const Box& point,
+           int position,int command,Budget& budget);
 
 // Small assembler: labels are routine-local; all call targets are fixed.
 class Assembler {

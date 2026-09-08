@@ -65,7 +65,7 @@ Box selectable(Box b,int command) {
         case B::CRACK_ALLY:b.resource[2].lo=std::max<Int>(b.resource[2].lo,3);break;
         case B::MEDICINAL_HERBS:b.resource[3].lo=std::max<Int>(b.resource[3].lo,1);break;
         case B::ACROBATIC_STAR:b.mode[0]&=0xfc;b.mode[2]&=1;break;
-        case B::FLEE_ALLY:b.mode[1]&=1;b.mode[4]&=1;break;
+        case B::FLEE_ALLY:b.mode[1]&=1;break;
         case B::ATTACK_ALLY:case B::DRAGON_SLASH:case B::DEFENCE:break;
         default:b.resource[0]={1,0};break;
     }
@@ -156,23 +156,23 @@ bool Partitions::refine(CellKey cell,Predicate predicate,unsigned limit) {
     if(!at(cell.position).split(cell.local,predicate,limit)) return false;
     ++version;return true;
 }
-std::optional<std::size_t> Coverage::containing(int p,int c,const Box& d,bool detailedOnly) const {
+const LocalProof* Coverage::containing(int p,int c,const Box& d,bool detailedOnly) const {
     if(indexedRecords>records.size()) {lookup.clear();indexedRecords=0;}
     while(indexedRecords<records.size()) {
         const auto& r=records[indexedRecords];lookup[{r.position,r.command}].push_back(indexedRecords++);
     }
-    const auto found=lookup.find({p,c});if(found==lookup.end()) return std::nullopt;
+    const auto found=lookup.find({p,c});if(found==lookup.end()) return nullptr;
     for(int pass=0;pass<(detailedOnly?1:2);++pass) for(std::size_t n=found->second.size();n!=0;) {
         auto id=found->second[--n];const auto& r=records.at(id);
-        if(r.detailed==(pass==0) && r.position==p && r.command==c && r.domain.contains(d)) return id;
+        if(r.detailed==(pass==0) && r.position==p && r.command==c && r.domain.contains(d)) return &r;
     }
-    return std::nullopt;
+    return nullptr;
 }
 std::size_t Coverage::require(int p,int c,const Box& d,Budget& budget) {
     budget.tick();
-    if(auto found=containing(p,c,d)) return *found;
+    if(auto found=containing(p,c,d)) return std::size_t(found-records.data());
     budget.memory(bytes()+sizeof(LocalProof)*2*(records.size()+1));
-    records.push_back({p,c,d,false,{}});return records.size()-1;
+    records.push_back({p,c,d,false,{}});++version;return records.size()-1;
 }
 bool Coverage::expand(int p,int c,const Box& d,const RegisteredRules& rules,Budget& budget) {
     budget.tick();
@@ -261,13 +261,21 @@ Model buildSupport(const Problem& p,int h,const RegisteredRules& rules,const Par
                     std::size_t record;
                     if(!generator) {
                         budget.tick();auto found=coverage.containing(cell.position,command,d);
-                        if(!found) throw std::invalid_argument("missing nonempty command proof root");record=*found;
+                        if(!found) throw std::invalid_argument("missing nonempty command proof root");record=std::size_t(found-coverage.records.data());
                     } else record=generator->require(cell.position,command,d,budget);
                     const auto& local=coverage.records[record];
                     if(!local.detailed) {completionEdges(m.edges[q],cell.position,command,d,record,rules);continue;}
                     for(std::size_t leafId=0;leafId<local.leaves.size();++leafId) {
                         budget.tick();const auto& leaf=local.leaves[leafId];
-                        auto guard=d.intersect(leaf.guard);if(guard.empty() || leaf.terminal==Terminal::Invalid) continue;
+                        auto guard=d.intersect(leaf.guard);if(guard.empty()) continue;
+                        if(leaf.terminal==Terminal::Invalid) throw std::logic_error("Invalid cannot discharge a legal proof root");
+                        // A checked violation of the user's skipTurn assertion
+                        // is recorded as a forbidden execution, not omitted.
+                        if(leaf.terminal==Terminal::ForbiddenFlee) {
+                            if(command!=BattleEmulator::FLEE_ALLY) throw std::logic_error("assertion on another command");
+                            Edge edge;edge.command=command;edge.guard=guard;edge.dead=true;
+                            edge.proof=record;edge.leaf=leafId;m.edges[q].push_back(std::move(edge));continue;
+                        }
                         auto out=image(guard,leaf.output);
                         for(int j=0;j<4;++j) if(out.resource[j].lo<0 || out.resource[j].hi>(j==0?456:j==1?65:baseBox(p).resource[j].hi))
                             throw std::logic_error("resource preservation outside envelope");
@@ -310,6 +318,7 @@ Model buildSupport(const Problem& p,int h,const RegisteredRules& rules,const Par
         }
         for(int q=0;q<int(next.size());++q) if(next[q]) m.support[t+1].push_back(q);
     }
+    m.coverageVersion=coverage.version;
     return m;
 }
 }
@@ -320,7 +329,7 @@ Model rebuildSupport(const Problem& p,int h,const RegisteredRules& rules,const P
 
 namespace {
 void maximum(Bound& current,Bound candidate) {
-    if(candidate && (!current || *candidate>*current)) current=candidate;
+    current=std::max(current,candidate);
 }
 struct RangeMaximum {
     int start=0,count=0,width=1;
@@ -328,7 +337,7 @@ struct RangeMaximum {
     std::vector<int> missing;
     RangeMaximum(const Model& m,const std::vector<int>& support,const std::vector<Bound>& values,Budget& budget) {
         start=m.firstPosition;count=m.lastPosition-start+1;while(width<count) width*=2;
-        tree.resize(width*2);missing.resize(count+1);std::vector<int> present(count);
+        tree.assign(width*2,unreachable);missing.resize(count+1);std::vector<int> present(count);
         for(auto q:support) {budget.tick();int i=m.cells[q].position-start;++present[i];maximum(tree[width+i],values[q]);}
         for(int i=0;i<count;++i) {
             unsigned leaves=0;for(int q:m.cellIndex[i]) if(q>=0) ++leaves;
@@ -340,7 +349,7 @@ struct RangeMaximum {
     Bound query(int lo,int hi,Budget& budget) const {
         if(lo<start || hi>=start+count || lo>hi || missing[hi-start+1]!=missing[lo-start])
             throw std::logic_error("completion target missing from Support/DP");
-        Bound result;int l=lo-start+width,r=hi-start+width+1;
+        Bound result=unreachable;int l=lo-start+width,r=hi-start+width+1;
         while(l<r) {budget.tick();if(l&1) maximum(result,tree[l++]);if(r&1) maximum(result,tree[--r]);l/=2;r/=2;}
         return result;
     }
@@ -350,25 +359,25 @@ DynamicProgram maxPlus(const Model& m,Prices prices,Budget& budget,bool distance
     validPrices(prices);DynamicProgram dp;
     const auto n=m.cells.size();
     budget.memory(m.bytes()+(m.horizon+1)*n*(sizeof(Bound)+(distances?sizeof(int):0)));
-    dp.bound.assign(m.horizon+1,std::vector<Bound>(n));
+    dp.bound.assign(m.horizon+1,std::vector<Bound>(n,unreachable));
     if(distances) dp.distance.assign(m.horizon+1,std::vector<int>(n,-1));
     // Live B_0 is -infinity. GOAL is implicit zero at every layer.
     for(int t=m.horizon-1;t>=0;--t) {
         RangeMaximum range(m,m.support[t+1],dp.bound[t+1],budget);
         std::vector<Bound> negativeDistance;
-        std::optional<RangeMaximum> distanceRange;
+        std::unique_ptr<RangeMaximum> distanceRange;
         if(distances) {
-            negativeDistance.resize(n);
+            negativeDistance.assign(n,unreachable);
             for(int q:m.support[t+1]) if(dp.distance[t+1][q]>=0) negativeDistance[q]=-dp.distance[t+1][q];
-            distanceRange.emplace(m,m.support[t+1],negativeDistance,budget);
+            distanceRange=std::make_unique<RangeMaximum>(m,m.support[t+1],negativeDistance,budget);
         }
         std::vector<unsigned char> present(n);for(int q:m.support[t+1]) present[q]=1;
         for(int q:m.support[t]) {
-            Bound best;int length=-1;
+            Bound best=unreachable;int length=-1;
             for(const auto& e:m.edges[q]) {
                 budget.tick();if(e.dead) continue;
-                Bound continuation=e.goal?Bound{0}:std::nullopt;
-                Bound dist=e.goal?Bound{0}:std::nullopt;
+                Bound continuation=e.goal?0:unreachable;
+                Bound dist=e.goal?0:unreachable;
                 if(e.completion) {
                     maximum(continuation,range.query(e.firstPosition,e.lastPosition,budget));
                     if(distances) maximum(dist,distanceRange->query(e.firstPosition,e.lastPosition,budget));
@@ -377,9 +386,9 @@ DynamicProgram maxPlus(const Model& m,Prices prices,Budget& budget,bool distance
                     continuation=dp.bound[t+1][e.target];
                     if(distances && dp.distance[t+1][e.target]>=0) dist=-dp.distance[t+1][e.target];
                 }
-                if(continuation) maximum(best,add(weight(e,prices),*continuation));
-                if(distances && dist) {
-                    int proposed=1-int(*dist);if(length<0 || proposed<length) length=proposed;
+                maximum(best,extendBound(weight(e,prices),continuation));
+                if(distances && dist!=unreachable) {
+                    int proposed=1-int(dist);if(length<0 || proposed<length) length=proposed;
                 }
             }
             dp.bound[t][q]=best;if(distances) dp.distance[t][q]=length;
@@ -388,14 +397,14 @@ DynamicProgram maxPlus(const Model& m,Prices prices,Budget& budget,bool distance
     dp.root=dp.bound[0].at(m.root);return dp;
 }
 bool excludesWin(const Problem& p,const DynamicProgram& dp,Prices prices) {
-    validPrices(prices);if(!dp.root) return true;
-    auto s=alpha(p.root);Int bound=*dp.root;
+    validPrices(prices);if(dp.root==unreachable) return true;
+    auto s=alpha(p.root);Int bound=dp.root;
     for(int j=0;j<3;++j) bound=add(bound,mul(prices.resource[j],s.resource[j+1].lo));
     return mul(prices.Q,s.resource[0].lo)>bound;
 }
 bool verifyFalse(const Problem& p,const Certificate& c,Budget& budget) {
     auto rules=battleRules();budget.tick();
-    if(c.ruleVersion!=rules->version || !sameProblem(p,c.problem)) return false;
+    if(c.ruleVersion!=rules->version || c.ruleIdentity!=rules->identity || !sameProblem(p,c.problem)) return false;
     validateProblem(p,c.horizon,*rules);validPrices(c.prices);
     if(p.root.players[1].hp==0) return false;
     if(c.horizon==0 || p.root.players[0].hp==0) return c.bound.empty() && c.coverage.records.empty();

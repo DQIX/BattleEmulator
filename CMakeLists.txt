@@ -9,9 +9,11 @@ set(CMAKE_CXX_STANDARD 20)
 if(YO2_SUFFIX_PROOF)
     add_library(yo2_suffix_proof STATIC
         ProofProgram.cpp ProofNatives.cpp BattleProofRules.cpp
-        ProofKernel.cpp SuffixProof.cpp
+        ProofKernel.cpp SuffixProof.cpp RegionProof.cpp
         BattleEmulator.cpp lcg.cpp camera.cpp debug.cpp)
     target_include_directories(yo2_suffix_proof PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+    add_executable(suffix_proof ProofCli.cpp)
+    target_link_libraries(suffix_proof PRIVATE yo2_suffix_proof)
     if(YO2_PROOF_TESTS)
         add_executable(suffix_proof_tests ProofTests.cpp)
         target_link_libraries(suffix_proof_tests PRIVATE yo2_suffix_proof)

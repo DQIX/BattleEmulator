@@ -248,7 +248,8 @@ inline void BattleEmulator::processTurn() {
 bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
                           BattleResult* result,
                           uint64_t seed, const int eActions[350], const int damages[350], int mode,
-                          uint64_t *NowState, bool logicalTurnStart, bool stopBeforePresentationTail) {
+                          uint64_t *NowState, bool logicalTurnStart, bool stopBeforePresentationTail, bool* rejectedFlee) {
+    if (rejectedFlee) *rejectedFlee = false;
     bool player0_has_initiative = false;
     int genePosition = 0;
     int exCounter = 0;
@@ -459,6 +460,10 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 auto skipTurn = false;
                 if (action == BattleEmulator::FLEE_ALLY) {
                     skipTurn = true;
+                }
+                if (rejectedFlee && skipTurn && (players[0].paralysis || players[0].inactive)) {
+                    *rejectedFlee = true;
+                    return false;
                 }
                 assert(!(skipTurn == true && (players[0].paralysis || players[0].inactive)));//アホが2回も仕様モンスターしたためこれを許さん。消すな
                 if (!skipTurn) {

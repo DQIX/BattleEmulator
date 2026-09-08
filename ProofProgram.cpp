@@ -1,5 +1,6 @@
 #include "ProofProgram.h"
 #include <bitset>
+#include <bit>
 #include <map>
 #include <numeric>
 #include <set>
@@ -71,7 +72,9 @@ std::shared_ptr<const RegisteredRules> registerRules(RuleProgram p) {
                 case Op::Finish:
                     if(f!=p.entry) throw std::invalid_argument("FINISH in subroutine");
                     for(int j=0;j<10;++j) reads.set(j);break;
-                case Op::Reject:break;
+                case Op::Reject:throw std::invalid_argument("Reject is not a rule termination");
+                case Op::FleeGuard:
+                    reads.set(5);reads.set(8);reads.set(12);next={pc+1};break;
                 case Op::RandomSkip:
                     if(i.immediate<0 || i.immediate>5000) throw std::invalid_argument("invalid RNG skip");
                     here.draws=i.immediate;next={pc+1};break;
@@ -114,8 +117,9 @@ std::shared_ptr<const RegisteredRules> registerRules(RuleProgram p) {
         throw std::invalid_argument("rule execution bounds exceed profile");
     // Version is private to the fixed registry. The certificate cannot replace
     // this program, its numerical functions or its kernel-computed bounds.
+    RuleIdentity identity;identity.program=p;
     return std::make_shared<const RegisteredRules>(RegisteredRules{
-        std::move(p),int(bound.draws),std::uint64_t(bound.steps),unsigned(bound.depth),1});
+        std::move(p),int(bound.draws),std::uint64_t(bound.steps),unsigned(bound.depth),identity.version,std::move(identity)});
 }
 
 namespace {
@@ -150,9 +154,11 @@ bool concretize(Frame& f,int slotId,std::vector<Frame>& pending,Budget& budget) 
     return true;
 }
 }
+Box selectable(Box,int);
 std::vector<Leaf> step(const RegisteredRules& rules,const Box& input,int position,int command,Budget& budget) {
     std::vector<Leaf> leaves;
     if(input.empty()) return leaves;
+    if(!(selectable(input,command)==input)) throw std::invalid_argument("rule input is not selectable");
     if(position<1 || position>4999-rules.maxDraws) throw std::invalid_argument("RNG range at rule root");
     Frame initial;
     initial.pc={rules.program.entry,0};initial.position=position;initial.domain=input;
@@ -204,8 +210,13 @@ std::vector<Leaf> step(const RegisteredRules& rules,const Box& input,int positio
                         throw std::logic_error("native RNG contract violated");
                     f.value[i.dst]=Value::constant(value);++f.pc.index;break;
                 }
-                case Op::Reject: {
-                    Leaf leaf;leaf.guard=f.domain;leaf.position=f.position;leaf.terminal=Terminal::Invalid;
+                case Op::Reject:throw std::logic_error("unregistered Reject reached");
+                case Op::FleeGuard: {
+                    if(concretize(f,12,pending,budget) || concretize(f,5,pending,budget) ||
+                       concretize(f,8,pending,budget)) {done=true;break;}
+                    if(f.value[12].offset!=53) throw std::logic_error("FLEE assertion outside skip slot");
+                    if(f.value[5].offset==5 && f.value[8].offset==0) {++f.pc.index;break;}
+                    Leaf leaf;leaf.guard=f.domain;leaf.position=f.position;leaf.terminal=Terminal::ForbiddenFlee;
                     std::copy_n(f.value.begin(),10,leaf.output.begin());
                     if(leaves.size()>=budget.limits.maxLeavesPerRoot) throw Exhausted{};
                     leaves.push_back(std::move(leaf));done=true;break;
@@ -237,6 +248,88 @@ std::vector<Leaf> step(const RegisteredRules& rules,const Box& input,int positio
         }
     }
     return leaves;
+}
+
+Leaf trace(const RegisteredRules& rules,const Box& domain,const Box& point,
+           int position,int command,Budget& budget) {
+    if(point.empty() || !domain.contains(point) || !(selectable(domain,command)==domain))
+        throw std::invalid_argument("invalid guarded trace input");
+    Frame f;f.pc={rules.program.entry,0};f.position=position;f.domain=domain;
+    for(int j=0;j<4;++j) {
+        if(point.resource[j].lo!=point.resource[j].hi) throw std::invalid_argument("trace requires a singleton");
+        f.value[j]=Value::resource(j);
+    }
+    for(int j=0;j<6;++j) {
+        if(!std::has_single_bit(unsigned(point.mode[j]))) throw std::invalid_argument("trace requires singleton modes");
+        f.value[j+4]=Value::mode(j);
+    }
+    f.value[10]=Value::constant(command);
+    auto concrete=[&](const Value& v)->Int {
+        if(v.kind==Value::Constant) return v.offset;
+        if(v.kind==Value::Resource) return add(point.resource[v.axis].lo,v.offset);
+        return v.table[std::countr_zero(unsigned(point.mode[v.axis]))];
+    };
+    auto resolve=[&](int id)->Int {
+        auto& v=f.value[id];
+        if(v.kind==Value::Resource) throw std::logic_error("trace resource used as a concrete argument");
+        auto x=concrete(v);
+        f.domain=restrictValue(f.domain,v,x,true);
+        f.domain=restrictValue(f.domain,v,add(x,-1),false);
+        v=Value::constant(x);return x;
+    };
+    auto finish=[&](Terminal terminal) {
+        if(!f.domain.contains(point)) throw std::logic_error("trace lost its point");
+        Leaf leaf;leaf.guard=f.domain;leaf.position=f.position;leaf.terminal=terminal;
+        std::copy_n(f.value.begin(),10,leaf.output.begin());return leaf;
+    };
+    for(;;) {
+        budget.tick();
+        if(++f.steps>rules.maxSteps || f.position<position || f.position>position+rules.maxDraws || f.position>4999)
+            throw std::logic_error("trace execution bound");
+        const auto& i=rules.program.routines.at(f.pc.routine).code.at(f.pc.index);
+        switch(i.op) {
+            case Op::Set:f.value[i.dst]=Value::constant(i.immediate);++f.pc.index;break;
+            case Op::Copy:f.value[i.dst]=f.value[i.x];++f.pc.index;break;
+            case Op::Add:f.value[i.dst]=f.value[i.x].translated(mul(resolve(i.y),i.immediate));++f.pc.index;break;
+            case Op::CompareLE: {
+                Int rhs=resolve(i.y);bool yes=concrete(f.value[i.x])<=rhs;
+                f.domain=restrictValue(f.domain,f.value[i.x],rhs,yes);
+                f.pc.index=yes?i.yes:i.no;break;
+            }
+            case Op::Jump:f.pc.index=i.yes;break;
+            case Op::Call:
+                if(f.stack.size()>=rules.maxDepth) throw std::logic_error("trace stack bound");
+                f.stack.push_back({f.pc.routine,f.pc.index+1});f.pc={i.x,0};break;
+            case Op::Return:
+                if(f.stack.empty()) throw std::logic_error("trace empty return");
+                f.pc=f.stack.back();f.stack.pop_back();break;
+            case Op::RandomSkip:f.position+=int(i.immediate);++f.pc.index;break;
+            case Op::NativeCall: {
+                std::array<Int,8> args{};
+                if(i.args.size()>args.size()) throw std::logic_error("trace native arity");
+                for(std::size_t j=0;j<i.args.size();++j) args[j]=resolve(i.args[j]);
+                int before=f.position;budget.tick(32);
+                auto n=evaluateNative(i.native,std::span<const Int>(args.data(),i.args.size()),f.position);
+                if(f.position<before || f.position-before>int(nativeDraws(i.native))) throw std::logic_error("trace native contract");
+                f.value[i.dst]=Value::constant(n);++f.pc.index;break;
+            }
+            case Op::FleeGuard:
+                if(resolve(12)!=53) throw std::logic_error("trace skip assertion on another command");
+                if(resolve(5)!=5 || resolve(8)!=0) return finish(Terminal::ForbiddenFlee);
+                ++f.pc.index;break;
+            case Op::Finish: {
+                if(!f.stack.empty()) throw std::logic_error("trace unfinished call");
+                bool goal=concrete(f.value[0])==0,dead=concrete(f.value[1])==0;
+                f.domain=restrictValue(f.domain,f.value[0],0,goal);
+                f.domain=restrictValue(f.domain,f.value[1],0,dead);
+                auto leaf=finish(goal?Terminal::Goal:dead?Terminal::Dead:Terminal::Continue);
+                auto out=image(leaf.guard,leaf.output);
+                for(auto r:out.resource) if(r.lo<0) throw std::logic_error("trace negative terminal resource");
+                return leaf;
+            }
+            default:throw std::logic_error("invalid trace opcode");
+        }
+    }
 }
 
 int Assembler::declare(const std::string& name) {

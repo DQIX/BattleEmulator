@@ -2,7 +2,6 @@
 #define YO2_PROOF_KERNEL_H
 #include "ProofProgram.h"
 #include "Player.h"
-#include <optional>
 #include <map>
 #include <set>
 
@@ -66,7 +65,7 @@ struct Coverage {
     std::vector<LocalProof> records;
     mutable std::map<std::pair<int,int>,std::vector<std::size_t>> lookup;
     mutable std::size_t indexedRecords=0;
-    std::optional<std::size_t> containing(int p,int command,const Box& domain,bool detailedOnly=false) const;
+    const LocalProof* containing(int p,int command,const Box& domain,bool detailedOnly=false) const;
     std::size_t require(int p,int command,const Box& domain,Budget& budget);
     bool expand(int p,int command,const Box& domain,const RegisteredRules& rules,Budget& budget);
     std::size_t bytes() const;
@@ -98,11 +97,19 @@ struct Prices {
     std::array<Int,3> resource{};
     bool operator==(const Prices&) const = default;
 };
-using Bound=std::optional<Int>; // nullopt is -infinity, never INT64_MIN arithmetic
+using Bound=Int;
+inline constexpr Bound unreachable=std::numeric_limits<Int>::min();
+// The sentinel is tested before every addition; it is never an operand.
+inline Bound extendBound(Int weight,Bound tail) {
+    if(tail==unreachable) return unreachable;
+    auto value=add(weight,tail);
+    if(value==unreachable) throw std::overflow_error("finite bound collides with unreachable tag");
+    return value;
+}
 struct DynamicProgram {
     std::vector<std::vector<Bound>> bound;
     std::vector<std::vector<int>> distance;
-    Bound root;
+    Bound root=unreachable;
 };
 DynamicProgram maxPlus(const Model& model,Prices prices,Budget& budget,bool withDistances=true);
 bool excludesWin(const Problem& problem,const DynamicProgram& dp,Prices prices);
@@ -114,6 +121,7 @@ struct Certificate {
     Coverage coverage;
     Prices prices;
     std::vector<std::vector<Bound>> bound;
+    RuleIdentity ruleIdentity;
 };
 bool verifyFalse(const Problem& problem,const Certificate& certificate,Budget& budget);
 }

@@ -1,6 +1,7 @@
 #ifndef YO2_SUFFIX_PROOF_H
 #define YO2_SUFFIX_PROOF_H
 #include "ProofKernel.h"
+#include "RegionProof.h"
 
 namespace proof {
 enum class Status { Optimal, Win, ProvedFalse, Unknown, Error };
@@ -15,7 +16,8 @@ struct Result {
     int minimum=-1,provedFalseThrough=-1;
     std::vector<int> prefix,commands;
     Problem problem;
-    std::optional<Certificate> certificate;
+    std::unique_ptr<Certificate> certificate;
+    std::unique_ptr<RegionCertificate> regionCertificate;
     Statistics statistics;
     std::string detail;
 };
