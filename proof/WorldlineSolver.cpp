@@ -366,7 +366,7 @@ namespace d20proof {
             const int firstHotelPosition = snapshot.root.rngPosition;
             const std::size_t hotelCount = snapshot.partitions.trees.size();
             const std::uint64_t hotelIndexStorage =
-                hotelCount * sizeof(const PredicatePartition *);
+                hotelCount * (sizeof(const PredicatePartition *) + sizeof(std::size_t));
             if (!chargeSearchBudget(
                     report,
                     limits,
@@ -377,6 +377,8 @@ namespace d20proof {
             }
             partitionIndexBytes.bytes += hotelIndexStorage;
             std::vector<const PredicatePartition *> partitionByHotel(hotelCount, nullptr);
+            std::vector<std::size_t> partitionLeafCountByHotel(hotelCount, 0);
+            std::uint64_t partitionLeafIndexWork = 0;
             for (const PredicatePartition &partition: snapshot.partitions.trees) {
                 if (partition.rngPosition < firstHotelPosition) {
                     result.reason = "goal-distance partition precedes the first hotel";
@@ -389,6 +391,19 @@ namespace d20proof {
                     return result;
                 }
                 partitionByHotel[static_cast<std::size_t>(offset)] = &partition;
+                std::size_t leafCount = 0;
+                for (const PartitionNode &node: partition.nodes) {
+                    ++partitionLeafIndexWork;
+                    if (node.leaf) {
+                        ++leafCount;
+                    }
+                }
+                partitionLeafCountByHotel[static_cast<std::size_t>(offset)] = leafCount;
+            }
+            if (partitionLeafIndexWork != 0 &&
+                !chargeSearchBudget(report, limits, partitionLeafIndexWork, 0)) {
+                result.reason = "goal-distance partition leaf-count index exceeded proof budget";
+                return result;
             }
             if (std::any_of(
                     partitionByHotel.begin(),
@@ -449,26 +464,20 @@ namespace d20proof {
                         ++end;
                     }
                     const PredicatePartition *partition = nullptr;
-                    std::uint64_t validationWork = 0;
+                    std::size_t leafCount = 0;
                     if (position >= firstHotelPosition) {
                         const std::uint64_t offset = static_cast<std::uint64_t>(
                             position - firstHotelPosition);
                         if (offset < partitionByHotel.size()) {
                             partition = partitionByHotel[static_cast<std::size_t>(offset)];
+                            leafCount = partitionLeafCountByHotel[static_cast<std::size_t>(offset)];
                         }
                     }
                     if (partition == nullptr) {
                         result.reason = "goal-distance per-position minimum references a missing partition";
                         return result;
                     }
-                    std::size_t leafCount = 0;
-                    for (const PartitionNode &node: partition->nodes) {
-                        ++validationWork;
-                        if (node.leaf) {
-                            ++leafCount;
-                        }
-                    }
-                    if (!chargeSearchBudget(report, limits, end - begin + validationWork, 0)) {
+                    if (!chargeSearchBudget(report, limits, end - begin, 0)) {
                         result.reason = "goal-distance per-position minimum construction exceeded proof budget";
                         return result;
                     }
@@ -476,64 +485,58 @@ namespace d20proof {
                     begin = end;
                 }
 
-                std::size_t rangeLevels = 0;
-                for (std::size_t n = positionMinimums.size(); n != 0; n >>= 1) {
-                    ++rangeLevels;
-                }
                 const std::size_t positionSpan = positionMinimums.empty()
                     ? 0
                     : static_cast<std::size_t>(
                         positionMinimums.back().rngPosition - positionMinimums.front().rngPosition + 1);
-                const std::uint64_t sparseBytes =
-                    rangeLevels * positionMinimums.size() * sizeof(int) +
-                    (positionMinimums.size() + 1) * sizeof(std::uint8_t) +
-                    (positionMinimums.size() + 1) * sizeof(std::uint32_t) +
+                const std::uint64_t rangeIndexBytes =
+                    positionSpan * sizeof(int) +
+                    positionSpan * sizeof(std::uint8_t) +
+                    (positionSpan + 1) * sizeof(std::uint32_t) +
+                    (positionSpan + 1) * sizeof(int) +
                     positionSpan * sizeof(std::size_t);
-                if (sparseBytes != 0 &&
-                    !chargeSearchBudget(report, limits, 0, sparseBytes)) {
-                    result.reason = "goal-distance sparse range-minimum table exceeded proof budget";
+                if (rangeIndexBytes != 0 &&
+                    !chargeSearchBudget(report, limits, 0, rangeIndexBytes)) {
+                    result.reason = "goal-distance sliding range-minimum index exceeded proof budget";
                     return result;
                 }
-                temporaryBytes.bytes += sparseBytes;
-                std::vector<int> sparseRangeMinimums(
-                    rangeLevels * positionMinimums.size(),
-                    kInfiniteDistance);
-                std::vector<std::uint8_t> floorLog2(positionMinimums.size() + 1, 0);
-                std::vector<std::uint32_t> incompletePrefix(positionMinimums.size() + 1, 0);
-                std::vector<std::size_t> positionIndex(
-                    positionSpan,
-                    positionMinimums.size());
+                temporaryBytes.bytes += rangeIndexBytes;
+                std::vector<int> densePositionMinimums(positionSpan, kInfiniteDistance);
+                std::vector<std::uint8_t> completePosition(positionSpan, 0);
+                std::vector<std::uint32_t> incompletePrefix(positionSpan + 1, 0);
+                std::vector<int> windowTableIndexByLength(positionSpan + 1, -1);
+                std::vector<std::size_t> monotoneQueue(positionSpan, 0);
                 std::uint64_t rangeBuildWork = 0;
                 if (!positionMinimums.empty()) {
-                    const std::size_t width = positionMinimums.size();
-                    for (std::size_t index = 0; index < width; ++index) {
-                        sparseRangeMinimums[index] = positionMinimums[index].distance;
-                        positionIndex[static_cast<std::size_t>(
-                            positionMinimums[index].rngPosition - positionMinimums.front().rngPosition)] = index;
-                        incompletePrefix[index + 1] =
-                            incompletePrefix[index] + (positionMinimums[index].complete ? 0u : 1u);
-                        ++rangeBuildWork;
-                    }
-                    for (std::size_t length = 2; length <= width; ++length) {
-                        floorLog2[length] = static_cast<std::uint8_t>(floorLog2[length / 2] + 1);
-                        ++rangeBuildWork;
-                    }
-                    for (std::size_t level = 1; level < rangeLevels; ++level) {
-                        const std::size_t span = std::size_t{1} << level;
-                        const std::size_t half = span >> 1;
-                        for (std::size_t index = 0; index + span <= width; ++index) {
-                            sparseRangeMinimums[level * width + index] = std::min(
-                                sparseRangeMinimums[(level - 1) * width + index],
-                                sparseRangeMinimums[(level - 1) * width + index + half]);
-                            ++rangeBuildWork;
+                    const int basePosition = positionMinimums.front().rngPosition;
+                    for (const PositionMinimum &entry: positionMinimums) {
+                        const std::size_t offset = static_cast<std::size_t>(
+                            entry.rngPosition - basePosition);
+                        if (offset >= positionSpan || completePosition[offset] != 0) {
+                            result.reason = "goal-distance per-position minimum index is not unique";
+                            return result;
                         }
+                        densePositionMinimums[offset] = entry.distance;
+                        completePosition[offset] = entry.complete ? 1u : 0u;
+                        ++rangeBuildWork;
+                    }
+                    for (std::size_t offset = 0; offset < positionSpan; ++offset) {
+                        incompletePrefix[offset + 1] =
+                            incompletePrefix[offset] + (completePosition[offset] == 0 ? 1u : 0u);
+                        ++rangeBuildWork;
                     }
                 }
                 if (rangeBuildWork != 0 &&
                     !chargeSearchBudget(report, limits, rangeBuildWork, 0)) {
-                    result.reason = "goal-distance sparse range-minimum construction exceeded proof budget";
+                    result.reason = "goal-distance sliding range-minimum index construction exceeded proof budget";
                     return result;
                 }
+
+                struct WindowMinimumTable {
+                    std::size_t length = 0;
+                    std::vector<int> minimumByStart;
+                };
+                std::vector<WindowMinimumTable> windowMinimumTables;
 
                 auto completionRangeMinimum = [&](int firstPosition,
                                                   int lastPosition,
@@ -545,15 +548,15 @@ namespace d20proof {
                     }
                     const int basePosition = positionMinimums.front().rngPosition;
                     if (firstPosition < basePosition || lastPosition < basePosition ||
-                        static_cast<std::uint64_t>(lastPosition - basePosition) >= positionIndex.size()) {
+                        static_cast<std::uint64_t>(lastPosition - basePosition) >= positionSpan) {
                         result.reason = "goal-distance COMPLETE range is missing a next-layer RNG position";
                         return false;
                     }
-                    const std::size_t left = positionIndex[static_cast<std::size_t>(firstPosition - basePosition)];
-                    const std::size_t right = positionIndex[static_cast<std::size_t>(lastPosition - basePosition)];
-                    const std::size_t width = positionMinimums.size();
+                    const std::size_t left = static_cast<std::size_t>(firstPosition - basePosition);
+                    const std::size_t right = static_cast<std::size_t>(lastPosition - basePosition);
                     const std::size_t count = static_cast<std::size_t>(lastPosition - firstPosition + 1);
-                    if (left >= width || right >= width || right < left || right - left + 1 != count) {
+                    if (left >= positionSpan || right >= positionSpan || right < left ||
+                        right - left + 1 != count || count == 0 || count > positionSpan) {
                         result.reason = "goal-distance COMPLETE range is missing a next-layer RNG position";
                         return false;
                     }
@@ -561,11 +564,59 @@ namespace d20proof {
                         result.reason = "goal-distance COMPLETE range does not contain every partition leaf";
                         return false;
                     }
-                    const std::size_t level = floorLog2[count];
-                    const std::size_t span = std::size_t{1} << level;
-                    minimum = std::min(
-                        sparseRangeMinimums[level * width + left],
-                        sparseRangeMinimums[level * width + right - span + 1]);
+                    int tableIndex = windowTableIndexByLength[count];
+                    if (tableIndex < 0) {
+                        const std::size_t startCount = positionSpan - count + 1;
+                        const std::uint64_t tableBytes =
+                            sizeof(WindowMinimumTable) + startCount * sizeof(int);
+                        if (!chargeSearchBudget(report, limits, 0, tableBytes)) {
+                            result.reason = "goal-distance sliding range-minimum table exceeded proof budget";
+                            return false;
+                        }
+                        temporaryBytes.bytes += tableBytes;
+                        WindowMinimumTable table;
+                        table.length = count;
+                        table.minimumByStart.assign(startCount, kInfiniteDistance);
+
+                        std::size_t head = 0;
+                        std::size_t tail = 0;
+                        std::uint64_t windowWork = 0;
+                        for (std::size_t index = 0; index < positionSpan; ++index) {
+                            while (head < tail && monotoneQueue[head] + count <= index) {
+                                ++head;
+                                ++windowWork;
+                            }
+                            while (head < tail) {
+                                ++windowWork;
+                                const std::size_t back = monotoneQueue[tail - 1];
+                                if (densePositionMinimums[back] < densePositionMinimums[index]) {
+                                    break;
+                                }
+                                --tail;
+                            }
+                            monotoneQueue[tail++] = index;
+                            ++windowWork;
+                            if (index + 1 >= count) {
+                                table.minimumByStart[index + 1 - count] =
+                                    densePositionMinimums[monotoneQueue[head]];
+                                ++windowWork;
+                            }
+                        }
+                        if (!chargeSearchBudget(report, limits, windowWork, 0)) {
+                            result.reason = "goal-distance sliding range-minimum construction exceeded proof budget";
+                            return false;
+                        }
+                        windowMinimumTables.push_back(std::move(table));
+                        tableIndex = static_cast<int>(windowMinimumTables.size() - 1);
+                        windowTableIndexByLength[count] = tableIndex;
+                    }
+                    const WindowMinimumTable &table =
+                        windowMinimumTables[static_cast<std::size_t>(tableIndex)];
+                    if (table.length != count || left >= table.minimumByStart.size()) {
+                        result.reason = "goal-distance sliding range-minimum table lookup is inconsistent";
+                        return false;
+                    }
+                    minimum = table.minimumByStart[left];
                     if (!chargeSearchBudget(report, limits, 1, 0)) {
                         result.reason = "goal-distance COMPLETE range query exceeded proof budget";
                         return false;
@@ -1026,9 +1077,12 @@ namespace d20proof {
                 std::size_t destinationCursor = 0;
                 std::optional<CandidateChoice> targetHead;
                 std::optional<std::size_t> childCommandSequenceId;
+                int completionDistance = 1;
                 std::size_t completionRunCursor = 0;
                 std::size_t completionRunEnd = 0;
                 bool completionRunActive = false;
+                bool completionDistanceInitialized = false;
+                bool exhausted = false;
             };
 
             struct Frame {
@@ -1041,6 +1095,7 @@ namespace d20proof {
             bool buildDestinationOrders() {
                 orderedDestinations_.resize(static_cast<std::size_t>(horizon_) + 1);
                 orderedDestinationRuns_.resize(static_cast<std::size_t>(horizon_) + 1);
+                orderedDestinationRunDistanceOffsets_.resize(static_cast<std::size_t>(horizon_) + 1);
                 for (int elapsedTurn = 1; elapsedTurn <= horizon_; ++elapsedTurn) {
                     const std::vector<CellKey> &support = snapshot_.support[elapsedTurn];
                     const std::vector<int> &layerDistances = distances_.values[elapsedTurn];
@@ -1134,6 +1189,33 @@ namespace d20proof {
                         return false;
                     }
                     ownedBytes_ += runBytes;
+
+                    // Runs are already ordered by (distance, position).  Keep
+                    // the exact run interval for each finite L value so a
+                    // COMPLETE edge can jump directly to the first run whose
+                    // RNG range can intersect its virtual p interval.  This
+                    // preserves the required (L,p,cell) candidate order while
+                    // avoiding a fresh scan from runs[0] for every edge.
+                    std::vector<std::size_t> &distanceOffsets =
+                        orderedDestinationRunDistanceOffsets_[elapsedTurn];
+                    distanceOffsets.resize(static_cast<std::size_t>(horizon_) + 2, runs.size());
+                    std::size_t runCursor = 0;
+                    std::uint64_t offsetWork = 0;
+                    for (int distance = 0; distance <= horizon_ + 1; ++distance) {
+                        while (runCursor < runs.size() && runs[runCursor].distance < distance) {
+                            ++runCursor;
+                            ++offsetWork;
+                        }
+                        distanceOffsets[static_cast<std::size_t>(distance)] = runCursor;
+                        ++offsetWork;
+                    }
+                    const std::uint64_t offsetBytes =
+                        distanceOffsets.size() * sizeof(std::size_t);
+                    if (!chargeSearchBudget(report_, limits_, offsetWork, offsetBytes)) {
+                        error_ = "candidate destination distance-run index exceeded proof budget";
+                        return false;
+                    }
+                    ownedBytes_ += offsetBytes;
                 }
                 return true;
             }
@@ -1217,6 +1299,9 @@ namespace d20proof {
             }
 
             ChoiceStatus ensureTargetHead(Frame &frame, EdgeCursor &cursor) {
+                if (cursor.exhausted) {
+                    return ChoiceStatus::Exhausted;
+                }
                 if (cursor.targetHead) {
                     return ChoiceStatus::Choice;
                 }
@@ -1230,6 +1315,12 @@ namespace d20proof {
                     }
                     const std::vector<OrderedDestinationRun> &runs =
                         orderedDestinationRuns_[frame.elapsedTurn + 1];
+                    const std::vector<std::size_t> &distanceOffsets =
+                        orderedDestinationRunDistanceOffsets_[frame.elapsedTurn + 1];
+                    if (distanceOffsets.size() != static_cast<std::size_t>(horizon_) + 2) {
+                        error_ = "candidate COMPLETE distance-run index has invalid dimensions";
+                        return ChoiceStatus::ModelError;
+                    }
                     while (true) {
                         if (cursor.completionRunActive &&
                             cursor.destinationCursor < cursor.completionRunEnd) {
@@ -1257,17 +1348,43 @@ namespace d20proof {
                             cursor.completionRunActive = false;
                             ++cursor.completionRunCursor;
                         }
-                        while (cursor.completionRunCursor < runs.size()) {
+                        while (cursor.completionDistance <= horizon_) {
+                            const std::size_t distanceIndex =
+                                static_cast<std::size_t>(cursor.completionDistance);
+                            const std::size_t runBegin = distanceOffsets[distanceIndex];
+                            const std::size_t runEnd = distanceOffsets[distanceIndex + 1];
+                            if (!cursor.completionDistanceInitialized) {
+                                std::size_t lo = runBegin;
+                                std::size_t hi = runEnd;
+                                std::uint64_t comparisons = 0;
+                                while (lo < hi) {
+                                    ++comparisons;
+                                    const std::size_t mid = lo + (hi - lo) / 2;
+                                    if (runs[mid].lastPosition < edge.firstOutputPosition) {
+                                        lo = mid + 1;
+                                    } else {
+                                        hi = mid;
+                                    }
+                                }
+                                if (comparisons != 0 &&
+                                    !chargeSearchBudget(report_, limits_, comparisons, 0)) {
+                                    error_ = "candidate COMPLETE range-index lookup exceeded proof budget";
+                                    return ChoiceStatus::BudgetExceeded;
+                                }
+                                cursor.completionRunCursor = lo;
+                                cursor.completionDistanceInitialized = true;
+                            }
+                            if (cursor.completionRunCursor >= runEnd ||
+                                runs[cursor.completionRunCursor].firstPosition > edge.lastOutputPosition) {
+                                ++cursor.completionDistance;
+                                cursor.completionDistanceInitialized = false;
+                                continue;
+                            }
                             if (!chargeSearchBudget(report_, limits_, 1, 0)) {
                                 error_ = "candidate COMPLETE range-index scan exceeded proof budget";
                                 return ChoiceStatus::BudgetExceeded;
                             }
                             const OrderedDestinationRun &run = runs[cursor.completionRunCursor];
-                            if (run.lastPosition < edge.firstOutputPosition ||
-                                run.firstPosition > edge.lastOutputPosition) {
-                                ++cursor.completionRunCursor;
-                                continue;
-                            }
                             const int firstPosition =
                                 std::max(run.firstPosition, edge.firstOutputPosition);
                             const int lastPosition =
@@ -1327,6 +1444,9 @@ namespace d20proof {
 
                 for (std::size_t cursorIndex = 0; cursorIndex < frame.edgeCursors.size(); ++cursorIndex) {
                     EdgeCursor &cursor = frame.edgeCursors[cursorIndex];
+                    if (cursor.exhausted) {
+                        continue;
+                    }
                     const CheckedEdge &edge = snapshot_.edgesByElapsedTurn[frame.elapsedTurn][cursor.edgeIndex];
                     const int profileOrder = commandOrder(bundle_, edge.selectedCommand);
 
@@ -1440,6 +1560,7 @@ namespace d20proof {
             BudgetReport &report_;
             std::vector<std::vector<OrderedDestination>> orderedDestinations_;
             std::vector<std::vector<OrderedDestinationRun>> orderedDestinationRuns_;
+            std::vector<std::vector<std::size_t>> orderedDestinationRunDistanceOffsets_;
 
             std::vector<Frame> stack_;
             std::vector<int> commandPath_;
@@ -2411,21 +2532,23 @@ namespace d20proof {
         std::vector<ProofTemplate> &proofTemplates = checkedCache.templates;
         std::uint64_t coverageVersion = 1;
 
-        FalseCheckResult falseCheck = ProofKernel::tryFalseZeroPrice(
+        FalseCheckResult falseCheck;
+        falseCheck.snapshot = ProofKernel::rebuildSupport(
             bundle_,
             problem,
             horizon,
             family,
             budget,
             report,
+            nullptr,
             &proofTemplates,
             coverageVersion);
-        std::cerr << "INITIAL_FALSE work=" << report.work << '\n';
+        falseCheck.check = falseCheck.snapshot.check;
         if (deadlineReached(start, budget, report)) {
             SolveResult result = makeFailure(
                 SolveKind::Unknown,
                 horizon,
-                "checked snapshot / zero-price verification exhausted total_time",
+                "checked snapshot construction exhausted total_time",
                 start);
             result.budget = report;
             stampElapsed(result.budget, start);
@@ -2527,9 +2650,6 @@ namespace d20proof {
         }
         auto iterator = std::make_unique<GoalCandidateIterator>(
             bundle_, falseCheck.snapshot, distances, commandSequences, horizon, budget, report);
-        std::cerr << "INITIAL_SETUP delta="
-                  << (report.work - initialCandidateSetupWorkStart)
-                  << " work=" << report.work << '\n';
         if (rejectedHint.has_value()) {
             std::size_t sequenceId = 0;
             bool representable = true;
@@ -2565,9 +2685,9 @@ namespace d20proof {
         std::uint64_t failureBatchBytes = 0;
         std::uint32_t trialOrder = 0;
         std::uint32_t failedCandidatesInBatch = rejectedHint.has_value() ? 1u : 0u;
-        std::uint64_t lastCompletedZeroPriceWork = 0;
         std::uint64_t lastCompletedCandidateSetupWork =
             report.work - initialCandidateSetupWorkStart;
+        std::uint64_t lastCompletedRepairApplyWork = 0;
 
 
         auto makeCurrentFailure = [&](SolveKind kind, std::string reason) {
@@ -2605,18 +2725,21 @@ namespace d20proof {
 
         auto templateRank = [](const ProofTemplate &value) {
             if (value.kind == RootProofKind::FullyDetailed) {
-                return 100;
+                return std::uint64_t{1} << 62;
+            }
+            if (value.kind == RootProofKind::Refined) {
+                return (std::uint64_t{1} << 61) + value.expandedCompletions.size();
             }
             switch (value.cut) {
                 case CompletionCutId::TurnEntry:
-                    return 0;
+                    return std::uint64_t{0};
                 case CompletionCutId::AllyDoneEnemyPending:
                 case CompletionCutId::EnemyDoneAllyPending:
-                    return 10;
+                    return std::uint64_t{10};
                 case CompletionCutId::ActionsDone:
-                    return 20;
+                    return std::uint64_t{20};
             }
-            return 0;
+            return std::uint64_t{0};
         };
 
         auto repairProposalTooLarge = [](const std::string &reason) {
@@ -2697,6 +2820,7 @@ namespace d20proof {
                 });
 
             for (const CandidateMismatch &failure: failures) {
+                const std::uint64_t repairFailureWorkStart = report.work;
                 if (failure.partitionVersion != falseCheck.snapshot.partitions.partitionVersion ||
                     failure.coverageVersion != falseCheck.snapshot.coverageVersion) {
                     return std::nullopt;
@@ -2704,6 +2828,43 @@ namespace d20proof {
                 const CheckedEdge *edge = edgeForStep(falseCheck.snapshot, failure.step);
                 if (edge == nullptr) {
                     return std::nullopt;
+                }
+
+                // A successful repair must publish a fully rebuilt Support/model
+                // and then rebuild L/the candidate iterator before search can
+                // continue.  Section 13 requires a proposal that is too large
+                // for the remaining shared work budget to be skipped in favor
+                // of the next mismatch, not started and allowed to consume the
+                // rest of the request.  Once one repair has completed, its
+                // measured full apply cost plus the latest completed candidate
+                // setup cost is a conservative generation-side reserve.  An
+                // overestimate can only defer an optional refinement; it cannot
+                // remove a FALSE edge or establish WIN/FALSE.
+                if (lastCompletedRepairApplyWork != 0) {
+                    const std::uint64_t remainingWork = report.work >= budget.maxWork
+                        ? 0
+                        : budget.maxWork - report.work;
+                    const std::uint64_t requiredWork =
+                        lastCompletedRepairApplyWork >
+                                std::numeric_limits<std::uint64_t>::max() - lastCompletedCandidateSetupWork
+                            ? std::numeric_limits<std::uint64_t>::max()
+                            : lastCompletedRepairApplyWork + lastCompletedCandidateSetupWork;
+                    if (!chargeSearchBudget(report, budget, 1, 0)) {
+                        ++diagnosticRepairBudgetFailure;
+                        diagnosticLastRepairBudgetReason = "repair remaining-work preflight";
+                        return false;
+                    }
+                    if (remainingWork <= 1 || remainingWork - 1 < requiredWork) {
+                        ++diagnosticRepairBudgetFailure;
+                        diagnosticLastRepairBudgetReason = "repair proposal exceeds remaining shared work";
+                        diagnosticLastRepairBudgetIdentity =
+                            "turn=" + std::to_string(failure.elapsedTurn) +
+                            ",p=" + std::to_string(failure.step.source.rngPosition) +
+                            ",cell=" + std::to_string(failure.step.source.localCellId) +
+                            ",command=" + std::to_string(failure.step.selectedCommand) +
+                            ",term=" + std::to_string(failure.step.modelTermNumber);
+                        continue;
+                    }
                 }
 
                 if (failure.kind == CandidateMismatchKind::Completion) {
@@ -2816,10 +2977,17 @@ namespace d20proof {
                     while (insertAt < checkedCache.templates.size() &&
                            templateKey(checkedCache.templates[insertAt]) == currentKey) {
                         ++rollbackLookupWork;
+                        const ProofTemplate &existingTemplate = checkedCache.templates[insertAt];
+                        const bool exactDomainReplacement =
+                            existingTemplate.coveredDomain == current.coveredDomain;
+                        const bool refinedContainingReplacement =
+                            advanced.kind == RootProofKind::Refined &&
+                            existingTemplate.kind == RootProofKind::Refined &&
+                            contains(existingTemplate.coveredDomain, advanced.coveredDomain);
                         if (!replacedIndex.has_value() &&
-                            checkedCache.templates[insertAt].coveredDomain == current.coveredDomain) {
+                            (exactDomainReplacement || refinedContainingReplacement)) {
                             replacedIndex = insertAt;
-                            replacedTemplateBefore = checkedCache.templates[insertAt];
+                            replacedTemplateBefore = existingTemplate;
                         }
                         ++insertAt;
                     }
@@ -2937,6 +3105,11 @@ namespace d20proof {
                     rejectedCompletionRepairBytes = 0;
                     ++report.completionResumes;
                     ++report.repairs;
+                    lastCompletedRepairApplyWork = report.work - repairFailureWorkStart;
+                    std::cerr << "TRACE_REPAIR_OK n=" << report.repairs
+                              << " kind=completion work=" << report.work
+                              << " candidates=" << report.candidates
+                              << " apply=" << lastCompletedRepairApplyWork << '\n';
                     return true;
                 }
 
@@ -3043,8 +3216,11 @@ namespace d20proof {
                     rejectedCompletionRepairBytes = 0;
                     ++report.addedPredicates;
                     ++report.repairs;
-                    std::cerr << "REPAIR_POINT n=" << report.repairs
-                              << " work=" << report.work << '\n';
+                    lastCompletedRepairApplyWork = report.work - repairFailureWorkStart;
+                    std::cerr << "TRACE_REPAIR_OK n=" << report.repairs
+                              << " kind=predicate work=" << report.work
+                              << " candidates=" << report.candidates
+                              << " apply=" << lastCompletedRepairApplyWork << '\n';
                     return true;
                 }
             }
@@ -3077,31 +3253,12 @@ namespace d20proof {
                         falseCheck.check.reason);
                 }
             } else {
-                const std::uint64_t remainingWork = report.work >= budget.maxWork
-                    ? 0
-                    : budget.maxWork - report.work;
-                if (lastCompletedZeroPriceWork == 0 ||
-                    (remainingWork >= lastCompletedZeroPriceWork &&
-                     remainingWork - lastCompletedZeroPriceWork >=
-                         lastCompletedCandidateSetupWork)) {
-                    const std::uint64_t zeroPriceWorkStart = report.work;
-                    falseCheck = ProofKernel::tryFalseZeroPriceOnSnapshot(
-                        bundle_,
-                        problem,
-                        horizon,
-                        std::move(falseCheck.snapshot),
-                        budget,
-                        report);
-                    if (!falseCheck.check.accepted) {
-                        return makeCurrentFailure(
-                            isBudgetFailure(falseCheck.check.reason) ? SolveKind::Unknown : SolveKind::ModelError,
-                            falseCheck.check.reason);
-                    }
-                    lastCompletedZeroPriceWork = report.work - zeroPriceWorkStart;
-                    std::cerr << "ZERO_PRICE n=" << report.repairs
-                              << " delta=" << lastCompletedZeroPriceWork
-                              << " work=" << report.work << '\n';
-                }
+                // The repaired snapshot is already fully rebuilt and checked.
+                // Section 13 permits omitting the optional zero-price attempt
+                // and continuing candidate search.  Re-running the full FALSE
+                // DP after every successful repair consumed most of the shared
+                // work budget before the candidate iterator could use the new
+                // model, so keep that work for witness search instead.
             }
             repairSnapshotPrepared = false;
             if (falseCheck.provedFalse) {
@@ -3156,9 +3313,6 @@ namespace d20proof {
             iterator = std::make_unique<GoalCandidateIterator>(
                 bundle_, falseCheck.snapshot, distances, commandSequences, horizon, budget, report);
             lastCompletedCandidateSetupWork = report.work - candidateSetupWorkStart;
-            std::cerr << "SETUP_POINT n=" << report.repairs
-                      << " delta=" << lastCompletedCandidateSetupWork
-                      << " work=" << report.work << '\n';
             failures.clear();
             releaseSearchBytes(report, failureBatchBytes);
             failureBatchBytes = 0;

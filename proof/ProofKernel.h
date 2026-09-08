@@ -34,6 +34,7 @@ namespace d20proof {
     enum class RootProofKind : std::uint8_t {
         Completion,
         FullyDetailed,
+        Refined,
     };
 
     enum class DetailedProofNodeKind : std::uint8_t {
@@ -52,6 +53,8 @@ namespace d20proof {
         ProgramPoint expectedPc;
         SymbolicFrame claimedFrame;
         std::vector<std::uint32_t> children;
+        CompletionCutId completionCut = CompletionCutId::TurnEntry;
+        std::vector<CompletionProofCase> completionCases;
 
         bool operator==(const DetailedProofNode &) const = default;
     };
@@ -128,6 +131,7 @@ namespace d20proof {
         Box coveredDomain;
         RootProofKind kind = RootProofKind::Completion;
         CompletionCutId cut = CompletionCutId::TurnEntry;
+        std::vector<CompletionCheckpoint> expandedCompletions;
 
         bool operator==(const ProofTemplate &) const = default;
     };

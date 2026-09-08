@@ -435,6 +435,7 @@ namespace d20proof {
             }
             add(node.expectedPc.routineId.size());
             add(node.children.size() * sizeof(std::uint32_t));
+            add(node.completionCases.size() * sizeof(CompletionProofCase));
             return bytes;
         }
 
@@ -474,6 +475,18 @@ namespace d20proof {
                 return std::numeric_limits<std::uint64_t>::max();
             }
             return bytes + dynamicFrameBytes;
+        }
+
+        std::uint64_t proofTemplateBytes(const ProofTemplate &proofTemplate) noexcept {
+            std::uint64_t bytes = sizeof(ProofTemplate);
+            for (const CompletionCheckpoint &checkpoint: proofTemplate.expandedCompletions) {
+                const std::uint64_t checkpointBytes = completionCheckpointBytes(checkpoint);
+                if (checkpointBytes > std::numeric_limits<std::uint64_t>::max() - bytes) {
+                    return std::numeric_limits<std::uint64_t>::max();
+                }
+                bytes += checkpointBytes;
+            }
+            return bytes;
         }
 
         std::uint64_t checkedEdgeBytes(const CheckedEdge &edge) noexcept {
@@ -745,17 +758,17 @@ namespace d20proof {
         }
 
         bool completionCasesMatch(
-            const RootProofRecord &proof,
+            const std::vector<CompletionProofCase> &proofCases,
             const std::vector<CompletionWeightTerm> &remainingTerms,
             std::uint32_t maximumTerms,
             std::string &error) {
             if (remainingTerms.empty() || remainingTerms.size() > maximumTerms ||
-                proof.completionCases.size() != remainingTerms.size()) {
+                proofCases.size() != remainingTerms.size()) {
                 error = "COMPLETE does not contain every required case_id";
                 return false;
             }
             std::vector<bool> seen(remainingTerms.size(), false);
-            for (const CompletionProofCase &proofCase: proof.completionCases) {
+            for (const CompletionProofCase &proofCase: proofCases) {
                 if (proofCase.caseId >= remainingTerms.size() ||
                     proofCase.targetKind != CompletionTargetKind::AllLeavesInCheckedRange ||
                     seen[proofCase.caseId]) {
@@ -765,6 +778,41 @@ namespace d20proof {
                 seen[proofCase.caseId] = true;
             }
             return true;
+        }
+
+        bool completionCasesMatch(
+            const RootProofRecord &proof,
+            const std::vector<CompletionWeightTerm> &remainingTerms,
+            std::uint32_t maximumTerms,
+            std::string &error) {
+            return completionCasesMatch(
+                proof.completionCases,
+                remainingTerms,
+                maximumTerms,
+                error);
+        }
+
+        bool sameSymbolicFrameExecution(const SymbolicFrame &a, const SymbolicFrame &b) noexcept {
+            return a.routineId == b.routineId &&
+                   a.pc == b.pc &&
+                   a.callStack == b.callStack &&
+                   a.rngPosition == b.rngPosition &&
+                   a.selectedCommand == b.selectedCommand &&
+                   a.elapsedTurn == b.elapsedTurn &&
+                   a.resources == b.resources &&
+                   a.controls == b.controls &&
+                   a.scalars == b.scalars &&
+                   a.scalarDefined == b.scalarDefined &&
+                   a.actionProgress == b.actionProgress;
+        }
+
+        bool completionCheckpointCoversFrame(
+            const CompletionCheckpoint &checkpoint,
+            CompletionCutId cut,
+            const SymbolicFrame &frame) noexcept {
+            return checkpoint.cut == cut &&
+                   sameSymbolicFrameExecution(checkpoint.frame, frame) &&
+                   contains(checkpoint.frame.inputDomain, frame.inputDomain);
         }
 
         bool prefixWeightTerm(
@@ -1573,6 +1621,7 @@ namespace d20proof {
             const SymbolicFrame &rootFrame,
             RootProofKind proofKind,
             CompletionCutId completionCut,
+            const std::vector<CompletionCheckpoint> *expandedCompletions,
             const ProofBudget &limits,
             BudgetReport &budget,
             std::vector<DetailedProofNode> &nodes,
@@ -1591,6 +1640,10 @@ namespace d20proof {
                     error = "detailed proof tree references an unregistered COMPLETE cut";
                     return false;
                 }
+            } else if (proofKind == RootProofKind::Refined &&
+                       (expandedCompletions == nullptr || expandedCompletions->empty())) {
+                error = "refined proof tree has no local COMPLETE expansion";
+                return false;
             }
 
             SymbolicStepper stepper(bundle, problem);
@@ -1647,6 +1700,49 @@ namespace d20proof {
                 if (completionSite != nullptr && stepper.point(frame) == completionSite->pc) {
                     nodes[nodeIndex].kind = DetailedProofNodeKind::Complete;
                     continue;
+                }
+                if (proofKind == RootProofKind::Refined) {
+                    bool isCut = false;
+                    const CompletionCutId cut = cutForPoint(bundle.profile, stepper.point(frame), isCut);
+                    if (isCut) {
+                        bool expandThisFrame = false;
+                        for (const CompletionCheckpoint &checkpoint: *expandedCompletions) {
+                            if (!chargeBudget(budget, limits, 1, 0)) {
+                                error = "refined proof COMPLETE expansion lookup exceeded work budget";
+                                return false;
+                            }
+                            if (completionCheckpointCoversFrame(checkpoint, cut, frame)) {
+                                expandThisFrame = true;
+                                break;
+                            }
+                        }
+                        if (!expandThisFrame) {
+                            std::vector<CompletionWeightTerm> terms =
+                                completionTermsForCut(bundle, frame.selectedCommand, cut);
+                            if (terms.empty() || terms.size() > limits.maxCompletionTermsPerAction) {
+                                error = "refined proof COMPLETE has an invalid case count";
+                                return false;
+                            }
+                            const std::uint64_t caseBytes =
+                                terms.size() * sizeof(CompletionProofCase);
+                            if (!chargeBudget(budget, limits, terms.size(), caseBytes)) {
+                                error = "refined proof COMPLETE case generation exceeded proof budget";
+                                return false;
+                            }
+                            temporaryBytes.add(caseBytes);
+                            DetailedProofNode &node = nodes[nodeIndex];
+                            node.kind = DetailedProofNodeKind::Complete;
+                            node.completionCut = cut;
+                            node.completionCases.reserve(terms.size());
+                            for (std::size_t caseIndex = 0; caseIndex < terms.size(); ++caseIndex) {
+                                node.completionCases.push_back({
+                                    static_cast<std::uint32_t>(caseIndex),
+                                    CompletionTargetKind::AllLeavesInCheckedRange,
+                                });
+                            }
+                            continue;
+                        }
+                    }
                 }
 
                 const Instruction *instruction = instructionAt(bundle, frame, error);
@@ -2233,6 +2329,9 @@ namespace d20proof {
                         CompletionTargetKind::AllLeavesInCheckedRange,
                     });
                 }
+            } else if (kind == RootProofKind::Refined) {
+                proof.expectedPc = {bundle.program.entryRoutine, 0};
+                proof.cut = CompletionCutId::TurnEntry;
             }
             return proof;
         };
@@ -2285,18 +2384,21 @@ namespace d20proof {
             const ProofTemplate *bestTemplate = nullptr;
             auto rank = [](const ProofTemplate &candidate) {
                 if (candidate.kind == RootProofKind::FullyDetailed) {
-                    return 100;
+                    return std::uint64_t{1} << 62;
+                }
+                if (candidate.kind == RootProofKind::Refined) {
+                    return (std::uint64_t{1} << 61) + candidate.expandedCompletions.size();
                 }
                 switch (candidate.cut) {
                     case CompletionCutId::TurnEntry:
-                        return 0;
+                        return std::uint64_t{0};
                     case CompletionCutId::AllyDoneEnemyPending:
                     case CompletionCutId::EnemyDoneAllyPending:
-                        return 10;
+                        return std::uint64_t{10};
                     case CompletionCutId::ActionsDone:
-                        return 20;
+                        return std::uint64_t{20};
                 }
-                return 0;
+                return std::uint64_t{0};
             };
             if (generationTemplates != nullptr) {
                 if (!chargeBudget(budget, limits, 1, 0)) {
@@ -2331,7 +2433,8 @@ namespace d20proof {
                     command,
                     bestTemplate->kind,
                     bestTemplate->cut);
-                if (proof.kind == RootProofKind::FullyDetailed ||
+                if (proof.kind == RootProofKind::Refined ||
+                    proof.kind == RootProofKind::FullyDetailed ||
                     proof.cut != CompletionCutId::TurnEntry) {
                     SymbolicStepper stepper(bundle, problem);
                     const SymbolicFrame rootFrame = stepper.makeRootFrame(
@@ -2346,6 +2449,9 @@ namespace d20proof {
                             rootFrame,
                             proof.kind,
                             proof.cut,
+                            proof.kind == RootProofKind::Refined
+                                ? &bestTemplate->expandedCompletions
+                                : nullptr,
                             limits,
                             budget,
                             proof.detailedNodes,
@@ -2490,9 +2596,20 @@ namespace d20proof {
                                           snapshot.check.reason)) {
                     return false;
                 }
-            } else if (!proof.completionCases.empty()) {
-                snapshot.check.reason = "fully detailed root must not contain COMPLETE cases";
-                return false;
+            } else {
+                if (!proof.completionCases.empty()) {
+                    snapshot.check.reason =
+                        proof.kind == RootProofKind::Refined
+                            ? "refined root must carry COMPLETE cases on its COMPLETE leaves"
+                            : "fully detailed root must not contain COMPLETE cases";
+                    return false;
+                }
+                if (proof.kind == RootProofKind::Refined &&
+                    (proof.cut != CompletionCutId::TurnEntry ||
+                     proof.expectedPc != ProgramPoint{bundle.program.entryRoutine, 0})) {
+                    snapshot.check.reason = "refined root has an invalid entry identity";
+                    return false;
+                }
             }
             if (proof.elapsedTurn != elapsedTurn || !(proof.source == source) ||
                 proof.selectedCommand != command ||
@@ -2571,7 +2688,8 @@ namespace d20proof {
                                         const CompletionWeightTerm &weight,
                                         int firstPosition,
                                         int lastPosition,
-                                        bool completion) -> bool {
+                                        bool completion,
+                                        CompletionCutId completionCut) -> bool {
                 if (output.enemyHp.lo < 0 || output.heroHp.lo < 0 ||
                     output.mp.lo < 0 || output.herb.lo < 0) {
                     snapshot.check.reason = "checked symbolic output contains a negative resource";
@@ -2580,7 +2698,7 @@ namespace d20proof {
 
                 CheckedEdge edge;
                 edge.kind = completion ? CheckedEdgeKind::Completion : CheckedEdgeKind::Detailed;
-                edge.completionCut = completion ? proof.cut : CompletionCutId::TurnEntry;
+                edge.completionCut = completion ? completionCut : CompletionCutId::TurnEntry;
                 edge.elapsedTurn = elapsedTurn;
                 edge.source = source;
                 edge.selectedCommand = command;
@@ -2842,6 +2960,105 @@ namespace d20proof {
                 return true;
             };
 
+            auto addCompletionLeaf = [&](const SymbolicFrame &frame,
+                                         CompletionCutId cut,
+                                         const std::vector<CompletionProofCase> &proofCases) -> bool {
+                const CompletionSite *leafSite = lookupCompletionSite(bundle.profile, cut);
+                if (leafSite == nullptr || stepper.point(frame) != leafSite->pc) {
+                    snapshot.check.reason = "COMPLETE proof leaf is not at its registered cut";
+                    return false;
+                }
+                const std::vector<CompletionWeightTerm> leafRemainingTerms =
+                    completionTermsForCut(bundle, command, cut);
+                if (!completionCasesMatch(
+                        proofCases,
+                        leafRemainingTerms,
+                        limits.maxCompletionTermsPerAction,
+                        snapshot.check.reason)) {
+                    return false;
+                }
+                reachedCut = true;
+
+                Box current;
+                std::string frameError;
+                if (!stepper.outputBox(frame, current, frameError)) {
+                    snapshot.check.reason = "COMPLETE current image failed: " + frameError;
+                    return false;
+                }
+                CompletionWeightTerm prefix;
+                if (!prefixWeightTerm(frame, prefix, frameError)) {
+                    snapshot.check.reason = "COMPLETE prefix bound failed: " + frameError;
+                    return false;
+                }
+
+                if (current.enemyHp.hi == 0 ||
+                    (current.heroHp.hi == 0 && current.enemyHp.lo > 0)) {
+                    return addExactFinishedOutput(frame);
+                }
+
+                int remainingRng = 0;
+                if (!stepper.remainingRngBound(frame, remainingRng, frameError)) {
+                    snapshot.check.reason = "COMPLETE Rremaining failed: " + frameError;
+                    return false;
+                }
+                const int lastOutputPosition = frame.rngPosition + remainingRng;
+                const int envelopeLastPosition = problem.s0.position +
+                                                 (elapsedTurn + 1) * bundle.bounds.rMax;
+                if (frame.rngPosition < problem.s0.position ||
+                    lastOutputPosition > envelopeLastPosition ||
+                    lastOutputPosition >= ExactReplay::kRngTapeSize) {
+                    snapshot.check.reason = "partial COMPLETE Rremaining escapes Envelope[t+1]";
+                    return false;
+                }
+
+                CompletionCheckpoint checkpoint{
+                    elapsedTurn,
+                    source,
+                    command,
+                    cut,
+                    rootDomain,
+                    frame,
+                };
+                const std::uint64_t checkpointBytes = completionCheckpointBytes(checkpoint);
+                if (!chargeBudget(budget, limits, 0, checkpointBytes)) {
+                    snapshot.check.reason = "partial COMPLETE checkpoint storage exceeded proof budget";
+                    return false;
+                }
+                outputBytes.add(checkpointBytes);
+                checkpoints.push_back(std::move(checkpoint));
+                for (const CompletionWeightTerm &remaining: leafRemainingTerms) {
+                    CompletionWeightTerm total;
+                    if (!addCompletionTerm(prefix, remaining, total, frameError)) {
+                        snapshot.check.reason = frameError;
+                        return false;
+                    }
+                    Box output;
+                    if (!completionOutputEnvelope(
+                            bundle,
+                            cut,
+                            current,
+                            remaining,
+                            output,
+                            frameError)) {
+                        snapshot.check.reason = frameError.empty()
+                            ? "partial COMPLETE produced an empty output"
+                            : frameError;
+                        return false;
+                    }
+                    if (!addCheckedOutput(
+                            frame,
+                            output,
+                            total,
+                            frame.rngPosition,
+                            lastOutputPosition,
+                            true,
+                            cut)) {
+                        return false;
+                    }
+                }
+                return true;
+            };
+
             while (!pending.empty()) {
                 const std::uint64_t currentPendingBytes = pendingDetailedNodeBytes(pending.back());
                 PendingDetailedNode pendingNode = std::move(pending.back());
@@ -2870,92 +3087,28 @@ namespace d20proof {
                         snapshot.check.reason = "partial COMPLETE proof node is missing, mis-typed, or has children beyond the cut";
                         return false;
                     }
-                    reachedCut = true;
-
-                    Box current;
-                    std::string frameError;
-                    if (!stepper.outputBox(frame, current, frameError)) {
-                        snapshot.check.reason = "COMPLETE current image failed: " + frameError;
+                    if (!addCompletionLeaf(frame, proof.cut, proof.completionCases)) {
                         return false;
-                    }
-                    CompletionWeightTerm prefix;
-                    if (!prefixWeightTerm(frame, prefix, frameError)) {
-                        snapshot.check.reason = "COMPLETE prefix bound failed: " + frameError;
-                        return false;
-                    }
-
-                    if (current.enemyHp.hi == 0 ||
-                        (current.heroHp.hi == 0 && current.enemyHp.lo > 0)) {
-                        if (!addExactFinishedOutput(frame)) {
-                            return false;
-                        }
-                        continue;
-                    }
-
-                    int remainingRng = 0;
-                    if (!stepper.remainingRngBound(frame, remainingRng, frameError)) {
-                        snapshot.check.reason = "COMPLETE Rremaining failed: " + frameError;
-                        return false;
-                    }
-                    const int lastOutputPosition = frame.rngPosition + remainingRng;
-                    const int envelopeLastPosition = problem.s0.position +
-                                                     (elapsedTurn + 1) * bundle.bounds.rMax;
-                    if (frame.rngPosition < problem.s0.position ||
-                        lastOutputPosition > envelopeLastPosition ||
-                        lastOutputPosition >= ExactReplay::kRngTapeSize) {
-                        snapshot.check.reason = "partial COMPLETE Rremaining escapes Envelope[t+1]";
-                        return false;
-                    }
-
-                    CompletionCheckpoint checkpoint{
-                        elapsedTurn,
-                        source,
-                        command,
-                        proof.cut,
-                        rootDomain,
-                        frame,
-                    };
-                    const std::uint64_t checkpointBytes = completionCheckpointBytes(checkpoint);
-                    if (!chargeBudget(budget, limits, 0, checkpointBytes)) {
-                        snapshot.check.reason = "partial COMPLETE checkpoint storage exceeded proof budget";
-                        return false;
-                    }
-                    outputBytes.add(checkpointBytes);
-                    checkpoints.push_back(std::move(checkpoint));
-                    for (const CompletionWeightTerm &remaining: remainingTerms) {
-                        CompletionWeightTerm total;
-                        if (!addCompletionTerm(prefix, remaining, total, frameError)) {
-                            snapshot.check.reason = frameError;
-                            return false;
-                        }
-                        Box output;
-                        if (!completionOutputEnvelope(bundle,
-                                                      proof.cut,
-                                                      current,
-                                                      remaining,
-                                                      output,
-                                                      frameError)) {
-                            snapshot.check.reason = frameError.empty()
-                                ? "partial COMPLETE produced an empty output"
-                                : frameError;
-                            return false;
-                        }
-                        if (!addCheckedOutput(frame,
-                                              output,
-                                              total,
-                                              frame.rngPosition,
-                                              lastOutputPosition,
-                                              true)) {
-                            return false;
-                        }
                     }
                     pendingBytes.release(currentPendingBytes);
                     continue;
                 }
 
                 if (proofNode.kind == DetailedProofNodeKind::Complete) {
-                    snapshot.check.reason = "detailed proof uses COMPLETE at an unregistered or wrong cut";
-                    return false;
+                    if (proof.kind != RootProofKind::Refined ||
+                        !proofNode.children.empty() ||
+                        !addCompletionLeaf(
+                            frame,
+                            proofNode.completionCut,
+                            proofNode.completionCases)) {
+                        if (snapshot.check.reason.empty()) {
+                            snapshot.check.reason =
+                                "detailed proof uses COMPLETE at an unregistered or wrong cut";
+                        }
+                        return false;
+                    }
+                    pendingBytes.release(currentPendingBytes);
+                    continue;
                 }
 
                 std::string instructionError;
@@ -3225,10 +3378,9 @@ namespace d20proof {
                 elapsedTurn < 0 || elapsedTurn >= horizon) {
                 return false;
             }
-            if (!chargeBudget(budget, limits, 1, 0)) {
-                snapshot.check.reason = "checked TurnEntry reuse lookup exceeded proof budget";
-                return std::nullopt;
-            }
+            // oldEdge was selected by the charged ordered merge scan below.
+            // Validating that selected record is part of the same old-edge
+            // visit, not a second lookup of the hotel room/command key.
             if (oldEdge->selectedCommand != command || oldEdge->source != source ||
                 oldEdge->kind != CheckedEdgeKind::Completion ||
                 oldEdge->completionCut != CompletionCutId::TurnEntry ||
@@ -3319,18 +3471,20 @@ namespace d20proof {
                             !candidate.weightTerms.empty() || !candidate.targets.empty()) {
                             continue;
                         }
-                        for (std::size_t slot = 0; slot < commandCount; ++slot) {
-                            if (bundle.profile.heroCommands[slot] != candidate.selectedCommand) {
-                                continue;
-                            }
-                            if (reusableForCommand[slot] != nullptr) {
-                                snapshot.check.reason =
-                                    "checked TurnEntry reuse contains duplicate canonical roots for one hotel room";
-                                return snapshot;
-                            }
-                            reusableForCommand[slot] = &candidate;
-                            break;
+                        if (candidate.selectedCommand < 0 ||
+                            static_cast<std::size_t>(candidate.selectedCommand) >= commandSlotByValue.size()) {
+                            continue;
                         }
+                        const int slot = commandSlotByValue[static_cast<std::size_t>(candidate.selectedCommand)];
+                        if (slot < 0) {
+                            continue;
+                        }
+                        if (reusableForCommand[static_cast<std::size_t>(slot)] != nullptr) {
+                            snapshot.check.reason =
+                                "checked TurnEntry reuse contains duplicate canonical roots for one hotel room";
+                            return snapshot;
+                        }
+                        reusableForCommand[static_cast<std::size_t>(slot)] = &candidate;
                     }
                     if (scan != oldReuseCursor) {
                         oldReuseCursor = scan;
@@ -3457,7 +3611,8 @@ namespace d20proof {
                             if (!contains(candidate.coveredDomain, rootDomain)) {
                                 continue;
                             }
-                            if (candidate.kind == RootProofKind::FullyDetailed ||
+                            if (candidate.kind == RootProofKind::Refined ||
+                                candidate.kind == RootProofKind::FullyDetailed ||
                                 candidate.cut != CompletionCutId::TurnEntry) {
                                 strongerTemplateCoversRoot = true;
                                 break;
@@ -3782,15 +3937,28 @@ namespace d20proof {
                         snapshot.check.reason = "checked-root working byte accounting disagrees with retained form";
                         return snapshot;
                     }
-                    const std::size_t proofCompletionCaseCount =
+                    std::size_t proofCompletionCaseCount =
                         proof.has_value() ? proof->completionCases.size() : 0;
+                    if (proof.has_value()) {
+                        for (const DetailedProofNode &node: proof->detailedNodes) {
+                            if (node.completionCases.size() >
+                                std::numeric_limits<std::size_t>::max() - proofCompletionCaseCount) {
+                                snapshot.check.reason = "proof COMPLETE case count overflow";
+                                return snapshot;
+                            }
+                            proofCompletionCaseCount += node.completionCases.size();
+                        }
+                    }
                     const std::size_t proofDetailedNodeCount =
                         proof.has_value() ? proof->detailedNodes.size() : 0;
+                    const std::uint64_t rootCoverageWork = reusedCheckedTurnEntry
+                        ? 0
+                        : 1 + proofCompletionCaseCount + proofDetailedNodeCount +
+                            edgeTerms + edgeTargets;
                     if (!chargeBudget(
                             budget,
                             limits,
-                            1 + proofCompletionCaseCount + proofDetailedNodeCount +
-                                edgeTerms + edgeTargets,
+                            rootCoverageWork,
                             0)) {
                         snapshot.check.reason = "root coverage exceeded proof budget";
                         return snapshot;
@@ -3983,7 +4151,6 @@ namespace d20proof {
         SymbolicStepper stepper(bundle, problem);
         std::vector<SymbolicFrame> pending;
         pending.push_back(checkpoint.frame);
-        std::optional<CompletionCutId> nextCut;
         const std::uint64_t retainedBytesBeforeReservation = budget.bytes;
         BudgetReport reservedBudget = budget;
         const std::uint64_t initialPendingBytes = symbolicFrameRecordBytes(pending.back());
@@ -4014,18 +4181,12 @@ namespace d20proof {
             bool isCut = false;
             const CompletionCutId cut = cutForPoint(bundle.profile, point, isCut);
             if (isCut && cut != checkpoint.cut) {
-                if (!nextCut.has_value()) {
-                    nextCut = cut;
-                }
-                if (cut == *nextCut) {
-                    // This entire nonempty branch is covered by the selected
-                    // stronger COMPLETE site; do not execute beyond the cut.
-                    releaseBudgetBytes(reservedBudget, currentFrameBytes);
-                    continue;
-                }
-                // A different registered cut is not the template we are
-                // proposing.  Keep this branch detailed instead of silently
-                // dropping it or inventing a second completion in one root.
+                // This branch has reached its next registered COMPLETE cut.
+                // Different nonempty branches may legitimately reach different
+                // registered cuts; each one stops at its own first allowed cut
+                // instead of being forced through the first cut seen elsewhere.
+                releaseBudgetBytes(reservedBudget, currentFrameBytes);
+                continue;
             }
 
             std::string instructionWorkError;
@@ -4088,13 +4249,9 @@ namespace d20proof {
         advancedTemplate.rngPosition = checkpoint.source.rngPosition;
         advancedTemplate.selectedCommand = checkpoint.selectedCommand;
         advancedTemplate.coveredDomain = checkpoint.rootDomain;
-        if (nextCut.has_value()) {
-            advancedTemplate.kind = RootProofKind::Completion;
-            advancedTemplate.cut = *nextCut;
-        } else {
-            advancedTemplate.kind = RootProofKind::FullyDetailed;
-            advancedTemplate.cut = checkpoint.cut;
-        }
+        advancedTemplate.kind = RootProofKind::Refined;
+        advancedTemplate.cut = CompletionCutId::TurnEntry;
+        advancedTemplate.expandedCompletions = {checkpoint};
         result.accepted = true;
         return result;
     }
@@ -4243,27 +4400,31 @@ namespace d20proof {
             result.reason = "checked_cache template has an invalid root identity/domain";
             return result;
         }
+        if (proofTemplate.kind == RootProofKind::Refined &&
+            proofTemplate.expandedCompletions.empty()) {
+            result.accepted = false;
+            result.reason = "checked_cache refined template has no local COMPLETE expansion";
+            return result;
+        }
         auto rank = [](const ProofTemplate &value) {
             if (value.kind == RootProofKind::FullyDetailed) {
-                return 100;
+                return std::uint64_t{1} << 62;
+            }
+            if (value.kind == RootProofKind::Refined) {
+                return (std::uint64_t{1} << 61) + value.expandedCompletions.size();
             }
             switch (value.cut) {
                 case CompletionCutId::TurnEntry:
-                    return 0;
+                    return std::uint64_t{0};
                 case CompletionCutId::AllyDoneEnemyPending:
                 case CompletionCutId::EnemyDoneAllyPending:
-                    return 10;
+                    return std::uint64_t{10};
                 case CompletionCutId::ActionsDone:
-                    return 20;
+                    return std::uint64_t{20};
             }
-            return -1;
+            return std::uint64_t{0};
         };
-        const int newRank = rank(proofTemplate);
-        if (newRank < 0) {
-            result.accepted = false;
-            result.reason = "checked_cache template has an invalid proof strategy";
-            return result;
-        }
+        const std::uint64_t newRank = rank(proofTemplate);
         auto keyOf = [](const ProofTemplate &value) {
             return std::tuple{value.elapsedTurn, value.rngPosition, value.selectedCommand};
         };
@@ -4292,6 +4453,39 @@ namespace d20proof {
                 return result;
             }
             ProofTemplate &existing = cache.templates[insertAt];
+            if (proofTemplate.kind == RootProofKind::Refined &&
+                existing.kind == RootProofKind::Refined &&
+                contains(existing.coveredDomain, proofTemplate.coveredDomain)) {
+                bool appended = false;
+                for (const CompletionCheckpoint &incoming: proofTemplate.expandedCompletions) {
+                    bool alreadyCovered = false;
+                    for (const CompletionCheckpoint &retained: existing.expandedCompletions) {
+                        if (!chargeBudget(budget, limits, 1, 0)) {
+                            result.accepted = false;
+                            result.reason = "checked_cache refined expansion lookup exceeded proof budget";
+                            return result;
+                        }
+                        if (completionCheckpointCoversFrame(retained, incoming.cut, incoming.frame)) {
+                            alreadyCovered = true;
+                            break;
+                        }
+                    }
+                    if (alreadyCovered) {
+                        continue;
+                    }
+                    const std::uint64_t expansionBytes = completionCheckpointBytes(incoming);
+                    if (!chargeBudget(budget, limits, 1, expansionBytes)) {
+                        result.accepted = false;
+                        result.reason = "checked_cache refined expansion storage exceeded proof budget";
+                        return result;
+                    }
+                    existing.expandedCompletions.push_back(incoming);
+                    appended = true;
+                }
+                changed = appended;
+                result.accepted = true;
+                return result;
+            }
             if (contains(existing.coveredDomain, proofTemplate.coveredDomain) &&
                 rank(existing) >= newRank) {
                 result.accepted = true;
@@ -4304,8 +4498,9 @@ namespace d20proof {
                 return result;
             }
         }
+        const std::uint64_t templateBytes = proofTemplateBytes(proofTemplate);
         if (cache.templates.size() >= limits.maxModelTerms ||
-            !chargeBudget(budget, limits, 1, sizeof(ProofTemplate))) {
+            !chargeBudget(budget, limits, 1, templateBytes)) {
             result.accepted = false;
             result.reason = "checked_cache exceeded proof budget";
             return result;
@@ -4342,6 +4537,13 @@ namespace d20proof {
             // in the checked snapshot and are never pruned by this cache.
             if (record.proofKind == RootProofKind::Completion &&
                 record.verifiedCut == CompletionCutId::TurnEntry) {
+                continue;
+            }
+            // Refined roots are backed by the local COMPLETE-expansion
+            // directives already stored in checked_cache.  CheckedRootRecord
+            // intentionally does not duplicate those symbolic checkpoints, so
+            // do not synthesize a lossy root-global template from the record.
+            if (record.proofKind == RootProofKind::Refined) {
                 continue;
             }
             ProofTemplate proofTemplate;
@@ -4428,6 +4630,67 @@ namespace d20proof {
                 return partition.rngPosition == position ? &partition : nullptr;
             };
 
+            // The registered command set is a fixed finite axis of every hotel
+            // room.  Build one exact command->slot table for the whole DP so
+            // completion terms can be accumulated directly by that axis rather
+            // than repeatedly searching the already-seen commands of each room.
+            int maximumCommandValue = -1;
+            for (const int command: bundle.profile.heroCommands) {
+                if (command < 0) {
+                    result.reason = "max-plus registered hero command is negative";
+                    return result;
+                }
+                maximumCommandValue = std::max(maximumCommandValue, command);
+            }
+            ScopedBudgetBytes commandSlotBytes(budget);
+            const std::uint64_t commandSlotStorage = maximumCommandValue < 0
+                ? 0
+                : (static_cast<std::uint64_t>(maximumCommandValue) + 1u) * sizeof(int);
+            if (!chargeBudget(
+                    budget,
+                    limits,
+                    bundle.profile.heroCommands.size(),
+                    commandSlotStorage)) {
+                result.reason = "max-plus command-slot lookup exceeded proof budget";
+                return result;
+            }
+            commandSlotBytes.add(commandSlotStorage);
+            std::vector<int> commandSlotByValue(
+                maximumCommandValue < 0 ? 0 : static_cast<std::size_t>(maximumCommandValue) + 1u,
+                -1);
+            for (std::size_t slot = 0; slot < bundle.profile.heroCommands.size(); ++slot) {
+                const int command = bundle.profile.heroCommands[slot];
+                if (commandSlotByValue[static_cast<std::size_t>(command)] != -1) {
+                    result.reason = "max-plus registered hero command list contains a duplicate";
+                    return result;
+                }
+                commandSlotByValue[static_cast<std::size_t>(command)] = static_cast<int>(slot);
+            }
+
+            struct CompletionAggregate {
+                int selectedCommand = 0;
+                bool mayReachGoal = false;
+                bool hasContinuingOutput = false;
+                int firstOutputPosition = 0;
+                int lastOutputPosition = -1;
+                CompletionWeightTerm weight;
+                bool hasWeight = false;
+            };
+            ScopedBudgetBytes completionAggregateBytes(budget);
+            const std::size_t commandCount = bundle.profile.heroCommands.size();
+            const std::uint64_t completionAggregateStorage =
+                commandCount * (sizeof(CompletionAggregate) + sizeof(std::uint64_t) + sizeof(std::size_t));
+            if (!chargeBudget(budget, limits, commandCount, completionAggregateStorage)) {
+                result.reason = "max-plus completion aggregate index exceeded proof budget";
+                return result;
+            }
+            completionAggregateBytes.add(completionAggregateStorage);
+            std::vector<CompletionAggregate> completionAggregates(commandCount);
+            std::vector<std::uint64_t> completionAggregateGeneration(commandCount, 0);
+            std::vector<std::size_t> activeCompletionAggregateSlots;
+            activeCompletionAggregateSlots.reserve(commandCount);
+            std::uint64_t completionAggregateGenerationId = 0;
+
             result.values.resize(static_cast<std::size_t>(horizon) + 1);
             result.values[0].assign(
                 snapshot.support[horizon].size(),
@@ -4510,63 +4773,68 @@ namespace d20proof {
                     begin = end;
                 }
 
-                std::size_t rangeLevels = 0;
-                for (std::size_t n = positionMaximums.size(); n != 0; n >>= 1) {
-                    ++rangeLevels;
-                }
                 const std::size_t positionSpan = positionMaximums.empty()
                     ? 0
                     : static_cast<std::size_t>(
                         positionMaximums.back().rngPosition - positionMaximums.front().rngPosition + 1);
-                const std::uint64_t sparseStorage =
-                    rangeLevels * positionMaximums.size() * sizeof(MaxPlusValue) +
-                    (positionMaximums.size() + 1) * sizeof(std::uint8_t) +
-                    (positionMaximums.size() + 1) * sizeof(std::uint32_t) +
+                const std::uint64_t rangeIndexStorage =
+                    positionSpan * sizeof(MaxPlusValue) +
+                    positionSpan * sizeof(std::uint8_t) +
+                    (positionSpan + 1) * sizeof(std::uint32_t) +
+                    (positionSpan + 1) * sizeof(int) +
                     positionSpan * sizeof(std::size_t);
-                if (sparseStorage != 0 &&
-                    !chargeBudget(budget, limits, 0, sparseStorage)) {
-                    result.reason = "max-plus sparse range-maximum table exceeded proof budget";
+                if (rangeIndexStorage != 0 &&
+                    !chargeBudget(budget, limits, 0, rangeIndexStorage)) {
+                    result.reason = "max-plus sliding range-maximum index exceeded proof budget";
                     return result;
                 }
-                rangeTableBytes.add(sparseStorage);
-                std::vector<MaxPlusValue> sparseRangeMaximums(
-                    rangeLevels * positionMaximums.size(),
-                    MaxPlusValue::negativeInfinity());
-                std::vector<std::uint8_t> floorLog2(positionMaximums.size() + 1, 0);
-                std::vector<std::uint32_t> incompletePrefix(positionMaximums.size() + 1, 0);
-                std::vector<std::size_t> positionIndex(
+                rangeTableBytes.add(rangeIndexStorage);
+                std::vector<MaxPlusValue> densePositionMaximums(
                     positionSpan,
-                    positionMaximums.size());
+                    MaxPlusValue::negativeInfinity());
+                std::vector<std::uint8_t> completePosition(positionSpan, 0);
+                std::vector<std::uint32_t> incompletePrefix(positionSpan + 1, 0);
+                std::vector<int> windowTableIndexByLength(positionSpan + 1, -1);
+                std::vector<std::size_t> monotoneQueue(positionSpan, 0);
                 std::uint64_t rangeBuildWork = 0;
                 if (!positionMaximums.empty()) {
-                    const std::size_t width = positionMaximums.size();
-                    for (std::size_t index = 0; index < width; ++index) {
-                        sparseRangeMaximums[index] = positionMaximums[index].value;
-                        positionIndex[static_cast<std::size_t>(
-                            positionMaximums[index].rngPosition - positionMaximums.front().rngPosition)] = index;
-                        incompletePrefix[index + 1] =
-                            incompletePrefix[index] + (positionMaximums[index].complete ? 0u : 1u);
-                        ++rangeBuildWork;
-                    }
-                    for (std::size_t length = 2; length <= width; ++length) {
-                        floorLog2[length] = static_cast<std::uint8_t>(floorLog2[length / 2] + 1);
-                        ++rangeBuildWork;
-                    }
-                    for (std::size_t level = 1; level < rangeLevels; ++level) {
-                        const std::size_t span = std::size_t{1} << level;
-                        const std::size_t half = span >> 1;
-                        for (std::size_t index = 0; index + span <= width; ++index) {
-                            sparseRangeMaximums[level * width + index] = maxValue(
-                                sparseRangeMaximums[(level - 1) * width + index],
-                                sparseRangeMaximums[(level - 1) * width + index + half]);
-                            ++rangeBuildWork;
+                    const int basePosition = positionMaximums.front().rngPosition;
+                    for (const PositionMaximum &entry: positionMaximums) {
+                        const std::size_t offset = static_cast<std::size_t>(
+                            entry.rngPosition - basePosition);
+                        if (offset >= positionSpan) {
+                            result.reason = "max-plus per-position maximum index escaped its dense hotel span";
+                            return result;
                         }
+                        densePositionMaximums[offset] = entry.value;
+                        completePosition[offset] = entry.complete ? 1u : 0u;
+                        ++rangeBuildWork;
+                    }
+                    for (std::size_t offset = 0; offset < positionSpan; ++offset) {
+                        incompletePrefix[offset + 1] =
+                            incompletePrefix[offset] + (completePosition[offset] == 0 ? 1u : 0u);
+                        ++rangeBuildWork;
                     }
                 }
                 if (rangeBuildWork != 0 && !chargeBudget(budget, limits, rangeBuildWork, 0)) {
-                    result.reason = "max-plus sparse range-maximum construction exceeded proof budget";
+                    result.reason = "max-plus sliding range-maximum index construction exceeded proof budget";
                     return result;
                 }
+
+                struct WindowMaximumTable {
+                    std::size_t length = 0;
+                    std::vector<MaxPlusValue> maximumByStart;
+                };
+                std::vector<WindowMaximumTable> windowMaximumTables;
+                const auto lessOrEqualMaxPlus = [](const MaxPlusValue &a, const MaxPlusValue &b) noexcept {
+                    if (a.isNegativeInfinity()) {
+                        return true;
+                    }
+                    if (b.isNegativeInfinity()) {
+                        return false;
+                    }
+                    return a.finite <= b.finite;
+                };
 
                 auto completionRangeMaximum = [&](int firstPosition,
                                                   int lastPosition,
@@ -4578,15 +4846,15 @@ namespace d20proof {
                     }
                     const int basePosition = positionMaximums.front().rngPosition;
                     if (firstPosition < basePosition || lastPosition < basePosition ||
-                        static_cast<std::uint64_t>(lastPosition - basePosition) >= positionIndex.size()) {
+                        static_cast<std::uint64_t>(lastPosition - basePosition) >= positionSpan) {
                         result.reason = "COMPLETE range is missing a checked RNG position in next-layer Support";
                         return false;
                     }
-                    const std::size_t left = positionIndex[static_cast<std::size_t>(firstPosition - basePosition)];
-                    const std::size_t right = positionIndex[static_cast<std::size_t>(lastPosition - basePosition)];
-                    const std::size_t width = positionMaximums.size();
+                    const std::size_t left = static_cast<std::size_t>(firstPosition - basePosition);
+                    const std::size_t right = static_cast<std::size_t>(lastPosition - basePosition);
                     const std::size_t count = static_cast<std::size_t>(lastPosition - firstPosition + 1);
-                    if (left >= width || right >= width || right < left || right - left + 1 != count) {
+                    if (left >= positionSpan || right >= positionSpan || right < left ||
+                        right - left + 1 != count || count == 0 || count > positionSpan) {
                         result.reason = "COMPLETE range is missing a checked RNG position in next-layer Support";
                         return false;
                     }
@@ -4594,11 +4862,63 @@ namespace d20proof {
                         result.reason = "max-plus COMPLETE support does not contain every partition leaf in queried range";
                         return false;
                     }
-                    const std::size_t level = floorLog2[count];
-                    const std::size_t span = std::size_t{1} << level;
-                    maximum = maxValue(
-                        sparseRangeMaximums[level * width + left],
-                        sparseRangeMaximums[level * width + right - span + 1]);
+                    int tableIndex = windowTableIndexByLength[count];
+                    if (tableIndex < 0) {
+                        const std::size_t startCount = positionSpan - count + 1;
+                        const std::uint64_t tableStorage =
+                            sizeof(WindowMaximumTable) + startCount * sizeof(MaxPlusValue);
+                        if (!chargeBudget(budget, limits, 0, tableStorage)) {
+                            result.reason = "max-plus sliding range-maximum table exceeded proof budget";
+                            return false;
+                        }
+                        rangeTableBytes.add(tableStorage);
+                        WindowMaximumTable table;
+                        table.length = count;
+                        table.maximumByStart.assign(
+                            startCount,
+                            MaxPlusValue::negativeInfinity());
+
+                        std::size_t head = 0;
+                        std::size_t tail = 0;
+                        std::uint64_t windowWork = 0;
+                        for (std::size_t index = 0; index < positionSpan; ++index) {
+                            while (head < tail && monotoneQueue[head] + count <= index) {
+                                ++head;
+                                ++windowWork;
+                            }
+                            while (head < tail) {
+                                ++windowWork;
+                                const std::size_t back = monotoneQueue[tail - 1];
+                                if (!lessOrEqualMaxPlus(
+                                        densePositionMaximums[back],
+                                        densePositionMaximums[index])) {
+                                    break;
+                                }
+                                --tail;
+                            }
+                            monotoneQueue[tail++] = index;
+                            ++windowWork;
+                            if (index + 1 >= count) {
+                                table.maximumByStart[index + 1 - count] =
+                                    densePositionMaximums[monotoneQueue[head]];
+                                ++windowWork;
+                            }
+                        }
+                        if (!chargeBudget(budget, limits, windowWork, 0)) {
+                            result.reason = "max-plus sliding range-maximum construction exceeded proof budget";
+                            return false;
+                        }
+                        windowMaximumTables.push_back(std::move(table));
+                        tableIndex = static_cast<int>(windowMaximumTables.size() - 1);
+                        windowTableIndexByLength[count] = tableIndex;
+                    }
+                    const WindowMaximumTable &table =
+                        windowMaximumTables[static_cast<std::size_t>(tableIndex)];
+                    if (table.length != count || left >= table.maximumByStart.size()) {
+                        result.reason = "max-plus sliding range-maximum table lookup is inconsistent";
+                        return false;
+                    }
+                    maximum = table.maximumByStart[left];
                     return true;
                 };
 
@@ -4621,17 +4941,12 @@ namespace d20proof {
                         }
                     }
 
-                    struct CompletionAggregate {
-                        int selectedCommand = 0;
-                        bool mayReachGoal = false;
-                        bool hasContinuingOutput = false;
-                        int firstOutputPosition = 0;
-                        int lastOutputPosition = -1;
-                        CompletionWeightTerm weight;
-                        bool hasWeight = false;
-                    };
-                    ScopedBudgetBytes aggregateBytes(budget);
-                    std::vector<CompletionAggregate> completionAggregates;
+                    if (completionAggregateGenerationId == std::numeric_limits<std::uint64_t>::max()) {
+                        result.reason = "max-plus completion aggregate generation overflow";
+                        return result;
+                    }
+                    ++completionAggregateGenerationId;
+                    activeCompletionAggregateSlots.clear();
                     std::uint64_t aggregateWork = 0;
                     for (std::size_t edgeIndex = edgeLo;
                          edgeIndex < layerEdges.size() && layerEdges[edgeIndex].source == source;
@@ -4641,23 +4956,23 @@ namespace d20proof {
                             !hasSuccessDpDestination(edge)) {
                             continue;
                         }
-                        std::size_t aggregateIndex = 0;
-                        while (aggregateIndex < completionAggregates.size() &&
-                               completionAggregates[aggregateIndex].selectedCommand != edge.selectedCommand) {
-                            ++aggregateIndex;
+                        ++aggregateWork;
+                        if (edge.selectedCommand < 0 ||
+                            static_cast<std::size_t>(edge.selectedCommand) >= commandSlotByValue.size() ||
+                            commandSlotByValue[static_cast<std::size_t>(edge.selectedCommand)] < 0) {
+                            result.reason = "max-plus completion edge command is outside registered profile";
+                            return result;
+                        }
+                        const std::size_t aggregateSlot = static_cast<std::size_t>(
+                            commandSlotByValue[static_cast<std::size_t>(edge.selectedCommand)]);
+                        if (completionAggregateGeneration[aggregateSlot] != completionAggregateGenerationId) {
+                            completionAggregateGeneration[aggregateSlot] = completionAggregateGenerationId;
+                            completionAggregates[aggregateSlot] = {};
+                            completionAggregates[aggregateSlot].selectedCommand = edge.selectedCommand;
+                            activeCompletionAggregateSlots.push_back(aggregateSlot);
                             ++aggregateWork;
                         }
-                        if (aggregateIndex == completionAggregates.size()) {
-                            if (!chargeBudget(budget, limits, 0, sizeof(CompletionAggregate))) {
-                                result.reason = "max-plus completion aggregate storage exceeded proof budget";
-                                return result;
-                            }
-                            aggregateBytes.add(sizeof(CompletionAggregate));
-                            CompletionAggregate aggregate;
-                            aggregate.selectedCommand = edge.selectedCommand;
-                            completionAggregates.push_back(aggregate);
-                        }
-                        CompletionAggregate &aggregate = completionAggregates[aggregateIndex];
+                        CompletionAggregate &aggregate = completionAggregates[aggregateSlot];
                         aggregate.mayReachGoal = aggregate.mayReachGoal || edge.mayReachGoal;
                         if (edge.hasContinuingOutput) {
                             if (!aggregate.hasContinuingOutput) {
@@ -4800,7 +5115,8 @@ namespace d20proof {
                         }
                     }
 
-                    for (const CompletionAggregate &aggregate: completionAggregates) {
+                    for (const std::size_t aggregateSlot: activeCompletionAggregateSlots) {
+                        const CompletionAggregate &aggregate = completionAggregates[aggregateSlot];
                         if (!aggregate.hasWeight) {
                             result.reason = "max-plus completion aggregate has no checked weight";
                             return result;
@@ -5588,14 +5904,10 @@ namespace d20proof {
                 normalResumeBudget,
                 advanced);
             if (!normalAdvance.accepted ||
-                (advanced.kind == RootProofKind::Completion && advanced.cut == checkpoint.cut)) {
+                advanced.kind != RootProofKind::Refined ||
+                advanced.expandedCompletions.size() != 1 ||
+                !(advanced.expandedCompletions.front() == checkpoint)) {
                 result.reason = "completion-reservation self-check did not advance with ordinary budget";
-                return result;
-            }
-
-            if (advanced.kind != RootProofKind::Completion ||
-                advanced.cut == CompletionCutId::TurnEntry) {
-                result.reason = "completion-reservation self-check did not reach a registered partial COMPLETE cut";
                 return result;
             }
 
@@ -5623,22 +5935,29 @@ namespace d20proof {
                     partialFalse.certificate.proofs.begin(),
                     partialFalse.certificate.proofs.end(),
                     [](const RootProofRecord &proof) {
-                        return proof.kind == RootProofKind::Completion &&
-                               proof.cut != CompletionCutId::TurnEntry;
+                        return proof.kind == RootProofKind::Refined;
                     });
                 if (partialProof == partialFalse.certificate.proofs.end()) {
-                    result.reason = "partial COMPLETE self-check certificate did not retain the advanced cut";
+                    result.reason = "partial COMPLETE self-check certificate did not retain the local refinement";
                     return result;
                 }
                 const std::size_t partialIndex = static_cast<std::size_t>(
                     partialProof - partialFalse.certificate.proofs.begin());
 
                 FalseCertificate partialMissingCase = partialFalse.certificate;
-                if (partialMissingCase.proofs[partialIndex].completionCases.empty()) {
-                    result.reason = "partial COMPLETE self-check unexpectedly has no completion cases";
+                auto &missingCaseNodes = partialMissingCase.proofs[partialIndex].detailedNodes;
+                auto missingCaseNode = std::find_if(
+                    missingCaseNodes.begin(),
+                    missingCaseNodes.end(),
+                    [](const DetailedProofNode &node) {
+                        return node.kind == DetailedProofNodeKind::Complete &&
+                               !node.completionCases.empty();
+                    });
+                if (missingCaseNode == missingCaseNodes.end()) {
+                    result.reason = "partial COMPLETE self-check unexpectedly has no COMPLETE leaf cases";
                     return result;
                 }
-                partialMissingCase.proofs[partialIndex].completionCases.pop_back();
+                missingCaseNode->completionCases.pop_back();
                 BudgetReport partialMissingCaseBudget;
                 if (verifyFalseCertificate(
                         bundle,
