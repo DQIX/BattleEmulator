@@ -204,6 +204,13 @@ struct PresentationActorState {
     std::int32_t battleWorldX{};
     std::int32_t battleWorldY{};
     std::int32_t battleWorldZ{};
+    // presentation object +0x04/+0x08/+0x0C. BACT opcode 0x4F mode0 runs
+    // 021695A8 -> 0204AB8C, which restores actor+0x44 from these base-world
+    // coordinates after resetting the presentation-node state.
+    bool baseBattleWorldKnown{};
+    std::int32_t baseBattleWorldX{};
+    std::int32_t baseBattleWorldY{};
+    std::int32_t baseBattleWorldZ{};
 
     [[nodiscard]] constexpr bool operator==(const PresentationActorState&) const = default;
 };

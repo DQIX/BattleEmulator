@@ -64,9 +64,9 @@ inline constexpr std::size_t kActionCount = 1024;
 inline constexpr std::uint16_t kInvalidActionId = UINT16_C(0xffff);
 inline constexpr std::uint32_t kInvalidProfileIndex = UINT32_C(0xffffffff);
 
-static_assert(generated::kCameraMetadataBytes.size() == 6288);
+static_assert(generated::kCameraMetadataBytes.size() == 7312);
 static_assert(MagicIs(generated::kCameraMetadataBytes, 'F', 'C', 'M', '1'));
-static_assert(ReadU32(generated::kCameraMetadataBytes, 4) == 3);
+static_assert(ReadU32(generated::kCameraMetadataBytes, 4) == 5);
 static_assert(ReadU32(generated::kCameraMetadataBytes, 8) == kActionCount);
 
 static_assert(generated::kActionMetadataBytes.size() == 6164);
@@ -166,6 +166,16 @@ struct ItemModelMapEntry {
     return generated::kCameraMetadataBytes[offset + actionId];
 }
 static_assert(CameraPlacementSequence(UINT16_C(24)) == UINT8_C(0x09));
+
+// Raw ROM-mined BACT opcode 0x4F mode membership. bit N=mode N occurs in the
+// action program. mode0 runs 021695A8 -> 0204AB8C; modes2/3 execute 0216964C.
+// Action IDs are never hand-maintained here.
+[[nodiscard]] constexpr std::uint8_t BactOpcode4fModeMask(const std::uint16_t actionId) {
+    if (actionId >= kActionCount) return 0;
+    constexpr std::size_t offset =
+        16 + 128 + kActionCount * 4 + kActionCount + kActionCount;
+    return generated::kCameraMetadataBytes[offset + actionId];
+}
 
 [[nodiscard]] constexpr std::uint16_t FallbackLookupActionId(const std::uint16_t actionId) {
     if (actionId >= kActionCount) return kInvalidActionId;
@@ -1254,7 +1264,57 @@ inline void SetTargetRecord02161720ActorId(const std::uint16_t actorId) noexcept
         std::uint8_t newStart = actor.startNode;
         if (actor.auxiliaryNode != detail::kInvalidPresentationNode) {
             newStart = actor.auxiliaryNode;
+        }
+
+// Exact persistent state relevant to BACT opcode 0x4F mode0:
+//   021E71A4 -> 021695A8 -> 0204AB8C -> 02049B10 -> 0204A904.
+// 02049B10 first resolves aux -> goal -> start and clears transient route
+// state. 0204AB8C then overwrites battle actor +0x44/+0x48/+0x4C from the
+// presentation object's base transform at +0x04/+0x08/+0x0C. Live ROM
+// tracing on seed 0x1AB6C4 confirms Hero 0,18432 -> 0,10240 and the three
+// enemies restoring to -9009/-10240, 0/-10240, 9009/-10240 respectively.
+[[nodiscard]] inline bool RestoreAllPresentationActorsToBaseBattleWorld() noexcept {
+    auto& state = ThreadContext();
+    if (state.presentationActorCount > state.presentationActors.size()) return false;
+
+    for (std::size_t index = 0; index < state.presentationActorCount; ++index) {
+        auto& actor = state.presentationActors[index];
+        const std::uint32_t originalFlags = actor.presentationFlags;
+
+        std::uint8_t newStart = actor.startNode;
+        if (actor.auxiliaryNode != detail::kInvalidPresentationNode) {
+            newStart = actor.auxiliaryNode;
         } else if (actor.goalNode != detail::kInvalidPresentationNode) {
+            newStart = actor.goalNode;
+        }
+        if (newStart != detail::kInvalidPresentationNode) {
+            if (newStart >= detail::kPresentationNodePositions.size()) return false;
+            const auto position = detail::kPresentationNodePositions[newStart];
+            if (!position.valid) return false;
+            actor.startNode = newStart;
+            actor.worldX = position.x;
+            actor.worldZ = position.z;
+        }
+
+        actor.goalNode = detail::kInvalidPresentationNode;
+        actor.auxiliaryNode = detail::kInvalidPresentationNode;
+        // 02049AB0 clears route-state flags 0x10/0x40. 0204AB8C then clears
+        // 0x01/0x20 and sets 0x02; 0204A904 clears 0x04.
+        actor.presentationFlags = (originalFlags & ~UINT32_C(0x75)) | UINT32_C(0x02);
+
+        if (actor.baseBattleWorldKnown) {
+            actor.battleWorldKnown = true;
+            actor.battleWorldX = actor.baseBattleWorldX;
+            actor.battleWorldY = actor.baseBattleWorldY;
+            actor.battleWorldZ = actor.baseBattleWorldZ;
+        }
+        state.nearestNodeCache[index] = {};
+    }
+
+    state.presentationGoalSetupActive = false;
+    InvalidateCurrentRoutes(state);
+    return true;
+} else if (actor.goalNode != detail::kInvalidPresentationNode) {
             newStart = actor.goalNode;
         }
 
@@ -1326,6 +1386,25 @@ inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
     (void)actorId;
     (void)actionIndex;
     return CommitAllCurrentRouteEnds();
+}
+
+// overlay_d_25:021E71A4 opcode 0x4F mode2 calls 0216964C at 021E732C
+// (LR=021E7330); mode3 also calls the same global reset. Live ROM tracing
+// shows this BACT instruction runs after the action's 0216F0E4 tracking-camera
+// RNG and before the next action's selector. Keep the reset at that lifecycle
+// point rather than folding it into CompleteActionPresentation, because
+// 0216964C invalidates the in-flight presentation routes.
+[[nodiscard]] inline bool ApplyBactOpcode4fPostTrackingEffects(
+    const std::uint16_t dq9ActionId
+) noexcept {
+    const std::uint8_t modeMask = metadata::BactOpcode4fModeMask(dq9ActionId);
+    if ((modeMask & UINT8_C(0x01)) != 0) {
+        if (!RestoreAllPresentationActorsToBaseBattleWorld()) return false;
+    }
+    if ((modeMask & UINT8_C(0x0c)) != 0) {
+        if (!ResetAllPresentationActorsForCameraPlacement()) return false;
+    }
+    return true;
 }
 
 template <typename Action>

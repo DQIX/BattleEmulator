@@ -554,6 +554,9 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                     runtimeTargetId
                 );
             }
+            if (hasPresentationSetup && actionMetadata != nullptr) {
+                (void)ApplyBactOpcode4fPostTrackingEffects(actionMetadata->dq9ActionId);
+            }
             (void)CompleteActionPresentation(runtimeActorId, i);
             processSlot1CleanupPresentationRecord(i, runtimeActorId);
             if (actionMetadata != nullptr) {
@@ -591,6 +594,9 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
             DEBUG_TRACE_IF(traceBoundaries,
                            std::cout << "TRACE rng lr=0x0216f0e4 max=8 consume=" << *position << '\n');
             (*position)++; // lr: 0x0216f0e4, max: 8
+        }
+        if (hasPresentationSetup && actionMetadata != nullptr) {
+            (void)ApplyBactOpcode4fPostTrackingEffects(actionMetadata->dq9ActionId);
         }
         if (after != BattleEmulator::ATTACK_ALLY) {//味方の攻撃→上空だとフリーカメラが特異点の挙動する
             preemptive = false;
