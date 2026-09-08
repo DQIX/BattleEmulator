@@ -2805,9 +2805,16 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             resetCombo(NowState);
             break;
         case BattleEmulator::CONFUSION_CANT_DECIDE:
-        case BattleEmulator::CONFUSION_FAILED_ATTACK:
         case BattleEmulator::CONFUSION_FAILED_FLEE:
         case BattleEmulator::CURE_CONFUSION:
+            baseDamage = 0;
+            resetCombo(NowState);
+            break;
+        case BattleEmulator::CONFUSION_FAILED_ATTACK:
+            // DQ9 0x00DE still runs the physical-attack calculation path even though
+            // its computed damage is discarded. Live order:
+            // 021EC6F8, 02158584, 02157F58, 02075724, 02075738, 021E54FC.
+            (*position) += 6;
             baseDamage = 0;
             resetCombo(NowState);
             break;
@@ -3297,7 +3304,8 @@ int BattleEmulator::FUN_0207564c(int *position, int atk, int def) {
 #endif
 
 void BattleEmulator::process7A8(int *position, int baseDamage, Player players[4], int defender) {
-    if (players[defender].paralysis || players[defender].sleeping || players[defender].specialCharge || players[defender].inactive || players[defender].hp <= baseDamage) {
+    if (players[defender].paralysis || players[defender].sleeping || players[defender].specialCharge
+        || players[defender].inactive || players[defender].confused || players[defender].hp <= baseDamage) {
         return;
     }
     if (baseDamage == 0) {
