@@ -96,6 +96,7 @@ void printHeader(std::stringstream& ss){
 	ss << std::left << std::setw(6) << "turn"
 		<< std::setw(18) << "sp"
 		<< std::setw(18) << "aAct"
+		<< std::setw(8) << "target"
 		<< std::setw(18) << "eAct1"
 		<< std::setw(18) << "eAct2"
 		<< std::setw(18) << "eAct3"
@@ -106,7 +107,16 @@ void printHeader(std::stringstream& ss){
 		<< std::setw(6) << "eD3"
 		<< std::setw(6) << "eD4"
 		<< std::setw(6) << "ahp"
+#if defined(gerunikku) && defined(DEBUG2)
+		<< std::setw(6) << "AHP"
+		<< std::setw(8) << "GeruHP"
+		<< std::setw(6) << "BHP"
+#elif defined(gerunikku)
 		<< std::setw(6) << "ehp"
+		<< std::setw(6) << "AB"
+#else
+		<< std::setw(6) << "ehp"
+#endif
 		<< std::setw(6) << "amp"
 
 		<< std::setw(6) << "ini"
@@ -115,9 +125,9 @@ void printHeader(std::stringstream& ss){
 		<< std::setw(6) << "ATT"
 		<< std::setw(6) << "DET"
 		//<< std::setw(6) << "MMT"
-		<< std::setw(6) << "Tab"
+		//<< std::setw(6) << "Tab"
 		<< std::setw(6) << "Sct" << "\n";
-	ss << std::string(188, '-') << "\n"; // 区切り線を出力
+	ss << std::string(196, '-') << "\n"; // 区切り線を出力
 }
 
 std::string dumpTable(const BattleResult& result,const int32_t gene[350], int PastTurns);
@@ -125,11 +135,23 @@ std::string dumpTable(const BattleResult& result,const int32_t gene[350], int Pa
 std::string dumpTable(const BattleResult& result, const int32_t gene[350], int PastTurns){
 	stringstream ss6;
 	printHeader(ss6);
+	auto appendHeroTargetColumn = [&](const int turn) {
+		const int packed = turn >= 0 ? gene[turn] : -1;
+		const int target = packed != 0 && packed != -1 ? BattleEmulator::HeroTargetId(packed) : -1;
+		const char* targetName = "";
+		switch (target) {
+			case 1: targetName = "A"; break;
+			case 2: targetName = "Geru"; break;
+			case 3: targetName = "B"; break;
+			default: break;
+		}
+		ss6 << std::setw(8) << targetName;
+	};
 	int currentTurn = -1;
 	int eDamage[4] = {-1, -1, -1, -1}, aDamage = -1;
 	bool initiative_tmp = false;
 	std::string eAction[4], aAction, sp, tmpState, ATKTurn1, DEFTurn1, magicMirrorTurn1, specialChargeTurn1, amp1, ahp2,
-	            ehp2, amp2;
+	            ehp2, enemyHpA2, enemyHpB2, enemyAlive2, amp2;
 	auto counter = 0;
 	// データのループ
 	for(int i = 0; i < result.position; ++i){
@@ -141,6 +163,8 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 		auto turn = result.turns[i];
 		auto initiative = result.initiative[i];
 		auto ehp1 = result.ehp[i];
+		auto enemyHpA1 = result.enemyHpA[i];
+		auto enemyHpB1 = result.enemyHpB[i];
 		auto ahp1 = result.ahp[i];
 		auto isEnemy = result.isEnemy[i];
 		auto state = result.state[i] & 0xf;
@@ -166,7 +190,9 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 					ss6
 						<< std::left << std::setw(6) << (currentTurn + 1)
 						<< std::setw(18) << sp
-						<< std::setw(18) << aAction
+						<< std::setw(18) << aAction;
+					appendHeroTargetColumn(currentTurn);
+					ss6
 						<< std::setw(18) << eAction[0]
 						<< std::setw(18) << eAction[1]
 						<< std::setw(18) << eAction[2]
@@ -177,7 +203,16 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 						<< std::setw(6) << eDamage[2]
 						<< std::setw(6) << eDamage[3]
 						<< std::setw(6) << ahp2
+#if defined(gerunikku) && defined(DEBUG2)
+						<< std::setw(6) << enemyHpA2
+						<< std::setw(8) << ehp2
+						<< std::setw(6) << enemyHpB2
+#elif defined(gerunikku)
 						<< std::setw(6) << ehp2
+						<< std::setw(6) << enemyAlive2
+#else
+						<< std::setw(6) << ehp2
+#endif
 						<< std::setw(6) << amp2
 						<< std::setw(6) << (initiative_tmp ? "yes" : "")
 						//<< std::setw(6) << ((aAction == "Paralysis" || aAction == "Cure Paralysis") ? "yes" : "")
@@ -185,7 +220,7 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 						<< std::setw(6) << ATKTurn1
 						<< std::setw(6) << DEFTurn1
 						//<< std::setw(6) << magicMirrorTurn1
-						<< std::setw(6) << tmpState
+						//<< std::setw(6) << tmpState
 						<< std::setw(6) << specialChargeTurn1
 						<< std::setw(11) << "" << "\n";
 				}
@@ -209,7 +244,7 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 			DEFTurn1 = "";
 			magicMirrorTurn1 = "";
 			specialChargeTurn1 = "";
-			tmpState = (state == 0) ? "A" : "B";
+			//tmpState = (state == 0) ? "A" : "B";
 		}
 
 		// 敵か味方の行動を適切な変数に格納
@@ -220,6 +255,13 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 			ahp2 = std::to_string(ahp1);
 		}else{
 			ehp2 = std::to_string(ehp1);
+#if defined(gerunikku)
+			enemyHpA2 = std::to_string(enemyHpA1);
+			enemyHpB2 = std::to_string(enemyHpB1);
+			enemyAlive2.clear();
+			enemyAlive2 += enemyHpA1 > 0 ? 'A' : '*';
+			enemyAlive2 += enemyHpB1 > 0 ? 'B' : '*';
+#endif
 			amp2 = std::to_string(amp);
 			aAction = BattleEmulator::getActionName(action);
 			aDamage = damage;
@@ -262,7 +304,9 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 		ss6
 			<< std::left << std::setw(6) << (currentTurn + 1)
 			<< std::setw(18) << sp
-			<< std::setw(18) << aAction
+			<< std::setw(18) << aAction;
+		appendHeroTargetColumn(currentTurn);
+		ss6
 			<< std::setw(18) << eAction[0]
 			<< std::setw(18) << eAction[1]
 			<< std::setw(18) << eAction[2]
@@ -273,7 +317,16 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 			<< std::setw(6) << eDamage[2]
 			<< std::setw(6) << eDamage[3]
 			<< std::setw(6) << ahp2
+#if defined(gerunikku) && defined(DEBUG2)
+			<< std::setw(6) << enemyHpA2
+			<< std::setw(8) << ehp2
+			<< std::setw(6) << enemyHpB2
+#elif defined(gerunikku)
 			<< std::setw(6) << ehp2
+			<< std::setw(6) << enemyAlive2
+#else
+			<< std::setw(6) << ehp2
+#endif
 			<< std::setw(6) << amp2
 			<< std::setw(6) << (initiative_tmp ? "yes" : "")
 			//<< std::setw(6) << ((aAction == "Paralysis" || aAction == "Cure Paralysis") ? "yes" : "")
@@ -281,7 +334,7 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 			<< std::setw(6) << ATKTurn1
 			<< std::setw(6) << DEFTurn1
 			//<< std::setw(6) << magicMirrorTurn1
-			<< std::setw(6) << tmpState
+			//<< std::setw(6) << tmpState
 			<< std::setw(6) << specialChargeTurn1
 			<< std::setw(11) << "" << "\n";
 	}
@@ -1796,20 +1849,9 @@ int main(int argc, char* argv[]){
 		return 0;
 	}
 
-	std::cout << "option missing" << std::endl;
-	return 1;
+
 
 #endif
-
-#if defined(OPTIMIZE_MODE)
-	int actions1[350] = {};
-	auto counter1 = 0;
-	actions1[counter1++] = BattleEmulator::BUFF;
-	actions1[counter1] = -1;
-	SimpleParameterOptimizer::optimize(copiedPlayers, 0x12398731ull, actions1, 100000, counter1);
-	return 0;
-#endif
-
 
 #ifdef DEBUG2
 	//THIS DEBUG CODE!
@@ -1917,6 +1959,9 @@ int main(int argc, char* argv[]){
 	std::cout << ss.str();
 	return 0;
 #endif
+
+	std::cout << "option missing" << std::endl;
+	return 1;
 
 	mainLoop(copiedPlayers);
 	return 0;

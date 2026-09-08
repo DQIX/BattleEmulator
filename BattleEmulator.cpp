@@ -714,6 +714,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 #endif
         #if defined(gerunikku)
         int ehp = players[2].hp;
+        const int enemyHpA = players[1].hp;
+        const int enemyHpB = players[3].hp;
         #else
         int ehp = players[1].hp;
         #endif
@@ -907,6 +909,10 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                               players[0].specialChargeTurn, players[0].mp, defenseFlag);
             if (result != nullptr) {
                 const int pos = result->position - 1;
+#if defined(gerunikku)
+                result->enemyHpA[pos] = enemyHpA;
+                result->enemyHpB[pos] = enemyHpB;
+#endif
                 result->actorIndex[pos] = actor;
                 result->actorMp[pos] = actor >= 0 && actor < 4 ? players[actor].mp : -1;
                 result->aiResourceGateMask[pos] = actor >= 0 && actor < 4

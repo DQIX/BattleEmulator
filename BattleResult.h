@@ -48,6 +48,8 @@ public:
 	int turns[1000] = {};
 	bool initiative[1000] = {};
 	int ehp[1000] = {};
+	int enemyHpA[1000] = {};
+	int enemyHpB[1000] = {};
 	int ahp[1000] = {};
 	int scTurn[1000] = {};
 	int amp[1000] = {};
