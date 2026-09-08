@@ -14,6 +14,8 @@
 #include "Player.h"
 #include "BattleResult.h"
 
+namespace proof { struct NativeAccess; }
+
 class BattleEmulator {
 public:
     static constexpr int TYPE_2A = 0;
@@ -135,6 +137,7 @@ public:
     static int getStartTurn();
 
 private:
+    friend struct proof::NativeAccess;
     static int ProcessMagicBurst(int *position);
 
     static void ProcessRage(int *position, int baseDamage, Player players[2]);

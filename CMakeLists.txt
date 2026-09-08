@@ -1,7 +1,24 @@
 cmake_minimum_required(VERSION 3.28)
 project(newDirectory)
 
+option(YO2_SUFFIX_PROOF "Build the suffix proof/search library" ON)
+option(YO2_PROOF_TESTS "Build independent proof kernel checks" OFF)
+
 set(CMAKE_CXX_STANDARD 20)
+
+if(YO2_SUFFIX_PROOF)
+    add_library(yo2_suffix_proof STATIC
+        ProofProgram.cpp ProofNatives.cpp BattleProofRules.cpp
+        ProofKernel.cpp SuffixProof.cpp
+        BattleEmulator.cpp lcg.cpp camera.cpp debug.cpp)
+    target_include_directories(yo2_suffix_proof PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+    if(YO2_PROOF_TESTS)
+        add_executable(suffix_proof_tests ProofTests.cpp)
+        target_link_libraries(suffix_proof_tests PRIVATE yo2_suffix_proof)
+        enable_testing()
+        add_test(NAME suffix_proof_tests COMMAND suffix_proof_tests)
+    endif()
+endif()
 
 option(multithreading "Enable multithreading" OFF)
 
