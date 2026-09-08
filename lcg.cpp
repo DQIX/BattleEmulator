@@ -148,6 +148,12 @@ uint8_t lcg::getSeed(int *position) {
     return result;
 }
 
+/**
+ *(void)lcg::getPercent(position, 100); 禁止な。(*position)++;とかけ。
+ * @param position
+ * @param max
+ * @return
+ */
 [[nodiscard]] int lcg::getPercent(int *position, int max) {
     assert(position != nullptr);
     assert((*position) < ARRAY_SIZE);

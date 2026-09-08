@@ -1021,6 +1021,79 @@ int main(int argc, char* argv[]){
 		return 0;
 	}
 
+	if (argc >= 4 && std::string_view(argv[1]) == "--scan-buffed-confusion-seeds") {
+		const uint64_t startSeed = std::stoull(argv[2], nullptr, 0);
+		const uint64_t count = std::stoull(argv[3], nullptr, 0);
+		const int currentSeedPosition = argc >= 5 ? std::stoi(argv[4], nullptr, 0) : 1;
+		// In the current one-member battle FUN_02160dfc cannot choose 0x00DB:
+		// its first RandInt(2) result is discarded and the four-entry table is
+		// forced. Scan only the four outcomes that are reachable in this State.
+		std::array<bool, 4> found{};
+		int foundCount = 0;
+		const auto previousCoutState = std::cout.rdstate();
+		std::cout.setstate(std::ios_base::failbit);
+
+		for (uint64_t offset = 0; offset < count && foundCount < 4; ++offset) {
+			const uint64_t seed = startSeed + offset;
+			if (seed == 0 || seed > 0x3fffff) continue;
+			lcg::init(seed, true);
+			BattleEmulator::SearchState state{};
+			if (!BattleEmulator::InitializeSearchState(&state, copiedPlayers, currentSeedPosition + 1)) {
+				throw std::runtime_error("failed to initialize buffed-confusion scan state");
+			}
+
+			bool firstTwoBuffs = true;
+			for (int turn = 0; turn < 2; ++turn) {
+				BattleResult result;
+				BattleEmulator::SearchState next{};
+				if (!BattleEmulator::StepSearchState(state, {BattleEmulator::BUFF, -1}, &next, &result, false)) {
+					firstTwoBuffs = false;
+					break;
+				}
+				bool heroActuallyUsedBuff = false;
+				for (int record = 0; record < result.position; ++record) {
+					if (!result.isEnemy[record] && result.actions[record] == BattleEmulator::BUFF) {
+						heroActuallyUsedBuff = true;
+						break;
+					}
+				}
+				if (!heroActuallyUsedBuff) {
+					firstTwoBuffs = false;
+					break;
+				}
+				state = next;
+			}
+			if (!firstTwoBuffs || state.players[0].BuffLevel != 2 || !state.players[0].confused) continue;
+
+			BattleResult result;
+			BattleEmulator::SearchState next{};
+			if (!BattleEmulator::StepSearchState(state, {BattleEmulator::PSYCHE_UP_ALLY, -1}, &next, &result, false)) continue;
+			for (int record = 0; record < result.position; ++record) {
+				if (result.isEnemy[record]) continue;
+				const int action = result.actions[record];
+				if (action < BattleEmulator::CONFUSION_CANT_DECIDE ||
+				    action > BattleEmulator::CONFUSION_FAILED_FLEE) continue;
+				const int index = action - BattleEmulator::CONFUSION_CANT_DECIDE;
+				if (found[index]) break;
+				found[index] = true;
+				++foundCount;
+				std::cerr << "BUFFED_CONFUSION_CANDIDATE seed=0x" << std::hex << seed << std::dec
+				          << " action=" << action
+				          << " buffLevel=" << state.players[0].BuffLevel
+				          << " buffTurns=" << state.players[0].BuffTurns
+				          << " positionBefore=" << state.position
+				          << " positionAfter=" << next.position << '\n';
+				break;
+			}
+		}
+
+		std::cout.clear(previousCoutState);
+		std::cout << "BUFFED_CONFUSION_1P_SCAN_DONE found=" << foundCount
+		          << " start=0x" << std::hex << startSeed << std::dec
+		          << " count=" << count << '\n';
+		return foundCount == 4 ? 0 : 2;
+	}
+
 	if (argc >= 5 && std::string_view(argv[1]) == "--trace-main-sequence") {
 		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
 		const int currentSeedPosition = std::stoi(argv[3], nullptr, 0);

@@ -2804,17 +2804,55 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             baseDamage = 0;
             resetCombo(NowState);
             break;
-        case BattleEmulator::CONFUSION_CANT_DECIDE:
-        case BattleEmulator::CONFUSION_FAILED_FLEE:
         case BattleEmulator::CURE_CONFUSION:
             baseDamage = 0;
             resetCombo(NowState);
             break;
+        case BattleEmulator::CONFUSION_CANT_DECIDE:
+            // DQ9 0x00DD. ROM seed 0x30 after two スカラ casts confirms this
+            // still executes the self-targeted generic physical helper path.
+            (*position)++; // max: 100, lr: 0x021ec6f8
+            (*position)++; // max: 10000, lr: 0x02158584
+            (*position)++; // max: 100, lr: 0x02157f58
+            baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[attacker].def);
+            if (baseDamage == 0) {
+                baseDamage = lcg::getPercent(position, 2); // lr: 0x021e81a0
+            }
+            if (baseDamage != 0) {
+                (*position)++; // max: 100, lr: 0x021e54fc
+            }
+            baseDamage = 0;
+            resetCombo(NowState);
+            break;
         case BattleEmulator::CONFUSION_FAILED_ATTACK:
-            // DQ9 0x00DE still runs the physical-attack calculation path even though
-            // its computed damage is discarded. Live order:
-            // 021EC6F8, 02158584, 02157F58, 02075724, 02075738, 021E54FC.
-            (*position) += 6;
+            // DQ9 0x00DE. ROM seed 0xA9 after two スカラ casts confirms the
+            // same self-targeted helper path; the computed damage is discarded.
+            (*position)++; // max: 100, lr: 0x021ec6f8
+            (*position)++; // max: 10000, lr: 0x02158584
+            (*position)++; // max: 100, lr: 0x02157f58
+            baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[attacker].def);
+            if (baseDamage == 0) {
+                baseDamage = lcg::getPercent(position, 2); // lr: 0x021e81a0
+            }
+            if (baseDamage != 0) {
+                (*position)++; // max: 100, lr: 0x021e54fc
+            }
+            baseDamage = 0;
+            resetCombo(NowState);
+            break;
+        case BattleEmulator::CONFUSION_FAILED_FLEE:
+            // DQ9 0x0396. ROM seed 0x2D after two スカラ casts confirms the
+            // same self-targeted helper path; the computed damage is discarded.
+            (*position)++; // max: 100, lr: 0x021ec6f8
+            (*position)++; // max: 10000, lr: 0x02158584
+            (*position)++; // max: 100, lr: 0x02157f58
+            baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[attacker].def);
+            if (baseDamage == 0) {
+                baseDamage = lcg::getPercent(position, 2); // lr: 0x021e81a0
+            }
+            if (baseDamage != 0) {
+                (*position)++; // max: 100, lr: 0x021e54fc
+            }
             baseDamage = 0;
             resetCombo(NowState);
             break;
@@ -2822,6 +2860,23 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             // DQ9 action 0x0393, operation type 24.
             // 0x021ffda8 -> FUN_021de52c -> FUN_02088b68.
             // FUN_02088b68 sets the primary status countdown to 3 at 0x02088bc0.
+            // The action still runs the same self-targeted normal-attack base-damage
+            // helper path before applying the status. Keep the individual call sites
+            // visible because FUN_0207564c/getNormalAttackBaseDamage consumes 0/1/2
+            // RNG values depending on defaultATK versus current (including スカラ) DEF.
+            (*position)++; // max: 100, lr: 0x021ec6f8
+            (*position)++; // max: 10000, lr: 0x02158584
+            (*position)++; // max: 100, lr: 0x02157f58
+            (*position)++; // floatRand(100.0, 100.0), lr: 0x0215816c
+            baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[attacker].def);
+            // ROM seed 0xC5 with two-stage スカラ: FUN_0207564c consumed its
+            // 0x020756e4 float RNG but rounded to zero, then 0x021e81a0 ran.
+            if (baseDamage == 0) {
+                baseDamage = lcg::getPercent(position, 2); // lr: 0x021e81a0
+            }
+            if (baseDamage != 0) {
+                (*position)++; // max: 100, lr: 0x021e54fc
+            }
             players[attacker].confused = false;
             players[attacker].confusionTurns = -1;
             players[attacker].paralysis = true;
@@ -3251,19 +3306,19 @@ int BattleEmulator::FUN_0207564c(int *position, int atk, int def) {
         int64_t atk4_fp = atk1_fp >> 4; // /16
 
         // floatRand(-atk4, atk4): -atk4 + top/2^32 * (2*atk4)
-        uint32_t r1 = lcg::getTop32(position);
+        uint32_t r1 = lcg::getTop32(position); // floatRand(-atk4, atk4), lr: 0x02075724
         auto spread_u = static_cast<uint64_t>(
             (static_cast<u128>(r1) * static_cast<u128>(static_cast<uint64_t>(atk4_fp))) >> 31);
         int64_t spread = static_cast<int64_t>(spread_u) - atk4_fp;
 
         // floatRandAttack(-1, 1): -1 + top/2^31
-        uint32_t r2 = lcg::getTop32(position);
+        uint32_t r2 = lcg::getTop32(position); // floatRandAttack(-1, 1), lr: 0x02075738
         int64_t attack = (static_cast<int64_t>(r2) << 1) - (1ll << 32);
 
         result_fp = atk1_fp + spread + attack;
     } else {
         // floatRand(0, atk2)
-        uint32_t r = lcg::getTop32(position);
+        uint32_t r = lcg::getTop32(position); // floatRand(0, atk/16), lr: 0x020756e4
         auto result_u = static_cast<uint64_t>(
             (static_cast<u128>(r) * static_cast<u128>(static_cast<uint64_t>(atk2_fp))) >> 32);
         result_fp = static_cast<int64_t>(result_u);

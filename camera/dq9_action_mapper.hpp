@@ -90,7 +90,11 @@ inline constexpr auto kActions = [] {
     actions[BattleEmulator::GERUNIKKU_MAGIC_MIRROR] = Describe<55>();
     actions[BattleEmulator::INACTIVE_ENEMY] = Describe<503>();
     actions[BattleEmulator::GERUNIKKU_MEDAPANI] = Describe<912>();
+    actions[BattleEmulator::CONFUSION_PARTY_ATTACK] = Describe<219>();
+    actions[BattleEmulator::CONFUSION_CANT_DECIDE] = Describe<221>();
+    actions[BattleEmulator::CONFUSION_TO_PARALYSIS] = Describe<915>();
     actions[BattleEmulator::CONFUSION_FAILED_ATTACK] = Describe<222>();
+    actions[BattleEmulator::CONFUSION_FAILED_FLEE] = Describe<918>();
     actions[BattleEmulator::WHIPPING_BOY] = Describe<929>();
     actions[BattleEmulator::HELM_SPLITTER] = Describe<109>();
     actions[BattleEmulator::KABUFF] = Describe<42>();
@@ -113,7 +117,9 @@ template <int CommonActionId>
 }
 
 static_assert(kActions[BattleEmulator::WHIPPING_BOY].dq9ActionId == 929);
+static_assert(kActions[BattleEmulator::CONFUSION_TO_PARALYSIS].dq9ActionId == 915);
 static_assert(kActions[BattleEmulator::CONFUSION_FAILED_ATTACK].dq9ActionId == 222);
+static_assert(kActions[BattleEmulator::CONFUSION_FAILED_FLEE].dq9ActionId == 918);
 static_assert(kActions[BattleEmulator::HELM_SPLITTER].dq9ActionId == 109);
 static_assert(kActions[BattleEmulator::INACTIVE_ENEMY].dq9ActionId == 503);
 static_assert(kActions[BattleEmulator::BUFF].dq9ActionId == 41);

@@ -21,6 +21,14 @@ private:
 public:
     static void init(uint64_t seed, bool init = false);
 
+    /**
+     * Do not write `(void)lcg::getPercent(position, max)` when only the RNG
+     * consumption matters. Write `(*position)++` and preserve the ROM LR in
+     * the call-site comment so RNG traces remain debuggable.
+     * @param position
+     * @param max
+     * @return
+     */
     static int getPercent(int *position, int max);
 
     static double floatRand(int *position, double min, double max);
