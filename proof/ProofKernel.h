@@ -5,6 +5,7 @@
 #include "SymbolicStepper.h"
 
 #include <optional>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -93,6 +94,18 @@ namespace d20proof {
         Completion,
     };
 
+    struct CompletionModelMember {
+        CompletionCutId cut = CompletionCutId::TurnEntry;
+        int completionCaseId = -1;
+        Box inputDomain;
+        int firstOutputPosition = 0;
+        int lastOutputPosition = -1;
+        bool mayReachGoal = false;
+        bool hasContinuingOutput = false;
+
+        bool operator==(const CompletionModelMember &) const = default;
+    };
+
     struct CheckedEdge {
         CheckedEdgeKind kind = CheckedEdgeKind::Detailed;
         CompletionCutId completionCut = CompletionCutId::TurnEntry;
@@ -100,13 +113,17 @@ namespace d20proof {
         CellKey source;
         int selectedCommand = 0;
         Box rootDomain;
-        Box continuingOutput;
+        // TurnEntry COMPLETE output envelopes are verified/reconstructible from
+        // the registered completion lemma and are not duplicated in every DP
+        // edge.  Detailed and refined partial edges retain their checked image.
+        std::shared_ptr<Box> continuingOutput;
         int firstOutputPosition = 0;
         int lastOutputPosition = -1;
         bool hasContinuingOutput = false;
         bool mayReachGoal = false;
         bool mayReachFailure = false;
-        bool useRegisteredTurnEntryTerms = false;
+        int completionCaseId = -1;
+        std::vector<CompletionModelMember> completionMembers;
         std::vector<CellKey> targets;
         std::vector<CompletionWeightTerm> weightTerms;
 
@@ -206,6 +223,11 @@ namespace d20proof {
         [[nodiscard]] static Box baseBox(const RuleBundle &bundle, const RawState &state);
 
         [[nodiscard]] static std::optional<Box> alphaSingleton(const RawState &state, std::string &error);
+
+        [[nodiscard]] static std::optional<Box> turnEntryCompletionContinuingEnvelope(
+            const RuleBundle &bundle,
+            const CheckedEdge &edge,
+            std::string &error);
 
         [[nodiscard]] static CheckedPartition validatePartition(
             const PredicatePartition &partition,

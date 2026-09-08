@@ -491,8 +491,16 @@ namespace d20proof {
 
         std::uint64_t checkedEdgeBytes(const CheckedEdge &edge) noexcept {
             std::uint64_t bytes = sizeof(CheckedEdge);
+            if (edge.continuingOutput) {
+                if (sizeof(Box) > std::numeric_limits<std::uint64_t>::max() - bytes) {
+                    return std::numeric_limits<std::uint64_t>::max();
+                }
+                bytes += sizeof(Box);
+            }
             const std::uint64_t targetBytes = edge.targets.size() * sizeof(CellKey);
             const std::uint64_t termBytes = edge.weightTerms.size() * sizeof(CompletionWeightTerm);
+            const std::uint64_t memberBytes =
+                edge.completionMembers.size() * sizeof(CompletionModelMember);
             if (targetBytes > std::numeric_limits<std::uint64_t>::max() - bytes) {
                 return std::numeric_limits<std::uint64_t>::max();
             }
@@ -500,7 +508,11 @@ namespace d20proof {
             if (termBytes > std::numeric_limits<std::uint64_t>::max() - bytes) {
                 return std::numeric_limits<std::uint64_t>::max();
             }
-            return bytes + termBytes;
+            bytes += termBytes;
+            if (memberBytes > std::numeric_limits<std::uint64_t>::max() - bytes) {
+                return std::numeric_limits<std::uint64_t>::max();
+            }
+            return bytes + memberBytes;
         }
 
         std::uint64_t snapshotAccountedBytes(const CheckedSnapshot &snapshot) noexcept {
@@ -524,7 +536,11 @@ namespace d20proof {
             for (const auto &layer: snapshot.edgesByElapsedTurn) {
                 add(layer.size() * sizeof(CheckedEdge));
                 for (const CheckedEdge &edge: layer) {
+                    if (edge.continuingOutput) {
+                        add(sizeof(Box));
+                    }
                     add(edge.weightTerms.size() * sizeof(CompletionWeightTerm));
+                    add(edge.completionMembers.size() * sizeof(CompletionModelMember));
                     add(edge.targets.size() * sizeof(CellKey));
                 }
             }
@@ -1529,24 +1545,6 @@ namespace d20proof {
             return true;
         }
 
-        const std::vector<CompletionWeightTerm> *checkedEdgeWeightTerms(
-            const RuleBundle &bundle,
-            const CheckedEdge &edge) {
-            if (!edge.useRegisteredTurnEntryTerms) {
-                return &edge.weightTerms;
-            }
-            if (edge.kind != CheckedEdgeKind::Completion ||
-                edge.completionCut != CompletionCutId::TurnEntry ||
-                !edge.weightTerms.empty()) {
-                return nullptr;
-            }
-            const CommandProfile *profile = lookupCommandProfile(bundle.profile, edge.selectedCommand);
-            if (profile == nullptr || profile->turnEntryCompletionTerms.empty()) {
-                return nullptr;
-            }
-            return &profile->turnEntryCompletionTerms;
-        }
-
         bool completionWeight(
             const CheckedEdge &edge,
             int q,
@@ -1554,21 +1552,10 @@ namespace d20proof {
             int v,
             int w,
             std::int64_t &weight) {
-            bool any = false;
-            std::int64_t best = 0;
-            for (const CompletionWeightTerm &term: edge.weightTerms) {
-                std::int64_t value = 0;
-                if (!completionTermWeight(term, q, u, v, w, value)) {
-                    return false;
-                }
-                best = any ? std::max(best, value) : value;
-                any = true;
-            }
-            if (!any) {
+            if (edge.weightTerms.size() != 1) {
                 return false;
             }
-            weight = best;
-            return true;
+            return completionTermWeight(edge.weightTerms.front(), q, u, v, w, weight);
         }
 
         bool sameCellVector(const std::vector<CellKey> &a, const std::vector<CellKey> &b) {
@@ -1579,12 +1566,34 @@ namespace d20proof {
             return edge.mayReachGoal || edge.hasContinuingOutput;
         }
 
+        void encloseBox(Box &target, const Box &source) noexcept {
+            target.enemyHp.lo = std::min(target.enemyHp.lo, source.enemyHp.lo);
+            target.enemyHp.hi = std::max(target.enemyHp.hi, source.enemyHp.hi);
+            target.heroHp.lo = std::min(target.heroHp.lo, source.heroHp.lo);
+            target.heroHp.hi = std::max(target.heroHp.hi, source.heroHp.hi);
+            target.mp.lo = std::min(target.mp.lo, source.mp.lo);
+            target.mp.hi = std::max(target.mp.hi, source.mp.hi);
+            target.herb.lo = std::min(target.herb.lo, source.herb.lo);
+            target.herb.hi = std::max(target.herb.hi, source.herb.hi);
+            target.chargeMask |= source.chargeMask;
+            target.paralysisMask |= source.paralysisMask;
+            target.acroMask |= source.acroMask;
+            target.rageMask |= source.rageMask;
+            target.inactiveMask |= source.inactiveMask;
+            target.cameraMask |= source.cameraMask;
+        }
+
         bool sameSuccessDpTerm(const CheckedEdge &a, const CheckedEdge &b) {
             if (a.kind != b.kind || !(a.source == b.source) ||
                 a.selectedCommand != b.selectedCommand ||
                 a.mayReachGoal != b.mayReachGoal ||
                 a.hasContinuingOutput != b.hasContinuingOutput ||
                 a.weightTerms != b.weightTerms) {
+                return false;
+            }
+            if (a.kind == CheckedEdgeKind::Completion &&
+                (a.completionCut != b.completionCut ||
+                 a.completionCaseId != b.completionCaseId)) {
                 return false;
             }
             if (!a.hasContinuingOutput) {
@@ -1597,23 +1606,34 @@ namespace d20proof {
             return sameCellVector(a.targets, b.targets);
         }
 
-        void includeDominatingCompletionTerm(
-            CompletionWeightTerm &aggregate,
-            bool &initialized,
-            const CompletionWeightTerm &term) noexcept {
-            if (!initialized) {
-                aggregate = term;
-                initialized = true;
-                return;
+        bool completionSuccessTermDominates(const CheckedEdge &a, const CheckedEdge &b) {
+            if (a.kind != CheckedEdgeKind::Completion || b.kind != CheckedEdgeKind::Completion ||
+                !(a.source == b.source) || a.selectedCommand != b.selectedCommand ||
+                a.weightTerms.size() != 1 || b.weightTerms.size() != 1 ||
+                !hasSuccessDpDestination(a) || !hasSuccessDpDestination(b)) {
+                return false;
             }
-            // All proof-price coefficients are nonnegative.  Componentwise
-            // maxima therefore dominate every source linear form for every
-            // admissible integer price, including negative resource deltas.
-            aggregate.enemyDamageUpper = std::max(aggregate.enemyDamageUpper, term.enemyDamageUpper);
-            aggregate.heroHpGainUpper = std::max(aggregate.heroHpGainUpper, term.heroHpGainUpper);
-            aggregate.mpDelta = std::max(aggregate.mpDelta, term.mpDelta);
-            aggregate.herbDelta = std::max(aggregate.herbDelta, term.herbDelta);
+            const CompletionWeightTerm &wa = a.weightTerms.front();
+            const CompletionWeightTerm &wb = b.weightTerms.front();
+            if (wa.enemyDamageUpper < wb.enemyDamageUpper ||
+                wa.heroHpGainUpper < wb.heroHpGainUpper ||
+                wa.mpDelta < wb.mpDelta ||
+                wa.herbDelta < wb.herbDelta) {
+                return false;
+            }
+            if (b.mayReachGoal && !a.mayReachGoal) {
+                return false;
+            }
+            if (b.hasContinuingOutput) {
+                if (!a.hasContinuingOutput ||
+                    a.firstOutputPosition > b.firstOutputPosition ||
+                    a.lastOutputPosition < b.lastOutputPosition) {
+                    return false;
+                }
+            }
+            return true;
         }
+
 
         bool buildDetailedProofTree(
             const RuleBundle &bundle,
@@ -1895,6 +1915,40 @@ namespace d20proof {
             return std::nullopt;
         }
         return box;
+    }
+
+    std::optional<Box> ProofKernel::turnEntryCompletionContinuingEnvelope(
+        const RuleBundle &bundle,
+        const CheckedEdge &edge,
+        std::string &error) {
+        error.clear();
+        if (edge.kind != CheckedEdgeKind::Completion ||
+            edge.completionCut != CompletionCutId::TurnEntry ||
+            edge.weightTerms.size() != 1 || edge.completionCaseId < 0) {
+            error = "checked edge is not one registered TurnEntry COMPLETE case";
+            return std::nullopt;
+        }
+        const CommandProfile *profile = lookupCommandProfile(bundle.profile, edge.selectedCommand);
+        if (profile == nullptr ||
+            static_cast<std::size_t>(edge.completionCaseId) >= profile->turnEntryCompletionTerms.size() ||
+            profile->turnEntryCompletionTerms[static_cast<std::size_t>(edge.completionCaseId)] !=
+                edge.weightTerms.front()) {
+            error = "TurnEntry COMPLETE case does not match the registered command profile";
+            return std::nullopt;
+        }
+        Box output;
+        if (!completionOutputEnvelope(
+                bundle,
+                CompletionCutId::TurnEntry,
+                edge.rootDomain,
+                edge.weightTerms.front(),
+                output,
+                error)) {
+            return std::nullopt;
+        }
+        output.enemyHp.lo = std::max<std::int64_t>(output.enemyHp.lo, 1);
+        output.heroHp.lo = std::max<std::int64_t>(output.heroHp.lo, 1);
+        return output;
     }
 
     CheckedPartition ProofKernel::validatePartition(
@@ -2263,44 +2317,6 @@ namespace d20proof {
             return snapshot;
         }
 
-        struct TurnEntrySummary {
-            int maximumDamage = 0;
-            int minimumMpDelta = 0;
-            int minimumHerbDelta = 0;
-            bool mayHealHero = false;
-        };
-        std::vector<TurnEntrySummary> turnEntrySummaries(bundle.profile.commandProfiles.size());
-        for (std::size_t commandIndex = 0;
-             commandIndex < bundle.profile.commandProfiles.size();
-             ++commandIndex) {
-            const CommandProfile &commandProfile = bundle.profile.commandProfiles[commandIndex];
-            TurnEntrySummary &summary = turnEntrySummaries[commandIndex];
-            for (const CompletionWeightTerm &term: commandProfile.turnEntryCompletionTerms) {
-                summary.maximumDamage = std::max(summary.maximumDamage, term.enemyDamageUpper);
-                summary.minimumMpDelta = std::min(summary.minimumMpDelta, term.mpDelta);
-                summary.minimumHerbDelta = std::min(summary.minimumHerbDelta, term.herbDelta);
-                summary.mayHealHero = summary.mayHealHero || term.heroHpGainUpper > 0;
-            }
-        }
-        auto turnEntryOutputEnvelope = [&](const Box &root,
-                                           const TurnEntrySummary &summary) {
-            Box output = root;
-            output.enemyHp.lo = std::max<std::int64_t>(0, root.enemyHp.lo - summary.maximumDamage);
-            output.enemyHp.hi = bundle.profile.enemyMaxHp;
-            output.heroHp.lo = 0;
-            if (summary.mayHealHero) {
-                output.heroHp.hi = bundle.profile.heroMaxHp;
-            }
-            output.mp.lo = root.mp.lo + summary.minimumMpDelta;
-            output.herb.lo = root.herb.lo + summary.minimumHerbDelta;
-            output.chargeMask = kChargeMaskAll;
-            output.paralysisMask = kParalysisMaskAll;
-            output.acroMask = kAcroMaskAll;
-            output.rageMask = kRageMaskAll;
-            output.inactiveMask = kInactiveMaskAll;
-            output.cameraMask = kCameraMaskAll;
-            return output;
-        };
 
         auto generatedProof = [&](int elapsedTurn,
                                   const CellKey &source,
@@ -2488,7 +2504,7 @@ namespace d20proof {
             const CommandProfile &commandProfile,
             const Box &rootDomain,
             CheckedRootRecord &record,
-            CheckedEdge &edge,
+            std::vector<CheckedEdge> &edges,
             bool generatedDefaultTurnEntry) -> bool {
             if (proof.kind != RootProofKind::Completion ||
                 proof.cut != CompletionCutId::TurnEntry || proof.expectedPc != turnEntrySite->pc) {
@@ -2549,24 +2565,88 @@ namespace d20proof {
             record.coverageVersion = snapshot.coverageVersion;
             record.verifiedPc = turnEntrySite->pc;
             record.verifiedCut = proof.cut;
-
-            edge.kind = CheckedEdgeKind::Completion;
-            edge.completionCut = proof.cut;
-            edge.elapsedTurn = elapsedTurn;
-            edge.source = source;
-            edge.selectedCommand = command;
-            edge.rootDomain = rootDomain;
-            edge.useRegisteredTurnEntryTerms = true;
-
             const int envelopeLastPosition = problem.s0.position +
                                              (elapsedTurn + 1) * bundle.bounds.rMax;
-            edge.firstOutputPosition = source.rngPosition;
-            edge.lastOutputPosition = source.rngPosition + turnEntryRemaining->maximumRngReads;
-            if (edge.firstOutputPosition < problem.s0.position ||
-                edge.lastOutputPosition > envelopeLastPosition ||
-                edge.firstOutputPosition > edge.lastOutputPosition) {
+            const int firstOutputPosition = source.rngPosition;
+            const int lastOutputPosition = source.rngPosition + turnEntryRemaining->maximumRngReads;
+            if (firstOutputPosition < problem.s0.position ||
+                lastOutputPosition > envelopeLastPosition ||
+                firstOutputPosition > lastOutputPosition) {
                 snapshot.check.reason = "COMPLETE Rremaining escapes Envelope[t+1]";
                 return false;
+            }
+
+            edges.clear();
+            edges.reserve(terms.size());
+            for (std::size_t caseIndex = 0; caseIndex < terms.size(); ++caseIndex) {
+                const CompletionWeightTerm &term = terms[caseIndex];
+                Box output;
+                std::string envelopeError;
+                if (!completionOutputEnvelope(
+                        bundle,
+                        CompletionCutId::TurnEntry,
+                        rootDomain,
+                        term,
+                        output,
+                        envelopeError)) {
+                    snapshot.check.reason = envelopeError.empty()
+                        ? "turn-entry COMPLETE case produced an empty output"
+                        : envelopeError;
+                    return false;
+                }
+                if (output.enemyHp.lo < 0 || output.heroHp.lo < 0 ||
+                    output.mp.lo < 0 || output.herb.lo < 0) {
+                    snapshot.check.reason = "turn-entry COMPLETE case produced a negative resource bound";
+                    return false;
+                }
+
+                CheckedEdge edge;
+                edge.kind = CheckedEdgeKind::Completion;
+                edge.completionCut = CompletionCutId::TurnEntry;
+                edge.completionCaseId = static_cast<int>(caseIndex);
+                edge.elapsedTurn = elapsedTurn;
+                edge.source = source;
+                edge.selectedCommand = command;
+                edge.rootDomain = rootDomain;
+                edge.weightTerms = {term};
+                edge.firstOutputPosition = firstOutputPosition;
+                edge.lastOutputPosition = lastOutputPosition;
+                edge.mayReachGoal = output.enemyHp.lo == 0;
+                edge.mayReachFailure = output.heroHp.lo == 0 && output.enemyHp.hi > 0;
+                if (completion) {
+                    edge.completionMembers.push_back({
+                        completionCut,
+                        completionCaseId,
+                        frame.inputDomain,
+                        firstPosition,
+                        lastPosition,
+                        edge.mayReachGoal,
+                        false,
+                    });
+                }
+
+                Box continuing = output;
+                continuing.enemyHp.lo = std::max<std::int64_t>(continuing.enemyHp.lo, 1);
+                continuing.heroHp.lo = std::max<std::int64_t>(continuing.heroHp.lo, 1);
+                if (!continuing.empty()) {
+                    if (!contains(base, continuing)) {
+                        snapshot.check.reason = "continuing turn-entry COMPLETE case escapes Envelope[t+1]";
+                        return false;
+                    }
+                    edge.hasContinuingOutput = true;
+                    // The TurnEntry COMPLETE envelope is reconstructible from
+                    // the registered case and is already checked here.  Do not
+                    // duplicate the full Box in every coarse DP edge.
+                    for (int outputPosition = firstOutputPosition;
+                         outputPosition <= lastOutputPosition;
+                         ++outputPosition) {
+                        if (checkedPartitionAt(outputPosition) == nullptr) {
+                            snapshot.check.reason = "turn-entry COMPLETE case references missing partition";
+                            return false;
+                        }
+                    }
+                }
+                edges.push_back(std::move(edge));
             }
             return true;
         };
@@ -2689,7 +2769,8 @@ namespace d20proof {
                                         int firstPosition,
                                         int lastPosition,
                                         bool completion,
-                                        CompletionCutId completionCut) -> bool {
+                                        CompletionCutId completionCut,
+                                        int completionCaseId) -> bool {
                 if (output.enemyHp.lo < 0 || output.heroHp.lo < 0 ||
                     output.mp.lo < 0 || output.herb.lo < 0) {
                     snapshot.check.reason = "checked symbolic output contains a negative resource";
@@ -2699,10 +2780,14 @@ namespace d20proof {
                 CheckedEdge edge;
                 edge.kind = completion ? CheckedEdgeKind::Completion : CheckedEdgeKind::Detailed;
                 edge.completionCut = completion ? completionCut : CompletionCutId::TurnEntry;
+                edge.completionCaseId = completion ? completionCaseId : -1;
                 edge.elapsedTurn = elapsedTurn;
                 edge.source = source;
                 edge.selectedCommand = command;
-                edge.rootDomain = frame.inputDomain;
+                // A COMPLETE model term belongs to the checked CellKey/action
+                // root.  The proof tree/checkpoints below retain the individual
+                // interrupted input regions that justify it.
+                edge.rootDomain = completion ? rootDomain : frame.inputDomain;
                 edge.weightTerms = {weight};
                 edge.firstOutputPosition = firstPosition;
                 edge.lastOutputPosition = lastPosition;
@@ -2718,7 +2803,10 @@ namespace d20proof {
                         return false;
                     }
                     edge.hasContinuingOutput = true;
-                    edge.continuingOutput = continuing;
+                    edge.continuingOutput = std::make_shared<Box>(continuing);
+                    if (completion) {
+                        edge.completionMembers.back().hasContinuingOutput = true;
+                    }
                     if (completion) {
                         for (int position = firstPosition; position <= lastPosition; ++position) {
                             if (checkedPartitionAt(position) == nullptr) {
@@ -2750,6 +2838,75 @@ namespace d20proof {
                 if (!completion) {
                     std::sort(edge.targets.begin(), edge.targets.end());
                     edge.targets.erase(std::unique(edge.targets.begin(), edge.targets.end()), edge.targets.end());
+                }
+
+                if (completion) {
+                    CheckedEdge *aggregate = nullptr;
+                    std::uint64_t aggregateLookupWork = 0;
+                    for (CheckedEdge &existing: edges) {
+                        ++aggregateLookupWork;
+                        const bool rangesMergeable =
+                            !existing.hasContinuingOutput || !edge.hasContinuingOutput ||
+                            (static_cast<std::int64_t>(existing.firstOutputPosition) <=
+                                 static_cast<std::int64_t>(edge.lastOutputPosition) + 1 &&
+                             static_cast<std::int64_t>(edge.firstOutputPosition) <=
+                                 static_cast<std::int64_t>(existing.lastOutputPosition) + 1);
+                        if (existing.kind != CheckedEdgeKind::Completion ||
+                            existing.elapsedTurn != edge.elapsedTurn ||
+                            !(existing.source == edge.source) ||
+                            existing.selectedCommand != edge.selectedCommand ||
+                            existing.completionCut != edge.completionCut ||
+                            existing.completionCaseId != edge.completionCaseId ||
+                            existing.weightTerms != edge.weightTerms || !rangesMergeable) {
+                            continue;
+                        }
+                        aggregate = &existing;
+                        break;
+                    }
+                    if (aggregateLookupWork != 0 &&
+                        !chargeBudget(budget, limits, aggregateLookupWork, 0)) {
+                        snapshot.check.reason = "checked COMPLETE model aggregation exceeded proof budget";
+                        return false;
+                    }
+                    if (aggregate != nullptr) {
+                        const std::uint64_t appendedMemberBytes =
+                            edge.completionMembers.size() * sizeof(CompletionModelMember);
+                        if (appendedMemberBytes != 0 &&
+                            !chargeBudget(budget, limits, 0, appendedMemberBytes)) {
+                            snapshot.check.reason = "checked COMPLETE member storage exceeded proof budget";
+                            return false;
+                        }
+                        outputBytes.add(appendedMemberBytes);
+                        aggregate->completionMembers.insert(
+                            aggregate->completionMembers.end(),
+                            std::make_move_iterator(edge.completionMembers.begin()),
+                            std::make_move_iterator(edge.completionMembers.end()));
+                        // Proof nodes/checkpoints still retain every interrupted
+                        // symbolic region.  The DP side may use one completion
+                        // term for the same registered cut/case/whole linear
+                        // form, with the union of all checked destinations.
+                        aggregate->mayReachGoal = aggregate->mayReachGoal || edge.mayReachGoal;
+                        aggregate->mayReachFailure = aggregate->mayReachFailure || edge.mayReachFailure;
+                        if (edge.hasContinuingOutput) {
+                            if (aggregate->hasContinuingOutput) {
+                                if (!aggregate->continuingOutput || !edge.continuingOutput) {
+                                    snapshot.check.reason = "aggregated COMPLETE continuing edge is missing its checked image";
+                                    return false;
+                                }
+                                encloseBox(*aggregate->continuingOutput, *edge.continuingOutput);
+                                aggregate->firstOutputPosition =
+                                    std::min(aggregate->firstOutputPosition, edge.firstOutputPosition);
+                                aggregate->lastOutputPosition =
+                                    std::max(aggregate->lastOutputPosition, edge.lastOutputPosition);
+                            } else {
+                                aggregate->hasContinuingOutput = true;
+                                aggregate->continuingOutput = edge.continuingOutput;
+                                aggregate->firstOutputPosition = edge.firstOutputPosition;
+                                aggregate->lastOutputPosition = edge.lastOutputPosition;
+                            }
+                        }
+                        return true;
+                    }
                 }
                 const std::uint64_t edgeBytes = checkedEdgeBytes(edge);
                 if (!chargeBudget(budget, limits, 0, edgeBytes)) {
@@ -2941,7 +3098,7 @@ namespace d20proof {
                             edge.source = source;
                             edge.selectedCommand = command;
                             edge.rootDomain = leaf.frame.inputDomain;
-                            edge.continuingOutput = leafOutput;
+                            edge.continuingOutput = std::make_shared<Box>(leafOutput);
                             edge.firstOutputPosition = leaf.frame.rngPosition;
                             edge.lastOutputPosition = leaf.frame.rngPosition;
                             edge.hasContinuingOutput = true;
@@ -3026,7 +3183,8 @@ namespace d20proof {
                 }
                 outputBytes.add(checkpointBytes);
                 checkpoints.push_back(std::move(checkpoint));
-                for (const CompletionWeightTerm &remaining: leafRemainingTerms) {
+                for (std::size_t caseIndex = 0; caseIndex < leafRemainingTerms.size(); ++caseIndex) {
+                    const CompletionWeightTerm &remaining = leafRemainingTerms[caseIndex];
                     CompletionWeightTerm total;
                     if (!addCompletionTerm(prefix, remaining, total, frameError)) {
                         snapshot.check.reason = frameError;
@@ -3052,7 +3210,8 @@ namespace d20proof {
                             frame.rngPosition,
                             lastOutputPosition,
                             true,
-                            cut)) {
+                            cut,
+                            static_cast<int>(caseIndex))) {
                         return false;
                     }
                 }
@@ -3201,6 +3360,138 @@ namespace d20proof {
             if (edges.empty()) {
                 snapshot.check.reason = "detailed verify_root produced no checked outputs";
                 return false;
+            }
+
+            // The proof tree above retains and independently checks every
+            // interrupted region.  C bounds the finite max-of-linear-forms
+            // model handed to the hotel DP, not the number of proof leaves.
+            // Within one registered cut/case, if one WHOLE checked linear form
+            // pointwise dominates another for all nonnegative prices, widen
+            // only the stronger term's checked destination union and drop the
+            // weaker DP term.  No coefficient is assembled from different
+            // cases, so resource correlations remain intact.
+            std::vector<std::uint8_t> dominated(edges.size(), 0);
+            std::uint64_t dominanceWork = 0;
+            for (std::size_t i = 0; i < edges.size(); ++i) {
+                if (edges[i].kind != CheckedEdgeKind::Completion ||
+                    !hasSuccessDpDestination(edges[i])) {
+                    continue;
+                }
+                for (std::size_t j = 0; j < edges.size(); ++j) {
+                    if (i == j || edges[j].kind != CheckedEdgeKind::Completion ||
+                        !hasSuccessDpDestination(edges[j]) ||
+                        edges[j].completionCut != edges[i].completionCut ||
+                        edges[j].completionCaseId != edges[i].completionCaseId) {
+                        continue;
+                    }
+                    ++dominanceWork;
+                    const CompletionWeightTerm &wi = edges[i].weightTerms.front();
+                    const CompletionWeightTerm &wj = edges[j].weightTerms.front();
+                    const bool jWeightDominatesI =
+                        wj.enemyDamageUpper >= wi.enemyDamageUpper &&
+                        wj.heroHpGainUpper >= wi.heroHpGainUpper &&
+                        wj.mpDelta >= wi.mpDelta &&
+                        wj.herbDelta >= wi.herbDelta;
+                    const bool rangesMergeable =
+                        !edges[i].hasContinuingOutput || !edges[j].hasContinuingOutput ||
+                        (static_cast<std::int64_t>(edges[i].firstOutputPosition) <=
+                             static_cast<std::int64_t>(edges[j].lastOutputPosition) + 1 &&
+                         static_cast<std::int64_t>(edges[j].firstOutputPosition) <=
+                             static_cast<std::int64_t>(edges[i].lastOutputPosition) + 1);
+                    if (!jWeightDominatesI || !rangesMergeable) {
+                        continue;
+                    }
+                    const bool iWeightDominatesJ =
+                        wi.enemyDamageUpper >= wj.enemyDamageUpper &&
+                        wi.heroHpGainUpper >= wj.heroHpGainUpper &&
+                        wi.mpDelta >= wj.mpDelta &&
+                        wi.herbDelta >= wj.herbDelta;
+                    // Equal formulas keep the first occurrence; strict
+                    // dominance keeps the stronger formula wherever it first
+                    // appears in proof/case order.
+                    if (iWeightDominatesJ && j > i) {
+                        continue;
+                    }
+                    dominated[i] = 1;
+                    break;
+                }
+            }
+            if (dominanceWork != 0 && !chargeBudget(budget, limits, dominanceWork, 0)) {
+                snapshot.check.reason = "checked COMPLETE dominance normalization exceeded proof budget";
+                return false;
+            }
+            if (std::find(dominated.begin(), dominated.end(), static_cast<std::uint8_t>(1)) != dominated.end()) {
+                // First widen every surviving maximal term by the destinations
+                // and terminal possibilities of the weaker terms it dominates.
+                for (std::size_t i = 0; i < edges.size(); ++i) {
+                    if (dominated[i] == 0 || edges[i].kind != CheckedEdgeKind::Completion) {
+                        continue;
+                    }
+                    for (std::size_t j = 0; j < edges.size(); ++j) {
+                        if (dominated[j] != 0 || edges[j].kind != CheckedEdgeKind::Completion ||
+                            edges[j].completionCut != edges[i].completionCut ||
+                            edges[j].completionCaseId != edges[i].completionCaseId ||
+                            edges[j].weightTerms.size() != 1 || edges[i].weightTerms.size() != 1) {
+                            continue;
+                        }
+                        const CompletionWeightTerm &weak = edges[i].weightTerms.front();
+                        const CompletionWeightTerm &strong = edges[j].weightTerms.front();
+                        if (strong.enemyDamageUpper < weak.enemyDamageUpper ||
+                            strong.heroHpGainUpper < weak.heroHpGainUpper ||
+                            strong.mpDelta < weak.mpDelta || strong.herbDelta < weak.herbDelta) {
+                            continue;
+                        }
+                        const bool rangesMergeable =
+                            !edges[i].hasContinuingOutput || !edges[j].hasContinuingOutput ||
+                            (static_cast<std::int64_t>(edges[i].firstOutputPosition) <=
+                                 static_cast<std::int64_t>(edges[j].lastOutputPosition) + 1 &&
+                             static_cast<std::int64_t>(edges[j].firstOutputPosition) <=
+                                 static_cast<std::int64_t>(edges[i].lastOutputPosition) + 1);
+                        if (!rangesMergeable) {
+                            continue;
+                        }
+                        edges[j].completionMembers.insert(
+                            edges[j].completionMembers.end(),
+                            std::make_move_iterator(edges[i].completionMembers.begin()),
+                            std::make_move_iterator(edges[i].completionMembers.end()));
+                        edges[j].mayReachGoal = edges[j].mayReachGoal || edges[i].mayReachGoal;
+                        edges[j].mayReachFailure = edges[j].mayReachFailure || edges[i].mayReachFailure;
+                        if (edges[i].hasContinuingOutput) {
+                            if (!edges[j].hasContinuingOutput) {
+                                edges[j].hasContinuingOutput = true;
+                                edges[j].continuingOutput = edges[i].continuingOutput;
+                                edges[j].firstOutputPosition = edges[i].firstOutputPosition;
+                                edges[j].lastOutputPosition = edges[i].lastOutputPosition;
+                            } else {
+                                if (!edges[j].continuingOutput || !edges[i].continuingOutput) {
+                                    snapshot.check.reason = "dominated COMPLETE model term is missing its checked image";
+                                    return false;
+                                }
+                                encloseBox(*edges[j].continuingOutput, *edges[i].continuingOutput);
+                                edges[j].firstOutputPosition =
+                                    std::min(edges[j].firstOutputPosition, edges[i].firstOutputPosition);
+                                edges[j].lastOutputPosition =
+                                    std::max(edges[j].lastOutputPosition, edges[i].lastOutputPosition);
+                            }
+                        }
+                        break;
+                    }
+                }
+                std::vector<CheckedEdge> normalized;
+                normalized.reserve(edges.size());
+                for (std::size_t index = 0; index < edges.size(); ++index) {
+                    if (dominated[index] != 0) {
+                        const std::uint64_t memberBytes =
+                            edges[index].completionMembers.size() * sizeof(CompletionModelMember);
+                        const std::uint64_t fullBytes = checkedEdgeBytes(edges[index]);
+                        const std::uint64_t removedBytes =
+                            fullBytes >= memberBytes ? fullBytes - memberBytes : 0;
+                        outputBytes.release(removedBytes);
+                        continue;
+                    }
+                    normalized.push_back(std::move(edges[index]));
+                }
+                edges = std::move(normalized);
             }
             checkedOutputBytes = outputBytes.bytes();
             outputBytes.disarm();
@@ -3369,33 +3660,44 @@ namespace d20proof {
         auto reuseCheckedTurnEntry = [&](int elapsedTurn,
                                          const CellKey &source,
                                          int command,
+                                         const CommandProfile &commandProfile,
                                          const Box &rootDomain,
-                                         const CheckedEdge *oldEdge,
+                                         const std::vector<CheckedEdge> *oldLayer,
+                                         std::size_t oldBegin,
+                                         std::size_t oldEnd,
                                          CheckedRootRecord &record,
-                                         CheckedEdge &edge) -> std::optional<bool> {
-            if (oldEdge == nullptr || checkedReuseSnapshot == nullptr || submittedProofs != nullptr ||
+                                         std::vector<CheckedEdge> &edges) -> std::optional<bool> {
+            if (oldLayer == nullptr || oldBegin >= oldEnd || oldEnd > oldLayer->size() ||
+                checkedReuseSnapshot == nullptr || submittedProofs != nullptr ||
                 retainDefaultProofRecords || !checkedReuseSnapshot->check.accepted ||
                 elapsedTurn < 0 || elapsedTurn >= horizon) {
                 return false;
             }
-            // oldEdge was selected by the charged ordered merge scan below.
-            // Validating that selected record is part of the same old-edge
-            // visit, not a second lookup of the hotel room/command key.
-            if (oldEdge->selectedCommand != command || oldEdge->source != source ||
-                oldEdge->kind != CheckedEdgeKind::Completion ||
-                oldEdge->completionCut != CompletionCutId::TurnEntry ||
-                oldEdge->rootDomain != rootDomain || !oldEdge->useRegisteredTurnEntryTerms ||
-                !oldEdge->weightTerms.empty() || !oldEdge->targets.empty()) {
+            const std::vector<CompletionWeightTerm> &terms = commandProfile.turnEntryCompletionTerms;
+            if (terms.empty() || oldEnd - oldBegin != terms.size()) {
                 return false;
             }
 
             const int envelopeLastPosition = problem.s0.position +
                                              (elapsedTurn + 1) * bundle.bounds.rMax;
-            if (oldEdge->firstOutputPosition < problem.s0.position ||
-                oldEdge->lastOutputPosition > envelopeLastPosition ||
-                oldEdge->firstOutputPosition > oldEdge->lastOutputPosition ||
-                (oldEdge->hasContinuingOutput && !contains(base, oldEdge->continuingOutput))) {
-                return false;
+            edges.clear();
+            edges.reserve(terms.size());
+            for (std::size_t caseIndex = 0; caseIndex < terms.size(); ++caseIndex) {
+                const CheckedEdge &oldEdge = (*oldLayer)[oldBegin + caseIndex];
+                if (oldEdge.selectedCommand != command || oldEdge.source != source ||
+                    oldEdge.kind != CheckedEdgeKind::Completion ||
+                    oldEdge.completionCut != CompletionCutId::TurnEntry ||
+                    oldEdge.completionCaseId != static_cast<int>(caseIndex) ||
+                    oldEdge.rootDomain != rootDomain || oldEdge.targets.size() != 0 ||
+                    oldEdge.weightTerms.size() != 1 || oldEdge.weightTerms.front() != terms[caseIndex] ||
+                    oldEdge.firstOutputPosition < problem.s0.position ||
+                    oldEdge.lastOutputPosition > envelopeLastPosition ||
+                    oldEdge.firstOutputPosition > oldEdge.lastOutputPosition ||
+                    oldEdge.continuingOutput != nullptr) {
+                    edges.clear();
+                    return false;
+                }
+                edges.push_back(oldEdge);
             }
 
             record = {};
@@ -3408,7 +3710,6 @@ namespace d20proof {
             record.coverageVersion = snapshot.coverageVersion;
             record.verifiedPc = turnEntrySite->pc;
             record.verifiedCut = CompletionCutId::TurnEntry;
-            edge = *oldEdge;
             return true;
         };
 
@@ -3433,7 +3734,9 @@ namespace d20proof {
             std::vector<std::size_t> cachedTemplateCommandEnd(commandCount, 0);
             const std::vector<CheckedEdge> *oldReuseLayer = nullptr;
             std::size_t oldReuseCursor = 0;
-            std::vector<const CheckedEdge *> reusableForCommand(commandCount, nullptr);
+            constexpr std::size_t kNoReusableEdge = std::numeric_limits<std::size_t>::max();
+            std::vector<std::size_t> reusableBegin(commandCount, kNoReusableEdge);
+            std::vector<std::size_t> reusableEnd(commandCount, kNoReusableEdge);
             if (checkedReuseSnapshot != nullptr && submittedProofs == nullptr &&
                 !retainDefaultProofRecords && checkedReuseSnapshot->check.accepted &&
                 elapsedTurn < static_cast<int>(checkedReuseSnapshot->edgesByElapsedTurn.size())) {
@@ -3452,7 +3755,8 @@ namespace d20proof {
                     return snapshot;
                 }
 
-                std::fill(reusableForCommand.begin(), reusableForCommand.end(), nullptr);
+                std::fill(reusableBegin.begin(), reusableBegin.end(), kNoReusableEdge);
+                std::fill(reusableEnd.begin(), reusableEnd.end(), kNoReusableEdge);
                 if (oldReuseLayer != nullptr) {
                     std::uint64_t reuseScanWork = 0;
                     while (oldReuseCursor < oldReuseLayer->size() &&
@@ -3463,12 +3767,13 @@ namespace d20proof {
                     std::size_t scan = oldReuseCursor;
                     while (scan < oldReuseLayer->size() && (*oldReuseLayer)[scan].source == source) {
                         const CheckedEdge &candidate = (*oldReuseLayer)[scan];
+                        const std::size_t candidateIndex = scan;
                         ++scan;
                         ++reuseScanWork;
                         if (candidate.kind != CheckedEdgeKind::Completion ||
                             candidate.completionCut != CompletionCutId::TurnEntry ||
-                            !candidate.useRegisteredTurnEntryTerms ||
-                            !candidate.weightTerms.empty() || !candidate.targets.empty()) {
+                            candidate.completionCaseId < 0 ||
+                            candidate.weightTerms.size() != 1 || !candidate.targets.empty()) {
                             continue;
                         }
                         if (candidate.selectedCommand < 0 ||
@@ -3479,12 +3784,16 @@ namespace d20proof {
                         if (slot < 0) {
                             continue;
                         }
-                        if (reusableForCommand[static_cast<std::size_t>(slot)] != nullptr) {
-                            snapshot.check.reason =
-                                "checked TurnEntry reuse contains duplicate canonical roots for one hotel room";
-                            return snapshot;
+                        const std::size_t commandSlot = static_cast<std::size_t>(slot);
+                        if (reusableBegin[commandSlot] == kNoReusableEdge) {
+                            reusableBegin[commandSlot] = candidateIndex;
+                            reusableEnd[commandSlot] = candidateIndex + 1;
+                        } else if (reusableEnd[commandSlot] == candidateIndex) {
+                            reusableEnd[commandSlot] = candidateIndex + 1;
+                        } else {
+                            reusableBegin[commandSlot] = kNoReusableEdge;
+                            reusableEnd[commandSlot] = kNoReusableEdge;
                         }
-                        reusableForCommand[static_cast<std::size_t>(slot)] = &candidate;
                     }
                     if (scan != oldReuseCursor) {
                         oldReuseCursor = scan;
@@ -3578,8 +3887,6 @@ namespace d20proof {
 
                     CheckedRootRecord record;
                     std::vector<CheckedEdge> checkedEdges;
-                    CheckedEdge defaultTurnEntryEdge;
-                    bool usesDefaultTurnEntryEdge = false;
                     std::vector<CompletionCheckpoint> checkpoints;
                     std::uint64_t localDerivedByteCount = 0;
                     bool generatedDefaultTurnEntry = false;
@@ -3632,24 +3939,30 @@ namespace d20proof {
                             elapsedTurn,
                             source,
                             command,
+                            commandProfile,
                             rootDomain,
-                            commandIndex < reusableForCommand.size()
-                                ? reusableForCommand[commandIndex]
-                                : nullptr,
+                            oldReuseLayer,
+                            commandIndex < reusableBegin.size()
+                                ? reusableBegin[commandIndex]
+                                : kNoReusableEdge,
+                            commandIndex < reusableEnd.size()
+                                ? reusableEnd[commandIndex]
+                                : kNoReusableEdge,
                             record,
-                            defaultTurnEntryEdge);
+                            checkedEdges);
                     if (!reuse.has_value()) {
                         return snapshot;
                     }
                     if (*reuse) {
                         reusedCheckedTurnEntry = true;
                         generatedDefaultTurnEntry = true;
-                        usesDefaultTurnEntryEdge = true;
                         localDerivedByteCount = checkedRootRecordBytes(record);
-                        localDerivedByteCount = saturatedReservationAdd(
-                            localDerivedByteCount,
-                            checkedEdgeBytes(defaultTurnEntryEdge),
-                            std::numeric_limits<std::uint64_t>::max());
+                        for (const CheckedEdge &edge: checkedEdges) {
+                            localDerivedByteCount = saturatedReservationAdd(
+                                localDerivedByteCount,
+                                checkedEdgeBytes(edge),
+                                std::numeric_limits<std::uint64_t>::max());
+                        }
                         if (!chargeBudget(budget, limits, 0, localDerivedByteCount)) {
                             snapshot.check.reason = "reused TurnEntry checked output storage exceeded proof budget";
                             return snapshot;
@@ -3678,7 +3991,6 @@ namespace d20proof {
                     if (!reusedCheckedTurnEntry &&
                         proof->kind == RootProofKind::Completion &&
                         proof->cut == CompletionCutId::TurnEntry) {
-                        CheckedEdge edge;
                         if (!verifyTurnEntryProof(
                                 *proof,
                                 elapsedTurn,
@@ -3687,55 +3999,17 @@ namespace d20proof {
                                 commandProfile,
                                 rootDomain,
                                 record,
-                                edge,
+                                checkedEdges,
                                 generatedDefaultTurnEntry)) {
                             return snapshot;
                         }
-                        // TurnEntry is the required root itself.  Its symbolic
-                        // frame is uniquely reconstructible from the retained
-                        // root identity/domain, so retaining one large frame
-                        // per required root only duplicates derivable state.
-                        // Partial COMPLETE cuts still retain their actual
-                        // reached frames below because those are not directly
-                        // reconstructible from the root without replaying the
-                        // detailed prefix.
-                        const Box output = turnEntryOutputEnvelope(
-                            rootDomain,
-                            turnEntrySummaries[commandIndex]);
-                        if (output.enemyHp.lo < 0 || output.heroHp.lo < 0 ||
-                            output.mp.lo < 0 || output.herb.lo < 0) {
-                            snapshot.check.reason = "COMPLETE produced a negative terminal resource bound";
-                            return snapshot;
-                        }
-                        edge.mayReachGoal = output.enemyHp.lo == 0;
-                        edge.mayReachFailure = output.heroHp.lo == 0 && output.enemyHp.hi > 0;
-
-                        Box continuing = output;
-                        continuing.enemyHp.lo = std::max<std::int64_t>(continuing.enemyHp.lo, 1);
-                        continuing.heroHp.lo = std::max<std::int64_t>(continuing.heroHp.lo, 1);
-                        if (!continuing.empty()) {
-                            if (!contains(base, continuing)) {
-                                snapshot.check.reason = "continuing COMPLETE output escapes Envelope[t+1]";
-                                return snapshot;
-                            }
-                            edge.hasContinuingOutput = true;
-                            edge.continuingOutput = continuing;
-                            for (int outputPosition = edge.firstOutputPosition;
-                                 outputPosition <= edge.lastOutputPosition;
-                                 ++outputPosition) {
-                                if (checkedPartitionAt(outputPosition) == nullptr) {
-                                    snapshot.check.reason = "COMPLETE output references missing partition";
-                                    return snapshot;
-                                }
-                            }
-                        }
-                        defaultTurnEntryEdge = std::move(edge);
-                        usesDefaultTurnEntryEdge = true;
                         localDerivedByteCount = checkedRootRecordBytes(record);
-                        localDerivedByteCount = saturatedReservationAdd(
-                            localDerivedByteCount,
-                            checkedEdgeBytes(defaultTurnEntryEdge),
-                            std::numeric_limits<std::uint64_t>::max());
+                        for (const CheckedEdge &edge: checkedEdges) {
+                            localDerivedByteCount = saturatedReservationAdd(
+                                localDerivedByteCount,
+                                checkedEdgeBytes(edge),
+                                std::numeric_limits<std::uint64_t>::max());
+                        }
                         for (const CompletionCheckpoint &checkpoint: checkpoints) {
                             localDerivedByteCount = saturatedReservationAdd(
                                 localDerivedByteCount,
@@ -3768,44 +4042,45 @@ namespace d20proof {
                     std::size_t edgeTargets = 0;
                     std::size_t edgeTerms = 0;
                     std::uint64_t edgeStoredTermBytes = 0;
+                    std::uint64_t edgeContinuingOutputBytes = 0;
+                    std::uint64_t edgeCompletionMemberBytes = 0;
 
                     std::size_t detailedTerms = 0;
                     std::size_t completionTerms = 0;
                     std::uint64_t dpDedupWork = 0;
-                    bool hasCompletionDpTerm = false;
-                    const std::size_t checkedEdgeCount =
-                        usesDefaultTurnEntryEdge ? 1 : checkedEdges.size();
-                    auto checkedEdgeAt = [&](std::size_t index) -> const CheckedEdge & {
-                        return usesDefaultTurnEntryEdge ? defaultTurnEntryEdge : checkedEdges[index];
-                    };
+                    const std::size_t checkedEdgeCount = checkedEdges.size();
                     for (std::size_t checkedEdgeIndex = 0;
                          checkedEdgeIndex < checkedEdgeCount;
                          ++checkedEdgeIndex) {
-                        const CheckedEdge &edge = checkedEdgeAt(checkedEdgeIndex);
+                        const CheckedEdge &edge = checkedEdges[checkedEdgeIndex];
                         if (edge.kind == CheckedEdgeKind::Completion) {
                             if (!edge.targets.empty() ||
+                                edge.completionCaseId < 0 ||
+                                edge.weightTerms.size() != 1 ||
                                 (edge.hasContinuingOutput &&
                                  edge.firstOutputPosition > edge.lastOutputPosition)) {
                                 snapshot.check.reason = "COMPLETE edge violates virtual-target representation";
                                 return snapshot;
                             }
-                        } else if (edge.hasContinuingOutput) {
-                            if (edge.targets.empty() ||
+                        } else {
+                            if (edge.completionCaseId != -1 || edge.weightTerms.size() != 1) {
+                                snapshot.check.reason = "detailed edge has an invalid completion case or weight term count";
+                                return snapshot;
+                            }
+                            if (edge.hasContinuingOutput && (edge.targets.empty() ||
                                 edge.firstOutputPosition != edge.lastOutputPosition ||
                                 std::any_of(
                                     edge.targets.begin(),
                                     edge.targets.end(),
                                     [&](const CellKey &target) {
                                         return target.rngPosition != edge.firstOutputPosition;
-                                    })) {
+                                    }))) {
                                 snapshot.check.reason = "detailed continuing edge violates explicit-target representation";
                                 return snapshot;
                             }
                         }
                         edgeTargets += edge.targets.size();
-                        const std::size_t logicalWeightTerms = edge.useRegisteredTurnEntryTerms
-                            ? commandProfile.turnEntryCompletionTerms.size()
-                            : edge.weightTerms.size();
+                        const std::size_t logicalWeightTerms = edge.weightTerms.size();
                         if (logicalWeightTerms > std::numeric_limits<std::size_t>::max() - edgeTerms) {
                             snapshot.check.reason = "checked edge term count overflow";
                             return snapshot;
@@ -3819,6 +4094,22 @@ namespace d20proof {
                             return snapshot;
                         }
                         edgeStoredTermBytes += storedTermBytes;
+                        const std::uint64_t storedMemberBytes =
+                            edge.completionMembers.size() * sizeof(CompletionModelMember);
+                        if (storedMemberBytes >
+                            std::numeric_limits<std::uint64_t>::max() - edgeCompletionMemberBytes) {
+                            snapshot.check.reason = "checked edge completion-member byte count overflow";
+                            return snapshot;
+                        }
+                        edgeCompletionMemberBytes += storedMemberBytes;
+                        if (edge.continuingOutput) {
+                            if (sizeof(Box) >
+                                std::numeric_limits<std::uint64_t>::max() - edgeContinuingOutputBytes) {
+                                snapshot.check.reason = "checked edge output-image byte count overflow";
+                                return snapshot;
+                            }
+                            edgeContinuingOutputBytes += sizeof(Box);
+                        }
 
                         // J/C bound the distinct terms handed to the success-
                         // reachability DP, not proof-tree leaves.  Keep every
@@ -3827,13 +4118,13 @@ namespace d20proof {
                         // proof branches with the same weight and G/live
                         // destination contribute the same max-plus term once.
                         bool duplicateDpTerm = false;
-                        if (hasSuccessDpDestination(edge) && edge.kind == CheckedEdgeKind::Detailed) {
+                        if (hasSuccessDpDestination(edge)) {
                             for (std::size_t previousIndex = 0;
                                  previousIndex < checkedEdgeIndex;
                                  ++previousIndex) {
-                                const CheckedEdge &previous = checkedEdgeAt(previousIndex);
+                                const CheckedEdge &previous = checkedEdges[previousIndex];
                                 if (!hasSuccessDpDestination(previous) ||
-                                    previous.kind != CheckedEdgeKind::Detailed) {
+                                    previous.kind != edge.kind) {
                                     continue;
                                 }
                                 ++dpDedupWork;
@@ -3849,7 +4140,9 @@ namespace d20proof {
                                     detailedTerms += logicalWeightTerms;
                                 }
                             } else {
-                                hasCompletionDpTerm = true;
+                                if (!duplicateDpTerm) {
+                                    completionTerms += logicalWeightTerms;
+                                }
                             }
                         }
                         if (edge.hasContinuingOutput && edge.kind == CheckedEdgeKind::Completion) {
@@ -3885,11 +4178,6 @@ namespace d20proof {
                         snapshot.check.reason = "checked DP-term deduplication exceeded proof budget";
                         return snapshot;
                     }
-                    // All completion proof leaves for one CellKey/action are
-                    // represented to the DP by one conservative term: the
-                    // componentwise maximum weight and the hull of their
-                    // checked RNG ranges.  Proof coverage remains per-leaf.
-                    completionTerms = hasCompletionDpTerm ? 1 : 0;
                     if (detailedTerms > limits.maxDetailedTermsPerAction) {
                         snapshot.check.reason =
                             "checked detailed term limit J exceeded for one CellKey/action: required=" +
@@ -3898,7 +4186,10 @@ namespace d20proof {
                         return snapshot;
                     }
                     if (completionTerms > limits.maxCompletionTermsPerAction) {
-                        snapshot.check.reason = "checked completion term limit C exceeded for one CellKey/action";
+                        snapshot.check.reason =
+                            "checked completion term limit C exceeded for one CellKey/action: required=" +
+                            std::to_string(completionTerms) +
+                            ", limit=" + std::to_string(limits.maxCompletionTermsPerAction);
                         return snapshot;
                     }
                     if (edgeTerms > limits.maxModelTerms -
@@ -3924,6 +4215,14 @@ namespace d20proof {
                     derivedRootBytes = saturatedReservationAdd(
                         derivedRootBytes,
                         edgeStoredTermBytes,
+                        byteCap);
+                    derivedRootBytes = saturatedReservationAdd(
+                        derivedRootBytes,
+                        edgeContinuingOutputBytes,
+                        byteCap);
+                    derivedRootBytes = saturatedReservationAdd(
+                        derivedRootBytes,
+                        edgeCompletionMemberBytes,
                         byteCap);
                     derivedRootBytes = saturatedReservationAdd(
                         derivedRootBytes,
@@ -3992,19 +4291,14 @@ namespace d20proof {
                         std::make_move_iterator(checkpoints.end()));
                     if (checkedEdgeCount != 0 &&
                         !snapshot.edgesByElapsedTurn[elapsedTurn].empty() &&
-                        checkedEdgeAt(0).source < snapshot.edgesByElapsedTurn[elapsedTurn].back().source) {
+                        checkedEdges.front().source < snapshot.edgesByElapsedTurn[elapsedTurn].back().source) {
                         snapshot.check.reason = "checked edges are not grouped in CellKey source order";
                         return snapshot;
                     }
-                    if (usesDefaultTurnEntryEdge) {
-                        snapshot.edgesByElapsedTurn[elapsedTurn].push_back(
-                            std::move(defaultTurnEntryEdge));
-                    } else {
-                        snapshot.edgesByElapsedTurn[elapsedTurn].insert(
-                            snapshot.edgesByElapsedTurn[elapsedTurn].end(),
-                            std::make_move_iterator(checkedEdges.begin()),
-                            std::make_move_iterator(checkedEdges.end()));
-                    }
+                    snapshot.edgesByElapsedTurn[elapsedTurn].insert(
+                        snapshot.edgesByElapsedTurn[elapsedTurn].end(),
+                        std::make_move_iterator(checkedEdges.begin()),
+                        std::make_move_iterator(checkedEdges.end()));
                 }
             }
 
@@ -4588,6 +4882,101 @@ namespace d20proof {
             return MaxPlusValue::finiteValue(std::max(a.finite, b.finite));
         }
 
+        std::uint64_t maxPlusEvaluationWorkReservation(
+            const RuleBundle &bundle,
+            const CheckedSnapshot &snapshot,
+            int horizon,
+            const ProofBudget &limits,
+            const BudgetReport &budget) noexcept {
+            // This is a structural upper bound for the work charges made by
+            // computeMaxPlus, not a prediction from a previous run.  It lets
+            // the optional zero-price attempt obey section 13's requirement
+            // that an evaluation is only started when the remaining shared
+            // evaluation budget can cover it completely.
+            const std::uint64_t cap = limits.maxWork == std::numeric_limits<std::uint64_t>::max()
+                ? limits.maxWork
+                : limits.maxWork + 1;
+            auto add = [&](std::uint64_t &value, std::uint64_t amount) {
+                value = saturatedReservationAdd(value, amount, cap);
+            };
+            auto mul = [&](std::uint64_t a, std::uint64_t b) {
+                return saturatedReservationMultiply(a, b, cap);
+            };
+
+            std::uint64_t supportCells = 0;
+            std::uint64_t totalEdges = 0;
+            for (const auto &layer: snapshot.support) {
+                add(supportCells, layer.size());
+            }
+            for (const auto &layer: snapshot.edgesByElapsedTurn) {
+                add(totalEdges, layer.size());
+            }
+
+            std::uint64_t completionEdges = budget.completionEdges;
+            std::uint64_t detailedEdges = budget.detailedEdges;
+            if (saturatedReservationAdd(completionEdges, detailedEdges, cap) != totalEdges) {
+                // Stale diagnostics must never make the reservation smaller.
+                completionEdges = totalEdges;
+                detailedEdges = totalEdges;
+            }
+
+            const std::uint64_t commandCount = bundle.profile.heroCommands.size();
+            const std::uint64_t completionTerms = limits.maxCompletionTermsPerAction;
+            const std::uint64_t perSourceEdgeBound = mul(
+                commandCount,
+                static_cast<std::uint64_t>(limits.maxDetailedTermsPerAction) + completionTerms);
+            const std::uint64_t maxPartitionNodes = limits.maxLeavesPerPosition == 0
+                ? 0
+                : 2u * static_cast<std::uint64_t>(limits.maxLeavesPerPosition) - 1u;
+            const std::uint64_t maximumRangeLengths =
+                static_cast<std::uint64_t>(bundle.bounds.rMax) + 1u;
+
+            // At elapsed turn t, next-layer p lies inside
+            // [p0, p0+(t+1)Rmax].  A monotone sliding-window table of one
+            // length performs at most 5*span charged queue/output operations:
+            // each entry is pushed once, can leave each end once, causes at
+            // most one failed back comparison, and produces at most one output.
+            std::uint64_t spanSum = 0;
+            const std::uint64_t hotelCount = snapshot.partitions.trees.size();
+            for (int elapsedTurn = 0; elapsedTurn < horizon; ++elapsedTurn) {
+                const std::uint64_t envelopeSpan = saturatedReservationAdd(
+                    mul(static_cast<std::uint64_t>(elapsedTurn + 1),
+                        static_cast<std::uint64_t>(bundle.bounds.rMax)),
+                    1,
+                    cap);
+                add(spanSum, std::min(hotelCount, envelopeSpan));
+            }
+
+            std::uint64_t required = 0;
+            // command-slot setup + one RuleBundle TurnEntry aggregate per
+            // registered completion case.
+            add(required, commandCount);
+            add(required, mul(commandCount, completionTerms));
+            // B[0], per-position value scans, and one current-layer write.
+            add(required, mul(3, supportCells));
+            // Partition-leaf validation, dense range-index construction, and
+            // every possible one-turn range length's sliding maximum table.
+            std::uint64_t perSpan = maxPartitionNodes;
+            add(perSpan, 2);
+            add(perSpan, mul(5, maximumRangeLengths));
+            add(required, mul(spanSum, perSpan));
+            // Each completion edge is visited once, can contribute at most C
+            // checked case vectors, and at most one aggregated DP evaluation.
+            add(required, mul(completionEdges, completionTerms + 2));
+            // Detailed terms can compare against every earlier term of the
+            // same finite source/action block, scan at most K output leaves,
+            // and perform one DP evaluation.
+            add(required, mul(
+                detailedEdges,
+                saturatedReservationAdd(
+                    saturatedReservationAdd(perSourceEdgeBound,
+                                            limits.maxLeavesPerPosition,
+                                            cap),
+                    1,
+                    cap)));
+            return required;
+        }
+
         MaxPlusResult computeMaxPlus(
             const RuleBundle &bundle,
             const CheckedSnapshot &snapshot,
@@ -4629,67 +5018,6 @@ namespace d20proof {
                     snapshot.partitions.trees[static_cast<std::size_t>(rawIndex)];
                 return partition.rngPosition == position ? &partition : nullptr;
             };
-
-            // The registered command set is a fixed finite axis of every hotel
-            // room.  Build one exact command->slot table for the whole DP so
-            // completion terms can be accumulated directly by that axis rather
-            // than repeatedly searching the already-seen commands of each room.
-            int maximumCommandValue = -1;
-            for (const int command: bundle.profile.heroCommands) {
-                if (command < 0) {
-                    result.reason = "max-plus registered hero command is negative";
-                    return result;
-                }
-                maximumCommandValue = std::max(maximumCommandValue, command);
-            }
-            ScopedBudgetBytes commandSlotBytes(budget);
-            const std::uint64_t commandSlotStorage = maximumCommandValue < 0
-                ? 0
-                : (static_cast<std::uint64_t>(maximumCommandValue) + 1u) * sizeof(int);
-            if (!chargeBudget(
-                    budget,
-                    limits,
-                    bundle.profile.heroCommands.size(),
-                    commandSlotStorage)) {
-                result.reason = "max-plus command-slot lookup exceeded proof budget";
-                return result;
-            }
-            commandSlotBytes.add(commandSlotStorage);
-            std::vector<int> commandSlotByValue(
-                maximumCommandValue < 0 ? 0 : static_cast<std::size_t>(maximumCommandValue) + 1u,
-                -1);
-            for (std::size_t slot = 0; slot < bundle.profile.heroCommands.size(); ++slot) {
-                const int command = bundle.profile.heroCommands[slot];
-                if (commandSlotByValue[static_cast<std::size_t>(command)] != -1) {
-                    result.reason = "max-plus registered hero command list contains a duplicate";
-                    return result;
-                }
-                commandSlotByValue[static_cast<std::size_t>(command)] = static_cast<int>(slot);
-            }
-
-            struct CompletionAggregate {
-                int selectedCommand = 0;
-                bool mayReachGoal = false;
-                bool hasContinuingOutput = false;
-                int firstOutputPosition = 0;
-                int lastOutputPosition = -1;
-                CompletionWeightTerm weight;
-                bool hasWeight = false;
-            };
-            ScopedBudgetBytes completionAggregateBytes(budget);
-            const std::size_t commandCount = bundle.profile.heroCommands.size();
-            const std::uint64_t completionAggregateStorage =
-                commandCount * (sizeof(CompletionAggregate) + sizeof(std::uint64_t) + sizeof(std::size_t));
-            if (!chargeBudget(budget, limits, commandCount, completionAggregateStorage)) {
-                result.reason = "max-plus completion aggregate index exceeded proof budget";
-                return result;
-            }
-            completionAggregateBytes.add(completionAggregateStorage);
-            std::vector<CompletionAggregate> completionAggregates(commandCount);
-            std::vector<std::uint64_t> completionAggregateGeneration(commandCount, 0);
-            std::vector<std::size_t> activeCompletionAggregateSlots;
-            activeCompletionAggregateSlots.reserve(commandCount);
-            std::uint64_t completionAggregateGenerationId = 0;
 
             result.values.resize(static_cast<std::size_t>(horizon) + 1);
             result.values[0].assign(
@@ -4941,77 +5269,10 @@ namespace d20proof {
                         }
                     }
 
-                    if (completionAggregateGenerationId == std::numeric_limits<std::uint64_t>::max()) {
-                        result.reason = "max-plus completion aggregate generation overflow";
-                        return result;
-                    }
-                    ++completionAggregateGenerationId;
-                    activeCompletionAggregateSlots.clear();
-                    std::uint64_t aggregateWork = 0;
                     for (std::size_t edgeIndex = edgeLo;
                          edgeIndex < layerEdges.size() && layerEdges[edgeIndex].source == source;
                          ++edgeIndex) {
                         const CheckedEdge &edge = layerEdges[edgeIndex];
-                        if (edge.kind != CheckedEdgeKind::Completion ||
-                            !hasSuccessDpDestination(edge)) {
-                            continue;
-                        }
-                        ++aggregateWork;
-                        if (edge.selectedCommand < 0 ||
-                            static_cast<std::size_t>(edge.selectedCommand) >= commandSlotByValue.size() ||
-                            commandSlotByValue[static_cast<std::size_t>(edge.selectedCommand)] < 0) {
-                            result.reason = "max-plus completion edge command is outside registered profile";
-                            return result;
-                        }
-                        const std::size_t aggregateSlot = static_cast<std::size_t>(
-                            commandSlotByValue[static_cast<std::size_t>(edge.selectedCommand)]);
-                        if (completionAggregateGeneration[aggregateSlot] != completionAggregateGenerationId) {
-                            completionAggregateGeneration[aggregateSlot] = completionAggregateGenerationId;
-                            completionAggregates[aggregateSlot] = {};
-                            completionAggregates[aggregateSlot].selectedCommand = edge.selectedCommand;
-                            activeCompletionAggregateSlots.push_back(aggregateSlot);
-                            ++aggregateWork;
-                        }
-                        CompletionAggregate &aggregate = completionAggregates[aggregateSlot];
-                        aggregate.mayReachGoal = aggregate.mayReachGoal || edge.mayReachGoal;
-                        if (edge.hasContinuingOutput) {
-                            if (!aggregate.hasContinuingOutput) {
-                                aggregate.firstOutputPosition = edge.firstOutputPosition;
-                                aggregate.lastOutputPosition = edge.lastOutputPosition;
-                                aggregate.hasContinuingOutput = true;
-                            } else {
-                                aggregate.firstOutputPosition = std::min(
-                                    aggregate.firstOutputPosition,
-                                    edge.firstOutputPosition);
-                                aggregate.lastOutputPosition = std::max(
-                                    aggregate.lastOutputPosition,
-                                    edge.lastOutputPosition);
-                            }
-                        }
-                        const std::vector<CompletionWeightTerm> *terms =
-                            checkedEdgeWeightTerms(bundle, edge);
-                        if (terms == nullptr) {
-                            result.reason = "max-plus completion edge has invalid registered weight terms";
-                            return result;
-                        }
-                        for (const CompletionWeightTerm &term: *terms) {
-                            includeDominatingCompletionTerm(aggregate.weight, aggregate.hasWeight, term);
-                            ++aggregateWork;
-                        }
-                    }
-                    if (aggregateWork != 0 && !chargeBudget(budget, limits, aggregateWork, 0)) {
-                        result.reason = "max-plus completion aggregation exceeded proof budget";
-                        return result;
-                    }
-
-                    for (std::size_t edgeIndex = edgeLo;
-                         edgeIndex < layerEdges.size() && layerEdges[edgeIndex].source == source;
-                         ++edgeIndex) {
-                        const CheckedEdge &edge = layerEdges[edgeIndex];
-
-                        if (edge.kind == CheckedEdgeKind::Completion) {
-                            continue;
-                        }
 
                         if (hasSuccessDpDestination(edge)) {
                             bool duplicateDpTerm = false;
@@ -5111,45 +5372,6 @@ namespace d20proof {
 
                         if (!chargeBudget(budget, limits, 1, 0)) {
                             result.reason = "max-plus edge evaluation exceeded proof budget";
-                            return result;
-                        }
-                    }
-
-                    for (const std::size_t aggregateSlot: activeCompletionAggregateSlots) {
-                        const CompletionAggregate &aggregate = completionAggregates[aggregateSlot];
-                        if (!aggregate.hasWeight) {
-                            result.reason = "max-plus completion aggregate has no checked weight";
-                            return result;
-                        }
-                        MaxPlusValue continuation = aggregate.mayReachGoal
-                            ? MaxPlusValue::finiteValue(0)
-                            : MaxPlusValue::negativeInfinity();
-                        if (aggregate.hasContinuingOutput) {
-                            MaxPlusValue rangeMaximum;
-                            if (!completionRangeMaximum(
-                                    aggregate.firstOutputPosition,
-                                    aggregate.lastOutputPosition,
-                                    rangeMaximum)) {
-                                return result;
-                            }
-                            continuation = maxValue(continuation, rangeMaximum);
-                        }
-                        if (continuation.isNegativeInfinity()) {
-                            continue;
-                        }
-                        std::int64_t weight = 0;
-                        if (!completionTermWeight(aggregate.weight, q, u, v, w, weight)) {
-                            result.reason = "max-plus aggregated completion weight overflow";
-                            return result;
-                        }
-                        std::int64_t candidate = 0;
-                        if (!checkedAdd(weight, continuation.finite, candidate)) {
-                            result.reason = "max-plus aggregated completion addition overflow";
-                            return result;
-                        }
-                        best = maxValue(best, MaxPlusValue::finiteValue(candidate));
-                        if (!chargeBudget(budget, limits, 1, 0)) {
-                            result.reason = "max-plus aggregated completion evaluation exceeded proof budget";
                             return result;
                         }
                     }
@@ -5298,6 +5520,20 @@ namespace d20proof {
             return result;
         }
         if (!structuralNoPathOnly) {
+            const std::uint64_t remainingWork = budget.work >= limits.maxWork
+                ? 0
+                : limits.maxWork - budget.work;
+            const std::uint64_t requiredWork = maxPlusEvaluationWorkReservation(
+                bundle,
+                snapshot,
+                horizon,
+                limits,
+                budget);
+            if (requiredWork > remainingWork) {
+                result.check.accepted = true;
+                result.snapshot = std::move(snapshot);
+                return result;
+            }
             ++budget.priceEvaluations;
         }
 
