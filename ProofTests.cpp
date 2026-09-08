@@ -9,7 +9,13 @@ void require(bool test,const char* message) {if(!test) throw std::runtime_error(
 std::uint64_t randomState=0x912759bd12345678ull;
 std::uint64_t nextRandom() {randomState^=randomState<<13;randomState^=randomState>>7;return randomState^=randomState<<17;}
 Limits testLimits() {
-    Limits l;l.time=std::chrono::seconds(60);l.maxWork=200'000'000;l.maxBytes=512u*1024u*1024u;return l;
+    Limits l;
+    l.time=std::chrono::seconds(60);
+    l.maxWork=200'000'000;
+    l.maxBytes=512u*1024u*1024u;
+    l.maxCellsPerPosition=32;
+    l.maxPrices=32;
+    return l;
 }
 void checkRegistration() {
     RuleProgram invalid;invalid.routines.push_back({"cycle",{{}}});

@@ -1,0 +1,132 @@
+* witnessを発見すると、その長さをNとしてN−1側を改めてFALSE証明する流れになっている。予算切れをFALSEにせずUNKNOWN相当に落とすのも正しい。
+  なので、「組み合わせ爆発したから適当に枝を削る別問題」にはなっていません。ここはかなり大事です。
+  ただし、**FLEEに致命的な穴があります。**
+  仕様では選択時のFLEEは、PoCでは
+  `Paralysis=CLEAR`
+  がSelectable条件です。眠りはそもそもprofileで排除します。`Inactive` は選択時にFLEEそのものを消す条件ではありません。さらに、FLEEを合法に選択した後、敵先攻によって麻痺・行動不能になった場合には、FLEEという一ターンを丸ごと消すのではなく、味方行動時点で通常の状態異常処理へ入り、
+* 麻痺ターン減算
+* 解除抽選
+* `PARALYSIS`
+* `CURE_PARALYSIS`
+* `INACTIVE_ALLY`
+  などの正しい遷移を通す、というのが仕様です。kernel仕様の `ALLY_GATE` にかなり明示的に書かれています。
+  ところが現実装では `ProofKernel.cpp:61-72` の `selectable()` が
+
+```cpp
+case B::FLEE_ALLY:
+    b.mode[1]&=1;
+    b.mode[4]&=1;
+    break;
+```
+
+となっていて、**Paralysis clearだけでなくInactive=0まで選択条件にしています。**
+さらにもっと重大なのが `BattleProofRules.cpp:259-262` です。
+
+```cpp
+a.copy(Action,Prepared);
+b.eq(Action,B::FLEE_ALLY,[&]{
+    b.mobile([&]{a.ret();},[&]{a.reject();});
+});
+```
+
+ここで `mobile` は
+
+```cpp
+Para clear && Inactive == 0
+```
+
+を要求します。
+つまり、
+
+1. FLEEを合法に選ぶ
+2. 敵が先に動く
+3. その結果、味方が麻痺またはInactiveになる
+4. 味方のFLEE枠へ来る
+   という経路で、仕様なら `ALLY_STATUS` へ進むべきところを、現実装は **`Reject` に落とします。**
+   そしてこの `Reject` は単なる「探索候補として後回し」ではありません。`ProofProgram.cpp` では `Terminal::Invalid` の葉になります。その後 `ProofKernel.cpp:270` で
+
+```cpp
+if(guard.empty() || leaf.terminal==Terminal::Invalid) continue;
+```
+
+として**辺そのものを消しています。**
+これはFALSE証明にとってアウトです。
+仕様の数学的証明は、
+
+> 合法な実遷移はすべて抽象グラフのどこかに含まれる
+> という外側近似が根本です。
+> ところがこのFLEE経路については、
+> 実際には存在する合法な遷移 → Invalid扱い → グラフから消滅
+> なので、外側近似ではなく部分的な**内側近似**になります。
+> したがって理屈の上では、実際にはHターン以内に勝つFLEE経路が存在するのに、その経路を消したグラフについて `D(H)=false` を証明してしまう余地があります。
+> これは性能問題ではなく、**FALSE証明の健全性の穴**です。
+> しかも現在の自己テストではこの穴を検出しません。`ProofTests.cpp` の `compare()` が
+
+```cpp
+if(leaves[0].terminal==Terminal::Invalid) return;
+```
+
+としており、Invalidになったケースでは `BattleEmulator::Main` との比較を行いません。
+`SuffixProof.cpp` の `exactStep()` も同様に
+
+```cpp
+if(leaf.terminal==Terminal::Invalid) return false;
+```
+
+してから具体replayへ進む構造です。
+つまり「RuleProgramが本物なら実行可能な経路をInvalidにした」という、まさに今回確認したい不一致だけがdifferential testを素通りします。8192件比較が通っていても、この種類の穴に対する保証にはなっていません。
+さらに、これと関連して `Op::Reject` 自体が仕様より強すぎます。
+3仕様書ではRuleProgramの全経路は原則として
+
+* TURN → `FINISH`
+* SUBROUTINE → `RETURN`
+  で有限終了することを登録条件にしています。証明木の葉も、正常終了か検査済みCOMPLETEだけです。
+  ところが現実装の `registerRules()` は `Op::Reject` を普通の終端として認めています。
+
+```cpp
+case Op::Reject: break;
+```
+
+そして `BattleProofRules.cpp` には複数の `a.reject()` があります。
+HEALのMP不足など、`Selectable` で既に除外されている領域の防御用Rejectなら、実際の必要rootでは到達しないので実害が出ない場合があります。しかし登録器そのものには、
+
+> このRejectは必ずSelectableの外だから安全
+> という証明はありません。
+> そしてFLEEでは実際に必要root内部からRejectへ到達しているので、これは単なる形式差ではなく、上の健全性問題として顕在化しています。
+> もう一つ、**rule_id / RuleBundleの固定が仕様どおりには実装されていません。**
+> 仕様では
+
+```text
+rule_id = (registry_namespace, rule_version)
+```
+
+に、
+
+* RuleProgram全体
+* 数値関数・丸め・native契約
+* profile
+* alpha
+* COMPLETE表
+* FLEE等の明示的修正
+* exact replay入口とその対応
+  をまとめて変更不可で登録し、TRUEとFALSEは同じRuleBundleに束縛する必要があります。
+  現状は `registerRules()` が最終的に
+
+```cpp
+..., 1
+```
+
+と、versionを常に1にしています。
+証明書側も `uint64_t ruleVersion` だけで、verifierは
+
+```cpp
+c.ruleVersion != rules->version
+```
+
+を見るだけです。
+したがって、仕様にある「同じ表示名・同じversion番号だが中身が違うRuleProgramを別物として拒否する」というRuleBundle identityまでは成立していません。
+同じ実行プロセス内で `battleRules()` のstaticを使っている限り、今すぐ別Programを証明書から注入できるような単純な穴ではありません。ただし、**正式な証明書として保存・別ビルドで検証したり、仕様第16節の意味でD(N)とD(N−1)を“同じ問題”として束縛する仕組みは未完成**です。
+小さい仕様差としては `Coverage::require()` が新しい補完rootを追加しても `coverage.version` を更新せず、`expand()` のときだけ更新しています。仕様では被覆・補完・行き先が変わればcoverage_versionを新世代にすることになっています。ただ、現verifierはversion番号だけを信用せず内容を再構築しているので、これは今のところ上のFLEEのようなFALSE健全性破壊ではなく、世代管理の仕様不一致という位置づけです。
+逆に、最初に少し怪しく見えたCOMPLETEについては、読んだ結果、**現在の方式で筋が通っています。** 現実装は仕様で許可された4 cut全部を実装せず、ターン入口のCOMPLETEだけ使っていますが、「許可されているものを全部使わなければいけない」わけではありません。性能は落ちても健全性は壊れません。しかも上界の数値とMP/薬草の2ケース分解は仕様と対応しています。
+なので全体評価をまとめるとこうです。
+要するに、**「方式そのものが壊れていて全探索を別名でやっている」状態ではありません。むしろ数学側の設計をかなり素直に実装しています。問題は、その良い外側近似の中に `Reject → Invalid → continue` という“実経路を消せる穴”が一個入り、その穴をFLEE実装が実際に踏んでいることです。**

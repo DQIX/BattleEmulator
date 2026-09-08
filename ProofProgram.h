@@ -43,14 +43,14 @@ struct RegisteredRules {
     const RuleIdentity identity;
 };
 struct Limits {
-    bool regional=true;
+    bool regional=false;
     int maxTurns=30;
-    unsigned maxCellsPerPosition=32;
+    unsigned maxCellsPerPosition=8;
     unsigned maxLeavesPerRoot=8192;
-    std::uint64_t maxWork=30'000'000;
-    std::size_t maxBytes=256u*1024u*1024u;
+    std::uint64_t maxWork=8'000'000;
+    std::size_t maxBytes=128u*1024u*1024u;
     std::chrono::milliseconds time=std::chrono::seconds(15);
-    unsigned maxCandidates=2048, maxRefinements=16, maxPrices=32;
+    unsigned maxCandidates=2048, maxRefinements=16, maxPrices=8;
     std::uint64_t maxCandidateScans=2'000'000;
 };
 struct Exhausted {};

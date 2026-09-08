@@ -74,6 +74,13 @@ target_compile_definitions(ybe_v5_lv10 PRIVATE MULTITHREADING)  # `#define MULTI
 add_executable(ybe_v5_lv10_opt ${SOURCES})
 target_compile_definitions(ybe_v5_lv10_opt PRIVATE MULTITHREADING OPTIMIZE_MODE)  # `#define MULTITHREADING` を適用
 
+if(YO2_SUFFIX_PROOF)
+    target_link_libraries(ybe_v5_lv10 PRIVATE yo2_suffix_proof)
+    target_link_libraries(ybe_v5_lv10_opt PRIVATE yo2_suffix_proof)
+    target_compile_definitions(ybe_v5_lv10 PRIVATE YO2_SUFFIX_PROOF_ENABLED)
+    target_compile_definitions(ybe_v5_lv10_opt PRIVATE YO2_SUFFIX_PROOF_ENABLED)
+endif()
+
 
 string(TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)
 string(TIMESTAMP BUILD_TIME "%H:%M:%S" UTC)
