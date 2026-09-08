@@ -1264,7 +1264,33 @@ inline void SetTargetRecord02161720ActorId(const std::uint16_t actorId) noexcept
         std::uint8_t newStart = actor.startNode;
         if (actor.auxiliaryNode != detail::kInvalidPresentationNode) {
             newStart = actor.auxiliaryNode;
+        } else if (actor.goalNode != detail::kInvalidPresentationNode) {
+            newStart = actor.goalNode;
         }
+        if (newStart != detail::kInvalidPresentationNode) {
+            if (newStart >= detail::kPresentationNodePositions.size()) return false;
+            const auto position = detail::kPresentationNodePositions[newStart];
+            if (!position.valid) return false;
+            actor.startNode = newStart;
+            actor.worldX = position.x;
+            actor.worldZ = position.z;
+            // 02049B10 writes presentation+0x10/+0x18 through 0204A9F4;
+            // 0216964C has set flag 0x20, so it also copies that position to
+            // battle actor +0x44/+0x4C.
+            actor.battleWorldKnown = true;
+            actor.battleWorldX = position.x;
+            actor.battleWorldZ = position.z;
+        }
+
+        actor.goalNode = detail::kInvalidPresentationNode;
+        actor.auxiliaryNode = detail::kInvalidPresentationNode;
+        state.nearestNodeCache[index] = {};
+    }
+
+    state.presentationGoalSetupActive = false;
+    InvalidateCurrentRoutes(state);
+    return true;
+}
 
 // Exact persistent state relevant to BACT opcode 0x4F mode0:
 //   021E71A4 -> 021695A8 -> 0204AB8C -> 02049B10 -> 0204A904.
@@ -1308,32 +1334,6 @@ inline void SetTargetRecord02161720ActorId(const std::uint16_t actorId) noexcept
             actor.battleWorldY = actor.baseBattleWorldY;
             actor.battleWorldZ = actor.baseBattleWorldZ;
         }
-        state.nearestNodeCache[index] = {};
-    }
-
-    state.presentationGoalSetupActive = false;
-    InvalidateCurrentRoutes(state);
-    return true;
-} else if (actor.goalNode != detail::kInvalidPresentationNode) {
-            newStart = actor.goalNode;
-        }
-
-        if (newStart != detail::kInvalidPresentationNode) {
-            if (newStart >= detail::kPresentationNodePositions.size()) return false;
-            const auto position = detail::kPresentationNodePositions[newStart];
-            if (!position.valid) return false;
-            actor.startNode = newStart;
-            actor.worldX = position.x;
-            actor.worldZ = position.z;
-            // 02049B10 writes presentation+0x10/+0x18 through 0204A9F4;
-            // 0216964C has set flag 0x20, so it also copies that position to
-            // battle actor +0x44/+0x4C.
-            actor.battleWorldKnown = true;
-            actor.battleWorldX = position.x;
-            actor.battleWorldZ = position.z;
-        }
-        actor.goalNode = detail::kInvalidPresentationNode;
-        actor.auxiliaryNode = detail::kInvalidPresentationNode;
         state.nearestNodeCache[index] = {};
     }
 
