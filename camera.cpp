@@ -220,6 +220,10 @@ bool camera::ResetBattle(const CameraPresentationActor *actors, const std::size_
                 .battleWorldX = source.battleWorldX,
                 .battleWorldY = source.battleWorldY,
                 .battleWorldZ = source.battleWorldZ,
+                .baseBattleWorldKnown = source.battleWorldKnown,
+                .baseBattleWorldX = source.battleWorldX,
+                .baseBattleWorldY = source.battleWorldY,
+                .baseBattleWorldZ = source.battleWorldZ,
             })) return false;
         switch (source.membershipKind) {
             case CameraMembershipKind::player:
@@ -628,6 +632,14 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
 #if defined(gerunikku)
         finalizeDebugEvent();
 #endif
+    }
+
+    // Turn-end global formation recenter. Live ROM call-stack evidence places
+    // overlay26:021D9434 here in the battle turn-end state machine, after the
+    // complete action sequence, not inside any one action's presentation.
+    if (runtimeReady) {
+        const bool recentered = ApplyTurnEndGlobalPresentationRecenter();
+        assert(recentered && "turn-end presentation recenter failed");
     }
 }
 

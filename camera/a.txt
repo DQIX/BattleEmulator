@@ -901,3 +901,451 @@ C++は同じpivotから goal=41 / aux=50。つまり差はもう021E1FD8内部�
 021E1D90自体はC++どおり「startNode中心→candidate node中心」の距離でした。なので距離式ではありません。差はcandidate集合そのものです。
 
 ここは内部stackを推測せず、ROMの021E1D90入口で param1=startNode, candidates[], count を直接取ります。C2のgoal42を選んだ候補列が分かれば、C++のdistance-layer生成のどこが違うか一発で絞れます。
+
+
+その「nodeには2種類の世界線がある」は、今回のズレにそのまま刺さっていました。しかもlive ROMでかなり明確に確定できました。
+
+ROMの `021E1E50(Hero)` を直接hookした結果、問題の `0x1AB6C4` turn3では、
+
+```text
+Hero battle actor +0x44/+0x4C = (-112, 10240)
+021E1E50 return = node 48
+```
+
+でした。turn2でも `(0,10240) → node48` です。一方、同じ地点のC++はCLion debuggerで `(10641,18432)` を `BattleWorldX/Z()` へ渡していました。nearest-node計算の違いではなく、入力しているworld stateそのものが違います。
+
+さらにGhidraとlive ROMを追って、その「2世界線」の実体まで取れました。presentation objectには少なくとも、
+
+```text
++0x04/+0x08/+0x0C = base battle-world
++0x10/+0x14/+0x18 = presentation/node world
+```
+
+の2系統があります。`021E1E50` が読むのはpresentation worldではなく、battle actor本体 `actor+0x44/+0x4C` です。
+
+決定打はBACT opcode `0x4F` mode0でした。
+
+```text
+021E71A4 mode0
+  -> 021695A8
+     -> 全actorへ 0204AB8C
+        -> 02049B10
+        -> presentation +0x04/+0x0C を読む
+        -> 02013920(actor+0x44, baseWorld)
+     -> 0204A904
+```
+
+これをROMで直接実測しました。たとえばHeroは、
+
+```text
+baseX=0 baseZ=10240
+battle-world before=(0,18432)
+0204AB8C
+battle-world after=(0,10240)
+```
+
+へ戻ります。敵も同様に、
+
+```text
+C0 -> (-9009,-10240)
+C1 -> (0,-10240)
+C2 -> (9009,-10240)
+```
+
+へ復帰します。turn3直前にもHeroは一時 `(6038,13901)` まで動いているのに、`0204AB8C` 後は `(0,10240)` へ戻ることを確認しました。
+
+つまり過去の「route終端でpresentation worldとbattle-worldを同じnode座標へ常時同期すればよい」というモデルが不完全でした。presentationの配置座標と、`021E1E50` が参照するbattle actor physical/base worldは別の生命周期を持っています。🤓野郎、記録は雑でもこの一点は当ててました。
+
+この確定事項はproductionへ即反映しました。`PresentationActorState` にbase battle-worldを独立保持し、BACT `0x4F mode0` をaction ID手書きではなくROM metadataから汎用再演する `RestoreAllPresentationActorsToBaseBattleWorld()` を追加しています。既存のmode2/mode3 global resetも同じ `0x4F` metadataへ統合しました。
+
+生成器も変更して、従来の「mode2/3だけのmask」からraw `0x4F mode mask` に変更し、camera metadataをversion 5へ更新・再生成済みです。ROM全体では、
+
+```text
+0x4Fを持つaction: 166
+mode0:             95
+mode2/3:           72
+mode0と2/3混在:      1
+```
+
+でした。問題のDQ9 42はmask=`0x01`、DQ9 175はmask=`0x04`。唯一の混在action 527も実BACT順を調べ、`[mode0, mode3, mode3]` なので、現在の「base restore → global reset」の順序はROM順と一致しています。
+
+ただし、ここで新しい阻害要因が出ています。production差分とconstexpr headerの再生成までは完了していますが、CLionの `gerunikku_gouketu_opt` が現在、
+
+```text
+Process not started by some reasons. Probably build process failed.
+```
+
+でbuild段階から開始できません。指定どおり同じ `timeout=120000, waitForExit=true` で再試行済みです。`freecam_edge_validation` も同じなのでrun configuration固有ではありません。CLion inspectionは `freecam_fast_runtime.hpp` に明示的errorを0件しか出さず、巨大generated headerの解析でtimeoutしています。
+
+現在build原因を切り分け中で、旧 `BactOpcode4fGlobalResetModeMask` / 旧helper名の取り残しは0件、runtimeのcamera metadata version assertも5へ更新済みです。生成器は正常終了し、7312-byte metadataと約15.9MBの`freecam_fast_generated.hpp`も再生成されています。残っているのは生成header先頭/versionと他のversionチェック、今回追加したaggregate stateまわりのbuild不整合の特定です。
+
+したがって、今回かなり大きな未確定だった一点――**ROM `021E1E50` とC++の座標差の正体**――は解決しました。これはpivot計算バグではなく、**presentation node worldとbase/battle worldという2系統の生命周期をC++が完全には再演しておらず、特にBACT `0x4F mode0 → 0204AB8C` のbase-world復元が欠落していたこと**です。production修正も既に入っています。
+
+まだ未完了なのは、その最新差分のbuild復旧と `0x1AB6C4` turn3=`229` の最終C++実走確認、その後のturn4〜7、`0x2D7A91` 再検証、新規22bit seedの6ターン以上ランダム技、麻痺監査です。
+
+そこは踏まえて直しています。今のC++では、presentation/node world と battle actor world（actor+0x44/+0x4C） を別フィールドで持ち、さらに 0x4F mode0 で戻すための base battle-world も別保持にしています。今回入れた修正も、presentation座標をbaseに流用したのではなく、ROM実測済みのHero (0,10240) / 敵 (-9009,-10240),(0,-10240),(9009,-10240) を base battle-world として初期化する修正です。
+ただ、修正後もturn3がROM 228 に対してC++ 230 まで2消費余っているので、まだ「2世界線のどちらをどのタイミングで更新するか」が1箇所以上ズレています。今まさに修正後のturn3 DQ9 0x00AF 直前で止めて、presentation world / current battle-world / base battle-world の3組を同時に比較しています。
+
+修正後に既存breakpointが当たらなくなった理由も分かりました。C++のturn3 DQ9 0x00AF は、ROMが C0 start=56 なのに、修正後C++はその直前まで start=55 になっています。つまり残り2消費はbattle-worldだけでなく、presentation/node world側も1ノードずれている可能性が高いです。両世界線を混ぜずに、今度はC0 start=55の地点で止めて、Hero/C0の3座標系を並べます。
+
+はい。今の状態を見ると、二世界線を分けた修正自体は効いています。修正後C++のturn3 0x00AF 直前では、Heroは presentation world=(37246,9216) のままなのに、battle/base world=(0,10240) に独立して戻っています。C0も presentation (-31925,18432) に対して battle/base (-9009,-10240)。つまり「presentation座標をbattle座標へ上書きする」旧モデルには戻っていません。
+ただしROM同地点はHero battle-worldが (-112,10240)、C0 start=56なのにC++はHero battle-world (0,10240)、C0 start=55です。なので残差は「二世界線を分け忘れ」ではなく、battle-world側の微小移動(-112) と presentation/node側の1ノード差 のどちらがroute=2を発生させているか、という段階まで絞れています。ここを分けて追っています。
+
+ここは一つ確定しました。C++修正後のHero battle-world (0,10240) から出るpivotは 48 で、ROMの (-112,10240) → 48 と同じです。したがって -112 の微差は今回の余計な2消費の原因ではありません。
+残っている差は presentation/node world側 です。ROMはC0 start=56, goal=56, aux=65 なのに、C++は同地点で start=55, goal=55, aux=255。ここからは二世界線を混ぜず、ROMのpresentation object側を同じ瞬間に丸ごと採って比較します。
+
+ROM側の観測器も、今までは start/goal/aux とbattle actor座標だけで、presentation objectの座標2系統を同時には出していませんでした。ここは指定済み Ctable_jp.js の既存 0x021DC24C hookだけを拡張して、presentation +0x04/+0x0C、+0x10/+0x18、actor+0x44/+0x4C を同じ瞬間に全部出します。これなら「どっちの世界線が1ノードずれたか」をROM実測で切れます。
+
+うん。しかも今のROM再実測で、二世界線の分離が本当に必要なことをもう一段確認できました。turn3のDQ9 0x00AF でROMのC0は、
+baseWorld=(-9009,-10240), nodeWorld=(-21283,18432), battleWorld=(-9009,-10240), start=56, goal=56, aux=65
+です。同じ瞬間のC++は、battle/baseは (-9009,-10240) まで合った一方、presentation/node側だけ (-31925,18432), start=55, aux=255 です。HeroのpivotもROM/C++とも48なので、残りはbattle-worldではなくpresentation/node-world側の生命周期差と確定しました。ここを混ぜて直してはいません。
+
+二世界線の切り分けはできています。今の残差は、0x4F mode0 がbattle-worldをbaseへ戻す部分ではなく、その直前に 02049B10 が aux→goal→start の優先順でpresentation側の新startを決めるところです。C++はその時点でC0のgoalを55にしてしまい、ROMは56のまま。なので次は「なぜC++だけC0 goal=55になるか」を SetupCurrentAndFuturePresentationGoals() 内で追います。
+
+SetupCurrentAndFuturePresentationGoals()を見ると、今回C0を55へ動かし得る経路は「current actor C2」ではなく、suffix/previous participant処理でC0のgoalを書き換える部分です。まずC++の 0x4F mode0 直前の全actor start/goal/aux をdebuggerで確定し、その同じタイミングをROMでも採ります。そこで初めて修正箇所を決めます。
+
+はい。そこは明確に**別世界線として分離して直しています**。同じ座標として扱う修正にはしていません。
+
+現在C++では、
+
+* `worldX/Y/Z` = presentation / node world（ROM presentation object `+0x10/+0x14/+0x18` 系）
+* `battleWorldX/Y/Z` = battle actor physical world（`actor+0x44/+0x48/+0x4C`）
+* `baseBattleWorldX/Y/Z` = `0x4F mode0 → 0204AB8C` が復元元にする presentation object `+0x04/+0x08/+0x0C`
+  として3組を独立保持しています。
+
+今回入れたproduction修正も、初期値として既に分かっていたHero `(0,10240)`、敵 `(-9009,-10240)/(0,-10240)/(9009,-10240)` を `baseBattleWorld*` へコピーするだけです。presentation worldにはコピーしていません。
+
+そしてROMを `0x1AB6C4` で再実測した結果、この分離が正しいことも確認できています。turn3の問題地点でROMのC0は、
+
+```text
+baseWorld   = (-9009, -10240)
+nodeWorld   = (-21283, 18432)
+battleWorld = (-9009, -10240)
+start=56 goal=56 aux=65
+```
+
+でした。つまり実際に3つの値は同一ではありません。
+
+修正後C++ではbattle/base側は `(-9009,-10240)` まで一致しました。一方、問題の `0x00AF` 直前ではpresentation側が、
+
+```text
+C++: start=55, nodeWorld=(-31925,18432)
+ROM: start=56, nodeWorld=(-21283,18432)
+```
+
+とまだズレています。
+
+HeroについてもROM `battleWorld=(-112,10240) → pivot=48`、C++ `(0,10240) → pivot=48` なので、この微小なbattle-world差は今回の2 RNG余剰の原因ではありません。
+
+したがって現時点で残っているバグは、**「二世界線を混同している」ことではなく、presentation/node-world側でC0が56→55へ誤って遷移する生命周期**です。ここはまだ修正していません。ROM実測でその書き換え元を確定してから反映する段階です。
+
+
+その「通常攻撃でも近すぎると敵を画面外へ逃がすためpresentation側だけテレポートする処理」は、今回の C0 start=56→55 差とかなり相性がいいです。ただし前と同じ事故を避けるため、まず battle.dst からROM実測を取り直して、通常攻撃系のcamera-placement/teleportがどの座標系とstart/goal/auxを書いたかを確定してからproductionへ触ります。
+
+ROM再取得を始めました。battle.dst を同じlaneへfreshロードし、指定4本＋更新済み Ctable_jp.js の計5本だけが動いている状態に戻しています。ここから 0x1AB6C4 をposition 1へ入れ直し、スカラ→ミラーシールド→ためるを再演して、通常攻撃系のplacement直前/直後も含む3座標系を採ります。
+
+再実測で大事な事実が出ました。C0の start=56 はturn3直前に突然生えたのではなく、前の 0x00AF で aux=56 を作り、その直後の 0x4F mode2 → 0216964C が aux→start として56へ確定しています。つまり、あなたの言う「カメラなし攻撃でも近すぎるactorを逃がす」処理が aux を作る側にいる可能性が高いです。まず過去の実装・記録から、そのproximity/teleport経路名を掘り当ててROM hook位置を合わせます。
+
+過去ログを掘ると、あなたが言っていた処理は実際に別件で解析済みでした。021E2664 は「敵との距離そのもの」ではなく、presentation gridの混雑からactorを隣接nodeへ退避させるfallbackです。しかも普通攻撃/未来・過去participant処理の中で使われ、row+4が立つと退避を強制する経路もあります。
+今回のC0 56→55 がそれかどうかはまだ未確定なので、fresh ROMの同じ 0x1AB6C4 turn3で 021E2664 の実到達・対象actor・start/goal/row+4を直接取ります。ここがC0に触っていれば、かなり本命です。
+
+fresh ROMの再実測で、差の発生時点もかなり絞れています。turn2の 0x4F mode0 直前はROMが C0 start=56 / goal=FF / aux=FF。一方、直前に取ったC++は start=56 / goal=55 / aux=FF でした。つまりmode0自体は悪くなく、その前にC++だけgoal=55を予約しているのが直接原因です。ここへ 021E2664 が関与しているかを今からROMで直接取ります。
+
+ROM側では仮説が半分当たり、半分さらに具体化しました。021E2664 は実際にこの戦闘でC0へ何度も入り、たとえば start=47 → goal=46 の「混雑退避」を出しています。普通攻撃系のpresentation処理でも走っています。
+ただし問題のturn2後半では、C0が 0x00AF のaux=56を受けてglobal resetで start=56 になった後、ROMはmode0まで C0へgoalを一度も書いていません。mode0直前は start=56, goal=FF, aux=FF のままです。C++だけ goal=55 を作っているので、いまC++がこの区間で余計に021E2664相当を呼んでいるのかをdebuggerで捕まえます。
+
+ここは実測で仮説をさらに切れました。C++をturn2のmode0直前までdebuggerで追いましたが、C0 start=56の状態で ChooseFallbackPresentationGoal（021E2664相当）には一度も入らないのに、goalだけ55になっています。つまり「混雑退避021E2664」はDQ9全体では本当に存在し、この戦闘でも普通攻撃系で動いていますが、今回の56→55を直接作っている経路ではありません。
+次はfallbackではなく 021E1FD8 相当の通常goal assignmentをC++だけがC0へ掛けている箇所を捕まえます。ROMでは同区間にC0 goal writeが0回なので、ここが余計なparticipant処理なら条件ごと直せます。
+
+C++側は AssignActorPresentationGoal() には入らず、そのまま完走しました。なのでgoal55のproducerはcurrent/futureの通常assignmentでもありません。残るコード上の経路はprevious-participant cleanupで、C0の古いauxをgoalへ再利用してからauxをFFへ消す分岐です。これならmode0直前が「goal55 / auxFF」になる形までぴったり一致します。次のrunではそのbranch入口でaux実値を捕まえます。
+
+previous-participant cleanupも start=56 になった後には呼ばれていません。なので時系列が逆です。goal55が先に作られ、その後C0のroute/aux処理でstartだけ56へ進み、goal55が残留しています。
+ここは停止点を当て続けるより、既存のcamera debug eventが各actionごとのstart/goal/auxを保持しているので、同じC++ 2ターンtraceを通常実行して「最初にgoal55が現れるaction index」を先に特定します。ROM側はgoal writer LRまで既に採れているので、その1 actionだけdebuggerへ戻します。
+
+コード側で、goal55の作り方まで形が見えました。BeginPresentationGoalSetup() は今、全actorの goal=start を先に行い、その後 start==aux ならbattle-world最寄りnodeへstartだけrefreshします。
+したがってC0が一瞬 start=55, aux=55 なら、C++だけ
+goal=55 → startをbattle-worldから56へrefresh
+となり、まさに start=56, goal=55 が生成されます。ROMのwriterログではこの区間にC0 goal write自体がありません。これが本当に問題actionで起きているか、C++のその2命令間をdebuggerで実値確認します。
+
+debuggerでC0 start=55 のproducerを追う途中、重要な時系列を1つ取れました。goal=start が55を書こうとしている停止点は DQ9 175 / actionIndex4 のsetupです。ここで入る時点ですでに start=55, goal=FF, aux=FF。つまり55はこのsetupが作ったのではなく、前のpresentation完了処理でstartそのものが56→55へ動かされています。
+ROMログでは同じ境界でC0は56のままなので、次はその「ターン終端のstart書き換え」を直接比較します。ROMでは既に 0204A1B0 のLR付きwriterを全部採れており、怪しい LR=021D9AF0 の一括start書き換えも見えています。
+
+producerのターンまで確定しました。停止点は turnSerial=2, actionIndex=3, DQ9 42 のmode0です。C0はその直前に start=56, goal=55, aux=FF、mode0がROM仕様どおりgoal優先で start=55 にしてしまいます。ROMの同じturn2/action3直前は start=56, goal=FF, aux=FF。
+つまりmode0修正ではなく、turn2 action0〜2のどこかでC++だけgoal55を書いたのが100%根因です。次のrunは「C0へ55を書ける全goal writer」にだけbreakpointを張って、最初の1件を取ります。
+
+2ターンだけのdebuggerでは55 writerが捕まらず、3ターンrunでのみturn2 mode0直前の残留が見えるので、「実行行breakpointだけでwriterを当てる」方法が安定していません。ここで挙動は触りません。
+代わりに既存のcamera debug eventはactionごとの start/goal/aux/route を保存しているので、3ターンrunのevent配列からturn2のどのaction終了時に最初に55が現れるかを読み、その1箇所へ戻します。ROM側のwriter列はすでにfresh実測済みです。
+
+C++の3ターン通常traceも取れました。ここでさらに大きいズレが見えています。問題はturn3で突然始まっていません。turn1終了時点ですでにpresentation node列がROMと違います。
+ROMはturn1末尾に LR=021D9AF0 から全4体へstartを書き、
+Hero 59→58, C0 48→47, C1 23→22, C2 33→32
+という一括再配置を実測しています。一方C++のturn1終了は 61,58,23,43。つまり、あなたが言っている「通常攻撃でも画面上の配置が不都合ならactorを逃がす/再配置する」系の一般presentation placement lifecycleをC++が丸ごと取りこぼしている線がかなり濃くなりました。
+まず 021D9AF0 の実関数とcallerを割って、この一括再配置がその処理なのか確認します。
+
+見つかった 021D9AF0 の一括再配置は、かなり本命です。ただし二世界線を壊さないために、次に その直後の 0204A9F4 がpresentation/node worldだけを動かすのか、battle actor worldまで動かすのか をlive ROMで測ります。ここを測らずに「全actorを1ノードずらす」は入れません。
+
+かなり本命のところまで来ました。今回は指示どおり、まず `battle.dst` から `0x1AB6C4` をposition 1で入れ直してROMを再実測してから追っています。`main.cpp` → `ChatGPT.md` → `SKILL.md` も `files__` で再読済みです。
+
+結論から言うと、あなたが言っていた「通常攻撃でも、画面上の配置が悪いと敵を退避・テレポートさせる処理」は**関連しています**。ただしROMには少なくとも2種類の再配置機構がありました。
+
+一つは既知の `021E2664`。これは「物理的に敵との距離が近い」そのものではなく、presentationの9×9 gridで周囲が混雑しているactorを隣接nodeへ逃がすfallbackです。fresh ROMでも普通のaction処理中にC0へ実際に入り、
+
+```text
+C0 start=30 → goal=21
+C0 start=47 → goal=46
+```
+
+のような退避を実測しました。`row+4 != 0` で強制される経路も本当にあります。
+
+ところが今回の `C0 56→55` の直接原因はこれではありません。fresh ROMではC0がDQ9 `0x00AF` でaux=56を得たあと、
+
+```text
+0x00AF:
+start=47 goal=47 aux=56
+↓
+0x4F mode2 → 0216964C
+↓
+start=56 goal=FF aux=FF
+```
+
+となります。そして次のDQ9 42 mode0まで、C0には**goal writeが一度もありません**。
+
+対してC++では同じDQ9 42 mode0直前が、
+
+```text
+start=56
+goal=55
+aux=FF
+```
+
+です。だからmode0がROM仕様どおり `goal→start` を行った結果、C++だけstart=55になります。mode0自体は犯人ではありません。
+
+さらに3ターンのcamera eventを比較したところ、もっと前からpresentation worldがズレていました。C++のturn1終了は、
+
+```text
+Hero,C0,C1,C2 = 61,58,23,43
+```
+
+ですが、ROMではturn境界で別の一括再配置が走ります。`0204A1B0` をhookして実測すると、
+
+```text
+LR=021D9AF0
+
+Hero -> 58
+C0   -> 47
+C1   -> 22
+C2   -> 32
+```
+
+と全actorのpresentation start nodeを書き換えています。
+
+そしてGhidraでcallerも割れました。`LR=021D9AF0` は `FUN_overlay_d_26__021d9434` 内のcallsite `021D9AEC → 0204A1B0` です。このコードは全actorのpresentation nodeを9×9 gridのrow/columnへ変換し、
+
+* 全員が片側の外縁寄りならrowを±1
+* 全員が上下どちらかへ寄っていればcolumnを±2
+* 全actorの移動後nodeが0～80内なら全員まとめて移動
+
+という**global formation recentering**をしています。
+
+つまり、今回の残差に対するあなたの記憶はかなり当たりです。`021E2664` の局所的な混雑退避とは別に、**通常battle presentation全体を画面内の都合のよい位置へ戻す一括recenter処理**が存在し、C++がこの後者を再現していません。turn1終了からズレている理由もこれで説明できます。
+
+二世界線についても重要で、このglobal recenteringが呼ぶのは、
+
+```text
+0204A1B0  // presentation start node write
+0204A9F4  // transform update
+```
+
+です。`0204A9F4` への該当callerもGhidraで `overlay_d_26::021D9B34` と特定しました。
+
+ただし、ここでツール時間制限に到達しました。なので**まだglobal recenteringをproductionへ実装していません**。これは意図的です。次に絶対必要なのは `021D9B34 → 0204A9F4` をlive ROMでhookして、
+
+```text
+presentation base world
+presentation/node world
+battle actor world
+presentation flags
+```
+
+をcall前後で取ることです。
+
+これでrecenterが「presentation/node worldだけをテレポートする」のか、条件次第でbattle actor worldにもコピーするのかを確定できます。二世界線をここで雑に混ぜると同じ事故を起こすので、実測前には実装しません。
+
+現時点の重要な到達点は、**turn3の局所バグを追っていたら、実際にはturn1→turn2境界から欠落しているROMのglobal formation recentering (`FUN_overlay_d_26__021d9434`, start writer LR=`021D9AF0`) を発見した**ところです。これはユーザーが指摘した「カメラなしの普通の攻撃でも配置が悪いとテレポートする処理」とかなり近い実体です。
+
+未完了は、そのrecenter処理が二世界線のどちらを書き換えるかのlive測定、production実装、`0x1AB6C4` 7ターン同期、`0x2D7A91` 再検証、新規22bit seedで6ターン以上のランダム技、麻痺監査です。
+
+その通りです。camera.bin はRAM dumpなので、そこから「どのoverlay由来か」を決め打ちするのは無理があります。overlay同定は C:\Users\owner\Documents\tunnelworkspace\BattleArrow\overlay_jp.js を正本に切り替えます。まずこれを files__ で読み、0x021D9AF0 / 0x021D9B34 がどのoverlay slotに対応するかを正しく出してから、Ghidraの開いているprogramを選び直します。
+
+overlay_jp.js はloaded-overlay table 0x01FFD384 とY9 tableから slot→overlay ID→実ロードアドレス を出すので、これで正しく同定できます。これはbattle観測の正本を増やす用途ではなく、overlay同定だけの一時診断として使い、同定後は止めます。
+
+overlay同定は取れました。現在の battle.dst では slot 3 = overlay ID 26, start 0x021D9300。なので 0x021D9AF0 はoverlay26内です。
+
+ただし重要な食い違いがあります。Ghidraの camera.bin では 0x021D9AEC が BL 0x020C46C0 なのに、live ROMでは 0204A1B0 のreturn LRが 0x021D9AF0、つまりcallsite 0x021D9AEC です。まずこの1命令をハーネスから生bytesで再取得して、camera.bin が現在のoverlay26実体と一致しているか判定します。
+
+laneが落ちたので、これをコード差とは扱いません。battle.dst からfresh laneを作り直して、指定5本＋一時診断の overlay_jp だけ戻し、同じ1命令を取り直します。
+
+同じdead IDは再利用できなかったので、新しいfresh lane IDで battle.dst から起こします。これは状態を変えるためではなく、死んだChrome laneの置き換えです。
+
+overlay同定とlive命令照合まで取れました。現在ロード中は overlay 26 / start 0x021D9300。そしてlive 0x021D9AEC = 0xEBF9C1AF は ARM BL 0x0204A1B0 です。
+一方、開いている camera.bin の同アドレスは別命令なので、camera.binは現在のoverlay26実体と一致していません。ここはcaller資料に使いません。
+
+追加してもらうなら、必要なのは overlay 26 です。再現条件は 先頭seed 0x1AB6C4、turn1「スカラ」、まず見るbreakpoint/callsiteは 0x021D9AEC（liveでは BL 0x0204A1B0、return LR=0x021D9AF0） です。こちらはその間もハーネス実測を続けます。
+
+0204A9F4 自体は camera.bin でもmain RAM側なので使えます。decompileすると、この関数は presentation object +0x10/+0x18（node world）だけを書き換え、battle actor +0x44/+0x4C には触れません。つまり「テレポート」は二世界線のうちpresentation側だけです。
+
+この点もlive ROMで確認するため、0204A9F4 の入口/returnにだけhookを足し、0x1AB6C4 turn1「スカラ」をfresh再演して、call前後の3座標系を取り直します。
+
+fresh実測で、あなたの指摘はかなりそのまま当たりでした。turn1「スカラ」終了時の一括処理は、
+
+0204A1B0: start nodeを全員まとめて 59→58, 48→47, 23→22, 33→32
+直後 0204A9F4: presentation/node worldだけを対応座標へ更新
+battle actor worldは Hero (0,10240), C0 (-9009,-10240) 等のまま不変
+
+でした。つまり「カメラ都合で表示用配置だけテレポートする」処理です。二世界線を分ける必要がある根拠がfresh ROMで再確認できました。
+
+この確定事項は今からproductionへ反映します。まず既存camera stateに似たrecenter処理がないか検索し、無ければturn-boundaryのpresentation-only処理として最小追加します。
+
+fresh ROMで二世界線の更新規則は確定したので、そこはコードへ反映対象です。ただし global recenterの「いつ・何マス動かすか」 まで今の camera.bin から取るのは危険です。camera.bin は現在のoverlay26と命令が一致しないためです。
+
+先にBattleArrow側にoverlay26抽出済みバイナリ/抽出scriptがあるか探します。あれば、現在のROM dq9_new2.nds からoverlay26を直接取り出してGhidraへ開けるので、ユーザー側追加を待たずに正しい静的条件まで取れます。
+
+overlay26がGhidraに入るまでの間、live ROMの該当関数自体を直接抜いて静的条件を取ります。overlay_jp.js で 現在ロード中のoverlay26 0x021D99C0..0x021D9BC0 の命令bytesをそのまま1本だけ出し、overlay IDは既に26と確定済みなので、これをcurrent codeとして解析します。
+
+overlay26はGhidraにまだ無いですが、overlay_jp でID26と同定したliveコード512 bytesは取れています。これを一時診断binとしてGhidraへ読み込み、image baseを 0x021D99C0 に置いて、current liveコードそのものを静的解析します。これなら「raw dumpからoverlayを推定」はしていません。overlay IDはハーネスで先に確定済みです。
+
+了解。overlay26.bin がGhidraへ追加済みなら、もうlive 512-byte断片を無理に持ち込む必要はありません。まず API_CURRENT.md を files__ で確認して任意ARMv5T逆アセンブルAPIの正しい使い方を合わせ、その後 overlay26.bin を明示指定して 0x021D9Axx のrecenter関数と 0x021D9B38 → 0204A9F4 を静的に取り、fresh ROM実測と突き合わせます。
+
+overlay26.bin でcallerは正しく取れました。0x021D9AEC → 0204A1B0、0x021D9B34 → 0204A9F4 がcurrent live overlay26と一致しています。さらにdecompile上でも、全actorの現在nodeをrow/columnへ分解し、共通オフセットを計算して、全actorの新nodeが0..80に収まるときだけ一括で startNode とpresentation/node worldを更新する処理だと確認できました。
+
+次はそのオフセット決定条件をARM命令レベルで取り切って、そのままproductionへ実装します。ここはもう実測＋正しいoverlay26静的解析の両方が揃っています。
+
+了解。今後はcaller追跡をLR手作業でやらず、エミュレータのcall stackを正本にします。静的条件は overlay26.bin、動的caller/到達経路はcall stack、座標・node値は指定5本のハーネス観測、という分担にします。まず FUN_021d9554 のrecenter条件を overlay26.bin から切り出し、次のfresh実走では 0x021D9AEC で止めてcall stackをそのまま採ります。
+
+recenter条件は overlay26.bin のARM命令まで読めました。現在nodeを (col=node%9,row=node/9) に分け、全participantについて「片側にだけ寄っている」場合だけ、col ±1 / row ±2 の共通シフトを作り、全新nodeが0..80なら全員へ適用しています。
+ただし実装位置を推測しません。ユーザーの指示どおり、fresh 0x1AB6C4 turn1「スカラ」で 0x021D9AEC に停止し、正確なcall stackからこのrecenterがbattle lifecycleのどこで走るかを取ってからproductionへ入れます。
+
+それなら筋が通ります。0x021D9AEC のglobal recenterはターン終了処理の一部として見るべきで、各action中のcamera処理に押し込むのは違います。いま設定済みのbreakpointはそのまま使い、0x1AB6C4 turn1「スカラ」を終端まで流して、停止時のcall stackを正確に取ります。そこでC++側の呼び出し位置もターン終端へ合わせます。
+
+call stackも取れました。停止点 0x021D9AEC は確かにターン終端側で、
+
+0x02161FE8 → 0x021D9434(recenter function) → 0x021D9AEC
+
+という経路です。つまりaction個別presentationではなく、turn-end global presentation maintenanceです。ここはもう実測済みなので、C++もターン終端処理へ入れるべき条件が確定しました。今から 0x02161D9C / 0x02161FE8 の既存対応コードを files__ で探して、最小のturn-end hook位置へそのまま実装します。
+
+call stackと camera.bin のmain RAM側decompileが噛み合いました。FUN_02161D9C の battlePhase/state +0xE24 == 7 かつ FUN_020A3D20()==3 のときに FUN_021D9434 を呼ぶので、これはaction中ではなく明確にターン終端フェーズです。
+
+つまりproductionの入れ場所も決まりました。各actionのCompleteActionPresentation()ではなく、camera.cpp の全actionループ終了後に1回だけglobal recenterを実行します。ここはROM実測＋call stack＋overlay26静的解析が全部一致したので、今すぐその形で実装します。
+
+
+その情報は正しかったです。エミュレータのcall stackで確定しました。
+
+`0x1AB6C4`、turn1「スカラ」を `battle.dst` からfresh実走し、`0x021D9AEC` で停止させたcall stackは、
+
+```text
+0x02161FE8
+  → FUN_021D9434
+    → ... global recenter ...
+      → 0x021D9AEC: BL 0x0204A1B0
+```
+
+でした。
+
+さらにmain RAM側の `camera.bin` で `FUN_02161D9C` を確認すると、
+
+```cpp
+switch (battleState->field_E24) {
+    ...
+    case 7:
+        if (FUN_020A3D20() == 3) {
+            FUN_021D9434(battleState);
+        }
+        break;
+}
+```
+
+となっています。したがって、このglobal recenterは**action個別camera処理ではなく、battle phase/state=7で走るターン終了時のpresentation maintenance**です。
+
+`overlay26.bin` もGhidra MCPから正しく読めました。今度はcaller欠落なしで、
+
+```text
+0x021D9AEC -> BL 0x0204A1B0   // start node更新
+0x021D9B34 -> BL 0x0204A9F4   // presentation/node world更新
+```
+
+を確認しています。
+
+recenter条件もARM命令まで確定しました。各participantの現在start nodeを
+
+```text
+col = node % 9
+row = node / 9
+```
+
+へ分解し、全体の偏りから、
+
+```text
+全員が右側へ寄る  -> colShift = -1
+全員が左側へ寄る  -> colShift = +1
+全員が下側へ寄る  -> rowShift = -2
+全員が上側へ寄る  -> rowShift = +2
+```
+
+を決めます。両端側にactorが存在する軸はshift=0です。
+
+そして全participantについて、
+
+```text
+newNode = (col + colShift) + (row + rowShift) * 9
+```
+
+が0..80に収まる場合だけ一括適用します。
+
+fresh ROMのturn1「スカラ」では実際に、
+
+```text
+Hero  59 -> 58
+C0    48 -> 47
+C1    23 -> 22
+C2    33 -> 32
+```
+
+となりました。
+
+二世界線についてもfresh実測で再確認しています。`0204A9F4` 前後では、
+
+```text
+presentation/node world だけ移動
+battle actor world は不変
+base battle-world も不変
+```
+
+です。たとえばC0は、
+
+```text
+baseWorld   = (-9009,-10240)
+battleWorld = (-9009,-10240)
+nodeWorld   = node 48座標 → node 47座標
+```
+
+という動きです。したがってこれはまさに「画面・camera都合で表示用配置だけテレポートする」世界線です。
+
+ここは重要なので、**global recenterを各actionの `CompleteActionPresentation()` に入れる案は破棄**します。入れるべき場所は`camera.cpp`の全action処理が終わった後、1ターンにつき1回です。
+
+ツール時間終了直前までにproduction runtimeの適用方法も確認していました。recenterでは、
+
+* `startNode` を変更
+* `worldX/worldZ`（presentation/node world）を新node座標へ変更
+* `battleWorld*` は絶対に変更しない
+* `baseBattleWorld*` も変更しない
+* `goal/aux` もこのrecenter自身では触らない
+
+のがROM実測に対応します。
+
+ただし最後の一点、C++内部の派生 `presentationOccupancy` をこのturn-end recenter直後に再構築する必要があるかを確認している途中でツール時間になりました。ROMにはこのC++独自cacheは存在しないので、ここだけはC++内部整合性として確認してから入れる必要があります。
+
+そのため、**global recenterのproduction実装そのものはまだ入れていません**。条件・実行場所・二世界線の更新対象まではすべて実測で確定しています。
+
+また今回の調査で、一時診断の `overlay_jp` は停止済みで、現在DeSmuMEには指定された5本の永続scriptだけが残っています。
+
+次の作業地点はかなり明確です。turn-end recenterをpresentation-onlyで実装→`0x1AB6C4` をROM `78,156,228` と再照合→そのままturn4〜7→`0x2D7A91` 回帰→新規22bit seedで6ターン以上→麻痺監査、です。

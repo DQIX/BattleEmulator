@@ -1246,6 +1246,95 @@ inline void SetTargetRecord02161720ActorId(const std::uint16_t actorId) noexcept
     return true;
 }
 
+// Exact turn-end global presentation recenter from overlay26:021D9434.
+// Live ROM call stack proves this runs from the battle turn-end state machine
+// (main:02161D9C, state +0xE24 == 7) rather than from an individual action.
+//
+// The ROM classifies each participant's current presentation start node on a
+// 9x9 grid. If the whole formation is biased toward only one outer side of an
+// axis, it applies one common shift to every participant:
+//   columns: right-only -> -1, left-only -> +1
+//   rows:    bottom-only -> -2, top-only  -> +2
+// The shift is committed only if every resulting node remains in [0, 80].
+// 0204A1B0 updates the presentation start node and 0204A9F4 updates only the
+// presentation/node world. The battle-actor world and base battle-world are
+// separate coordinate timelines and must not be changed here.
+[[nodiscard]] inline bool ApplyTurnEndGlobalPresentationRecenter() noexcept {
+    auto& state = ThreadContext();
+    if (state.presentationActorCount > state.presentationActors.size()) return false;
+
+    bool hasLeftOuter = false;
+    bool hasRightOuter = false;
+    bool hasTopOuter = false;
+    bool hasBottomOuter = false;
+    std::size_t participantCount = 0;
+
+    for (std::size_t index = 0; index < state.presentationActorCount; ++index) {
+        const auto& actor = state.presentationActors[index];
+        if (actor.actorId == detail::kInvalidPresentationActor
+            || actor.startNode >= detail::kPresentationNodePositions.size()) {
+            continue;
+        }
+        ++participantCount;
+        const int column = actor.startNode % 9;
+        const int row = actor.startNode / 9;
+        if (column < 3) hasLeftOuter = true;
+        if (column > 5) hasRightOuter = true;
+        if (row < 3) hasTopOuter = true;
+        if (row > 5) hasBottomOuter = true;
+    }
+
+    if (participantCount == 0) return true;
+
+    int columnShift = 0;
+    int rowShift = 0;
+    if (hasRightOuter && !hasLeftOuter) columnShift = -1;
+    if (!hasRightOuter && hasLeftOuter) columnShift = 1;
+    if (!hasTopOuter && hasBottomOuter) rowShift = -2;
+    if (hasTopOuter && !hasBottomOuter) rowShift = 2;
+    if (columnShift == 0 && rowShift == 0) return true;
+
+    std::array<std::uint8_t, detail::kMaxPresentationActors> newNodes{};
+    newNodes.fill(detail::kInvalidPresentationNode);
+    for (std::size_t index = 0; index < state.presentationActorCount; ++index) {
+        const auto& actor = state.presentationActors[index];
+        if (actor.actorId == detail::kInvalidPresentationActor
+            || actor.startNode >= detail::kPresentationNodePositions.size()) {
+            continue;
+        }
+        const int column = actor.startNode % 9;
+        const int row = actor.startNode / 9;
+        const int newNode = (column + columnShift) + (row + rowShift) * 9;
+        if (newNode < 0 || newNode > 80) return true; // ROM aborts the whole recenter.
+        newNodes[index] = static_cast<std::uint8_t>(newNode);
+    }
+
+    bool changed = false;
+    for (std::size_t index = 0; index < state.presentationActorCount; ++index) {
+        const std::uint8_t node = newNodes[index];
+        if (node == detail::kInvalidPresentationNode) continue;
+        const auto position = detail::kPresentationNodePositions[node];
+        if (!position.valid) return false;
+        auto& actor = state.presentationActors[index];
+        changed = changed || actor.startNode != node;
+        actor.startNode = node;
+        actor.worldX = position.x;
+        actor.worldZ = position.z;
+        // Deliberately do not modify goal/aux, battleWorld*, or baseBattleWorld*.
+    }
+
+    if (changed) {
+        InvalidateCurrentRoutes(state);
+        state.presentationOccupancy = detail::BuildPresentationOccupancy(
+            std::span<const detail::PresentationActorState>(
+                state.presentationActors.data(),
+                state.presentationActorCount
+            )
+        );
+    }
+    return true;
+}
+
 // Exact presentation-state side effect of main:0216964C -> 0204ACA8 /
 // 0204A904. 0204ACA8 first clears flag bits 0..1 and sets 0x20, then
 // 02049B10(actor, 0) chooses the new start node with the priority
