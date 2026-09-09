@@ -460,6 +460,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 if (action == BattleEmulator::FLEE_ALLY) {
                     skipTurn = true;
                 }
+                if (skipTurn == true && (players[0].paralysis || players[0].inactive)){
+                    action = BattleEmulator::ATTACK_ALLY;
+                }
                 if (!skipTurn) {
                     //--------start_FUN_02158dfc-------
                     if (!players[0].paralysis) {
