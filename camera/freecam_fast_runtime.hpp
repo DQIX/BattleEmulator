@@ -824,6 +824,15 @@ inline void InvalidateRosterField4Compatibility() noexcept {
                 if (index < pattern.size()) pattern[index] = true;
             }
             break;
+        case 22: {
+            // Fresh live-ROM seed 0x2D7A91 evidence after DQ9 0x009B
+            // (presentation type 22): the next 021E1958 roster build sees the
+            // first four physical work-row +4 words all nonzero. This is a
+            // measured stack-residue prefix, not an actor mask; rows beyond
+            // the observed four deliberately remain unknown.
+            constexpr std::array<bool, 4> prefix{true, true, true, true};
+            return SetRosterField4CompatibilityPrefix(prefix);
+        }
         case generated::kTensionGainPresentationType: {
             // This presentation path is one known trigger of the independent
             // FUN_020515EC battle-HUD renderer lifecycle.
