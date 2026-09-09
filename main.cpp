@@ -11,6 +11,7 @@
 #include "debug.h"
 #include "Genome.h"
 #include "setting.h"
+#include "ActionSearch.h"
 #if defined(YO2_SUFFIX_PROOF_ENABLED)
 #include "SuffixProof.h"
 #endif
@@ -503,6 +504,48 @@ namespace {
         if (turns < 0 || turns >= 350) {
             std::cerr << "SearchRequest failed: invalid replay turn count " << turns << std::endl;
             return;
+        }
+
+        // SearchRequest owns construction of the authoritative search-start state:
+        // replay the observed prefix once through BattleEmulator, then search only
+        // by applying BattleEmulator transitions to copies of that state.
+        lcg::init(seed, true);
+        ActionSearchState start{};
+        start.players[0] = copiedPlayers[0];
+        start.players[1] = copiedPlayers[1];
+        start.position = 1;
+        start.nowState = 0;
+        BattleEmulator::Main(&start.position, turns, gene, start.players, nullptr, seed,
+                             nullptr, nullptr, -2, &start.nowState);
+
+        constexpr int SEARCH_TIME_BUDGET_MS = 1500;
+        const int maxSuffixTurns = 349 - turns;
+        auto searchResult = ActionSearch::Run(start, seed, maxSuffixTurns, SEARCH_TIME_BUDGET_MS);
+
+        Genome genome{};
+        for (int i = 0; i < turns; ++i) {
+            genome.actions[i] = gene[i];
+        }
+        for (int i = 0; i < searchResult.length && turns + i < 349; ++i) {
+            genome.actions[turns + i] = searchResult.actions[i];
+        }
+        genome.turn = turns + searchResult.length;
+        genome.actions[genome.turn] = -1;
+
+        std::cout << "Search: " << (searchResult.victory ? "victory" : "best partial")
+                  << ", suffix turns=" << searchResult.length
+                  << ", expanded=" << searchResult.expanded
+                  << ", beam=" << searchResult.completedBeamWidth << std::endl;
+
+        if (genome.turn > 0) {
+            lcg::init(seed, true);
+            BattleResult result1;
+            Player replayPlayers[2] = {copiedPlayers[0], copiedPlayers[1]};
+            int replayPosition = 1;
+            uint64_t replayState = 0;
+            BattleEmulator::Main(&replayPosition, genome.turn, genome.actions, replayPlayers,
+                                 &result1, seed, nullptr, nullptr, -1, &replayState);
+            dumpTableMain(result1, genome, seed, turns);
         }
 #ifdef DEBUG
         auto turnProcessed = BattleEmulator::getTurnProcessed();
