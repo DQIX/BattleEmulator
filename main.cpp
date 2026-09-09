@@ -504,6 +504,17 @@ namespace {
             std::cerr << "SearchRequest failed: invalid replay turn count " << turns << std::endl;
             return;
         }
+
+        // SearchRequest owns construction of the authoritative search-start state:
+        // replay the observed prefix once through BattleEmulator, then search only
+        // by applying BattleEmulator transitions to copies of that state.
+        lcg::init(seed, true);
+        int position = 1;
+        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
+        uint64_t nowState = 0;
+        BattleEmulator::Main(&position, turns, gene, players, nullptr, seed,
+                             nullptr, nullptr, -2, &nowState);
+
 #ifdef DEBUG
         auto turnProcessed = BattleEmulator::getTurnProcessed();
         auto t3 = std::chrono::high_resolution_clock::now();
