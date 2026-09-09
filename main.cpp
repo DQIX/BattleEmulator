@@ -11,6 +11,7 @@
 #include "debug.h"
 #include "Genome.h"
 #include "setting.h"
+#include "ActionSearch.h"
 #if defined(YO2_SUFFIX_PROOF_ENABLED)
 #include "SuffixProof.h"
 #endif
@@ -514,6 +515,39 @@ namespace {
         uint64_t nowState = 0;
         BattleEmulator::Main(&position, turns, gene, players, nullptr, seed,
                              nullptr, nullptr, -2, &nowState);
+
+        constexpr int64_t searchBudgetMicros = 100000;
+        const auto searchResult = ActionSearch::Run(players, seed, position, nowState, searchBudgetMicros);
+
+        Genome genome{};
+        for (int i = 0; i < turns && i < 349; ++i) {
+            genome.actions[i] = gene[i];
+        }
+        int totalTurns = turns;
+        for (int i = 0; i < searchResult.length && totalTurns < 349; ++i, ++totalTurns) {
+            genome.actions[totalTurns] = searchResult.actions[static_cast<std::size_t>(i)];
+        }
+        genome.actions[totalTurns] = -1;
+        genome.turn = totalTurns;
+        genome.fitness = -searchResult.enemyHp;
+
+        std::cout << "Search: " << (searchResult.victory ? "victory" : "best partial")
+                  << ", suffix turns: " << searchResult.length
+                  << ", explored: " << searchResult.explored
+                  << ", search time: " << (static_cast<double>(searchResult.elapsedMicros) / 1000.0) << " ms"
+                  << ", ally hp: " << searchResult.allyHp
+                  << ", enemy hp: " << searchResult.enemyHp << std::endl;
+
+        if (searchResult.length > 0) {
+            lcg::init(seed, true);
+            int replayPosition = 1;
+            uint64_t replayState = 0;
+            Player replayPlayers[2] = {copiedPlayers[0], copiedPlayers[1]};
+            BattleResult replayResult;
+            BattleEmulator::Main(&replayPosition, totalTurns, genome.actions, replayPlayers, &replayResult, seed,
+                                 nullptr, nullptr, -1, &replayState);
+            dumpTableMain(replayResult, genome, seed, turns);
+        }
 
 #ifdef DEBUG
         auto turnProcessed = BattleEmulator::getTurnProcessed();
