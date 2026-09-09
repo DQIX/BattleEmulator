@@ -17,7 +17,7 @@ namespace {
 
     // This is the fixed ally action menu already implemented by BattleEmulator::callAttackFun.
     // Search ordering and pruning may change, but the reachable action set does not.
-    constexpr std::array<int32_t, 7> ALLY_ACTIONS = {
+    constexpr std::array<int32_t, 8> ALLY_ACTIONS = {
         BattleEmulator::ATTACK_ALLY,
         BattleEmulator::DRAGON_SLASH,
         BattleEmulator::CRACK_ALLY,
@@ -25,6 +25,7 @@ namespace {
         BattleEmulator::MEDICINAL_HERBS,
         BattleEmulator::DEFENCE,
         BattleEmulator::ACROBATIC_STAR,
+        BattleEmulator::FLEE_ALLY,
     };
 
     struct Node {
@@ -241,6 +242,10 @@ namespace {
                 // input specification; BattleEmulator is the authority for what an
                 // explicit action does in the current state.
                 for (const int32_t action: ALLY_ACTIONS) {
+                    if (action == BattleEmulator::ACROBATIC_STAR && !(parent.state.players[0].specialCharge && parent.state.players[0].specialChargeTurn != 0)) continue;
+                    if (action == BattleEmulator::HEAL && parent.state.players[0].mp < 2) continue;
+                    if (action == BattleEmulator::CRACK_ALLY && parent.state.players[0].mp < 3) continue;
+                    if (action == BattleEmulator::MEDICINAL_HERBS && parent.state.players[0].medicinal_herbs_count <= 0) continue;
                     Candidate candidate;
                     candidate.state = step(parent.state, seed, action);
                     ++outcome.expanded;
