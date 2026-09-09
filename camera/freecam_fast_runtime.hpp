@@ -1498,9 +1498,13 @@ inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
     const std::uint16_t actorId,
     const int actionIndex
 ) noexcept {
-    (void)actorId;
     (void)actionIndex;
-    return CommitAllCurrentRouteEnds();
+    // Fresh live-ROM seed 0x2D7A91, turn 3, DQ9 0x009B proves that
+    // future participants may receive temporary goals (C0 56->55, C2 68->61)
+    // without committing those goals to start nodes when the action completes.
+    // Only the executing actor's completed route belongs to this lifecycle;
+    // coordinated future-participant goals remain provisional for the next setup.
+    return CommitCurrentRouteEnd(actorId);
 }
 
 // overlay_d_25:021E71A4 opcode 0x4F mode2 calls 0216964C at 021E732C
