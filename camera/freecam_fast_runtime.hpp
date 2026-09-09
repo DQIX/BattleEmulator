@@ -1227,11 +1227,9 @@ inline void SetTargetRecord02161720ActorId(const std::uint16_t actorId) noexcept
     actor.goalNode = node;
     actor.worldX = position.x;
     actor.worldZ = position.z;
-    // The fast path commits the completed ROM route atomically. At route end
-    // the battle actor transform has reached the same presentation node.
-    actor.battleWorldKnown = true;
-    actor.battleWorldX = position.x;
-    actor.battleWorldZ = position.z;
+    // Presentation/node world and battle actor physical world have separate
+    // lifecycles in the ROM. A completed presentation route advances only the
+    // presentation object here; it does not rewrite actor+0x44/+0x4c.
     state.nearestNodeCache[actorIndex] = {};
     InvalidateCurrentRoutes(state);
     return true;
