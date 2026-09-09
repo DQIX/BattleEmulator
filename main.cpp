@@ -9,8 +9,11 @@
 #include "lcg.h"
 #include "BattleEmulator.h"
 #include "debug.h"
-#include "ActionOptimizer.h"
+#include "Genome.h"
 #include "setting.h"
+#if defined(YO2_SUFFIX_PROOF_ENABLED)
+#include "SuffixProof.h"
+#endif
 
 #ifdef DEBUG
 
@@ -51,7 +54,7 @@ namespace {
 
     void help(const char *program_name);
 
-    void SearchRequest(Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads);
+    void SearchRequest(Player copiedPlayers[2], uint64_t seed, const int aActions[350], int turns, int numThreads);
 
     uint64_t BruteForceRequest(Player copiedPlayers[2], int hours, int minutes, int seconds, int turns,
                                int damages[350], int aActions[350]);
@@ -68,6 +71,12 @@ namespace {
 
     int foundTurn = 0;
     int foundTurnOffset = 0;
+
+    struct SeedMatch {
+        uint64_t seed = 0;
+        int foundTurn = 0;
+    };
+    std::vector<SeedMatch> seedMatches;
 
     const char *version = "v4.0.4_vE_v6";
 
@@ -430,7 +439,7 @@ namespace {
         auto seed = BruteForceRequest(players, hours, minutes, seconds, valuesIndex, values, aActions);
         std::cout << "foundTurn: " << (foundTurn + foundTurnOffset) << ", " << valuesIndex << std::endl;
         if (foundSeeds == 1) {
-            SearchRequest(players, seed, aActions, THREAD_COUNT);
+            SearchRequest(players, seed, aActions,foundTurn + foundTurnOffset, THREAD_COUNT);
         }
         return 0;
     }
@@ -475,51 +484,28 @@ namespace {
                 std::endl;
     }
 
-    void SearchRequest(Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads) {
+    void SearchRequest(Player copiedPlayers[2], uint64_t seed, const int aActions[350], int turns, int numThreads) {
 #ifdef DEBUG
         auto t0 = std::chrono::high_resolution_clock::now();
         BattleEmulator::ResetTurnProcessed();
 #endif
 
+        (void) numThreads;
         int32_t gene[350] = {0};
-        auto turns = 0;
         for (int i = 0; i < 349; ++i) {
             gene[i] = aActions[i];
             if (aActions[i] == -1) {
                 gene[i] = -1;
                 break;
             }
-            turns++;
-        }
-        if (foundTurn != 0) {
-            turns = foundTurn + foundTurnOffset;
         }
 
-        auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 100000, gene, numThreads);
-
-        auto turnProcessed = BattleEmulator::getTurnProcessed();
-        BattleResult result1;
-        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
-
-        lcg::init(seed);
-
-        auto *position = new int(1);
-        auto *nowState = new uint64_t(0);
-
-        BattleEmulator::Main(position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
-                             nowState);
-
-        delete position;
-        delete nowState;
-
-#if defined(MINGW_BUILD)
-        dumpTableMain(result1, genome, seed, 0);
-#else
-        dumpTableMain(result1, genome, seed, turns);
-#endif
-
+        if (turns < 0 || turns >= 350) {
+            std::cerr << "SearchRequest failed: invalid replay turn count " << turns << std::endl;
+            return;
+        }
 #ifdef DEBUG
+        auto turnProcessed = BattleEmulator::getTurnProcessed();
         auto t3 = std::chrono::high_resolution_clock::now();
         auto elapsed_time1 =
                 std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
@@ -543,10 +529,10 @@ namespace {
                                                    maxElement,
                                                    &nowState);
             if (resultBool) {
-                //std::cout << seed << std::endl;
                 FoundSeed = seed;
                 foundSeeds++;
                 foundTurn = BattleEmulator::getStartTurn();
+                seedMatches.push_back({seed, foundTurn});
             }
         }
     }
@@ -569,6 +555,7 @@ namespace {
 
         foundSeeds = 0;
         FoundSeed = 0;
+        seedMatches.clear();
 
         int totalSeconds = hours * 3600 + minutes * 60 + seconds;
         totalSeconds = totalSeconds - 15;
@@ -612,8 +599,7 @@ namespace {
             std::cout << "not found!!!" << std::endl;
             return 0;
         }
-        FoundSeed = 0;
-        foundSeeds = 0;
+        std::cout << "multiple matching seeds will be proved independently" << std::endl;
         return 0;
     }
 
@@ -814,10 +800,10 @@ namespace {
             gene[349] = -1;
         }
 
-        auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 100000, gene, 0);
+        //auto genome =
+        //        ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 100000, gene, 0);
 
-        if (genome.turn >= 100) {
+        /*if (genome.turn >= 100) {
             return "SearchRequest failed: turn limit reached.";
         }
 
@@ -834,6 +820,7 @@ namespace {
         delete position;
         delete nowState;
 
+
         std::stringstream ss;
         ss << dumpTable(result1, genome.actions, foundTurn + foundTurnOffset) << "\n";
         ss << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
@@ -845,7 +832,8 @@ namespace {
             ss << genome.actions[i] << ", ";
         }
         ss << "\n";
-        return ss.str();
+        return ss.str();*/
+        return "";
     }
 }
 
@@ -866,6 +854,7 @@ EMSCRIPTEN_KEEPALIVE uint64_t wasm_bruteforce_range(int resultIndex, uint64_t st
     BattleEmulator::ResetTurnProcessed();
     foundSeeds = 0;
     FoundSeed = 0;
+    seedMatches.clear();
     BruteForceMainLoop(BasePlayers, startSeed, endSeed, foundTurn + foundTurnOffset, aActions1, values1);
     wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
 
@@ -903,6 +892,7 @@ EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed
 
 int main(int argc, char *argv[]) {
     showHeader();
+
 #ifdef DEBUG
     auto t0 = std::chrono::high_resolution_clock::now();
 #endif
@@ -1019,7 +1009,9 @@ int main(int argc, char *argv[]) {
         //        25, 25, 26, 25, 22, 25, 25, -1
     };
     Player Player5[2] = {BasePlayers[0], BasePlayers[1]};
-    SearchRequest(Player5, seed, actions, 1);
+    int debugTurns = 0;
+    while (debugTurns < 349 && actions[debugTurns] != -1) ++debugTurns;
+    SearchRequest(Player5, seed, actions, debugTurns, 1);
 
     std::cout << performanceLogger.rdbuf() << std::endl;
 
