@@ -8,6 +8,7 @@
 
 #include "lcg.h"
 #include "BattleEmulator.h"
+#include "BattleSearch.h"
 #include "debug.h"
 #include "Genome.h"
 #include "setting.h"
@@ -82,7 +83,7 @@ namespace {
 
     std::stringstream performanceLogger = std::stringstream();
 
-    constexpr int THREAD_COUNT = 1;
+    constexpr int THREAD_COUNT = 4;
     // `InputBuilder` インスタンス作成
 
     // ヘッダーを出力する関数
@@ -490,7 +491,6 @@ namespace {
         BattleEmulator::ResetTurnProcessed();
 #endif
 
-        (void) numThreads;
         int32_t gene[350] = {0};
         for (int i = 0; i < 349; ++i) {
             gene[i] = aActions[i];
@@ -514,6 +514,12 @@ namespace {
         uint64_t nowState = 0;
         BattleEmulator::Main(&position, turns, gene, players, nullptr, seed,
                              nullptr, nullptr, -2, &nowState);
+
+        const battle_search::State searchStart{{players[0], players[1]}, position, nowState};
+        auto searchOptions = battle_search::environmentOptions(numThreads, 350 - turns);
+        searchOptions.initializeWorker = [seed] { lcg::init(seed, true); };
+        const auto searchResult = battle_search::search(searchStart, seed, searchOptions);
+        battle_search::printResult(searchStart, seed, searchResult, gene, turns, dumpTable);
 
 #ifdef DEBUG
         auto turnProcessed = BattleEmulator::getTurnProcessed();

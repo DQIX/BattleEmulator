@@ -38,6 +38,8 @@ set(SOURCES
         lcg.h
         BattleEmulator.cpp
         BattleEmulator.h
+        BattleSearch.cpp
+        BattleSearch.h
         Player.h
         camera.cpp
         camera.h
@@ -50,6 +52,13 @@ set(SOURCES
 # マルチスレッド版（multithreading = ON）
 add_executable(ybe_v5_lv10 ${SOURCES})
 target_compile_definitions(ybe_v5_lv10 PRIVATE MULTITHREADING)  # `#define MULTITHREADING` を適用
+
+# Explicit evaluation target; it uses the application's real dumpTable and
+# generated inputs, and is kept out of the normal application build.
+set(SEARCH_CHECK_SOURCES ${SOURCES})
+list(REMOVE_ITEM SEARCH_CHECK_SOURCES main.cpp)
+add_executable(battle_search_checks EXCLUDE_FROM_ALL BattleSearchChecks.cpp ${SEARCH_CHECK_SOURCES})
+target_compile_definitions(battle_search_checks PRIVATE MULTITHREADING)
 
 
 add_executable(ybe_v5_lv10_opt ${SOURCES})
