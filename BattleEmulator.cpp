@@ -460,6 +460,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 if (action == BattleEmulator::FLEE_ALLY) {
                     skipTurn = true;
                 }
+                assert(!(skipTurn == true && (players[0].paralysis || players[0].inactive)));//アホが2回も仕様モンスターしたためこれを許さん。消すな
                 if (!skipTurn) {
                     //--------start_FUN_02158dfc-------
                     if (!players[0].paralysis) {
