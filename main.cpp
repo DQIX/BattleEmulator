@@ -10,6 +10,7 @@
 #include "BattleEmulator.h"
 #include "debug.h"
 #include "Genome.h"
+#include "SearchAlgorithm.h"
 #include "setting.h"
 #if defined(YO2_SUFFIX_PROOF_ENABLED)
 #include "SuffixProof.h"
@@ -514,6 +515,51 @@ namespace {
         uint64_t nowState = 0;
         BattleEmulator::Main(&position, turns, gene, players, nullptr, seed,
                              nullptr, nullptr, -2, &nowState);
+
+#ifndef YO2_SEARCH_BUDGET_MS
+#define YO2_SEARCH_BUDGET_MS 2000
+#endif
+        SearchAlgorithm::State searchStart{};
+        searchStart.players[0] = players[0];
+        searchStart.players[1] = players[1];
+        searchStart.position = position;
+        searchStart.nowState = nowState;
+
+        const auto searchResult = SearchAlgorithm::Run(searchStart, seed, turns, YO2_SEARCH_BUDGET_MS);
+
+        int32_t replayGene[350] = {0};
+        for (int i = 0; i < turns; ++i) replayGene[i] = gene[i];
+        for (int i = 0; i < searchResult.actionCount && turns + i < 349; ++i) {
+            replayGene[turns + i] = searchResult.actions[i];
+        }
+        const int replayTurns = std::min(349, turns + searchResult.actionCount);
+        replayGene[replayTurns] = -1;
+
+        lcg::init(seed, true);
+        int replayPosition = 1;
+        uint64_t replayNowState = 0;
+        Player replayPlayers[2] = {copiedPlayers[0], copiedPlayers[1]};
+        BattleResult replayResult;
+        BattleEmulator::Main(&replayPosition, replayTurns, replayGene, replayPlayers, &replayResult, seed,
+                             nullptr, nullptr, -1, &replayNowState);
+
+        // The exact replay table is the primary search output.
+        std::cout << dumpTable(replayResult, replayGene, turns) << std::endl;
+
+        const bool replayVictory = replayPlayers[1].hp == 0 && replayPlayers[0].hp != 0;
+        std::cout << "Search result: victory=" << (replayVictory ? "yes" : "no")
+                  << ", suffixTurns=" << searchResult.actionCount
+                  << ", allyHP=" << replayPlayers[0].hp
+                  << ", enemyHP=" << replayPlayers[1].hp
+                  << ", expanded=" << searchResult.expanded
+                  << ", elapsed=" << std::fixed << std::setprecision(3) << searchResult.elapsedMs << " ms"
+                  << (searchResult.timedOut ? ", timeout" : "") << std::endl;
+        std::cout << "Search actions: ";
+        for (int i = 0; i < searchResult.actionCount; ++i) {
+            std::cout << searchResult.actions[i];
+            if (i + 1 != searchResult.actionCount) std::cout << ", ";
+        }
+        std::cout << std::endl;
 
 #ifdef DEBUG
         auto turnProcessed = BattleEmulator::getTurnProcessed();

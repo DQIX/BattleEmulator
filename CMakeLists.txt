@@ -45,6 +45,8 @@ set(SOURCES
         debug.h
         BattleResult.h
         Genome.h
+        SearchAlgorithm.cpp
+        SearchAlgorithm.h
 )
 
 # マルチスレッド版（multithreading = ON）
