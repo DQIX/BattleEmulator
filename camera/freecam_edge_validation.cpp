@@ -304,6 +304,16 @@ bool ValidateRosterField4Compatibility() {
     }
     if (!BeginTurn(roster)) return false;
 
+    if (!ApplyBattleEntryRendererResidueCompatibility()) return false;
+    for (std::size_t index = 0; index < roster.size(); ++index) {
+        if (index < 4) {
+            const bool expectedNonzero = index < 2;
+            if (!RosterField4IsKnown(index) || RosterField4IsZero(index) == expectedNonzero) return false;
+        } else if (RosterField4IsKnown(index)) {
+            return false;
+        }
+    }
+
     if (!ApplyKnownRosterField4PostActionCompatibility(1)) return false;
     constexpr std::array<std::size_t, 8> type1Nonzero{0, 1, 2, 5, 6, 7, 8, 9};
     for (std::size_t index = 0; index < roster.size(); ++index) {

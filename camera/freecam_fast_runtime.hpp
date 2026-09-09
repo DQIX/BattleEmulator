@@ -645,6 +645,11 @@ struct RuntimeState {
     // not invent residue for rows 4..11 in a larger encounter.
     std::array<bool, detail::kMaxPresentationActors> rosterField4Known{};
     bool rosterField4CompatibilityValid{};
+    // The battle-entry renderer runs before the first 021E08BC setup and
+    // leaves a distinct compiler-stack footprint for that first setup only.
+    // Keep this as a lifecycle event; do not leak it across normal turn
+    // boundaries as if row+4 were persistent battle state.
+    bool battleEntryRendererResiduePending{};
     detail::PresentationOccupancyMap presentationOccupancy{};
     bool presentationGoalSetupActive{};
     detail::PresentationTurnRoutes currentRoutes{};
@@ -681,6 +686,7 @@ inline void ResetBattle() noexcept {
     state.presentationMembershipProfiles.fill(kInvalidMembershipProfile);
     state.rosterField4Nonzero.fill(false);
     state.rosterField4Known.fill(false);
+    state.battleEntryRendererResiduePending = true;
 }
 
 [[nodiscard]] inline bool BeginTurn(const std::span<const BattleActorRef> actionOrder) noexcept {
@@ -785,6 +791,17 @@ inline void InvalidateRosterField4Compatibility() noexcept {
         prefix[index] =
             ((generated::kBattleHudRendererResiduePrefixMask >> index) & UINT8_C(1)) != 0;
     }
+    return SetRosterField4CompatibilityPrefix(prefix);
+}
+
+// Stack compatibility produced during the battle-entry renderer lifecycle.
+// Fresh live-ROM capture of the first 021E1958 roster build gives the first
+// four physical work rows as nonzero, nonzero, zero, zero. This is not an
+// actor/monster/action mask: these are physical stack-overlap rows, and only
+// the zero/nonzero state consumed by 021E08BC is represented here. Rows past
+// the measured prefix deliberately remain unknown.
+[[nodiscard]] inline bool ApplyBattleEntryRendererResidueCompatibility() noexcept {
+    constexpr std::array<bool, 4> prefix{true, true, false, false};
     return SetRosterField4CompatibilityPrefix(prefix);
 }
 

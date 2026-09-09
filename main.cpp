@@ -1148,6 +1148,22 @@ int main(int argc, char* argv[]){
 				if (actorIndex != 0) std::cout << ',';
 				std::cout << static_cast<unsigned>(event.startNodesAfter[actorIndex]);
 			}
+			std::cout << " goals=";
+			for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
+				if (actorIndex != 0) std::cout << ',';
+				std::cout << static_cast<unsigned>(event.goalNodes[actorIndex]);
+			}
+			std::cout << " aux=";
+			for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
+				if (actorIndex != 0) std::cout << ',';
+				std::cout << static_cast<unsigned>(event.auxiliaryNodes[actorIndex]);
+			}
+			std::cout << " row4=";
+			for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
+				if (actorIndex != 0) std::cout << ',';
+				if (!event.rosterField4Known[actorIndex]) std::cout << '?';
+				else std::cout << (event.rosterField4Nonzero[actorIndex] ? '1' : '0');
+			}
 			std::cout << '\n';
 		}
 		camera::SetDebugCapture(false);

@@ -276,6 +276,15 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
     if (actionCount < 0 || static_cast<std::size_t>(actionCount) > actionOrder.size()) return;
     for (int i = 0; i < actionCount; ++i) actionOrder[static_cast<std::size_t>(i)] = actors[i];
     const bool runtimeReady = BeginTurn(std::span<const BattleActorRef>(actionOrder.data(), actionCount));
+    if (runtimeReady && ThreadContext().battleEntryRendererResiduePending) {
+        // The live battle-entry renderer has already executed before the
+        // first action setup. BeginTurn correctly clears generic previous-turn
+        // compatibility, so inject this independent first-setup stack
+        // footprint immediately afterwards and consume it exactly once.
+        ThreadContext().battleEntryRendererResiduePending = false;
+        const bool applied = ApplyBattleEntryRendererResidueCompatibility();
+        assert(applied && "battle-entry renderer residue compatibility failed");
+    }
 #if defined(gerunikku)
     const int debugTurnSerial = gCameraDebugTurnSerial++;
 #endif
