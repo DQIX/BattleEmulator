@@ -589,21 +589,30 @@ constexpr void InvalidateGoalNeighborConflicts(
             break;
         }
     }
-    std::uint8_t pivot = target.auxiliaryNode;
+    // 021E1FD8 carries two distinct target nodes when the acting actor is in
+    // the current action. r5 remains the target presentation start node from
+    // 0204A1C4 and is used by 021E1B1C/021E1C08/021E1F2C for distance/goal
+    // assignment. Separately, 021E1E50 computes the nearest node from the
+    // target battle-actor world transform only for the 021E2904 conflict
+    // invalidation. Do not collapse those two values: live 0x2D7A91 action 0
+    // has presentation start 23 but battle-world nearest 30.
+    std::uint8_t goalPivot = target.startNode;
+    std::uint8_t conflictPivot = kInvalidPresentationNode;
     if (actorIsInAction) {
         // overlay_d_25:021E1E50 resolves the battle actor and reads
         // actor+0x44/+0x4C. It does not read presentation+0x10/+0x18.
         const std::int32_t targetWorldX = BattleWorldX(target);
         const std::int32_t targetWorldZ = BattleWorldZ(target);
-        pivot = searchMode == PresentationNodeSearchMode::optimized
+        conflictPivot = searchMode == PresentationNodeSearchMode::optimized
             ? NearestPresentationNodeFast(targetWorldX, targetWorldZ)
             : NearestPresentationNodeSimple(targetWorldX, targetWorldZ);
     } else {
-        if (pivot == kInvalidPresentationNode) pivot = target.goalNode;
-        if (pivot == kInvalidPresentationNode) pivot = target.startNode;
+        goalPivot = target.auxiliaryNode;
+        if (goalPivot == kInvalidPresentationNode) goalPivot = target.goalNode;
+        if (goalPivot == kInvalidPresentationNode) goalPivot = target.startNode;
     }
     if (actorIsInAction) {
-        const auto conflictNodes = PresentationNeighbors(pivot);
+        const auto conflictNodes = PresentationNeighbors(conflictPivot);
         InvalidatePresentationConflicts(
             std::span<const std::uint8_t>(conflictNodes.data(), conflictNodes.size()),
             occupancy,
@@ -624,15 +633,15 @@ constexpr void InvalidateGoalNeighborConflicts(
     const std::uint8_t holdDepth = expansion == 0
         ? 1
         : static_cast<std::uint8_t>(expansion + 1);
-    PaintPresentationDistanceForExpansion<false>(levels, pivot, expansion);
+    PaintPresentationDistanceForExpansion<false>(levels, goalPivot, expansion);
 
     PresentationOccupancyMap targetArea{};
     if (actorIsInAction) {
-        PaintPresentationDistanceForExpansion<false>(targetArea, pivot, expansion);
-        targetArea[pivot] = PresentationClassForActor(target.actorId);
+        PaintPresentationDistanceForExpansion<false>(targetArea, goalPivot, expansion);
+        targetArea[goalPivot] = PresentationClassForActor(target.actorId);
         PaintPresentationClassForExpansion<true>(
             targetArea,
-            pivot,
+            goalPivot,
             PresentationClassForActor(target.actorId),
             expansion
         );
@@ -718,9 +727,9 @@ constexpr void InvalidateGoalNeighborConflicts(
 
     if (actorIsInAction && attackFormationMode != 2) {
         PresentationOccupancyMap adjacent{};
-        PaintPresentationDistanceForExpansion<true>(adjacent, pivot, expansion);
+        PaintPresentationDistanceForExpansion<true>(adjacent, goalPivot, expansion);
         if ((actor.startNode < adjacent.size() && adjacent[actor.startNode] == 1)
-            || actor.startNode == pivot) {
+            || actor.startNode == goalPivot) {
             goal = actor.startNode;
         }
     }

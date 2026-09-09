@@ -80,6 +80,17 @@ inline void AssertCameraMapping(const int action) noexcept {
     const std::uint16_t currentPresentationTargetId =
         currentAction.targetScope == TargetScope::self ? currentActorId : currentTargetId;
 
+    // overlay_d_25:021E08BC resolves the current action actor/target rows
+    // before entering either the suffix or previous-participant loops.  When
+    // both resolve to the same actor it returns success immediately.  The
+    // initial goal/start refresh above still happens, but no other participant
+    // is repositioned for a self-target action.  Without this gate, live
+    // 0x2D7A91 action 1 (DQ9 0x0037, C1 -> C1) incorrectly moved previous
+    // Hero and future C0 even though ROM performs no goal/aux setter at all.
+    if (currentActorId == currentPresentationTargetId) {
+        return PlanCurrentActionRoutes(actionIndex);
+    }
+
     const std::array<std::uint16_t, 1> currentActionActorIds{currentActorId};
     std::array<bool, dq9::freecam::detail::kMaxPresentationActors> visited{};
     for (int futureIndex = actionIndex; futureIndex < actionCount; ++futureIndex) {
