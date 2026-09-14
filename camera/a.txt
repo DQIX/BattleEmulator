@@ -1884,3 +1884,13 @@ turn2のROM 0x009b では、setup中に C0 goal 57→56、C2 goal 78→61 は計
 しかもcurrent actor側は直前の CommitActionProgressRaw(...) が既に別処理で進めています。まずそれを確認して、CompleteActionPresentation() の全actor commitを削除し、ROMで必要なcurrent actorだけのcommitが既に足りているならno-opへ戻します。
 
 ROMで「future goalは作るがstartへ進めない」が直接取れているので、次はそこだけ製品へ落とします。CommitAllCurrentRouteEnds() 周辺を読んで、current actor専用commitが既にあるならそれへ差し替えます。なければ最小helperを追加します。
+
+2026-09-14 fresh differential confirmation: seed `0x2726D6`, position 1, turn 1, Hero DQ9 `0x0046`（けものづき）target C2。
+
+戦闘コアはROM/C++とも同じ5 action、同じ実HP差、同じcore terminal（ROM last-consumed `#76` / C++ next-position `77`）だった。最初の差はpresentationで、修正前C++だけがけものづきにHero route `[59,50]` を生成してfree-camera `0x0216FE40`を余計に呼んだ。ROMの同selector実測はHero presentation `start=59 goal=59 aux=60 target=42`, `FUN_0204A264(actor)=0`, route count `0` でfree-camera抑止。追尾方角の `0x0216F0E4` はROM/C++とも1回であり、ここは変更対象ではない。
+
+producerを一つ前まで追うと、DQ9 `0x0390` setupがfuture C2へ `goal=42` を作り、次のDQ9 `0x0013`（バギマ）selector時点でもROMはC2 `start=33 goal=42`を保持していた。その後のBACT resetが42をstartへcommitし、けものづきsetupはC2 start 42を使う。一方C++は全mapped actionで `BeginPresentationGoalSetup()` を呼び、バギマでC2 goalを33へ戻していた。
+
+Ghidra `batch_decompile` で `021DC9CC, 021E08BC, 02163F68, 021DC1D4, 0204A264` を同時確認した結果、ROMの `FUN_02163F68` はactdata record `+0x14` high nibbleが2または5のときだけ `021E08BC` goal setupを許可する。これは既存 `build_freecam_action_metadata.mjs` がROMから `targetScopeCode = word14 >>> 28` として採掘し、`freecam_fast_generated.hpp::kTargetScopeCode`へ生成済み。DQ9 19はscope 4なのでgoal setupをスキップし、DQ9 70はscope 2なので実行する。
+
+production fixは `SetupCurrentAndFuturePresentationGoals()` 冒頭で、mined `TargetScope::single` / `single_formation` 以外ならgoalを初期化せず既存goalからrouteだけ再計画するgate。BACT post effect・action history・tracking-camera処理は従来どおり残す。修正後の同一C++ turnはROMと同じterminal列 `0x0215962C @77 -> 0x0216F0E4 @78 -> 0x0216FE40 @79`、next-position `80`、けものづきroute `0` / aux `60` / target `42`になった。

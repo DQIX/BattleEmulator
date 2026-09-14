@@ -66,6 +66,12 @@ inline void AssertCameraMapping(const int action) noexcept {
     const std::uint16_t currentTargetId
 ) noexcept {
     using namespace dq9::freecam::fast;
+    // FUN_02163F68 gates 021E08BC goal setup with the ROM-mined
+    // actdata +0x14 high nibble: only scope codes 2 and 5 enter it.
+    if (currentAction.targetScope != TargetScope::single
+        && currentAction.targetScope != TargetScope::single_formation) {
+        return PlanCurrentActionRoutes(actionIndex);
+    }
     if (!BeginPresentationGoalSetup()) return false;
 
     const auto presentationRecordTargetId = [](const int commonActionId,
