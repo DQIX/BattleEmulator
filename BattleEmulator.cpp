@@ -2772,8 +2772,6 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     (*position)++; // lr: 0x021e54fc
                 }
                 (*position)++; // max: 100, lr: 0x021ed7a8
-            } else {
-                (*position)++; // max: 100, lr: 0x021ed7a8
             }
             baseDamage = 0;
             resetCombo(NowState);

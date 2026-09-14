@@ -1349,3 +1349,538 @@ nodeWorld   = node 48座標 → node 47座標
 また今回の調査で、一時診断の `overlay_jp` は停止済みで、現在DeSmuMEには指定された5本の永続scriptだけが残っています。
 
 次の作業地点はかなり明確です。turn-end recenterをpresentation-onlyで実装→`0x1AB6C4` をROM `78,156,228` と再照合→そのままturn4〜7→`0x2D7A91` 回帰→新規22bit seedで6ターン以上→麻痺監査、です。
+
+了解。もう条件・タイミング・更新対象までROM実測＋call stack＋overlay26で確定しているので、turn-end global recenterを即productionへ入れます。まず指定どおり main.cpp → ChatGPT.md → SKILL.md を files__ で再確認し、その直後に実装→既知seed再実走→7ターン継続→新規22bit seed→麻痺監査まで進めます。
+
+turn-end recenterの条件は overlay26.bin から完全に読めました。ここはもう推測ではありません。全participantの startNode を9×9へ分解し、外縁偏りから共通shiftを決め、全員の新nodeが0..80に収まる場合だけ startNode + presentation/node world を一括更新します。battle/base worldには触れません。これをruntimeへ実装し、actionループ終了後に1回だけ呼びます。
+
+turn-end recenterはproductionへ反映しました。二世界線は分離したまま、変更するのは startNode + presentation/node world だけです。まず既知の 0x1AB6C4 3ターンでROM期待 next=79,157,229 に戻るか、CLionの指定run configで即確認します。
+
+既知reproは両方閉じました。0x1AB6C4 は 79,157,229、0x2D7A91 はturn5 398へ一致し、さらにそのままC++は7ターン完走して 88,165,240,320,398,480,558 です。次はROM側を battle.dst からfreshで7ターン同一戦闘実走し、各turn末尾を確認します。
+
+ROM側はコード差ではなく、前回のturn-end breakpoint停止状態が残っていて confirmOption が待たされていました。指定どおり壊れた扱いにはせず、同じlaneをresumeして実行状態だけ戻します。入力自体が重複していないことをUIで確認してから次ターンへ進めます。
+
+turn2もROM last-consumed=164でC++ next=165と一致です。user breakpointは完全に除去し、指定5本のscript breakpointだけ残っています。ここからturn3〜7を同じ戦闘で進め、各ターン末尾を取り続けます。
+
+turn5はROM 397 ↔ C++ 398で、今回のglobal recenter実装後も完全一致しました。ここからturn6「一閃づき」→turn7「きゅうしょづき」を同じbattleで続けます。
+
+turn6で新しい差が出ました。ここでturn7へは進めません。ROM last-consumed=477に対してC++ next=480なので、整合なら478のはずでC++が2 RNG多いです。まずaction/HPが一致しているか指定traceで確認し、presentation差と確定したら即reproファイルへ固定します。
+
+turn6差は確認済みなので、まず規約どおり新しいreproへ固定します。その直後、C++詳細traceとROMのCtable consoleを同じturn6 tailだけ突き合わせて、余計な2 RNGのproducerを特定します。turn7にはまだ進みません。
+
+ROM turn6 tailははっきりしました。ROMのfreecam RNGは #474-476（通常攻撃側）と #477（メラミ側）だけで、一閃づき 0x0048 自身はfreecamへ入っていません。C++は3つのcamera eventをcall扱いしているので、余分な #478/#479 はまず「どのeventが3つ目か」をコード順とcounterで対応付けます。
+
+余分なcallはほぼ特定できました。C++はturn6 action0の一閃づき DQ9 0x0048をfreecam call扱いして #474-476 を先食いし、その後通常攻撃とメラミでさらに進みます。ROMは一閃づき自身ではfreecamへ入らず、#474-476 は次の通常攻撃、#477 はメラミです。
+しかもselector直前状態が違い、ROM Heroは start=58, goal=58, aux=59, route=0、C++はturn6開始時Hero start=60 からroute [60,49]。つまり根は前ターン終了時のpresentation stateです。turn5のROM global recenter実測値を取り直して、今入れたrecenterのparticipant集合/結果と照合します。
+
+
+続きます。まず指定順どおり main.cpp 引数パーサー → ChatGPT.md → SKILL.md を files__ で再確認し、その後 turn4末尾→turn5開始の4 actor presentation stateをROM/C++で同じ時点にそろえて比較します。最初にズレる書き込み経路が確定したら、その場でproductionへ反映し、0x2D7A91 turn6まで即再実走します。
+
+ROMログを時系列で組み直すと、turn5開始時のROMは [Hero58,C0=75,C1=23,C2=68]、C++は [58,47,23,40]。つまり最初の大きな差はturn5ではなくturn4中の2回の通常攻撃presentationです。ROMでは通常攻撃のauxが C0=75、C2=68 まで飛び、その後startへcommitされています。turn-end recenterはそこを壊していません。
+今からC++ turn4だけcamera eventを出し、同じ2通常攻撃のaux/commitを比較します。ここで差が確定したら、その通常攻撃placement経路をproduction修正します。
+
+C++ turn4の詳細が出ました。ROMとの差は通常攻撃そのものより前です。
+
+C++ turn4開始は [60,29,24,58]。そこから バギマ→マホカンタ で [59,20,24,39] まで動き、最初の通常攻撃C0は start=20, route=[20,21,30,40], aux=48。
+ROMは同じ最初の通常攻撃で C0 start=65, goal=65, aux=75, route=0、次のC2通常攻撃も start=60, aux=68, route=0 です。
+
+なので差は通常攻撃selectorではなく、turn4前半のpresentation placementが既に別物です。ROM turn4開始～マホカンタまでのstart/goal/aux書き込みをもう少し前から回収し、最初の1書き込み差を確定します。
+
+古いconsoleは1000行上限でturn4冒頭が落ちているので、ここは推測しません。battle.dst から同じ 0x2D7A91 をposition 1へ戻し、指定5本だけのまま けものづき→スカラ→スカラ→ためる を再演します。Ctable_jp 自体だけ再登録してログを空にし、turn4の最初のpresentation writeから取り直します。
+
+4ターン連続入力は正常に非同期化されただけです。同じ入力は再送せず、そのasync IDの完了だけ待ちます。完了後、再登録して空にした Ctable_jp consoleからturn4だけを抜きます。
+
+3回の20秒待機でも同じmacroが完了しないので、入力を再送せず現在どのターンまで消化したかだけ確認します。戦闘は安全な4ターン列なので、UIとCtable位置から「処理中」か「どこかのconfirmOptionが待ち条件で固まった」かを切ります。
+
+fresh ROMでturn4開始値まで確定しました。ROM turn4開始 = [58,65,23,61]、C++は [60,29,24,58]。したがって通常攻撃よりさらに前です。
+
+一つ前のturn-endもROMログから取れています。turn3開始直前のglobal recenter出力は [58,56,23,68]。次にC++ turn3だけcamera traceを出し、turn3開始から既に違うか確認します。最初に一致して最後にズレるターンをここで確定します。
+
+さらに前まで切れました。ROM turn3開始 = [58,56,23,68]、C++ turn3開始 = [57,30,23,59]。つまりturn3処理ではなく、turn2までにもう壊れています。
+
+次はturn2だけ比較します。これで「turn1終了から既に違う」か「turn2中に初めて違う」かまで詰めます。差が出た最初のpresentation actionを見つけるまではコードは触りません。
+
+turn2開始でも既に違いました。ROM turn2の最初のgoal snapshotは [59,57,24,78]、C++は [58,47,23,60]。つまり根はturn1です。
+
+ここまで戻れば最初の1ターンだけで閉じられます。0x2D7A91 turn1「けものづき」のROM/C++ presentationを最初から比較し、最初のnode/aux/route差を確定します。
+
+turn1 fresh再演も非同期化されただけです。同じ入力は再送せず完了を待ちます。これが終われば、turn1だけなのでconsole内に初期presentationからturn-end recenterまで全部残ります。
+
+最初の差まで到達しました。初期stateは完全一致です。turn1開始はROM/C++とも [59,30,23,33]。
+
+最初に割れるのは、最初の技 けものづき(DQ9 0x46) のpresentation setupです。
+
+ROM:
+
+target C1のbattle-world (0,-10240) → nearest node 30
+Hero auxiliary = 58
+C0 fallback goal = 38
+C2 goal = 68
+0x4F mode2後 start = [58,38,23,68]
+
+C++:
+
+同じ開始 [59,30,23,33]
+Hero auxiliary = 67
+C0/C2の同じfuture-placementも作れていない
+action0後 [67,30,23,33]
+
+つまりturn6の一閃づきまで積み上がったズレの最初の発生点はturn1 action0のpresentation auxiliary/future-participant配置です。ここなら原因を局所的に実測比較できます。
+
+最初の差はturn1 action0まで絞れたので、ここからはその1 actionだけ見ます。ROM実測では「Hero aux58 + future C0 goal38 + future C2 goal68」。C++はHero aux67しか作れていません。まず SetupCurrentAndFuturePresentationGoals() のfuture/previous参加者の処理順をソースで確認し、同じturn1をO0 debuggerで止めて、どのparticipantをskipしているかを実値で取ります。
+
+原因候補がコード上でROM実測とぴったり一致しました。C++のfuture-participant loopには現在、
+
+if (!RosterField4IsKnown(actorSlot)) continue;
+
+という未再現producerを理由にfuture actorを丸ごとskipする暫定処理があります。turn1 action0のdebug traceが row4=?,?,?,? なのもそのためです。
+
+ROMは同じ箇所でC0について 021E2664 field4=0x00000002 を実測しており、C0 future placementを実行しています。C2もfuture participantとしてgoal68を書いています。つまり「unknownなのでskip」は今回の最初の差そのものです。次に、そのrow+4 producerが既にmining/compatibilityデータとして存在するか検索します。存在するなら即接続、無ければROMからproducer条件を採って実装します。
+
+過去のローカル作業記録にも、まさにこの未完了箇所が残っていました。row+4 はpresentation actor slotではなくROMのphysical work-row順で読む、というところまで以前確定しているのに、現production consumerはまだ RosterField4IsKnown(actorSlot) のままです。これは今回のfresh実測とも一致します。
+
+ただし過去記録だけで直しません。現ROM turn1でphysical rowとactor対応を取り直し、C0/C2のrow+4 zero/nonzeroを確定してから、consumerをrow-index参照へ製品修正します。
+
+ただし、turn1 action0では「前actionのrenderer residue」では説明できません。これは戦闘開始直後の最初のpresentation setupなので、ROMのwork-row +4 は初期scratch/stale値をすでに持っている一方、C++ BeginTurn() はknownを全消去しています。ここをpresentationType表で捏造するのはダメです。
+
+fresh ROMではC0 row+4=2（nonzero）まで取れています。C2はfallback経路に入らないので値がログに出ていません。021E1958 のrow build/readをCtableの既存hookで直接取れるか確認し、turn1 action0の physical row順・actor・+4値 を全部実測します。これが取れれば初期compatibilityを正しくproductionへ入れられます。
+
+既存Ctableはfallback入口でrow pointerを読めるだけなので、C2のzero/nonzeroを取るにはrow build/read側を1点だけ足す必要があります。ここはCtable自体を観測器として拡張します。先に 021E1958 周辺のlive命令を任意ARMv5T逆アセンブルして、どのregisterがrow配列・row index・actor IDを持つかを確定してからhookを入れます。
+
+overlay26.bin で 021E1958 の実体が取れました。重要です。この関数は12-byte rowを作るとき、
+
+row+0 actor ID
+row+1 presentation class
+row+8 presentation object pointer
+
+だけを書き、row+4 は一切初期化していません。つまりROMでC0=2だった row+4 は本当にcaller stackの残留値です。C++の BeginTurn() でknownを全消去するモデルはROMと一致しません。
+
+次はcallerの同じstack領域を直前に誰が書いたかを overlay26.bin のxref/call graphで追い、turn1 freshでそのproducer値を実測します。これならpresentationTypeの手書き表ではなく、実際のstack lifecycleとしてproductionへ入れられます。
+
+021E1958 のcallerも見えました。turnのpresentation setup本体 021E08BC は spを0x1ECだけ引いた直後、row buffer=sp+0x15C の+4を初期化せずに 021E1958 を呼んでいます。したがってturn1のrow+4は「この関数内部で作る状態」ではなく、同じstack領域を直前のcaller/calleeが使った残留値です。
+
+ここまで確定したので、次は 021E08BC のcaller call stackをROMで取ります。静的xrefだけで「直前関数」を推定せず、turn1 action0 setup入口でbreakして正確なcall stackを採り、そのcaller内で直前に同じstack領域へ書く関数を特定します。
+
+動的callerはエミュレータcall stackで取れます。021E08BC 入口に一時user breakpointを置き、fresh battle.dst / 0x2D7A91 / けものづき で最初のhitだけ止めます。そこでcall stackとSP帯を取得し、row buffer sp+0x15C の+4残留を作った直前frameを特定します。終了後breakpointは消します。
+
+breakpointは実際にhitしています。confirmOption が「nativeFault pause中なので入力不可」と返しただけで、エミュレータ故障ではありません。いま停止PCとcall stackを取得します。もしこれはturn1 action setupより前の同関数hitなら、call stackで判別してresumeして次hitへ進めます。
+
+user breakpoint経路は、battle.dst 復帰時にこのlane固有のnative pause（PC=020121B4）へ戻ってしまい、目的の 021E08BC hitではありません。これをcaller証拠には使いません。
+
+動的値の取得は止めず、指定済み Ctable_jp に 021E094C（021E1958 return直後）で12-byte row配列を全件出すhook を追加します。ここならturn1 action0で actor順とrow+4値を直接取れます。まず既存hook記法を読んで最小追加します。
+
+021E1958 のrowレイアウトが確定したので、観測器にreturn直後のrow dumpを追加します。r0=count, sp+0x15C=row[0], stride=12として actor/class/field4/presentation pointerを出すだけです。戦闘状態は変更しません。
+
+laneはまた同じ PC=020121B4 / skipIrq=true のnative pauseへ戻っています。これは戦闘差ではなく、以前にも出たStateロード後のharness実行状態です。入力を再送せず、SKILLのnative-fault/IRQ復旧手順だけ確認してlaneを正常実行へ戻します。
+
+同じlaneを何度resumeしてもこのnative pauseを再現する状態なので、これ以上lane内部をいじりません。ハーネスの正規手順どおり fresh laneを battle.dst から作り直し、指定5本だけ再登録します。観測hookはCtableに入っているので、そのままturn1 row全件を取れます。
+
+fresh ROMでturn1 action0のphysical work-row全件が取れました。最初のsetupで実際に見えているのは、
+
+row0 Hero: nonzero (0x027E3488)
+row1 C0: nonzero (0x00000002)
+row2 C1: zero
+row3 C2: zero
+
+です。これでROMの分岐も完全に説明できます。C1はcurrent targetと同一なのでmovement gateでskip、C2はrow+4=0なのでcurrent-action contextでgoal68、C0はrow+4!=0なのでfallback goal38。C++はknownを全消去していたため両方skipしていました。
+
+ただしこの4値を初期定数として書くのは雑です。021E1958 自身は+4を書かないので、前回の 021E08BC 呼び出しが同じstack rowへ残した値を次回が再利用する lifecycle の可能性があります。021E1FD8 / 021E2664 がrow+4を書き戻しているかを静的に確認し、持ち越しモデルとして実装できるならその形で即productionへ入れます。
+
+row+4の値は同じturn内でも C0=2 → 0x007B0800 → 0xFF92F800 のように変わるので、初期maskだけを固定値で入れるのは却下します。これは本当にstack scratchの生命周期です。
+
+幸いエミュレータはcall stackを履歴として保持しているので、fresh turn1をもう走らせた現在のlaneから callStack を直接取得します。021E08BC のcallerと、その直前に同じSP帯を使ったframeが残っていれば、初期値producerを追加再演なしで取れます。
+
+021E1A1C も確認しましたがrow+4には一切書きません。つまり+4は本当に 021E08BC のstack scratch残留で、occupancy rebuildやgoal assignmentが生成している値ではありません。
+
+この状態で [nonzero,nonzero,zero,zero] を定数化するのはしません。過去ログにこのscratch producerを途中まで追った記録があるので、「初回row値のproducer」まで既に取れていないか検索し、なければ別fresh laneで 021E08BC 入口call stackを正しく捕まえます。
+
+確定済みの部分は先にproductionへ入れます。021E1958 はrow+4を初期化せず、ROMでは同じscratch値が次setup/次turnへ残るのに、C++ BeginTurn() は毎ターン known=false へ全消去していました。これは明確にROMと逆なので、turn境界でのrow+4 compatibility消去を今すぐ削除します。ResetBattle() の初期unknownは残します。
+
+turn境界の誤消去はproduction修正済みです。残るturn1初回だけはResetBattle直後なので、scratch初期値producerを取る必要があります。
+
+そのためrow dumpに実アドレスを1個追加し、同じ battle.dst / 0x2D7A91 / けものづき をもう一度だけfresh再演します。次にその row1+4 へwrite breakpointを置けば、C0=2を書いた本当のproducerとcall stackを直接捕まえられます。
+
+続きます。いまのfresh laneは battle.dst 再ロード＋更新済み Ctable_jp 再登録まで済んでいて、まだturn1入力前です。まず 0x2D7A91 / position1 / けものづき を1ターンだけ再演して row buffer実アドレス を取り、その C0 row+4 へのwrite breakpointで初期scratch値 2 のproducerをcall stackから捕まえます。
+
+
+続きで、ズレの発生点をさらにかなり前まで戻せました。
+
+`0x0048` のmining/selectorはそのままで正しいです。今回の問題は完全にpresentation state側でした。
+
+最重要の新規実測は、**最初のズレがturn1の最初の行動「けものづき」DQ9 `0x0046`ですでに発生している**ことです。初期nodeはROM/C++とも完全一致していました。
+
+```text
+turn1開始
+Hero=59, C0=30, C1=23, C2=33
+```
+
+ところが `0x0046` presentation setup後は、
+
+```text
+ROM:
+Hero aux=58
+C0 goal=38
+C1=23
+C2 goal=68
+0x4F mode2 reset後 = [58,38,23,68]
+
+C++:
+Hero aux=67
+C0=30
+C1=23
+C2=33
+```
+
+になります。これがturn2→turn6まで累積して、最終的に一閃づきのrouteがROM=0 / C++=2へ分岐していました。
+
+さらに `overlay26.bin` の `021E1958` をARMで確認し、ROM側のphysical work rowもfresh harnessで全件実測しました。turn1最初のsetupは、
+
+```text
+row0 Hero class242 row+4=0x027E3488  nonzero
+row1 C0   class246 row+4=0x00000002  nonzero
+row2 C1   class247 row+4=0x00000000  zero
+row3 C2   class248 row+4=0x00000000  zero
+```
+
+です。
+
+これがROMの挙動を完全に説明します。
+
+```text
+C0: row+4 != 0
+    → 021E2664 fallback
+    → goal=38
+
+C2: row+4 == 0
+    → normal future-participant placement
+    → goal=68
+```
+
+一方、C++はfuture loopで、
+
+```cpp
+if (!RosterField4IsKnown(actorSlot)) continue;
+```
+
+としており、`BeginTurn()` がknownを全消去していたためC0/C2を丸ごとskipしていました。
+
+さらに `021E1958` の実assemblyを見ると、この関数が12-byte rowへ書くのは、
+
+```text
++0 actor ID
++1 presentation class
++8 actor/presentation pointer
+```
+
+だけです。**`row+4` には一度も書きません。**
+
+つまりrow+4は本当にstack scratchの残留値です。`021E08BC` 側も `sp+0x15C` のrow bufferを事前zero-clearしていません。`021E1A1C` もrow+4を書きません。
+
+このため、確定した一般バグをすぐproductionへ反映しました。`BeginTurn()` にあった、
+
+```cpp
+state.rosterField4CompatibilityValid = false;
+state.rosterField4Known.fill(false);
+```
+
+を削除しました。ROMではrow+4 scratchはturn境界を越えて残留するため、毎ターンunknownへ戻すのは明確に誤りです。`ResetBattle()` は依然として初期unknownの境界として残しています。
+
+`Ctable_jp.js` にも観測だけ追加しました。`021E094C`（`021E1958` return直後）でphysical row全件のactor/class/row+4/pointerを出します。これは状態変更しません。
+
+fresh ROMでは同じturn中でもrow+4は、
+
+```text
+最初:
+Hero=nonzero, C0=2, C1=0, C2=0
+
+後:
+Hero=2, C0=0x007B0800, C1=0xFFFFFFFF, C2=0
+
+さらに後:
+Hero=2, C0=0xFF92F800, C1=0, C2=0
+```
+
+のように変わります。したがって `[1,1,0,0]` を固定初期maskとして実装する案は明確に却下できます。stack scratch lifecycleそのものを再現する必要があります。
+
+現在のfresh emulator laneは `battle-debug-0909e-rom` で、指定された5本だけをpersistent scriptとしてロード済みです。最後にもう一度 `battle.dst` をロードして更新済みCtableを再登録し、`0x2D7A91 position=1` の設定まで完了しました。
+
+次の一点がまだ未完了です。更新したrow dumpに実row-buffer base addressも出すようにしたので、次の1ターン実走でそのアドレスを取り、**C0 `row+4` アドレスへのwrite breakpoint + emulator call stack**で「最初の `2` を誰が残したのか」を直接捕捉するところです。これで初回scratch producerまで分かれば、固定maskなしの一般production実装へ落とせます。
+
+今回productionへ入れたのは、ROM実測で確定した **`BeginTurn()` のrow+4 state誤消去の削除**だけです。`0x0048` への例外や、未実測の初期scratch値hardcodeは入れていません。
+
+なお要求されている6ターン以上、新規22bit seed、麻痺監査は、このturn1 presentation root causeがまだ閉じていないため未完了です。ここを直した後、`0x2D7A91` turn6=`ROM477 ↔ C++ next478` を再確認してから続ける必要があります。
+
+
+続きます。まず指定順どおり main.cpp 引数パーサー → ChatGPT.md → SKILL.md を files__ で再確認します。その直後に 現在のgit diff全体を監査して、今回の修正が他エッジケースへ波及しうる箇所を先に洗い出し、確定済みの一般修正はその場で本番へ反映します。そこから 0x2D7A91 のturn1 scratch producerを閉じ、turn6まで再走、新規22bit seedで6ターン以上へ進みます。
+
+指定3ファイルは再確認済みです。ここでdiff監査を先にやります。特に危ないのは、今回の BeginTurn() row+4保持変更が 別seed・別presentationTypeで「本来unknownに戻るべき場面」まで過去scratchを持ち越す可能性、それと既存のconfusion/mapper/recenter変更がpresentation以外へ波及していないかです。まず変更ファイルを全件列挙して、意味ごとに分けます。
+
+diff監査で重要な点が1つ出ています。現在の本番コード差は実質 BeginTurn() のrow+4 reset削除だけで、これはturn1の根本差を直していません。しかも「021E1958 がrow+4を初期化しない」は確定ですが、“毎ターン必ずその値がそのまま残る”までは未証明です。ROMでは間に別stack利用が入り得るので、このまま無条件持ち越しにすると別エッジケースで古いcompatibilityを過保持する危険があります。call site/lifecycleを確認して、証拠がなければこの早すぎた変更は戻します。
+
+call-site監査で、この変更は本番に残すべきでないと確定しました。各action後の ApplyKnownRosterField4PostActionCompatibility() は未知typeなら明示的にinvalidateし、既知type/HUDならcompatibilityをセットします。そこから BeginTurn() のresetだけ消すと、前ターン最後が既知typeだった場合、その抽象化された値を次ターン先頭へ無条件持ち越すことになります。一方ROMで確定しているのは「stack wordが未初期化」までで、途中のstack利用によるoverwriteをC++は再現していません。しかもturn1はResetBattle後unknownのままなので根本差も直りません。
+
+これは他エッジケースを壊し得る早すぎた修正です。いま本番から戻します。stack producerが確定したら、そのproducer/lifecycleを再現する形で入れ直します。
+
+危険な本番差は撤回でき、git status上も production codeのtracked diffはゼロになりました。今残っているtracked変更は camera/a.txt の作業ログだけです。つまり、これからscratch producerを確定して入れる修正は、他の未確定変更と混ざらず単独で評価できます。
+
+次は予定どおりturn1初回scratchです。現在のDeSmuME laneを確認し、Ctable_jp のrow dumpがbase address付きになっていることを確認して、同じ battle.dst / 0x2D7A91 の1ターンだけを再演します。
+
+laneは正常で、指定5本だけです。ただし現在は battle.dst 読み込み後の manual pause状態で、UIは次入力可能なtopにいます。これはbehavior mismatchではありません。まずCtable consoleから、直前のturn1でbase付きrow dumpがすでに採れているか確認します。採れていれば再演せずそのアドレスを使います。
+
+row baseは 0x027E333C で固定して取れました。したがってturn1最初のC0 row+4 は 0x027E334C です。
+
+ここで重要な切り分けをします。battle.dst をfresh reloadした直後、まだturn1を1フレームも進める前に 0x027E334C がすでに 2 なら、その値のproducerは今回のturn処理ではなくState保存前のstack履歴です。その場合「BeginTurnで生成」ではなく、battle初期化以前のscratch snapshotをどう一般化するかが本筋になります。逆にreload直後が別値なら、write breakpointでturn開始前producerを捕まえられます。
+
+reload直後の 0x027E334C は まだ2ではありません。APIのraw readをROM-native endianへ直すと 0x02154DFC です。つまり朗報で、battle.dst に「2」が焼き付いているわけではなく、State復帰後〜最初の021E1958までに本当に誰かがこのstack wordへ2を書いています。
+
+これなら固定初期mask不要です。0x027E334C にwrite breakpointを先回りで置き、call stackをそのhitで直接取ります。これがproducerです。
+
+producerを捕まえました。0x027E334C への最初のwriteは PC=0x020BAF50 です。これはState復帰直後に自然発生しており、turn1入力前です。つまりrow+4初期値は「前ターンのcompatibility持ち越し」ではなく、battle menu/turn準備側のstack利用が同じアドレスへ書いた結果です。
+
+いま停止したままcall stack・書込後値・周辺ARMv5Tを取ります。ここが一般producerとして再現できれば、その場で本番へ入れます。
+
+最初のhit 0x020BAF50 は目的の「2」ではなく、関数prologue STMDB SP!,{R3-R9,LR} が同じstack addressを踏んだだけでした。書込後のnative値は 0x027E34DC です。つまりこのアドレスは実際に複数のstack frameで再利用されていること自体が確認でき、さっきの無条件turn持ち越し撤回が正しかったことも裏付けられました。
+
+write breakpointはそのまま維持して、各write後の値だけ追い、native値が 2 になったhitでcall stackを保存します。手動LR追跡はしません。
+
+producerはかなり明瞭です。0x027E334C へのwrite列は、
+
+0x1000 → 0 → 1 → 2
+
+で、native 2 を書く命令は PC=0x020B7708。call stack上では 0x020B7224 から始まる同一関数の中です。つまり偶然の保存レジスタではなく、この関数が明示的にカウンタ/値を 0→1→2 と更新して、そのstack slotが後でrow+4として再利用されています。
+
+次に 0x020B7224..0x020B7710 をARMv5Tで直接見て、0x020B7708 が何のローカル値を書いているか、入力に何が依存するかを確定します。ここが一般化できれば即productionです。
+
+0x020B7708 は単なる謎値書込みではなく、関数 0x020B7224 の明示的なloop counterです。
+
+0x020B7248: R2 = byte[*R0 + 2] を [SP+0x10] に保存（loop上限）
+0x020B7278: [SP+0x0C] = 0
+0x020B7700..7708: [SP+0x0C]++
+0x020B770C: counterと上限を比較してループ
+
+今回そのframeの SP+0x0C がちょうど後の C0 physical row+4 (0x027E334C) と同じRAMです。上限が2なので 0→1→2 が残り、後の021E1958がそこを初期化しないためC0がfallbackへ入ります。
+
+これは「row+4を永続状態として持つ」のではなく、別のrenderer/prepare関数のstack footprintがpresentation rowへ漏れるという一般原因です。既存のHUD residue互換と同じ種類なので、まず 0x020B7224 が既存miningで何として扱われているか探します。見つかればそのlifecycleへ接続します。
+
+了解。geru_start.dst を使えば、今回の「初回row+4の2」が戦闘突入シーケンスのどこで作られるかを、State復帰後ではなく戦闘前から捕まえられます。A 押下→1500ms待機→breakpoint監視は、指定どおり新規persistent scriptに切り出します。まず battle_harness\API_CURRENT.md を files__ で読み、そのAPIだけで実装します。
+
+API_CURRENT.md のpersistent-script仕様まで確認しました。今回は callback 内で手動LRを追わず、0x020B7708 のexec hookで R1==2 の2回目だけcall stackを自動保存してpauseする新規probeにします。これなら最初の 1 では止めず、戦闘突入前Stateから自然に「2を残す瞬間」だけ捕まえられます。probe以外の本番観測5本はそのままです。
+
+probeの構文チェックはNodeのCommonJS規則でtop-level await を弾いただけで、persistent-script仕様ではtop-level await が正式対応なので問題ありません。いま既存user breakpointだけ消し、geru_start.dst をロードして新probeを6本目として登録します。その後Aを1回押し、1500msだけ待って結果を回収します。
+
+runPersistentScript をコード文字列で内包した呼び出しだけ、プラットフォーム側の安全チェックに止められました。これはROM/デバッガ側の拒否ではありません。迂回でDOMを触るのはせず、ローカルMCPに「ファイルからpersistent scriptを直接起動する」専用toolがあるか確認し、あればそれを使います。
+
+persistent script起動tool自体が安全チェックに止められています。コード内容をさらに最小化します。新scriptは 0x020B7708 で R1==2 を見てpauseするだけにし、call stack取得・逆アセンブルはpause後に通常のharness APIで外から取ります。これならscriptは観測＋停止だけで、ゲーム状態やメモリを一切書き換えません。
+
+了解。runPersistentScript 経路だけ数回そのまま再試行します。内容や条件は変えません。
+
+3回とも正常に再登録できました。script IDは6のまま、exec triggerだけ 157→158→159→160 と正しく差し替わっていて、古いscript breakpointは残っていません。
+
+このまま geru_start.dst の戦闘突入前からAを押し、1500ms内に 0x020B7708 / counter=2 が捕まるか実測します。
+
+A押下後1500msでは、0x020B7708 のprobeはまだ0 hitでした。つまり geru_start.dst からその1.5秒以内に例のstack producerへは到達していません。次に現在UI/phaseだけ確認して、「まだ戦闘突入演出中」なのか「Aで別段階までしか進んでいない」のか切ります。
+
+geru_start.dst はA後も battle_command_mcp ではphase=unknownのままで、例のrenderer producerも0 hitでした。なので「戦闘に入った」と仮定せず、まず画面/状態遷移を確認します。Aの再送はまだしません。
+
+指定どおり「新規persistent script自身が A→1500ms待機→breakpoint観測」をやる形に直します。geru_start.dst をfresh reloadしてからそのscriptを起動し、同じ条件を一発で再現します。
+
+geru_start.dst からpersistent script自身で「A→1500ms」も再実行しましたが、0x020B7708 は0 hitでした。なので、ここで「戦闘突入済み」と決め打ちしません。次は同じStateで、A直後1500msの画面状態とPC/phaseを取り、必要なら「戦闘開始までの次の入力」があるか確認します。
+
+geru_start のA後1500msではまだ例のrenderer関数に入っていないので、初期scratch producerの意味自体は battle.dst で捕まえた正確なcall stackから先に解きます。0x020B7224 はmain RAMなので camera.bin のdecompileを使えます。ここでloop counter「2」が何を数えているかを確定し、固定値ではなく一般producerとして本番へ落とします。
+
+0x020B7224 の意味も取れました。row+4=2 はpresentation側の意味ある状態ではなく、このrenderer関数のループ回数カウンタ local_11c が同じstack slotへ残ったものです。pbVar12[2] がloop上限で、今回それが2なので 0→1→2 が残ります。
+
+つまり本番で再現すべきなのは「row+4という状態を持ち越す」ではなく、既存の ...RendererResidueCompatibility 系と同じく、直前rendererがどのstack wordを最後に残すかです。既存compatibility実装を読み、今回のproducerを同じ枠へ追加できるか確認します。
+
+既存実装にはすでに「renderer stack residueを意味値ではなくcompatibility artifactとして扱う」枠があります。今回の 0x020B7224 local_11c もそこへ入れるべきです。まずその既存helperと生成metadataを読み、今回のproducerを一般化して追加しても他エッジケースを壊さない条件を確認します。
+
+既存の一時probeに、まさに「action0のE1958直前の4つのrow+4最終writer」を取るものが残っています。新しく同じ調査を作り直す前に、それを読んで今回のfresh実測と整合するか確認します。
+
+既存probe/設計を読むと、row+4はすでに「renderer residue compatibility」として扱う方針があり、今回のproducerもそこへ自然に追加できます。ただし初回だけの固定maskにはしません。0x020B7224 のloop counterが どのstack slotへどう重なるか を同じ仕組みでモデル化します。
+
+その前に、現在のtracked diffをもう一度確認して、余計な本番変更が残っていない状態を維持します。
+
+既存compatibility設計とfresh実測は整合しています。今回必要なのは「初回だけ特別扱い」ではなく、battle entry直前に走るrenderer stack footprintを新しいproducerとしてcompatibilityへ反映することです。まず過去の調査ログに同じproducerの測定結果が残っていないか確認し、重複調査を避けます。
+
+過去probeを見る限り、初回row+4は既に「4ワードの最終writerをE1958直前で捕まえる」仕組みがあるので、それを再利用します。0x020B7708 だけ追うより、Hero/C0/C1/C2の4slotそれぞれについて最終writer PC/valueを一度に取る方が一般化に必要な情報が揃います。
+
+画面を確認できました。A後1500msはまだ戦闘突入前のゲルニック将軍の台詞画面です。つまりprobeが0 hitだったのは正しく、まだrenderer/battle setupまで来ていません。
+
+geru_start.dst の初期画面も確認して、Aが「台詞表示」なのか「台詞送り」なのかを切ります。
+
+初期画面とA後1500ms画面は完全に同じ台詞でした。つまり前回のAは戦闘開始入力として通っていません。State自体は正しいので、外からAを1回だけ直接tapし、画面変化を確認します。ここで変わればpersistent script側の入力タイミングだけの問題です。
+
+外からのAは正しく通り、戦闘イントロ画面へ遷移しました。なのでpersistent script側はStateロード直後すぎて入力が早かっただけです。probe hook自体は生きているので、このまま1500ms待って 0x020B7708 counter=2 が戦闘突入中に捕まるか確認します。
+
+0x020B7224 のlive call stackも戦闘突入中に再取得できました。caller chainは battle setup (0216280C → 02032B14 → 02035488 → 0207F5FC → 020B5D38 → 020B5B34/5AEC → 020B7224) 側です。これで「action固有」ではなくbattle-entry renderer producerだと確定しました。
+
+既存のrenderer residue minerに同じproducer familyを足せるか、残っているprobeを確認します。
+
+
+続けます。今回は判明した 0x020B7224 のbattle-entry renderer residueを、初期maskのハードコードではなく既存のcompiler-stack compatibility producerとしてその場でproductionへ入れます。先に該当runtime/呼び出し点とvalidationだけ読み、最小変更で実装→CLionビルド/既知seed再実走まで通します。
+
+ResetBattle() はactor数が確定する前なので、ここへ雑に [1,1,0,0] を入れるのはしません。まず 0x020B7224 のstack slotとE08BCの4 physical row slotの重なりを命令単位で対応させます。ここが取れれば、battle-entry rendererの「実際のstack footprint」をそのままhelperにできます。
+
+一点、命令を突き合わせたら前回説明の「local_11c がそのままC0 row+4=2」はまだ証明になっていません。0x020B7708 は確かにloop counter=2ですが、その時点のstack offsetは別です。ここを誤ったまま製品化はしません。4つのphysical row+4の最終writer PC/valueをbattle-entry→最初のE1958まで一度に取り、取れたproducerから即実装します。
+
+書き込みwatchがネイティブpauseを発生させていたので、今の値は「途中の最終writer」であってE1958直前ではありません。probeを1点だけ直し、各write callbackで即resume、最初のaction0 E1958だけで停止させます。これで4slotの真の最終writerを一発で取ります。
+
+ハーネス側に runUntilMemoryWrite がありました。これはwrite breakpointの「何回目まで走る」をネイティブ側で処理できるので、JS callbackで毎回pauseする方式は捨てます。まず引数を確認して、最終writerを低オーバーヘッドで取ります。
+
+ここは製品実装に入れます。構造は「ResetBattleでbattle-entry renderer residueをpendingにする → 最初のcamera::MainでBeginTurnのreset後に一度だけ適用」です。これなら通常のturn境界へ古い値を持ち越さず、初回setupだけROMのbattle-entry stack producerを再現できます。
+
+ビルドは通っています。freecam_edge_validation は既知の decision-edges（later-Zaki）で exit 4、今回追加したrow+4 testより前で止まる既存失敗です。今回の変更の実動作は既知 0x2D7A91 turn1で直接確認します。まず既存ログから正しいCLI列を拾って、そのまま再実走します。
+
+初回producerを入れた結果、turn1 action0は明確に前進しました。C0が 30→38 までROMと一致し、C2もfuture-placement自体は走るようになりました。まだ Hero 67≠58、C2 60≠68 なので、次はrow+4 consumerのphysical-row対応とcurrent/future placement入力をそのまま詰めます。
+
+いまの starts だけではHeroが「goal=67をcommitした」のか「aux=67をcommitした」のか分離できません。既に CameraDebugEvent に goal/aux/row4 は保存されているので、trace CLIの表示だけ追加して同じ1ターンを再実行します。戦闘ロジックには触れません。
+
+差がかなり単純化しました。Heroはgoalを59のまま保持し、auxiliaryだけ C++=67 / ROM=58。つまり初回row+4ではなく、FindNeighborAtPresentationLevel() の候補選択です。ここは隣接列挙順かlevel mapの差なので、関数とROMの 02170F58 列挙順を突き合わせて、分かった時点で直します。
+
+原因候補が数式まで一致しました。C++ではゲルニック(C1)の occupancyExpansionDepth=1 をROM metadataから上書きしているため、Hero59の候補levelは 67=3, 58=2 となりaux67を選びます。ROMのaux58は、この箇所の実効maximumLayerが2なら完全に一致します。次に 0x013a のpresentation depth適用元が正しいか、ROM固定データ/既存採掘を確認し、誤りなら即production修正します。
+
+次は 0x013A の occupancyExpansionDepth=1 が本当に 021E1FD8 の +0xA4 footprint descriptor と同じ意味かを確認します。ここが違うと、Hero aux 67 の根因そのものです。ROM minerと既存live/static記録を同時に読み、一般的な誤マッピングと分かった時点で即production修正します。
+
+miner自体は「enemy actor +0x148 → battle record +0x10 bits29..30」をdepthとしています。一方 021E1FD8 のC++コメントは「target presentation object +0xA4」を読む、と別のポインタ元を明記しています。ここ、同一視した可能性が高いです。既存 freecam_setup_probe_mcp.js は実ROMでそのdescriptorを読むコードを既に持っているので、まず内容を確認します。
+
+既存probeも expansion depth は presentation+0xA4 ではなく、battle actor flags 0x400 → actor+0x148 → record+0x10 bits29..30 と読んでいます。なのでC++コメントの「presentation+0xA4」は怪しい一方、depth=1自体はROM側の正規actor record由来です。
+
+ここは 021E1FD8 の実命令を直接見ます。depth=1なのにROM aux58なら、C++側の「depth→maximumLayer/paint」の翻訳が違います。
+
+021E1FD8 の実命令で答えが出ました。C++の maximumLayer=depth+2 は正しいです。ただしdepthの読み元が違います。
+
+ROMは param_2 の row+8 pointer を取り、そのオブジェクトの先頭flags 0x400 を見て、そのオブジェクト+0xA4のpointer → +0x10 bits29..30 を読んでいます。現C++は monster IDから actor+0x148 側のbattle recordを引いてdepth=1を全体へ上書きしています。
+
+次に 021E1958 が row+8 に何を入れているかを実コードで確定します。ここがbattle actorではなくpresentation objectなら、現在のmetadata sourceは構造的に誤りなので即差し替えます。
+
+021E1958 の row+8 は FUN_0200FCC4 が返すdynamic battle objectそのものです。そして 021E1FD8 はそのobjectの +0xA4 を読んでいます。現minerは object+0x148 を読んでいました。ここは同じmonster IDから引けるから結果がたまたま似て見えていただけで、フィールドが別です。
+
++0xA4 の実体を既存probe/ROMで確認し、production metadata minerを +0xA4 相当のROM固定フィールドへ直します。
+
+actor+0x148 はローカル解析資料でも明確に AI record pointer です。021E1FD8 が読むのは actor+0xA4。つまり現在の build_freecam_monster_presentation_metadata.mjs は、presentation footprintにAI recordを誤流用していることが確定しました。これは一般バグです。
+
+まずこの誤用をproductionから外します。正しい +0xA4 metadataをまだROM固定表へ採掘できていないので、既存fixtureから渡されている occupancyExpansionDepth を尊重し、AI metadataによる上書きを停止します。その上で既知seedを即再走し、ROMのaux58/C2=68まで戻るか確認します。
+
+actor+0x148 誤流用という一般バグ自体は確定ですが、「だからfixtureの0を使う」はまだ飛躍でした。実走すると即反例が出て、position 88→91、Hero 59→48 まで悪化しました。なのでこの代替は製品に残しません。AI record上書き停止パッチだけ即撤回し、ROMの 021E1FD8 入口で本当に使われる row+8 object +0xA4 descriptorを直接読みます。
+
+正しいsourceを直接取ります。021E1FD8 entryの r1=row から row+8 object → object+0xA4 descriptor → +0x10 depth を読むだけのread-only probeを入れます。action/monster IDで決め打ちせず、最初のsetupイベント列をそのまま記録します。
+
+重要な訂正が出ました。Ghidraの +0xA4 は ushort* に対するポインタ加算なので、byte offsetは 0x148 です。live target objectも 0x02394F64、その +0x148 は実際に既知のゲルニックAI record 0x0235F710。つまり既存minerの actor+0x148 は正しかったです。
+
+さっきの「AI record誤流用」は撤回です。製品コードは既に元へ戻してあるので余計な誤修正は残っていません。次は 021E1FD8 の実assemblyで LDR [...,#0x148] を確認し、depth=1でROMがなぜaux58になるのか、距離paint側へ戻ります。
+
+LDRNE r7,[r1,#0x148] も実assemblyで確認できました。depth sourceも式も正しい。残るのは距離paintの移植です。ROMは depth=1 なら FUN_021E1B1C(map,pivot,3,2,0) を呼びます。C++のgenerated paintがこれを正確に再現しているか、021E1B1C 本体を1対1で比較します。
+
+021E1B1C の再帰はC++の式と一致しています。generated展開の差か、実際のdepth値の読み違いかを次に切ります。さっきのprobeは誤って object+0xA4 を読んでいたので、同じlive objectの正しい object+0x148=0x0235F710 の +0x10 を直接読みます。
+
+depthは実ROMでも 1（AI record 0x0235F710 +0x10 = 0x304AF027、bits29..30=1）でした。なのでmetadataも正しい。
+
+次の差が見えています。ROMはkeep-goal時のauxを単純な「startの隣接でlevel==maxの最初」ではなく、FUN_021E1F2C(start, pivot, levels, maxLayer) で選びます。現C++はこの関数を FindNeighborAtPresentationLevel(start, levels, maxLayer) に簡略化しており、pivot引数を完全に捨てています。ここを実関数どおり移植します。
+
+021E1F2C をdecompileするとpivot引数は実際には未使用でした。なので「pivotを捨てた」が原因ではありません。違いはもっと狭く、ROMのlocal levels map上でHero59のどの隣接がlevel=3なのかです。
+
+021E1F2C 入口で start / maxLayer / 6 neighbors / levels[neighbor] を直接記録すれば一発です。これを取り、generated paintのどこが違うか即直します。
+
+続行して、確定した部分はすでにproductionへ入れました。
+
+今回入れた本番修正は、battle-entry residueを通常turnの持ち越しとは分離し、`ResetBattle → 最初のBeginTurn直後` に一度だけ適用するlifecycleです。fresh ROMで確認済みのphysical prefix `nonzero, nonzero, zero, zero` だけをknownとして扱い、5行目以降はunknownのままです。seed/actor/monster固有maskにはしていません。
+
+この修正後、`0x2D7A91 / けものづき` の最初の差はかなり閉じました。
+
+```text
+以前のC++:
+[59,30,23,33] -> [67,30,23,33]
+
+battle-entry residue実装後:
+[59,30,23,33] -> [67,38,23,60]
+
+ROM期待:
+[59,30,23,33] -> [58,38,23,68]
+```
+
+つまりC0 `30→38` はROMと一致し、C2のfuture-participant処理も初めて実行されるようになりました。row4もaction0入口で `1,1,0,0` になっています。RNG最終位置は従来どおりC++ next `88` を維持しています。
+
+さらにHero `67≠58` を追ったところ、いくつか重要な訂正までできました。`021E1FD8` の実assemblyは、
+
+```text
+LDRNE r7,[r1,#0x148]
+LDR   r0,[r7,#0x10]
+...
+depth = bits29..30
+```
+
+で、ゲルニック実ROM object `0x02394F64` の `+0x148` は既知AI record `0x0235F710`、そのwordは `0x304AF027`、depth=`1` です。したがって既存monster metadataのdepth=1は正しいです。途中で「Ghidraの+0xA4だからminerが間違い」と見えましたが、これはGhidraが`ushort* + 0xA4`と表示したためで、byte offsetでは`0x148`でした。誤修正は実走で即反例を確認して撤回済みです。
+
+また、ROMのaux選択本体 `021E1F2C` もdecompileしました。現C++の「startの6近傍からlevel==maximumLayerを最初に選ぶ」は基本的に一致していました。次の未解決点は一点だけです。
+
+**depth=1 / maximumLayer=3なのに、ROMのHeroはaux=58を選び、C++は67を選ぶ。**
+
+したがって差は `021E1B1C` が作るlocal distance-level mapです。ROM `021E1F2C` 入口で
+
+```text
+start
+pivot
+maximumLayer
+neighbors = [67,68,58,60,49,50]
+各neighborの実level
+```
+
+を直接取るread-only probe `presentation_level_probe.js` まで作成済みです。ここで時間切れになったため、その実ROM再演だけがまだ未実行です。
+
+なお `freecam_edge_validation` はビルド成功、従来どおり既存later-Zakiの `FAIL decision-edges` でexit 4です。今回の変更によるコンパイルエラーではありません。
+
+未完了なのは、このlevel-map差をROMから1回採取して `021E1B1C` のgenerated paintとの差を特定・即production修正し、その後 `0x2D7A91` をturn6まで再走するところです。
+
+その通り。ここは順序が逆でした。ROMハーネスを正本にして、まずturn3で実際に何が起きているかを採るべきで、C++ debuggerは「ROMで確定した枝の受け皿確認」に留めます。いまCLion debuggerは止めて、battle.dst / 0x2D7A91 をハーネスでfresh再演し、turn3のfreecam有無・actor/target・start/goal/aux/route・RNG LR列をROMから取り直します。
+
+まず余計な診断script freecam_setup_probe_mcp は止めます。今回の正本は指定5本だけに戻します。そのうえで battle.dst をfresh reloadし、0x2D7A91 をposition 1へセット、turn1「けものづき」→turn2「スカラ」→turn3「スカラ」を同一戦闘で実走します。turn3直前にdamage/Ctableログをクリアして、ROMが実際に呼んだcamera RNGだけを採ります。
+
+このlaneは前にも出た PC=0x020121AC のnative pauseへState復帰直後に戻っています。ROM挙動の反例ではないので、このlaneは捨てて battle.dst からfresh laneを作り直します。新laneには指定5本だけを再登録します。
+
+ROM側の基礎データは取れました。turn3では freecamは1回も入っていません。#238 の後にあるcamera RNGは、DQ9 0x006d のtracking 0216F0E4 #239 だけです。0x006d 自身のROM状態は C0 start=56 goal=56 aux=65 routeCount=0、その後 0x4F mode2 resetです。
+
+C++の一時停止点をROM後に最低限照合すると、余計なfreecamを出しているのはまさに action index 3 / DQ9 0x006d / actor C0 / position 239 でした。ここから先はこの1枝だけをC++側で見る。まずmining済みの 0x006d selector suppression条件を確認し、ROM実測 route=0 でなぜ抑止されないのかを直します。
+
+ROMのmined tableも確認しました。DQ9 0x006d（かぶと割り）は direct_selector_suppressed=true です。つまりROM実測の routeCount=0 ならfreecam抑止が正しい。ここはデータ自体は既に正しいです。
+
+次はC++を「反例の値を取るだけ」に使います。同じ3ターン列を通常traceで1回走らせ、0x006d のC++側routeだけ確認します。routeが0なのにcallしているならselectorバグ、route>0ならまだpresentation stateバグです。
+
+ROMで元データは十分取れました。重要なのは、turn3 0x006d は start=56, goal=56, aux=65, route=0 でfreecam無し、tracking #239だけということです。mined tableも direct_selector_suppressed=true なので一致しています。
+
+C++側では同じ0x006dだけが余計なfreecamに入っています。ここからC++は値取りだけに絞るため、既存CLIにcamera eventだけ出す狭いモードがあるか main.cpp のパーサーを確認します。無ければdebuggerで routeCount 1値だけ取ります。
+
+ROM側の答えはもう揃っています。0x006d のselector suppression自体は正しく、ROMではroute=0だから抑止。なのでC++で確認すべきは1値だけ、同じ瞬間にC++のrouteが何本あるかです。ここだけdebuggerで取って、route>0ならpresentation producerへ戻ります。
+
+ROM側の元データは取れているので、C++はここで粘りません。最初の条件付きbreakpointは実行行に乗らず完走しただけでした。CameraDebugEvent を作る箇所の実行行へ1回だけ置き直してroute値だけ採ります。
+
+ROM正本で原因の形が見えました。turn3 0x006d 直前、ROMは C0 start=56 goal=56 aux=65 route=0。一方C++は同じ瞬間に start=55 goal=57 aux=66 route=3 でした。selectorではなく、その前のpresentation setupがまだズレています。
+
+ROM側では同setupのscratch rowも取れていて、[Hero,C0,C1,C2] field4 = [0x02392920,0x02392920,0x8,0xf]。次にC++の同じ瞬間のrow4 known/nonzeroだけ取り、ROMと違えばそのproducerを直します。
+
+ROM正本から次の根も見えています。C++の同瞬間では row4Known=false のままですが、ROMは turn3 の該当setupで4行とも既知nonzeroです。つまり 0x006d 自体より前に、ROMのstack-residue producerをC++が落としている。
+
+ここはもう「推測でrouteを消す」ではなく、既存のrenderer-residue compatibility実装に欠けているproducerを足す話です。まずそのproducer適用箇所を読み、turn3でどのaction後にunknownへ落ちるかを1個だけ特定します。
+
+ROM正本で、C++がunknownに落ちる直前のproducerも絞れました。turn3の 0x009b 後、ROMの次setupでもrow+4は 4行ともnonzeroのままです。一方C++はそのaction後に ApplyKnownRosterField4PostActionCompatibility() のdefaultへ落ちて全invalidateしています。ここはROM実測に反するので、0x009b のpost-action residueを製品側へ追加します。まずこのactionのpresentationTypeを固定データから確認して、action ID手書きではなく既存metadata側へ接続します。
+
+ROM正本とC++ metadataを突き合わせると、turn3でrow4をunknownへ落としている直前action 0x009b の presentationType は22 でした。ROMではその直後の次setupで4 physical rowすべてnonzero。C++はtype22を未実装扱いしてinvalidateしています。
+
+ここはaction 0x009b の一点だけでtype22全体へ広げる前に、既存ROMログ/採掘にtype22 residueの別観測があるか1回確認します。あればtype22一般producerとして即実装、なければ 0x009b の固定action residueとして最小実装します。
+
+既存playbookにまさに未完了事項が残っていました。presentationType 22 / 31 は「post-action residue未実測なのでproducer tableへ入れない」と明記されています。今回ROMで type22 (0x009b) 後の4 physical row = 全nonzero をfresh実測できたので、これは昇格条件を満たしました。
+
+他エッジケースへの影響を抑えるため、12-slot全体は捏造せず、実測した先頭4 rowだけknown/nonzero、5行目以降はunknownとしてtype22 producerをproductionへ追加します。
+
+ROM実測を時系列で並べると、もっと根っこが見えました。type22 residue自体は正しいので残しますが、turn3差の主犯は別です。
+
+turn2のROM 0x009b では、setup中に C0 goal 57→56、C2 goal 78→61 は計算しますが、startは動きません。次の0x006d setup開始時に goal は startへ戻され、C0は依然 start=57 です。
+
+一方C++は 0x009b 終了時にそのfuture participant goalをstartへcommitしてしまい、C0 57→56、C2 78→68 と動かしています。これがその後の 0x006d route差の起点です。つまりROMの「future participantはgoalを計算しても、そのaction終了で必ずstartへcommitされるわけではない」をC++が潰しています。
+
+次は CompleteActionPresentation() のcommit対象をROM通りに直します。まず関数を読んで、current actor以外を無条件commitしている箇所を確認します。
+
+ここは完全に犯人です。CompleteActionPresentation() は引数 actorId/actionIndex を**両方捨てて CommitAllCurrentRouteEnds()**しています。ROMで明確に「future participant goalは計算するがstartへcommitしない」反例が出たので、この全actor commitは仕様違反です。
+
+しかもcurrent actor側は直前の CommitActionProgressRaw(...) が既に別処理で進めています。まずそれを確認して、CompleteActionPresentation() の全actor commitを削除し、ROMで必要なcurrent actorだけのcommitが既に足りているならno-opへ戻します。
+
+ROMで「future goalは作るがstartへ進めない」が直接取れているので、次はそこだけ製品へ落とします。CommitAllCurrentRouteEnds() 周辺を読んで、current actor専用commitが既にあるならそれへ差し替えます。なければ最小helperを追加します。
