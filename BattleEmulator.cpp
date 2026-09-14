@@ -2771,8 +2771,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 if (baseDamage != 0) {
                     (*position)++; // lr: 0x021e54fc
                 }
-                (*position)++; // max: 100, lr: 0x021ed7a8
             }
+            (*position)++; // max: 100, lr: 0x021ed7a8
             baseDamage = 0;
             resetCombo(NowState);
             break;
@@ -2793,9 +2793,15 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 // メダパニ成立時は、そのターンに選択済みの「ぼうぎょ」を解除する。
                 // seed 0x1A 実測: 後続の通常攻撃は raw physical damage 5 のまま通る。
                 players[defender].defence = 1.0;
+                baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
+                if (baseDamage == 0) {
+                    baseDamage = lcg::getPercent(position, 2); // lr: 0x021e81a0
+                }
+                if (baseDamage != 0) {
+                    (*position)++; // lr: 0x021e54fc
+                }
                 // Successful status application enters the zero-damage result path.
                 (*position)++; // max: 2, lr: 0x021e81a0
-                (*position)++; // max: 100, lr: 0x021e54fc
             } else {
                 (*position)++; // max: 100, lr: 0x021ed7a8
             }

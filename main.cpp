@@ -33,7 +33,7 @@ int startturn = -1;
 constexpr Player copiedPlayers[4] = {
 	// プレイヤー1
 	{
-	301, 301, 320, 320, 289, 289, 187, 234, 161, // 最初のメンバー
+	301, 301, 320, 320, 282, 282, 187, 234, 161, // 最初のメンバー
 		161, false, false, 0, false, 0, -1,
 		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
 		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
