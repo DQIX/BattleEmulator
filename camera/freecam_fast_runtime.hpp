@@ -624,10 +624,6 @@ struct RuntimeState {
     std::uint16_t targetRecord02161720ActorId{kInvalidBattleActor};
 
     std::array<detail::PresentationActorState, detail::kMaxPresentationActors> presentationActors{};
-    // Stable row+0 identities from the ROM-equivalent 021E1958 physical
-    // work-row build. This order is independent of presentationActors[].
-    std::array<std::uint16_t, detail::kMaxPresentationActors> physicalRosterActorIds{};
-    std::uint8_t physicalRosterRowCount{};
     std::array<std::uint32_t, detail::kMaxPresentationActors> presentationMembershipProfiles{};
     struct NearestNodeCache {
         std::int32_t worldX{};
@@ -687,7 +683,6 @@ inline void ResetBattle() noexcept {
     state = {};
     state.battleActive = true;
     state.turnActionActors.fill(detail::kInvalidPresentationActor);
-    state.physicalRosterActorIds.fill(kInvalidBattleActor);
     state.presentationMembershipProfiles.fill(kInvalidMembershipProfile);
     state.rosterField4Nonzero.fill(false);
     state.rosterField4Known.fill(false);
@@ -724,35 +719,11 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     state.rosterField4Known.fill(false);
 }
 
-[[nodiscard]] inline bool SetPhysicalRosterRowActor(
-    const std::size_t rowIndex,
-    const std::uint16_t actorId
-) noexcept {
-    auto& state = ThreadContext();
-    if (rowIndex >= state.physicalRosterActorIds.size()
-        || actorId == kInvalidBattleActor) return false;
-    state.physicalRosterActorIds[rowIndex] = actorId;
-    if (state.physicalRosterRowCount <= rowIndex) {
-        state.physicalRosterRowCount = static_cast<std::uint8_t>(rowIndex + 1);
-    }
-    return true;
-}
-
-[[nodiscard]] inline std::size_t FindPhysicalRosterRowIndex(
-    const std::uint16_t actorId
-) noexcept {
-    const auto& state = ThreadContext();
-    for (std::size_t rowIndex = 0; rowIndex < state.physicalRosterRowCount; ++rowIndex) {
-        if (state.physicalRosterActorIds[rowIndex] == actorId) return rowIndex;
-    }
-    return state.physicalRosterActorIds.size();
-}
-
 [[nodiscard]] inline bool SetRosterField4Compatibility(
     const std::span<const bool> nonzero
 ) noexcept {
     auto& state = ThreadContext();
-    if (nonzero.size() != state.physicalRosterRowCount) return false;
+    if (nonzero.size() != state.presentationActorCount) return false;
     state.rosterField4Nonzero.fill(false);
     state.rosterField4Known.fill(false);
     for (std::size_t index = 0; index < nonzero.size(); ++index) {
@@ -767,12 +738,12 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     const std::span<const bool> nonzero
 ) noexcept {
     auto& state = ThreadContext();
-    if (nonzero.empty() || state.physicalRosterRowCount == 0) return false;
+    if (nonzero.empty() || state.presentationActorCount == 0) return false;
     state.rosterField4Nonzero.fill(false);
     state.rosterField4Known.fill(false);
-    const std::size_t count = nonzero.size() < state.physicalRosterRowCount
+    const std::size_t count = nonzero.size() < state.presentationActorCount
         ? nonzero.size()
-        : state.physicalRosterRowCount;
+        : state.presentationActorCount;
     for (std::size_t index = 0; index < count; ++index) {
         state.rosterField4Nonzero[index] = nonzero[index];
         state.rosterField4Known[index] = true;
@@ -787,12 +758,12 @@ inline void InvalidateRosterField4Compatibility() noexcept {
 
 [[nodiscard]] inline bool RosterField4IsKnown(const std::size_t index) noexcept {
     const auto& state = ThreadContext();
-    return index < state.physicalRosterRowCount && state.rosterField4Known[index];
+    return index < state.presentationActorCount && state.rosterField4Known[index];
 }
 
 [[nodiscard]] inline bool RosterField4IsZero(const std::size_t index) noexcept {
     const auto& state = ThreadContext();
-    return index < state.physicalRosterRowCount
+    return index < state.presentationActorCount
         && state.rosterField4Known[index]
         && !state.rosterField4Nonzero[index];
 }
@@ -802,7 +773,7 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     const bool nonzero
 ) noexcept {
     auto& state = ThreadContext();
-    if (index >= state.physicalRosterRowCount) return false;
+    if (index >= state.presentationActorCount) return false;
     state.rosterField4Nonzero[index] = nonzero;
     state.rosterField4Known[index] = true;
     state.rosterField4CompatibilityValid = true;
@@ -872,7 +843,7 @@ inline void InvalidateRosterField4Compatibility() noexcept {
             return false;
     }
     return SetRosterField4Compatibility(
-        std::span<const bool>(pattern.data(), state.physicalRosterRowCount)
+        std::span<const bool>(pattern.data(), state.presentationActorCount)
     );
 }
 
@@ -1120,18 +1091,6 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     const std::size_t actorIndex = FindPresentationActorIndex(actorId);
     const std::size_t targetIndex = FindPresentationActorIndex(targetId);
     if (actorIndex >= state.presentationActorCount || targetIndex >= state.presentationActorCount) return false;
-    std::array<bool, detail::kMaxPresentationActors> row4ByPresentationActor{};
-    std::array<bool, detail::kMaxPresentationActors> row4KnownByPresentationActor{};
-    if (state.rosterField4CompatibilityValid) {
-        for (std::size_t index = 0; index < state.presentationActorCount; ++index) {
-            const std::size_t physicalRow = FindPhysicalRosterRowIndex(
-                state.presentationActors[index].actorId
-            );
-            if (physicalRow >= state.physicalRosterRowCount) continue;
-            row4ByPresentationActor[index] = state.rosterField4Nonzero[physicalRow];
-            row4KnownByPresentationActor[index] = state.rosterField4Known[physicalRow];
-        }
-    }
     const detail::PresentationGoalDecision decision = detail::AssignPresentationGoal(
         std::span<detail::PresentationActorState>(
             state.presentationActors.data(),
@@ -1144,22 +1103,12 @@ inline void InvalidateRosterField4Compatibility() noexcept {
         attackFormationMode,
         mode,
         state.rosterField4CompatibilityValid
-            ? std::span<bool>(row4ByPresentationActor.data(), state.presentationActorCount)
+            ? std::span<bool>(state.rosterField4Nonzero.data(), state.presentationActorCount)
             : std::span<bool>{},
         state.rosterField4CompatibilityValid
-            ? std::span<bool>(row4KnownByPresentationActor.data(), state.presentationActorCount)
+            ? std::span<bool>(state.rosterField4Known.data(), state.presentationActorCount)
             : std::span<bool>{}
     );
-    if (state.rosterField4CompatibilityValid) {
-        for (std::size_t index = 0; index < state.presentationActorCount; ++index) {
-            const std::size_t physicalRow = FindPhysicalRosterRowIndex(
-                state.presentationActors[index].actorId
-            );
-            if (physicalRow >= state.physicalRosterRowCount) continue;
-            state.rosterField4Nonzero[physicalRow] = row4ByPresentationActor[index];
-            state.rosterField4Known[physicalRow] = row4KnownByPresentationActor[index];
-        }
-    }
     if (!decision.valid) return false;
     if (decision.goalChanged) InvalidateCurrentRoutes(state);
     return true;

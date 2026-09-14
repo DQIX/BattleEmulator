@@ -103,7 +103,6 @@ inline void AssertCameraMapping(const int action) noexcept {
         if (actions[futureIndex] < 0 || !actors[futureIndex].valid()) continue;
         const std::uint16_t actorId = Dq9ActorId(actors[futureIndex]);
         const std::size_t actorSlot = FindPresentationActorIndex(actorId);
-        const std::size_t physicalRow = FindPhysicalRosterRowIndex(actorId);
         if (actorSlot >= visited.size() || visited[actorSlot]) continue;
         // overlay_d_25:021E0AA0 marks the suffix actor visited before the
         // movement-eligibility test, so later actions by the same actor do not
@@ -123,11 +122,12 @@ inline void AssertCameraMapping(const int action) noexcept {
         // The entry value is compiler-stack residue. If its producer has not
         // been reproduced for this action path yet, do not invent a fallback
         // rule: retain the current-only behavior for that future participant.
-        if (!RosterField4IsKnown(physicalRow)) {
+        if (!RosterField4IsKnown(actorSlot)) {
+            std::cout << actorSlot << std::endl;
             assert(false && "unknown roster row+4 pattern for future participant");
             return false;
         }
-        if (!RosterField4IsZero(physicalRow)) {
+        if (!RosterField4IsZero(actorSlot)) {
             if (!AssignActorFallbackPresentationGoal(actorId, true)) return false;
             continue;
         }
@@ -162,7 +162,6 @@ inline void AssertCameraMapping(const int action) noexcept {
 
         const std::uint16_t actorId = Dq9ActorId(actors[previousIndex]);
         const std::size_t actorSlot = FindPresentationActorIndex(actorId);
-        const std::size_t physicalRow = FindPhysicalRosterRowIndex(actorId);
         if (actorSlot >= visited.size() || visited[actorSlot]) continue;
         visited[actorSlot] = true;
         if (!IsActorPresentationMovementEligible(actorSlot, currentPresentationTargetId)) continue;
@@ -172,11 +171,11 @@ inline void AssertCameraMapping(const int action) noexcept {
             actorId,
             Dq9ActorId(targets[previousIndex])
         );
-        if (!RosterField4IsKnown(physicalRow)) {
+        if (!RosterField4IsKnown(actorSlot)) {
             assert(false && "unknown roster row+4 pattern for previous participant");
             return false;
         }
-        const bool row4Nonzero = !RosterField4IsZero(physicalRow);
+        const bool row4Nonzero = !RosterField4IsZero(actorSlot);
         if (!PreparePreviousActionPresentationParticipant(actorId, primaryTargetId, row4Nonzero)) return false;
     }
     return PlanCurrentActionRoutes(actionIndex);
@@ -231,7 +230,6 @@ bool camera::ResetBattle(const CameraPresentationActor *actors, const std::size_
         const CameraPresentationActor &source = actors[index];
         const std::uint16_t actorId = Dq9ActorId(source.actor);
         if (actorId == kInvalidBattleActor) return false;
-        if (!SetPhysicalRosterRowActor(index, actorId)) return false;
         const std::uint8_t node = dq9::freecam::detail::NearestPresentationNodeFast(source.worldX, source.worldZ);
         if (!SetPresentationActor(index, {
                 .actorId = actorId,
@@ -542,13 +540,8 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                 debugEvent.goalNodes[actorIndex] = state.presentationActors[actorIndex].goalNode;
                 debugEvent.targetNodes[actorIndex] = state.presentationActors[actorIndex].targetNode;
                 debugEvent.auxiliaryNodes[actorIndex] = state.presentationActors[actorIndex].auxiliaryNode;
-                const std::size_t physicalRow = FindPhysicalRosterRowIndex(
-                    state.presentationActors[actorIndex].actorId
-                );
-                if (physicalRow < state.physicalRosterRowCount) {
-                    debugEvent.rosterField4Known[actorIndex] = state.rosterField4Known[physicalRow];
-                    debugEvent.rosterField4Nonzero[actorIndex] = state.rosterField4Nonzero[physicalRow];
-                }
+                debugEvent.rosterField4Known[actorIndex] = state.rosterField4Known[actorIndex];
+                debugEvent.rosterField4Nonzero[actorIndex] = state.rosterField4Nonzero[actorIndex];
             }
             debugEvent.presentationOccupancy = state.presentationOccupancy;
         }
