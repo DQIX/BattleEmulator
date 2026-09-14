@@ -1979,26 +1979,33 @@ int main(int argc, char* argv[]){
 	//THIS DEBUG CODE!
 	int32_t gene1[350] = {
 		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::BUFF,
-		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
-		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
-		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
-		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::FULLHEAL,
-		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
-		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::FULLHEAL,
-		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::DOUBLE_UP,
-		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::MULTITHRUST,
+		//(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
+		//(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
+		// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
+		// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
+		// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::FULLHEAL,
+		// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
+		// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::FULLHEAL,
+		// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::DOUBLE_UP,
+		// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::MULTITHRUST,
 	};
 	//gene1[19-1] = BattleEmulator::DEFENCE;
 	int counter = 0;
 
 	//gene1[counter++] = BattleEmulator::BUFF;
 
-	//for (int i = 0; i < 10; ++i) {
+	for (int i = 0; i < 20; ++i) {
+		if (gene1[i] == 0) {
+			gene1[i] = -1;
+			break;
+		}
+		counter++;
+	}
 	(*NowState) = BattleEmulator::TYPE_2A;
 	(*position1) = 1;
 	BattleResult dummy1;
 	std::memcpy(players1, copiedPlayers, sizeof(players1));
-	BattleEmulator::Main(position1, 30, gene1, players1, &dummy1, time1, dummy, dummy, -1, NowState);
+	BattleEmulator::Main(position1, counter, gene1, players1, &dummy1, time1, dummy, dummy, -1, NowState);
 
 	std::stringstream ss1;
 	ss1 << time1 << " ";
