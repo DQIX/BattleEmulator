@@ -330,7 +330,9 @@ bool ValidateRosterField4Compatibility() {
         if (RosterField4IsZero(index) == expectedNonzero) return false;
     }
 
-    if (!ApplyKnownRosterField4PostActionCompatibility(metadata::PresentationType(UINT16_C(137)))) {
+    if (!ApplyKnownRosterField4PostActionCompatibility(
+            UINT16_C(137),
+            metadata::PresentationType(UINT16_C(137)))) {
         return false;
     }
     for (std::size_t index = 0; index < roster.size(); ++index) {
@@ -339,6 +341,14 @@ bool ValidateRosterField4Compatibility() {
         } else if (RosterField4IsKnown(index)) {
             return false;
         }
+    }
+    static_assert(metadata::PresentationType(UINT16_C(137))
+        == metadata::PresentationType(UINT16_C(55)));
+    if (ApplyKnownRosterField4PostActionCompatibility(
+            UINT16_C(55),
+            metadata::PresentationType(UINT16_C(55)))
+        || HasRosterField4Compatibility()) {
+        return false;
     }
 
     if (!ApplyBattleHudRendererResidueCompatibility()) return false;

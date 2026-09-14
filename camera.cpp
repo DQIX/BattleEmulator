@@ -368,6 +368,7 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
 
         (void)AppendSlot1CleanupPresentationRecord(actorId);
         (void)ApplyKnownRosterField4PostActionCompatibility(
+            metadata::kSlot1CleanupPresentationActionId,
             metadata::PresentationType(metadata::kSlot1CleanupPresentationActionId)
         );
 
@@ -598,7 +599,10 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
             (void)CompleteActionPresentation(runtimeActorId, i);
             processSlot1CleanupPresentationRecord(i, runtimeActorId);
             if (actionMetadata != nullptr) {
-                (void)ApplyKnownRosterField4PostActionCompatibility(actionMetadata->presentationType);
+                (void)ApplyKnownRosterField4PostActionCompatibility(
+                    actionMetadata->dq9ActionId,
+                    actionMetadata->presentationType
+                );
             }
             if (after != BattleEmulator::ATTACK_ALLY) preemptive = false;
 #if defined(gerunikku)
@@ -659,7 +663,10 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                 const bool applied = ApplyBattleHudRendererResidueCompatibility();
                 assert(applied && "battle HUD renderer residue compatibility failed");
             } else {
-                (void)ApplyKnownRosterField4PostActionCompatibility(actionMetadata->presentationType);
+                (void)ApplyKnownRosterField4PostActionCompatibility(
+                    actionMetadata->dq9ActionId,
+                    actionMetadata->presentationType
+                );
             }
             processSlot1CleanupPresentationRecord(i, runtimeActorId);
         }

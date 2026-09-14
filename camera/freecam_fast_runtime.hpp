@@ -836,14 +836,6 @@ inline void InvalidateRosterField4Compatibility() noexcept {
             constexpr std::array<bool, 4> prefix{true, true, true, true};
             return SetRosterField4CompatibilityPrefix(prefix);
         }
-        case metadata::PresentationType(UINT16_C(137)): {
-            // Seed 0x3EBB94 after Mirror Shield (DQ9 137, presentation type
-            // 31): the next 021E1958 build reads physical row +4 values
-            // [0x02392920, 0x02392920, 8, 15], all nonzero. Only this measured
-            // four-row prefix is known; rows beyond it remain unknown.
-            constexpr std::array<bool, 4> prefix{true, true, true, true};
-            return SetRosterField4CompatibilityPrefix(prefix);
-        }
         case generated::kTensionGainPresentationType: {
             // This presentation path is one known trigger of the independent
             // FUN_020515EC battle-HUD renderer lifecycle.
@@ -856,6 +848,21 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     return SetRosterField4Compatibility(
         std::span<const bool>(pattern.data(), state.presentationActorCount)
     );
+}
+
+[[nodiscard]] inline bool ApplyKnownRosterField4PostActionCompatibility(
+    const std::uint16_t dq9ActionId,
+    const std::uint8_t presentationType
+) noexcept {
+    if (dq9ActionId == UINT16_C(137)) {
+        // Seed 0x3EBB94 after Mirror Shield: the next 021E1958 build reads
+        // physical row +4 values [0x02392920, 0x02392920, 8, 15], all nonzero.
+        // This observation is action-specific; DQ9 55 shares presentation type
+        // 31 but has not been measured and must not inherit this prefix.
+        constexpr std::array<bool, 4> prefix{true, true, true, true};
+        return SetRosterField4CompatibilityPrefix(prefix);
+    }
+    return ApplyKnownRosterField4PostActionCompatibility(presentationType);
 }
 
 [[nodiscard]] inline bool SetPresentationActor(
