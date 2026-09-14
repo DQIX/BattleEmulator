@@ -123,6 +123,7 @@ inline void AssertCameraMapping(const int action) noexcept {
         // been reproduced for this action path yet, do not invent a fallback
         // rule: retain the current-only behavior for that future participant.
         if (!RosterField4IsKnown(actorSlot)) {
+            std::cout << actorSlot << std::endl;
             assert(false && "unknown roster row+4 pattern for future participant");
             return false;
         }

@@ -9,6 +9,7 @@
 
 const CPU = "arm9";
 const ROW_BUILD_RETURN = 0x021e094c;
+const FIRST_ROW_INITIALIZATION = 0x021e0980;
 const GOAL_SETUP_TERMINAL = 0x021e0f40;
 const NORMAL_CONSUMER = 0x021e1fd8;
 const FALLBACK_CONSUMER = 0x021e2664;
@@ -17,6 +18,7 @@ const ROW4_ZERO_BRANCH = 0x021e0cf8;
 const ROW_OFFSET_FROM_SP = 0x15c;
 const ROW_STRIDE = 12;
 const MAX_ROWS = 12;
+const CAPTURE_BASELINE_NAME = "roster-row4-consumer-at-021e094c";
 
 let armState = null;
 let capture = null;
@@ -160,6 +162,7 @@ memory.registerexec(ROW_BUILD_RETURN, async () => {
     rowBaseHex: hex32(rowBase),
     rowCount,
     controlledRows: Math.min(rowCount, armState.controlledRows),
+    baselineName: CAPTURE_BASELINE_NAME,
     originalRows: await snapshotRows(rowBase, rowCount),
   };
   armState = null;
@@ -167,6 +170,14 @@ memory.registerexec(ROW_BUILD_RETURN, async () => {
   results = [];
   print(`row+4 capture: base=${capture.rowBaseHex} rows=${rowCount} controlled=${capture.controlledRows}`);
   await mcp.call("pause", {});
+  const saved = await mcp.call("saveAnalysisBaseline", {
+    name: CAPTURE_BASELINE_NAME,
+    replace: true,
+  });
+  if (!saved || saved.ok !== true) {
+    throw new Error("failed to save the exact 021E094C consumer baseline");
+  }
+  print(`row+4 baseline saved: ${CAPTURE_BASELINE_NAME}`);
 }, { cpu: CPU });
 
 memory.registerexec(NORMAL_CONSUMER, async () => {
@@ -226,6 +237,44 @@ async function armHandler(params, context) {
   return { armed: true, controlledRows, skipHits };
 }
 
+async function adoptBaselineHandler(params, context) {
+  requireBlocking(context, "adoptBaseline");
+  const pc = await reg("pc");
+  const sp = await reg("r13");
+  const rowCount = await reg("r0");
+  const beforeFirstConsumer = pc >= ROW_BUILD_RETURN && pc < FIRST_ROW_INITIALIZATION;
+  if (!beforeFirstConsumer) {
+    throw new Error(
+      `restore ${CAPTURE_BASELINE_NAME} first; PC ${hex32(pc)} is not in the pre-consumer window`
+    );
+  }
+  if (rowCount < 1 || rowCount > MAX_ROWS) {
+    throw new Error(`pre-consumer baseline has invalid row count ${rowCount}`);
+  }
+  const controlledRows = params && params.controlledRows !== undefined
+    ? Number(params.controlledRows)
+    : Math.min(rowCount, 4);
+  if (!Number.isInteger(controlledRows) || controlledRows < 1 || controlledRows > rowCount) {
+    throw new Error(`controlledRows must be an integer in 1..${rowCount}`);
+  }
+  const rowBase = u32(sp + ROW_OFFSET_FROM_SP);
+  capture = {
+    pc: hex32(pc),
+    sp,
+    spHex: hex32(sp),
+    rowBase,
+    rowBaseHex: hex32(rowBase),
+    rowCount,
+    controlledRows,
+    baselineName: CAPTURE_BASELINE_NAME,
+    originalRows: await snapshotRows(rowBase, rowCount),
+  };
+  armState = null;
+  activeRun = null;
+  results = [];
+  return { adopted: true, capture };
+}
+
 async function applyMaskHandler(params, context) {
   requireBlocking(context, "applyMask");
   if (!capture) throw new Error("No captured 021E094C state; call arm, then enter one presentation setup");
@@ -233,9 +282,10 @@ async function applyMaskHandler(params, context) {
 
   const pc = await reg("pc");
   const sp = await reg("r13");
-  if (pc !== ROW_BUILD_RETURN || sp !== capture.sp) {
+  const beforeFirstConsumer = pc >= ROW_BUILD_RETURN && pc < FIRST_ROW_INITIALIZATION;
+  if (!beforeFirstConsumer || sp !== capture.sp) {
     throw new Error(
-      `Restore the captured baseline before applyMask; expected PC=${hex32(ROW_BUILD_RETURN)} SP=${capture.spHex}, got PC=${hex32(pc)} SP=${hex32(sp)}`
+      `Restore the captured pre-consumer baseline before applyMask; expected PC in ${hex32(ROW_BUILD_RETURN)}..${hex32(FIRST_ROW_INITIALIZATION - 4)} SP=${capture.spHex}, got PC=${hex32(pc)} SP=${hex32(sp)}`
     );
   }
 
@@ -344,6 +394,11 @@ return [
     name: "row4ApplyMask",
     description: "At the restored 021E094C baseline, writes one exact physical-row zero/nonzero mask and verifies every native u32 write.",
     handler: applyMaskHandler,
+  },
+  {
+    name: "row4AdoptBaseline",
+    description: "Adopts the already-saved 021E094C pre-consumer baseline without executing another battle turn.",
+    handler: adoptBaselineHandler,
   },
   {
     name: "row4ApplyNextMask",

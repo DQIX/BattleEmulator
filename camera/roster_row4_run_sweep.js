@@ -4,7 +4,6 @@
 // this driver only restores the identical emulator baseline between masks.
 
 const SCRIPT_NAME = "roster_row4_consumer_sweep";
-const BASELINE_NAME = "roster-row4-consumer-at-021e094c";
 const CONTROLLED_ROWS = 4;
 const PER_MASK_TIMEOUT_MS = 120000;
 
@@ -41,18 +40,14 @@ if (initial.capture.controlledRows !== CONTROLLED_ROWS) {
     `captured controlledRows=${initial.capture.controlledRows}; expected ${CONTROLLED_ROWS}`
   );
 }
-
-requireOk(await mcp.call("saveAnalysisBaseline", {
-  name: BASELINE_NAME,
-  replace: true,
-}), "saveAnalysisBaseline");
+const baselineName = initial.capture.baselineName;
+if (!baselineName) throw new Error("capture has no saved 021E094C baseline");
 
 const patternCount = 2 ** CONTROLLED_ROWS;
 for (let mask = 0; mask < patternCount; mask++) {
   requireOk(await mcp.call("restoreAnalysisBaseline", {
-    name: BASELINE_NAME,
+    name: baselineName,
   }), `restoreAnalysisBaseline mask=${mask}`);
-
   const applied = await callProbe("row4ApplyMask", {
     mask,
     controlledRows: CONTROLLED_ROWS,
@@ -76,7 +71,7 @@ for (let mask = 0; mask < patternCount; mask++) {
 }
 
 requireOk(await mcp.call("restoreAnalysisBaseline", {
-  name: BASELINE_NAME,
+  name: baselineName,
 }), "final restoreAnalysisBaseline");
 
 const finalStatus = await callProbe("row4Status");
@@ -89,7 +84,7 @@ if (!finalStatus.complete || finalStatus.completedMasks.length !== patternCount)
 return {
   ok: true,
   scriptName: SCRIPT_NAME,
-  baselineName: BASELINE_NAME,
+  baselineName,
   controlledRows: CONTROLLED_ROWS,
   patternCount,
   completedMasks: finalStatus.completedMasks,
