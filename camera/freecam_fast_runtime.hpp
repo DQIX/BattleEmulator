@@ -836,6 +836,14 @@ inline void InvalidateRosterField4Compatibility() noexcept {
             constexpr std::array<bool, 4> prefix{true, true, true, true};
             return SetRosterField4CompatibilityPrefix(prefix);
         }
+        case metadata::PresentationType(UINT16_C(137)): {
+            // Seed 0x3EBB94 after Mirror Shield (DQ9 137, presentation type
+            // 31): the next 021E1958 build reads physical row +4 values
+            // [0x02392920, 0x02392920, 8, 15], all nonzero. Only this measured
+            // four-row prefix is known; rows beyond it remain unknown.
+            constexpr std::array<bool, 4> prefix{true, true, true, true};
+            return SetRosterField4CompatibilityPrefix(prefix);
+        }
         case generated::kTensionGainPresentationType: {
             // This presentation path is one known trigger of the independent
             // FUN_020515EC battle-HUD renderer lifecycle.

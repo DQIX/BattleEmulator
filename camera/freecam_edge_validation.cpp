@@ -330,6 +330,17 @@ bool ValidateRosterField4Compatibility() {
         if (RosterField4IsZero(index) == expectedNonzero) return false;
     }
 
+    if (!ApplyKnownRosterField4PostActionCompatibility(metadata::PresentationType(UINT16_C(137)))) {
+        return false;
+    }
+    for (std::size_t index = 0; index < roster.size(); ++index) {
+        if (index < 4) {
+            if (!RosterField4IsKnown(index) || RosterField4IsZero(index)) return false;
+        } else if (RosterField4IsKnown(index)) {
+            return false;
+        }
+    }
+
     if (!ApplyBattleHudRendererResidueCompatibility()) return false;
     for (std::size_t index = 0; index < roster.size(); ++index) {
         if (index < 4) {
