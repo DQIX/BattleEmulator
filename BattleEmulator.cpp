@@ -3025,6 +3025,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     tmp = baseDamage;
                 }
 
+                tmp *= HeroSpearLightningMultiplier(attacker, defender);
                 if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
                     tmp *= players[defender].defence;
                 }
