@@ -24,6 +24,16 @@ let armState = null;
 let capture = null;
 let activeRun = null;
 let results = [];
+let naturalCaptureEnabled = false;
+let naturalTurnSerial = -1;
+let naturalActionIndex = -1;
+let naturalLastActionIndex = -1;
+let naturalCurrentAction = null;
+let naturalActiveBuild = null;
+let naturalResults = [];
+let naturalTurnOrders = [];
+let naturalExperimentMetadata = null;
+let naturalExperiments = [];
 
 function requireBlocking(context, name) {
   if (!context || !context.blocking) throw new Error(`${name} requires blocking:true`);
@@ -61,6 +71,12 @@ async function reg(name) {
 
 async function native32(address) {
   return swap32(await memory.read32(u32(address), CPU));
+}
+
+async function native16(address) {
+  const low = await memory.read8(u32(address), CPU);
+  const high = await memory.read8(u32(address + 1), CPU);
+  return (low | (high << 8)) >>> 0;
 }
 
 async function writeNative32(address, value) {
@@ -115,40 +131,132 @@ function rowIndexForPointer(rowPointer) {
 }
 
 async function recordConsumer(kind) {
-  if (!activeRun || !capture) return;
   const rowPointer = await reg("r0");
-  const rowIndex = rowIndexForPointer(rowPointer);
-  activeRun.consumers.push({
-    sequence: activeRun.consumers.length,
-    kind,
-    pc: hex32(await reg("pc")),
-    lr: hex32(await reg("r14")),
-    rowIndex,
-    row: rowIndex === null ? null : await snapshotRowAt(rowPointer, rowIndex),
-  });
+  if (activeRun && capture) {
+    const rowIndex = rowIndexForPointer(rowPointer);
+    activeRun.consumers.push({
+      sequence: activeRun.consumers.length,
+      kind,
+      pc: hex32(await reg("pc")),
+      lr: hex32(await reg("r14")),
+      rowIndex,
+      row: rowIndex === null ? null : await snapshotRowAt(rowPointer, rowIndex),
+    });
+  }
+  if (naturalActiveBuild) {
+    const delta = u32(rowPointer - naturalActiveBuild.rowBase);
+    const rowIndex = (delta % ROW_STRIDE) === 0 && delta / ROW_STRIDE < naturalActiveBuild.rowCount
+      ? delta / ROW_STRIDE
+      : null;
+    naturalActiveBuild.consumers.push({
+      sequence: naturalActiveBuild.consumers.length,
+      kind,
+      pc: hex32(await reg("pc")),
+      lr: hex32(await reg("r14")),
+      rowIndex,
+      row: rowIndex === null ? null : await snapshotRowAt(rowPointer, rowIndex),
+    });
+  }
 }
 
 async function recordRow4Decision(kind) {
-  if (!activeRun || !capture) return;
   const rowPointer = await reg("r10");
-  const rowIndex = rowIndexForPointer(rowPointer);
-  activeRun.decisions.push({
-    sequence: activeRun.decisions.length,
-    kind,
-    pc: hex32(await reg("pc")),
-    rowIndex,
-    row: rowIndex === null ? null : await snapshotRowAt(rowPointer, rowIndex),
-  });
+  if (activeRun && capture) {
+    const rowIndex = rowIndexForPointer(rowPointer);
+    activeRun.decisions.push({
+      sequence: activeRun.decisions.length,
+      kind,
+      pc: hex32(await reg("pc")),
+      rowIndex,
+      row: rowIndex === null ? null : await snapshotRowAt(rowPointer, rowIndex),
+    });
+  }
+  if (naturalActiveBuild) {
+    const delta = u32(rowPointer - naturalActiveBuild.rowBase);
+    const rowIndex = (delta % ROW_STRIDE) === 0 && delta / ROW_STRIDE < naturalActiveBuild.rowCount
+      ? delta / ROW_STRIDE
+      : null;
+    naturalActiveBuild.decisions.push({
+      sequence: naturalActiveBuild.decisions.length,
+      kind,
+      pc: hex32(await reg("pc")),
+      rowIndex,
+      row: rowIndex === null ? null : await snapshotRowAt(rowPointer, rowIndex),
+    });
+  }
 }
 
+memory.registerexec(0x021e08bc, async () => {
+  if (!naturalCaptureEnabled) return;
+  const controller = await reg("r0");
+  const actionIndex = await native32(controller + 0x57c8);
+  const combat = await native32(controller + 0x218);
+  const actionStruct = u32(combat + 0x821c + actionIndex * 0x28);
+  const actorRecord = await native32(actionStruct + 0x10);
+  const targetRecord = await native32(actionStruct + 0x14);
+  const newTurn = naturalTurnSerial < 0 || actionIndex <= naturalLastActionIndex;
+  if (newTurn) naturalTurnSerial++;
+  naturalLastActionIndex = actionIndex;
+  naturalActionIndex = actionIndex;
+  const actionCount = await native32(combat + 0x8e24);
+  if (newTurn) {
+    const order = [];
+    for (let index = 0; index < actionCount; index++) {
+      const record = u32(combat + 0x821c + index * 0x28);
+      const recordActor = await native32(record + 0x10);
+      const recordTarget = await native32(record + 0x14);
+      order.push({
+        actionIndex: index,
+        dq9ActionId: await native16(record),
+        actorId: recordActor === 0 ? null : await native16(recordActor + 0x20),
+        targetId: recordTarget === 0 ? null : await native16(recordTarget + 0x0e),
+      });
+    }
+    naturalTurnOrders[naturalTurnSerial] = order;
+  }
+  naturalCurrentAction = {
+    actionIndex,
+    actionCount,
+    dq9ActionId: await native16(actionStruct),
+    actorId: actorRecord === 0 ? null : await native16(actorRecord + 0x20),
+    targetId: targetRecord === 0 ? null : await native16(targetRecord + 0x0e),
+  };
+}, { cpu: CPU });
+
 memory.registerexec(ROW_BUILD_RETURN, async () => {
+  const rowCount = await reg("r0");
+  if (naturalCaptureEnabled) {
+    if (rowCount < 1 || rowCount > MAX_ROWS) {
+      throw new Error(`021E1958 returned invalid natural row count ${rowCount}`);
+    }
+    const sp = await reg("r13");
+    const rowBase = u32(sp + ROW_OFFSET_FROM_SP);
+    naturalActiveBuild = {
+      sequence: naturalResults.length,
+      turnSerial: naturalTurnSerial,
+      action: naturalCurrentAction === null ? null : { ...naturalCurrentAction },
+      presentationActionOrder: naturalTurnOrders[naturalTurnSerial]
+        ? naturalTurnOrders[naturalTurnSerial].map((item) => ({ ...item }))
+        : [],
+      pc: hex32(ROW_BUILD_RETURN),
+      sp: hex32(sp),
+      rowBase,
+      rowBaseHex: hex32(rowBase),
+      rowCount,
+      originalRows: await snapshotRows(rowBase, rowCount),
+      decisions: [],
+      consumers: [],
+      after: null,
+      returnValue: null,
+      terminalPc: null,
+    };
+  }
   if (!armState) return;
   if (armState.hitsSeen < armState.skipHits) {
     armState.hitsSeen++;
     return;
   }
 
-  const rowCount = await reg("r0");
   if (rowCount < 1 || rowCount > MAX_ROWS) {
     throw new Error(`021E1958 returned invalid row count ${rowCount}`);
   }
@@ -197,6 +305,16 @@ memory.registerexec(ROW4_ZERO_BRANCH, async () => {
 }, { cpu: CPU });
 
 memory.registerexec(GOAL_SETUP_TERMINAL, async () => {
+  if (naturalActiveBuild) {
+    naturalActiveBuild.after = await snapshotRows(
+      naturalActiveBuild.rowBase,
+      naturalActiveBuild.rowCount
+    );
+    naturalActiveBuild.returnValue = await reg("r0");
+    naturalActiveBuild.terminalPc = hex32(GOAL_SETUP_TERMINAL);
+    naturalResults.push(naturalActiveBuild);
+    naturalActiveBuild = null;
+  }
   if (!activeRun || !capture) return;
   const completed = {
     mask: activeRun.mask,
@@ -382,6 +500,155 @@ async function resultsHandler(_params, context) {
   };
 }
 
+async function naturalArmHandler(params, context) {
+  requireBlocking(context, "naturalArm");
+  naturalCaptureEnabled = true;
+  naturalTurnSerial = -1;
+  naturalActionIndex = -1;
+  naturalLastActionIndex = -1;
+  naturalCurrentAction = null;
+  naturalActiveBuild = null;
+  naturalResults = [];
+  naturalTurnOrders = [];
+  naturalExperimentMetadata = params?.experiment ?? null;
+  return { armed: true, experiment: naturalExperimentMetadata };
+}
+
+function compactNaturalResult(item) {
+  if (!item) return null;
+  return {
+    sequence: item.sequence,
+    turnSerial: item.turnSerial,
+    presentationAction: item.action,
+    presentationActionOrder: item.presentationActionOrder,
+    rowCount: item.rowCount,
+    physicalRows: item.originalRows.map((row) => ({
+      rowIndex: row.rowIndex,
+      actorId: row.actorId,
+      presentationClass: row.presentationClass,
+      row4Raw: row.field4,
+      row4Nonzero: row.field4 !== "0x00000000",
+    })),
+    consultedRows: item.decisions.map((decision) => ({
+      sequence: decision.sequence,
+      rowIndex: decision.rowIndex,
+      actorId: decision.row ? decision.row.actorId : null,
+      branch: decision.kind,
+    })),
+    consumers: item.consumers.map((consumer) => ({
+      sequence: consumer.sequence,
+      rowIndex: consumer.rowIndex,
+      actorId: consumer.row ? consumer.row.actorId : null,
+      kind: consumer.kind,
+    })),
+    resultingCameraState: (item.after ?? []).map((row) => ({
+      rowIndex: row.rowIndex,
+      actorId: row.actorId,
+      nodes: row.nodes,
+    })),
+    terminalPc: item.terminalPc,
+    returnValue: item.returnValue,
+  };
+}
+
+function compactNaturalExperiment(metadata, items) {
+  return {
+    experiment: metadata,
+    presentationActionOrder: items.length === 0 ? [] : items[0].presentationActionOrder,
+    builds: items.map((item) => ({
+      sequence: item.sequence,
+      turnSerial: item.turnSerial,
+      presentationAction: item.action,
+      physicalRows: item.originalRows.map((row) => ({
+        rowIndex: row.rowIndex,
+        actorId: row.actorId,
+        row4Raw: row.field4,
+        row4Nonzero: row.field4 !== "0x00000000",
+      })),
+      consultedRows: item.decisions.map((decision) => ({
+        rowIndex: decision.rowIndex,
+        actorId: decision.row ? decision.row.actorId : null,
+        branch: decision.kind,
+      })),
+      consumers: item.consumers.map((consumer) => ({
+        rowIndex: consumer.rowIndex,
+        actorId: consumer.row ? consumer.row.actorId : null,
+        kind: consumer.kind,
+      })),
+      resultingCameraState: (item.after ?? []).map((row) => ({
+        rowIndex: row.rowIndex,
+        actorId: row.actorId,
+        start: row.nodes?.start ?? null,
+        goal: row.nodes?.goal ?? null,
+        auxiliary: row.nodes?.auxiliary ?? null,
+        target: row.nodes?.target ?? null,
+        routeCount: row.nodes?.routeCount ?? null,
+      })),
+    })),
+  };
+}
+
+async function naturalArchiveHandler(_params, context) {
+  requireBlocking(context, "naturalArchive");
+  const archived = compactNaturalExperiment(naturalExperimentMetadata, naturalResults);
+  naturalExperiments.push(archived);
+  naturalCaptureEnabled = false;
+  naturalActiveBuild = null;
+  return {
+    archivedIndex: naturalExperiments.length - 1,
+    experiment: archived.experiment,
+    actionCount: archived.presentationActionOrder.length,
+    buildCount: archived.builds.length,
+  };
+}
+
+async function naturalExperimentsHandler(params, context) {
+  requireBlocking(context, "naturalExperiments");
+  if (params && params.index !== undefined) {
+    const index = Number(params.index);
+    if (!Number.isInteger(index) || index < 0) throw new Error("index must be a non-negative integer");
+    return { index, result: naturalExperiments[index] ?? null };
+  }
+  return {
+    count: naturalExperiments.length,
+    experiments: naturalExperiments.map((item, index) => ({
+      index,
+      experiment: item.experiment,
+      actionCount: item.presentationActionOrder.length,
+      buildCount: item.builds.length,
+    })),
+  };
+}
+
+async function naturalResultsHandler(params, context) {
+  requireBlocking(context, "naturalResults");
+  if (params && params.sequence !== undefined) {
+    const sequence = Number(params.sequence);
+    if (!Number.isInteger(sequence) || sequence < 0) {
+      throw new Error("sequence must be a non-negative integer");
+    }
+    return {
+      armed: naturalCaptureEnabled,
+      result: compactNaturalResult(
+        naturalResults.find((item) => item.sequence === sequence) ?? null
+      ),
+    };
+  }
+  return {
+    armed: naturalCaptureEnabled,
+    activeBuild: naturalActiveBuild,
+    resultCount: naturalResults.length,
+    results: naturalResults.map(compactNaturalResult),
+  };
+}
+
+async function naturalStopHandler(_params, context) {
+  requireBlocking(context, "naturalStop");
+  naturalCaptureEnabled = false;
+  naturalActiveBuild = null;
+  return { armed: false, resultCount: naturalResults.length };
+}
+
 print("roster row+4 consumer sweep registered");
 
 return [
@@ -414,5 +681,30 @@ return [
     name: "row4Results",
     description: "Returns full non-quantized before/consumer/after observations for every completed mask.",
     handler: resultsHandler,
+  },
+  {
+    name: "row4NaturalArm",
+    description: "Clears and arms non-mutating capture of every natural 021E1958 physical row build, action identity, consulted row, and terminal state.",
+    handler: naturalArmHandler,
+  },
+  {
+    name: "row4NaturalResults",
+    description: "Returns compact per-setup action identity, every physical row actor/raw row+4 value, consulted branches, and terminal camera nodes.",
+    handler: naturalResultsHandler,
+  },
+  {
+    name: "row4NaturalStop",
+    description: "Stops natural row capture while retaining the completed results for retrieval.",
+    handler: naturalStopHandler,
+  },
+  {
+    name: "row4NaturalArchive",
+    description: "Archives the current compact natural run across State restores for later matrix retrieval.",
+    handler: naturalArchiveHandler,
+  },
+  {
+    name: "row4NaturalExperiments",
+    description: "Lists archived matrix runs, or returns one compact run by index.",
+    handler: naturalExperimentsHandler,
   },
 ];
