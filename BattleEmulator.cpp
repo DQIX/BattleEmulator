@@ -831,6 +831,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         if (players[0].sleeping) {
             actionTable = SLEEPING;
         } else if (!players[0].paralysis && !players[0].inactive && actionTable == BattleEmulator::MERCURIAL_THRUST) {
+            const auto heroOrder = std::find(std::begin(order), std::end(order), 0);
+            std::rotate(std::begin(order), heroOrder, std::next(heroOrder));
             player0_has_initiative = true;
         }
 

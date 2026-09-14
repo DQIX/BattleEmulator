@@ -705,6 +705,9 @@ inline void ResetBattle() noexcept {
     state.targetRecord02161720ActorId = kInvalidBattleActor;
     state.rosterField4CompatibilityValid = false;
     state.rosterField4Known.fill(false);
+    // The 021E08BC turn-setup stack frame recreates the measured physical-row
+    // residue at the start of every turn, not only at battle entry.
+    state.battleEntryRendererResiduePending = true;
     state.presentationGoalSetupActive = false;
     InvalidateCurrentRoutes(state);
     for (std::size_t index = 0; index < actionOrder.size(); ++index) {

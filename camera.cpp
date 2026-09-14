@@ -122,7 +122,10 @@ inline void AssertCameraMapping(const int action) noexcept {
         // The entry value is compiler-stack residue. If its producer has not
         // been reproduced for this action path yet, do not invent a fallback
         // rule: retain the current-only behavior for that future participant.
-        if (!RosterField4IsKnown(actorSlot)) continue;
+        if (!RosterField4IsKnown(actorSlot)) {
+            assert(false && "unknown roster row+4 pattern for future participant");
+            return false;
+        }
         if (!RosterField4IsZero(actorSlot)) {
             if (!AssignActorFallbackPresentationGoal(actorId, true)) return false;
             continue;
@@ -167,7 +170,11 @@ inline void AssertCameraMapping(const int action) noexcept {
             actorId,
             Dq9ActorId(targets[previousIndex])
         );
-        const bool row4Nonzero = RosterField4IsKnown(actorSlot) && !RosterField4IsZero(actorSlot);
+        if (!RosterField4IsKnown(actorSlot)) {
+            assert(false && "unknown roster row+4 pattern for previous participant");
+            return false;
+        }
+        const bool row4Nonzero = !RosterField4IsZero(actorSlot);
         if (!PreparePreviousActionPresentationParticipant(actorId, primaryTargetId, row4Nonzero)) return false;
     }
     return PlanCurrentActionRoutes(actionIndex);
@@ -294,10 +301,10 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
     for (int i = 0; i < actionCount; ++i) actionOrder[static_cast<std::size_t>(i)] = actors[i];
     const bool runtimeReady = BeginTurn(std::span<const BattleActorRef>(actionOrder.data(), actionCount));
     if (runtimeReady && ThreadContext().battleEntryRendererResiduePending) {
-        // The live battle-entry renderer has already executed before the
-        // first action setup. BeginTurn correctly clears generic previous-turn
-        // compatibility, so inject this independent first-setup stack
-        // footprint immediately afterwards and consume it exactly once.
+        // The live turn-setup stack frame has already executed before the
+        // first action setup. BeginTurn clears generic previous-action
+        // compatibility, so inject this independent physical-row footprint
+        // immediately afterwards and consume it once for this turn.
         ThreadContext().battleEntryRendererResiduePending = false;
         const bool applied = ApplyBattleEntryRendererResidueCompatibility();
         assert(applied && "battle-entry renderer residue compatibility failed");
@@ -662,8 +669,12 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
 
     // Turn-end global formation recenter. Live ROM call-stack evidence places
     // overlay26:021D9434 here in the battle turn-end state machine, after the
-    // complete action sequence, not inside any one action's presentation.
+    // complete action sequence, not inside any one action's presentation. Its
+    // state-3 path first calls 021695A8 to restore every actor's base battle
+    // world, then performs the global formation recenter.
     if (runtimeReady) {
+        const bool restored = RestoreAllPresentationActorsToBaseBattleWorld();
+        assert(restored && "turn-end presentation base-world restore failed");
         const bool recentered = ApplyTurnEndGlobalPresentationRecenter();
         assert(recentered && "turn-end presentation recenter failed");
     }
