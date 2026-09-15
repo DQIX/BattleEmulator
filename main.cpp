@@ -1190,9 +1190,15 @@ int main(int argc, char* argv[]){
 		uint64_t shtCount = 0;
 		uint64_t turn6MedapaniCount = 0;
 		uint64_t turn6MedapaniConfusedCount = 0;
+		uint64_t turn6MeramiCount = 0;
+		uint64_t turn6BagimaCount = 0;
+		uint64_t turn6BagimaStrongCount = 0;
 		int emittedSht = 0;
 		int emittedMedapani = 0;
 		int emittedConfused = 0;
+		int emittedMerami = 0;
+		int emittedBagima = 0;
+		int emittedBagimaStrong = 0;
 
 		for (uint64_t offset = 0; offset < count; ++offset) {
 			const uint64_t seed = startSeed + offset;
@@ -1210,16 +1216,23 @@ int main(int argc, char* argv[]){
 			++shtCount;
 
 			bool turn6Medapani = false;
+			bool turn6Merami = false;
+			bool turn6Bagima = false;
+			bool turn6BagimaStrong = false;
 			for (int record = 0; record < scanResult.position; ++record) {
 				if (!scanResult.isEnemy[record] || scanResult.actorIndex[record] != 2) continue;
-				if (scanResult.turns[record] == 5 && scanResult.actions[record] == BattleEmulator::GERUNIKKU_MEDAPANI) {
-					turn6Medapani = true;
-					break;
-				}
+				if (scanResult.turns[record] != 5) continue;
+				turn6Medapani |= scanResult.actions[record] == BattleEmulator::GERUNIKKU_MEDAPANI;
+				turn6Merami |= scanResult.actions[record] == BattleEmulator::GERUNIKKU_MERAMI;
+				turn6Bagima |= scanResult.actions[record] == BattleEmulator::GERUNIKKU_BAGIMA;
+				turn6BagimaStrong |= scanResult.actions[record] == BattleEmulator::GERUNIKKU_BAGIMA_STRONG;
 			}
 
 			if (turn6Medapani) ++turn6MedapaniCount;
 			if (turn6Medapani && scanPlayers[0].confused) ++turn6MedapaniConfusedCount;
+			if (turn6Merami) ++turn6MeramiCount;
+			if (turn6Bagima) ++turn6BagimaCount;
+			if (turn6BagimaStrong) ++turn6BagimaStrongCount;
 
 			auto emit = [&](const char* category, int& emitted) {
 				if (emitted >= emitLimit) return;
@@ -1234,7 +1247,10 @@ int main(int argc, char* argv[]){
 				          << " mirrorTurn=" << scanPlayers[0].MagicMirrorTurn << '\n';
 			};
 
-			if (turn6Medapani && scanPlayers[0].confused) emit("turn6-medapani-confused", emittedConfused);
+			if (turn6Merami) emit("turn6-merami", emittedMerami);
+			else if (turn6Bagima) emit("turn6-bagima", emittedBagima);
+			else if (turn6BagimaStrong) emit("turn6-bagima-strong", emittedBagimaStrong);
+			else if (turn6Medapani && scanPlayers[0].confused) emit("turn6-medapani-confused", emittedConfused);
 			else if (turn6Medapani) emit("turn6-medapani", emittedMedapani);
 			else emit("sht", emittedSht);
 		}
@@ -1244,7 +1260,10 @@ int main(int argc, char* argv[]){
 		          << " currentSeedPosition=" << currentSeedPosition
 		          << " sht=" << shtCount
 		          << " turn6Medapani=" << turn6MedapaniCount
-		          << " turn6MedapaniConfused=" << turn6MedapaniConfusedCount << '\n';
+		          << " turn6MedapaniConfused=" << turn6MedapaniConfusedCount
+		          << " turn6Merami=" << turn6MeramiCount
+		          << " turn6Bagima=" << turn6BagimaCount
+		          << " turn6BagimaStrong=" << turn6BagimaStrongCount << '\n';
 		return 0;
 	}
 
