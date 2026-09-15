@@ -44,17 +44,7 @@ set(SOURCES
         debug.h
         BattleResult.h
         Equipment.h
-        ActionOptimizer.cpp
-        ActionOptimizer.h
         Genome.h
-        EnhancedCostCalculator.h
-        EnhancedCostCalculator.cpp
-        EnhancedHashCalculator.h
-        EnhancedHeapQueue.h
-        EnhancedHeapQueue.cpp
-        EnhancedHashCalculator.cpp
-        SimpleParameterOptimizer.cpp
-        SimpleParameterOptimizer.h
         LinearIdPool.h
         camera/freecam-bact-table.hpp
         camera/freecam_action_mapper.hpp
@@ -64,6 +54,10 @@ set(SOURCES
         camera/freecam_runtime.hpp
         camera/freecam_setup.hpp
         camera/freecam_state.hpp
+        GerunikkuSearchCli.h
+        GerunikkuSearchCli.cpp
+        GerunikkuSearch.cpp
+        GerunikkuSearch.h
 )
 
 add_executable(gerunikku ${SOURCES})

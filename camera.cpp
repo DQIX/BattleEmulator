@@ -422,12 +422,14 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
         TriggerDecision runtimeDecision{};
         bool hasRuntimeDecision = false;
         bool hasPresentationSetup = false;
-        std::uint16_t runtimeActorId = kInvalidBattleActor;
-        std::uint16_t runtimeTargetId = kInvalidBattleActor;
+        std::uint16_t runtimeActorId = actors[i].valid()
+            ? Dq9ActorId(actors[i])
+            : kInvalidBattleActor;
+        std::uint16_t runtimeTargetId = targets[i].valid()
+            ? Dq9ActorId(targets[i])
+            : kInvalidBattleActor;
         if (runtimeReady && hasActionMetadata
             && actors[i].valid() && targets[i].valid()) {
-            runtimeActorId = Dq9ActorId(actors[i]);
-            runtimeTargetId = Dq9ActorId(targets[i]);
             if (SetupCurrentAndFuturePresentationGoals(
                     i,
                     actionCount,
@@ -569,6 +571,18 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
         if (moture && after == BattleEmulator::MERA_ZOMA) {
             AssertCameraMapping(after);
             onFreeCameraMove(position, after, 1, NowState, traceBoundaries);
+            if (runtimeReady) {
+                (void)CommitActionProgressRaw(
+                    i,
+                    actionCount,
+                    after,
+                    actionMetadata != nullptr
+                        ? actionMetadata->dq9ActionId
+                        : metadata::kInvalidActionId,
+                    runtimeActorId,
+                    runtimeTargetId
+                );
+            }
 #if defined(gerunikku)
             finalizeDebugEvent();
 #endif
@@ -588,18 +602,23 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                     runtimeTargetId
                 );
             }
-            if (hasPresentationSetup && actionMetadata != nullptr) {
+            if (runtimeReady) {
                 (void)CommitActionProgressRaw(
                     i,
                     actionCount,
                     after,
-                    actionMetadata->dq9ActionId,
+                    actionMetadata != nullptr
+                        ? actionMetadata->dq9ActionId
+                        : metadata::kInvalidActionId,
                     runtimeActorId,
                     runtimeTargetId
                 );
             }
             if (hasPresentationSetup && actionMetadata != nullptr) {
-                (void)ApplyBactOpcode4fPostTrackingEffects(actionMetadata->dq9ActionId);
+                (void)ApplyBactOpcode4fPostTrackingEffects(
+                    actionMetadata->dq9ActionId,
+                    trackingCameraDecision.source
+                );
             }
             (void)CompleteActionPresentation(runtimeActorId, i);
             processSlot1CleanupPresentationRecord(i, runtimeActorId);
@@ -643,20 +662,27 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
             (*position)++; // lr: 0x0216f0e4, max: 8
         }
         if (hasPresentationSetup && actionMetadata != nullptr) {
-            (void)ApplyBactOpcode4fPostTrackingEffects(actionMetadata->dq9ActionId);
+            (void)ApplyBactOpcode4fPostTrackingEffects(
+                actionMetadata->dq9ActionId,
+                trackingCameraDecision.source
+            );
         }
         if (after != BattleEmulator::ATTACK_ALLY) {//味方の攻撃→上空だとフリーカメラが特異点の挙動する
             preemptive = false;
         }
-        if (hasPresentationSetup && actionMetadata != nullptr) {
+        if (runtimeReady) {
             (void)CommitActionProgressRaw(
                 i,
                 actionCount,
                 after,
-                actionMetadata->dq9ActionId,
+                actionMetadata != nullptr
+                    ? actionMetadata->dq9ActionId
+                    : metadata::kInvalidActionId,
                 runtimeActorId,
                 runtimeTargetId
             );
+        }
+        if (hasPresentationSetup && actionMetadata != nullptr) {
             (void)CompleteActionPresentation(runtimeActorId, i);
             // DQ9 929 is presentation type 0, but seed-0x13 live-ROM tracing
             // proves that the independent battle-HUD renderer executes while

@@ -13,9 +13,7 @@
 #include "camera.h"
 #include "camera/freecam_action_mapper.hpp"
 #include "debug.h"
-#include "ActionOptimizer.h"
 #include "GerunikkuSearchCli.h"
-#include "EnhancedCostCalculator.h"
 
 #ifdef DEBUG
 
@@ -23,9 +21,6 @@
 
 #endif
 
-#if defined(OPTIMIZE_MODE)
-#include "SimpleParameterOptimizer.h"
-#endif
 
 int startturn = -1;
 
@@ -400,44 +395,6 @@ bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aAct
 		}
 		turns++;
 	}
-
-#if !defined(OPTIMIZE_MODE)
-	Genome genome = ActionOptimizer::RunAlgorithmAsync(
-		copiedPlayers2, seed, turns, -1, gene, 8, dropbug).second;
-    BattleResult result;
-
-	auto runMain = [&](const Genome& g, BattleResult& res) -> RunResult {
-		Player players[4] = {copiedPlayers2[0], copiedPlayers2[1], copiedPlayers2[2], copiedPlayers2[3]};
-		int position = 1;
-		uint64_t nowState = 0;
-		BattleEmulator::Main(&position, 100, g.actions, players, &res, seed, nullptr, nullptr, -1, &nowState);
-		#if defined(gerunikku)
-		bool win = players[0].hp > 0 && players[1].hp <= 0 && players[2].hp <= 0 && players[3].hp <= 0;
-		return { win, players[2].hp, res.turn, res.position };
-		#else
-		bool win = players[0].hp > 0 && players[1].hp <= 0;
-		return { win, players[1].hp, res.turn, res.position };
-		#endif
-	};
-
-    const auto rr = runMain(genome, result);
-    if (!rr.win) return false;
-
-    ss << dumpTable(result, genome.actions, startturn) << std::endl;
-
-    ss << "0x" << std::hex << seed << std::dec << ": ";
-
-	for (auto i = 0; i < 100; ++i) {
-		if (genome.actions[i] == 0 || genome.actions[i] == -1) {
-			break;
-		}
-		ss << genome.actions[i] << ", ";
-	}
-	ss << std::endl;
-    ss << "[IDDFS] Win turn=" << (rr.turn + 1)
-       << " position=" << rr.position
-       << " nodes=" << ActionOptimizer::getNodesUsed() << std::endl;
-#endif
 
 	//探索成功
 	return true;
@@ -1607,112 +1564,6 @@ int main(int argc, char* argv[]){
 				break;
 			}
 		}
-		return 0;
-	}
-
-	if (argc >= 3 && std::string_view(argv[1]) == "--trace-iddfs") {
-		const uint64_t searchSeed = std::stoull(argv[2], nullptr, 0);
-		int searchThreads = 1;
-		int firstActionArg = 3;
-		if (argc >= 4) {
-			const std::string_view option(argv[3]);
-			constexpr std::string_view threadPrefix = "--threads=";
-			if (option.starts_with(threadPrefix)) {
-				searchThreads = std::max(1, std::stoi(std::string(option.substr(threadPrefix.size()))));
-				firstActionArg = 4;
-			}
-		}
-		int searchActions[350];
-		std::fill(std::begin(searchActions), std::end(searchActions), -1);
-		int knownTurns = 0;
-		for (int argIndex = firstActionArg; argIndex < argc && knownTurns < 349; ++argIndex) {
-			const std::string_view token(argv[argIndex]);
-			const std::size_t separator = token.find(':');
-			const int action = std::stoi(std::string(token.substr(0, separator)), nullptr, 0);
-			const int target = separator == std::string_view::npos
-				? -1
-				: std::stoi(std::string(token.substr(separator + 1)), nullptr, 0);
-			searchActions[knownTurns++] = BattleEmulator::PackHeroAction(action, target);
-		}
-
-		const auto searchStart = std::chrono::steady_clock::now();
-		Genome genome = searchThreads > 1
-			? ActionOptimizer::RunAlgorithmAsync(
-				copiedPlayers, searchSeed, knownTurns, -1, searchActions, searchThreads, false).second
-			: ActionOptimizer::RunAlgorithm(
-				copiedPlayers, searchSeed, knownTurns, -1, searchActions, 0);
-		const auto searchElapsed = std::chrono::steady_clock::now() - searchStart;
-		const auto searchMs = std::chrono::duration_cast<std::chrono::milliseconds>(searchElapsed).count();
-		const auto searchNodes = ActionOptimizer::getNodesUsed();
-		const auto nodesPerSecond = searchMs > 0
-			? (static_cast<std::uint64_t>(searchNodes) * UINT64_C(1000)) / static_cast<std::uint64_t>(searchMs)
-			: UINT64_C(0);
-		std::cout << "IDDFS nodes=" << searchNodes
-		          << " knownTurns=" << knownTurns
-		          << " threads=" << searchThreads
-		          << " elapsedMs=" << searchMs
-		          << " nodesPerSec=" << nodesPerSecond
-		          << " dominancePruned=" << ActionOptimizer::getDominancePruned()
-		          << " dominanceRecordsMax=" << ActionOptimizer::getDominanceRecordsMax()
-		          << " dominanceOverflowIterations=" << ActionOptimizer::getDominanceOverflowIterations()
-		          << '\n';
-		std::cout << "IDDFS actions=";
-		for (int index = 0; index < 350 && genome.actions[index] > 0; ++index) {
-			const int packed = genome.actions[index];
-			std::cout << (index == 0 ? "" : ",")
-			          << BattleEmulator::HeroActionId(packed);
-			const int target = BattleEmulator::HeroTargetId(packed);
-			if (target >= 0) std::cout << ':' << target;
-		}
-		std::cout << '\n';
-
-		Player verifyPlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
-		BattleResult verifyResult;
-		// RunIddfs starts from the ROM baseline after setSeedFromInitial(seed, 1):
-		// position #1 is already consumed, so the first battle RNG read is #2.
-		int verifyPosition = 2;
-		uint64_t verifyState = 0;
-		lcg::init(searchSeed, true);
-		BattleEmulator::Main(&verifyPosition, 100, genome.actions, verifyPlayers, &verifyResult,
-		                     searchSeed, nullptr, nullptr, -1, &verifyState);
-		const bool win = verifyPlayers[0].hp > 0
-			&& verifyPlayers[1].hp <= 0
-			&& verifyPlayers[2].hp <= 0
-			&& verifyPlayers[3].hp <= 0;
-		std::cout << "IDDFS verify win=" << win
-		          << " position=" << verifyPosition
-		          << " hp=" << verifyPlayers[0].hp << ',' << verifyPlayers[1].hp << ','
-		          << verifyPlayers[2].hp << ',' << verifyPlayers[3].hp << '\n';
-		std::cout << dumpTable(verifyResult, genome.actions, -1);
-		return win ? 0 : 2;
-	}
-
-	if (argc >= 4 && std::string_view(argv[1]) == "--probe-iddfs-depth") {
-		const uint64_t searchSeed = std::stoull(argv[2], nullptr, 0);
-		const int depthLimit = std::stoi(argv[3], nullptr, 0);
-		int searchThreads = 1;
-		if (argc >= 5) {
-			const std::string_view option(argv[4]);
-			constexpr std::string_view threadPrefix = "--threads=";
-			if (option.starts_with(threadPrefix)) {
-				searchThreads = std::max(1, std::stoi(std::string(option.substr(threadPrefix.size()))));
-			}
-		}
-		const auto started = std::chrono::steady_clock::now();
-		const auto probe = ActionOptimizer::ProbeDepth(copiedPlayers, searchSeed, depthLimit, searchThreads);
-		const auto elapsed = std::chrono::steady_clock::now() - started;
-		const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
-		const auto nodesPerSecond = elapsedMs > 0
-			? (probe.nodes * UINT64_C(1000)) / static_cast<std::uint64_t>(elapsedMs)
-			: UINT64_C(0);
-		std::cout << "IDDFS_PROBE seed=0x" << std::hex << searchSeed << std::dec
-		          << " depth=" << depthLimit
-		          << " threads=" << searchThreads
-		          << " nodes=" << probe.nodes
-		          << " elapsedMs=" << elapsedMs
-		          << " nodesPerSec=" << nodesPerSecond
-		          << " win=" << probe.win
-		          << " solutionDepth=" << probe.solutionDepth << '\n';
 		return 0;
 	}
 

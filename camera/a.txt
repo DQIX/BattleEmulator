@@ -1951,3 +1951,52 @@ assert自体はちゃんと残っています。skipもproductionから消えて
 
 runtimeはもう変えていませんが、念のため最後にBUFFをhero actionとして固定した5万seed×3turn scanも回します。これで「元seedだけ通る」ではなく、type4を毎turn踏みながら敵側の全分岐を広く通します。
 
+了解、訂正を反映します。追加の観測資産は C:\Users\owner\Documents\tunnelworkspace\BattleArrow と battle_harness だけを使います。さっき作った local-mcp-chatgpt-tunnel 用の分離は作業対象外なので閉じ、元の分離で続けます。
+
+静的BACTには 0x009B 内の offset 0x0120 に opcode 0x4F mode0 が本当にあります。ただしROM実走ではその命令が通っていません。つまり「BACTに存在する」≠「毎回実行される」で、現在のmetadataは制御フローを潰している可能性が高いです。これを freecam_aux_write_probe_mcp.js で同じ2ターンをfresh再演して確定します。
+
+観測で決着しました。fresh 2ターンの 0x009B は2回ともselector・camera placementまでは通りますが、bact-opcode-4f は一度も実行されません。対してturn1のザラキ 0x0019 では bact-opcode-4f mode0 が実際に記録されています。したがってC++の「BACT内に0x4Fがあればaction後に必ず適用」は明確な一般バグです。これからaction固有除外ではなく、BACT側の実行条件を既存解析から復元します。
+
+過去の a.txt も再確認すると、当時は「raw 0x4F mode maskをaction固定で再演する」まで進めた一方、今回初めて 0x009B がその前提の反例になっています。既知actionを壊すaction-ID除外は入れません。まず当時のmode0/mode2確定箇所と、BACT実行側の条件を読み直して、metadataを「存在」から「実行される条件」へ直します。
+
+もう一つ重要な可能性があります。liveの actionId=155 は「現在の戦闘action ID」であって、実行中の 0x4F が必ず sp155.bact 由来とは限りません。DQ9はaction-specific BACT、actor-resource BACT、default BACTの複数ソースを持つので、まず 0x009B が実際にどのBACTソースを通っているかを既存のSP-BACT caller観測で確認します。ここを飛ばすとgeneratorだけ直して別の飛躍になります。
+
+live差の核心は「action 155にSP-BACTファイルは存在するが、この実行ではSP-BACT callerを通っていない」まで確定しています。次はそのcaller分岐を、既存の観測コードと既存解析資料から一般条件として特定します。ここでaction 155だけを除外するような修正はしません。
+
+既存のtriggerモデルを見ると、すでに TriggerSource::action_bact と actor_membership を区別する設計があります。なら新しいE28状態を持ち込むより、各actionのruntime decisionが「この実行はSP-BACT由来か」を既に表現できている可能性が高いです。そこを先に確認します。
+
+設計上の手掛かりが出ました。freecam triggerは「actor membershipがあればそれを先に使い、なければSP-BACT」という優先順位を既に持っています。0x009B のlive selectorがdirect-membership callerなのと整合するので、BACT後処理も同じtrigger sourceに従うべきかを既存membership metadataで検証します。
+
+0x4F はSP-BACTインタプリタ内の命令なので、一般条件は「そのactionに0x4Fが存在する」ではなく「今回のtrigger sourceがaction_bactで、実際にSP-BACT経路を選んだ」と考えるのが構造的に自然です。これを推測で採用せず、C++側の既存 TrackingCameraFor() が155をどのsourceに分類しているか、同じtraceで直接出します。
+
+検証値が揃いました。C++の既存判定は 0x009B: source=actor_membership(1), bact4f=0x1、ザラキ 0x0019: source=action_bact(2), bact4f=0x1。live ROMでも前者は0x4F未実行、後者はmode0実行です。したがって、action-specific 0x4F後処理を action_bact sourceのときだけ適用する修正を入れます。
+
+0x4F誤適用は直り、C0はROMどおり start=29 / route=3 に戻りました。ただし位置はまだC++ next=127、ROM last=125のままです。残る1回分は同じfreecamの param5 差で、ROMは0、C++は1。次はselectorのmode1例外条件だけを比較します。
+
+3条件のROM正本も既存playbookにあります。今回のaction3では route最大3、current target=Hero、直前action actor=C1なのでprevious-actor一致もfalse。残るoverlapは、camera.cppからgeometryを渡していなければfalseのはずです。それでもparam5=1なら、履歴の「直前action」がC++側で別物になっている可能性があります。現在の previousAction と presentationActionRecordIndex をaction3直前だけ出して確認します。
+
+0x4F修正後もparam5差が残るので、今度は3条件の入力値そのものを取ります。特に「C0自身のroute=3」だけでは足りず、selectorは全participantのrouteを見ているため、action3直前の全route count・previous actor・target auxをC++側で出します。
+
+残るparam5差の直接原因も取れました。turn2 action3直前のC++は presentationIndex=-1 のままです。つまり0x009Bや通常攻撃を処理していても「直前action履歴が存在しない」扱いになり、later actionなのにfirst-action相当のparam5=1へ落ちています。原因はturn2 action0（ミラーシールド）でhistory更新が成立せず、その後のcontiguous checkも連鎖的に全部失敗していることです。ROMは当然4本のaction recordを持っています。まずcamera入力recordのactor/target生成を確認します。
+
+補足すると、ミラーシールドのC++ combat側は汎用target選択の都合でraw defenderに敵を入れていますが、camera metadataはself-targetを認識しています。履歴が途切れた原因が「self actionだからpresentation goal setupをしない」ことなのか、それともroute planner失敗なのかを関数条件で切ります。
+
+履歴の欠落はコード上も確認できました。CommitActionProgressRaw() は「前のreal action indexが連続している」ことを要求するのに、camera.cppは hasPresentationSetup のactionでしか呼んでいません。ROMではgoal setupを通らないactionにも0x28-byte action recordは存在します。そこでcamera setup有無とaction-record履歴を分離し、各real actionを1回必ず履歴へ進めます。DQ9 mapping未対応actionはIDをinvalidのまま記録し、actor/target履歴だけは保持します。
+
+2ターンprefixは修正後、C++ position=126 になり、ROMのlast-consumed 125 と規約どおり一致しました。C0も start=29 / route=3、freecamは RandInt(100) 1回だけで一致です。探索本体は触っていません。このまま探索列のturn3「ザキ→A」をROMで続け、各turn境界でC++ prefixと照合します。
+
+ROM turn3も完走し、AはHP0、positionはlast-consumed 176。このturnにはsynthetic action 944 も実際に挿入されています。C++の3-turn prefixを同じ列で走らせ、next 177 とaction-record履歴（synthetic込み）が一致するか確認します。
+
+turn3 ROM側はlast 176 まで取得済みです。C++ 3-turn traceは途中まで同じ枝を通っていますが、診断出力が多すぎて末尾が切れました。原因特定用に足した一時traceはもう役目を終えたので外し、機能修正だけ残した状態で3-turn→8-turnの境界値を取り直します。
+
+3ターンも一致しました。ROM last 176 ↔ C++ next 177、A/Bとも死亡、synthetic 944 も両側で入っています。次はturn4/5の「ためる」を連続実演し、テンション経路とpresentationがずれないか見ます。
+
+turn5のROMはlast-consumed 266 まで進んでいます。まず同じ5ターンprefixをC++で再演してnext 267 を確認し、そのままturn6の「すてみ」をlive ROMでID込み観測します。
+
+turn5も一致しました。ROM last 266 ↔ C++ next 267、Hero HPも298です。ここから静的推定をせず、turn6のlive menuで「すてみ」を選び、実行action IDとROM終端を観測してからC++ common 33と比較します。
+
+turn6でlive ROMのaction IDは 173 と確定しました。静的表ではなく実行中selectorで actionId=173 を観測済みです。ROM終端はlast 320。ここで初めてcommon 33 のC++再演と比較し、mapper追加が本当に必要か判定します。
+
+turn6も境界は一致しました。ROM last 320 ↔ C++ next 321、Hero HP274。liveで すてみ=action173 は確定しましたが、common33がmapper未登録でもこのturnのRNG/HPは一致しているため、まだ「登録漏れバグ」とは断定しません。後続turn7/8でpresentation stateまで影響が出るかを先に見ます。
+
+turn7のROMはlast 374、Hero presentation startは66、freecam無しでした。まずC++ 7-turn prefixでnext 375 を確認し、その後turn8のさみだれづきを勝利までlive実演します。

@@ -862,13 +862,13 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     const std::uint16_t dq9ActionId,
     const std::uint8_t presentationType
 ) noexcept {
-    if (dq9ActionId == UINT16_C(137)) {
-        // Seed 0x3EBB94 after Mirror Shield: the next 021E1958 build reads
-        // physical row +4 values [0x02392920, 0x02392920, 8, 15], all nonzero.
-        // This observation is action-specific; DQ9 55 shares presentation type
-        // 31 but has not been measured and must not inherit this prefix.
-        constexpr std::array<bool, 4> prefix{true, true, true, true};
-        return SetRosterField4CompatibilityPrefix(prefix);
+    if (dq9ActionId == UINT16_C(55) || dq9ActionId == UINT16_C(137)) {
+        // Live ROM evidence now covers both measured presentation-type-31
+        // actions used here. After DQ9 137 (seed 0x3EBB94) and DQ9 55
+        // (seed 0x31A7C5), the next 021E1958 roster build sees all four
+        // physical row +4 words nonzero. Keep this scoped to the measured
+        // action IDs rather than promoting every type-31 action by inference.
+        return ApplyBattleHudRendererResidueCompatibility();
     }
     return ApplyKnownRosterField4PostActionCompatibility(presentationType);
 }
@@ -1538,8 +1538,16 @@ inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
 // point rather than folding it into CompleteActionPresentation, because
 // 0216964C invalidates the in-flight presentation routes.
 [[nodiscard]] inline bool ApplyBactOpcode4fPostTrackingEffects(
-    const std::uint16_t dq9ActionId
+    const std::uint16_t dq9ActionId,
+    const TriggerSource triggerSource
 ) noexcept {
+    // The raw 0x4F mask describes instructions present in spNNN.bact, not
+    // instructions that execute for every occurrence of that action ID.
+    // Live ROM confirms DQ9 0x009B can reach the selector through direct actor
+    // membership without entering 021DCF8C (the SP-BACT caller); in that path
+    // its static mode-0 instruction is not executed. Conversely DQ9 0x0019
+    // reaches the action-BACT path and does execute its mode-0 instruction.
+    if (triggerSource != TriggerSource::action_bact) return true;
     const std::uint8_t modeMask = metadata::BactOpcode4fModeMask(dq9ActionId);
     if ((modeMask & UINT8_C(0x01)) != 0) {
         if (!RestoreAllPresentationActorsToBaseBattleWorld()) return false;

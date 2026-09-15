@@ -557,7 +557,6 @@ std::string BattleEmulator::getActionName(int actionId) {
             return "Double up";
         case BattleEmulator::MULTITHRUST:
             return "Multithrust";
-
         case BattleEmulator::ATTACK_ALLY:
             return "Attack";
         case BattleEmulator::HEAL:
@@ -743,6 +742,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         double speed3 = Player::isPlayerAlive(players[3]) && players[3].speed > 0
             ? players[3].speed * lcg::floatRand(position, 0.51, 1.0) // float, lr: 0x0215efac
             : -1.0;
+
 
         auto swap_if = [](double& a, double& b, int& ia, int& ib) {
             if (a < b) {
