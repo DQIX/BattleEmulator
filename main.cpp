@@ -565,14 +565,6 @@ namespace {
             BattleEmulator::Main(&replayPosition, genome.turn, genome.actions, replayPlayers,
                                  &result1, seed, nullptr, nullptr, -1, &replayState);
 
-            if (replayPlayers[0].hp <= 0) {
-                BattleResult result;
-                BattleEmulator::Main(&start.position, 100, gene, start.players, &result, seed,
-                                 nullptr, nullptr, -1, &start.nowState);
-                dumpTableMain(result, gene, seed, turns, ss);
-                return;
-            }
-
 #if defined(ACTION_SEARCH_USE_OPTIMIZED)
             ActionSearchState replayEnd{};
             replayEnd.players[0] = replayPlayers[0]; replayEnd.players[1] = replayPlayers[1];
@@ -582,7 +574,20 @@ namespace {
                 ss << "ActionSearchOptimized: exact replay mismatch; result rejected" << std::endl;
                 return;
             }
+
+            if (searchResult.length <= 10) {
+                BattleResult result;
+                BattleEmulator::Main(&start.position, 100, gene, start.players, &result, seed,
+                                 nullptr, nullptr, -1, &start.nowState);
+                dumpTableMain(result, gene, seed, turns, ss);
+                return;
+            }
+
+
 #endif
+
+
+
             dumpTableMain(result1, genome, seed, turns, ss);
             ss << "BattleResult.position=" << result1.position
                       << ", RNG.position=" << replayPosition << std::endl;
