@@ -1,5 +1,7 @@
 # BattleEmulator debugging notes for ChatGPT
 
+**最終ターンの乱数ずれは一切問題としない。ダメージさえあってればよい。**
+
 ## Command ID interpretation: never compare IDs before mapping them
 
 There are multiple action-ID namespaces in this repository. Treating them as the same namespace creates false mismatches.
