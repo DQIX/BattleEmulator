@@ -1087,7 +1087,7 @@ int main(int argc, char *argv[]) {
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 139924927+8;
+    uint64_t seed = 0x01a44cc5;
 
     int actions[350] = {
         25, -1,
@@ -1097,7 +1097,9 @@ int main(int argc, char *argv[]) {
     Player Player5[2] = {BasePlayers[0], BasePlayers[1]};
     int debugTurns = 0;
     while (debugTurns < 349 && actions[debugTurns] != -1) ++debugTurns;
-    SearchRequest(Player5, seed, actions, debugTurns, 1);
+    std::stringstream ss;
+    SearchRequest(Player5, seed, actions, debugTurns, 1, ss);
+    std::cout << ss.str() << std::endl;
 
     std::cout << performanceLogger.rdbuf() << std::endl;
 
