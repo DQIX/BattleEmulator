@@ -1,0 +1,2730 @@
+{
+  "schema": "battle-emulator-roster-row4-mining-v1",
+  "seed": "0x31d86b",
+  "initialPosition": 0,
+  "finalPosition": 615,
+  "heroDq9Actions": [
+    {
+      "dq9": 137,
+      "target": null
+    },
+    {
+      "dq9": 41,
+      "target": null
+    },
+    {
+      "dq9": 161,
+      "target": null
+    },
+    {
+      "dq9": 69,
+      "target": 192
+    },
+    {
+      "dq9": 70,
+      "target": 193
+    },
+    {
+      "dq9": 71,
+      "target": 194
+    },
+    {
+      "dq9": 72,
+      "target": 192
+    },
+    {
+      "dq9": 24,
+      "target": 193
+    }
+  ],
+  "turns": [
+    {
+      "turn": 0,
+      "presentationActionOrder": [
+        {
+          "actionIndex": 0,
+          "dq9ActionId": 137,
+          "actorId": 0,
+          "targetId": 0
+        },
+        {
+          "actionIndex": 1,
+          "dq9ActionId": 929,
+          "actorId": 192,
+          "targetId": 193
+        },
+        {
+          "actionIndex": 2,
+          "dq9ActionId": 42,
+          "actorId": 194,
+          "targetId": 194
+        },
+        {
+          "actionIndex": 3,
+          "dq9ActionId": 155,
+          "actorId": 193,
+          "targetId": 0
+        },
+        {
+          "actionIndex": 4,
+          "dq9ActionId": 55,
+          "actorId": 193,
+          "targetId": 193
+        }
+      ],
+      "builds": [
+        {
+          "actionIndex": 3,
+          "dq9ActionId": 155,
+          "actorId": 193,
+          "targetId": 0,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x02392920",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0x02392920",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0x00000008",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x0000000f",
+              "row4Nonzero": true
+            }
+          ],
+          "consultedRows": [],
+          "consumers": [
+            {
+              "sequence": 0,
+              "rowIndex": 1,
+              "actorId": 192,
+              "kind": "fallback-021E2664"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 3,
+              "actorId": 194,
+              "kind": "fallback-021E2664"
+            }
+          ],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 59,
+                "goal": 59,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 30,
+                "goal": 29,
+                "auxiliary": 255,
+                "target": 23,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 23,
+                "goal": 23,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 33,
+                "goal": 34,
+                "auxiliary": 255,
+                "target": 34,
+                "routeCount": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "turn": 1,
+      "presentationActionOrder": [
+        {
+          "actionIndex": 0,
+          "dq9ActionId": 41,
+          "actorId": 0,
+          "targetId": 0
+        },
+        {
+          "actionIndex": 1,
+          "dq9ActionId": 155,
+          "actorId": 193,
+          "targetId": 0
+        },
+        {
+          "actionIndex": 2,
+          "dq9ActionId": 2,
+          "actorId": 193,
+          "targetId": 0
+        },
+        {
+          "actionIndex": 3,
+          "dq9ActionId": 109,
+          "actorId": 192,
+          "targetId": 0
+        },
+        {
+          "actionIndex": 4,
+          "dq9ActionId": 929,
+          "actorId": 194,
+          "targetId": 193
+        }
+      ],
+      "builds": [
+        {
+          "actionIndex": 0,
+          "dq9ActionId": 41,
+          "actorId": 0,
+          "targetId": 0,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x027e3488",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0x00000002",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0x00000000",
+              "row4Nonzero": false
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x00000000",
+              "row4Nonzero": false
+            }
+          ],
+          "consultedRows": [],
+          "consumers": [],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 59,
+                "goal": 59,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 29,
+                "goal": 29,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 23,
+                "goal": 23,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 34,
+                "goal": 34,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            }
+          ]
+        },
+        {
+          "actionIndex": 1,
+          "dq9ActionId": 155,
+          "actorId": 193,
+          "targetId": 0,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x02392920",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0x02392920",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0x00000008",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x0000000f",
+              "row4Nonzero": true
+            }
+          ],
+          "consultedRows": [
+            {
+              "sequence": 0,
+              "rowIndex": 1,
+              "actorId": 192,
+              "branch": "row4-nonzero"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 3,
+              "actorId": 194,
+              "branch": "row4-nonzero"
+            }
+          ],
+          "consumers": [
+            {
+              "sequence": 0,
+              "rowIndex": 1,
+              "actorId": 192,
+              "kind": "fallback-021E2664"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 3,
+              "actorId": 194,
+              "kind": "fallback-021E2664"
+            }
+          ],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 59,
+                "goal": 59,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 29,
+                "goal": 28,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 23,
+                "goal": 23,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 34,
+                "goal": 33,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            }
+          ]
+        },
+        {
+          "actionIndex": 2,
+          "dq9ActionId": 2,
+          "actorId": 193,
+          "targetId": 0,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x02392920",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0x02392920",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0x00000008",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x0000000f",
+              "row4Nonzero": true
+            }
+          ],
+          "consultedRows": [
+            {
+              "sequence": 0,
+              "rowIndex": 1,
+              "actorId": 192,
+              "branch": "row4-nonzero"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 3,
+              "actorId": 194,
+              "branch": "row4-nonzero"
+            }
+          ],
+          "consumers": [
+            {
+              "sequence": 0,
+              "rowIndex": 1,
+              "actorId": 192,
+              "kind": "fallback-021E2664"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 3,
+              "actorId": 194,
+              "kind": "fallback-021E2664"
+            }
+          ],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 59,
+                "goal": 59,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 29,
+                "goal": 28,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 23,
+                "goal": 23,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 34,
+                "goal": 33,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            }
+          ]
+        },
+        {
+          "actionIndex": 3,
+          "dq9ActionId": 109,
+          "actorId": 192,
+          "targetId": 0,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x02392920",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0x02392920",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0x00000008",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x0000000f",
+              "row4Nonzero": true
+            }
+          ],
+          "consultedRows": [
+            {
+              "sequence": 0,
+              "rowIndex": 3,
+              "actorId": 194,
+              "branch": "row4-nonzero"
+            }
+          ],
+          "consumers": [
+            {
+              "sequence": 0,
+              "rowIndex": 1,
+              "actorId": 192,
+              "kind": "normal-021E1FD8"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 3,
+              "actorId": 194,
+              "kind": "fallback-021E2664"
+            }
+          ],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 59,
+                "goal": 59,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 29,
+                "goal": 40,
+                "auxiliary": 48,
+                "target": 59,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 23,
+                "goal": 23,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 34,
+                "goal": 33,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "turn": 2,
+      "presentationActionOrder": [
+        {
+          "actionIndex": 0,
+          "dq9ActionId": 161,
+          "actorId": 0,
+          "targetId": 0
+        },
+        {
+          "actionIndex": 1,
+          "dq9ActionId": 155,
+          "actorId": 193,
+          "targetId": 0
+        },
+        {
+          "actionIndex": 2,
+          "dq9ActionId": 2,
+          "actorId": 193,
+          "targetId": 0
+        },
+        {
+          "actionIndex": 3,
+          "dq9ActionId": 929,
+          "actorId": 192,
+          "targetId": 193
+        },
+        {
+          "actionIndex": 4,
+          "dq9ActionId": 1,
+          "actorId": 194,
+          "targetId": 0
+        }
+      ],
+      "builds": [
+        {
+          "actionIndex": 1,
+          "dq9ActionId": 155,
+          "actorId": 193,
+          "targetId": 0,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x02392920",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0x02392920",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0x00000008",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x0000000f",
+              "row4Nonzero": true
+            }
+          ],
+          "consultedRows": [
+            {
+              "sequence": 0,
+              "rowIndex": 1,
+              "actorId": 192,
+              "branch": "row4-nonzero"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 3,
+              "actorId": 194,
+              "branch": "row4-nonzero"
+            }
+          ],
+          "consumers": [
+            {
+              "sequence": 0,
+              "rowIndex": 1,
+              "actorId": 192,
+              "kind": "fallback-021E2664"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 3,
+              "actorId": 194,
+              "kind": "fallback-021E2664"
+            }
+          ],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 58,
+                "goal": 58,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 47,
+                "goal": 46,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 22,
+                "goal": 22,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 32,
+                "goal": 33,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            }
+          ]
+        },
+        {
+          "actionIndex": 2,
+          "dq9ActionId": 2,
+          "actorId": 193,
+          "targetId": 0,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x02392920",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0x02392920",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0x00000008",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x0000000f",
+              "row4Nonzero": true
+            }
+          ],
+          "consultedRows": [
+            {
+              "sequence": 0,
+              "rowIndex": 1,
+              "actorId": 192,
+              "branch": "row4-nonzero"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 3,
+              "actorId": 194,
+              "branch": "row4-nonzero"
+            }
+          ],
+          "consumers": [
+            {
+              "sequence": 0,
+              "rowIndex": 1,
+              "actorId": 192,
+              "kind": "fallback-021E2664"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 3,
+              "actorId": 194,
+              "kind": "fallback-021E2664"
+            }
+          ],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 58,
+                "goal": 58,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 47,
+                "goal": 46,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 22,
+                "goal": 22,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 32,
+                "goal": 33,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            }
+          ]
+        },
+        {
+          "actionIndex": 4,
+          "dq9ActionId": 1,
+          "actorId": 194,
+          "targetId": 0,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x02392920",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0x02392920",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0x00000008",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x0000000f",
+              "row4Nonzero": true
+            }
+          ],
+          "consultedRows": [],
+          "consumers": [
+            {
+              "sequence": 0,
+              "rowIndex": 3,
+              "actorId": 194,
+              "kind": "normal-021E1FD8"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 1,
+              "actorId": 192,
+              "kind": "fallback-021E2664"
+            }
+          ],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 58,
+                "goal": 58,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 47,
+                "goal": 38,
+                "auxiliary": 255,
+                "target": 22,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 22,
+                "goal": 22,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 32,
+                "goal": 41,
+                "auxiliary": 50,
+                "target": 58,
+                "routeCount": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "turn": 3,
+      "presentationActionOrder": [
+        {
+          "actionIndex": 0,
+          "dq9ActionId": 69,
+          "actorId": 0,
+          "targetId": 192
+        },
+        {
+          "actionIndex": 1,
+          "dq9ActionId": 944,
+          "actorId": 0,
+          "targetId": 0
+        },
+        {
+          "actionIndex": 2,
+          "dq9ActionId": 155,
+          "actorId": 193,
+          "targetId": 0
+        },
+        {
+          "actionIndex": 3,
+          "dq9ActionId": 2,
+          "actorId": 193,
+          "targetId": 0
+        },
+        {
+          "actionIndex": 4,
+          "dq9ActionId": 944,
+          "actorId": 193,
+          "targetId": 193
+        },
+        {
+          "actionIndex": 5,
+          "dq9ActionId": 1,
+          "actorId": 192,
+          "targetId": 0
+        },
+        {
+          "actionIndex": 6,
+          "dq9ActionId": 1,
+          "actorId": 194,
+          "targetId": 0
+        }
+      ],
+      "builds": [
+        {
+          "actionIndex": 0,
+          "dq9ActionId": 69,
+          "actorId": 0,
+          "targetId": 192,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x027e3488",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0x00000002",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0x00000000",
+              "row4Nonzero": false
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x00000000",
+              "row4Nonzero": false
+            }
+          ],
+          "consultedRows": [
+            {
+              "sequence": 0,
+              "rowIndex": 3,
+              "actorId": 194,
+              "branch": "row4-zero-or-missing-row"
+            }
+          ],
+          "consumers": [
+            {
+              "sequence": 0,
+              "rowIndex": 0,
+              "actorId": 0,
+              "kind": "normal-021E1FD8"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 3,
+              "actorId": 194,
+              "kind": "normal-021E1FD8"
+            }
+          ],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 59,
+                "goal": 58,
+                "auxiliary": 57,
+                "target": 39,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 39,
+                "goal": 39,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 23,
+                "goal": 23,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 51,
+                "goal": 67,
+                "auxiliary": 255,
+                "target": 58,
+                "routeCount": 0
+              }
+            }
+          ]
+        },
+        {
+          "actionIndex": 2,
+          "dq9ActionId": 155,
+          "actorId": 193,
+          "targetId": 0,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x00000002",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0x007c3000",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0xffffffff",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x00000000",
+              "row4Nonzero": false
+            }
+          ],
+          "consultedRows": [
+            {
+              "sequence": 0,
+              "rowIndex": 1,
+              "actorId": 192,
+              "branch": "row4-nonzero"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 3,
+              "actorId": 194,
+              "branch": "row4-zero-or-missing-row"
+            }
+          ],
+          "consumers": [
+            {
+              "sequence": 0,
+              "rowIndex": 1,
+              "actorId": 192,
+              "kind": "fallback-021E2664"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 3,
+              "actorId": 194,
+              "kind": "normal-021E1FD8"
+            }
+          ],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 57,
+                "goal": 57,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 39,
+                "goal": 29,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 23,
+                "goal": 23,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 67,
+                "goal": 67,
+                "auxiliary": 255,
+                "target": 57,
+                "routeCount": 0
+              }
+            }
+          ]
+        },
+        {
+          "actionIndex": 3,
+          "dq9ActionId": 2,
+          "actorId": 193,
+          "targetId": 0,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x00000002",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0x007c3000",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0xffffffff",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x00000000",
+              "row4Nonzero": false
+            }
+          ],
+          "consultedRows": [
+            {
+              "sequence": 0,
+              "rowIndex": 1,
+              "actorId": 192,
+              "branch": "row4-nonzero"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 3,
+              "actorId": 194,
+              "branch": "row4-zero-or-missing-row"
+            }
+          ],
+          "consumers": [
+            {
+              "sequence": 0,
+              "rowIndex": 1,
+              "actorId": 192,
+              "kind": "fallback-021E2664"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 3,
+              "actorId": 194,
+              "kind": "normal-021E1FD8"
+            }
+          ],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 57,
+                "goal": 57,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 39,
+                "goal": 29,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 23,
+                "goal": 23,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 67,
+                "goal": 67,
+                "auxiliary": 255,
+                "target": 57,
+                "routeCount": 0
+              }
+            }
+          ]
+        },
+        {
+          "actionIndex": 5,
+          "dq9ActionId": 1,
+          "actorId": 192,
+          "targetId": 0,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x00001000",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0x00000fff",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0x00001000",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x00000fff",
+              "row4Nonzero": true
+            }
+          ],
+          "consultedRows": [
+            {
+              "sequence": 0,
+              "rowIndex": 3,
+              "actorId": 194,
+              "branch": "row4-nonzero"
+            }
+          ],
+          "consumers": [
+            {
+              "sequence": 0,
+              "rowIndex": 1,
+              "actorId": 192,
+              "kind": "normal-021E1FD8"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 3,
+              "actorId": 194,
+              "kind": "fallback-021E2664"
+            }
+          ],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 57,
+                "goal": 57,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 39,
+                "goal": 39,
+                "auxiliary": 38,
+                "target": 57,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 23,
+                "goal": 23,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 67,
+                "goal": 60,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            }
+          ]
+        },
+        {
+          "actionIndex": 6,
+          "dq9ActionId": 1,
+          "actorId": 194,
+          "targetId": 0,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x00000002",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0xff939000",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0x00000000",
+              "row4Nonzero": false
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x00000000",
+              "row4Nonzero": false
+            }
+          ],
+          "consultedRows": [],
+          "consumers": [
+            {
+              "sequence": 0,
+              "rowIndex": 3,
+              "actorId": 194,
+              "kind": "normal-021E1FD8"
+            }
+          ],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 57,
+                "goal": 57,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 39,
+                "goal": 38,
+                "auxiliary": 255,
+                "target": 57,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 23,
+                "goal": 23,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 60,
+                "goal": 59,
+                "auxiliary": 67,
+                "target": 57,
+                "routeCount": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "turn": 4,
+      "presentationActionOrder": [
+        {
+          "actionIndex": 0,
+          "dq9ActionId": 70,
+          "actorId": 0,
+          "targetId": 193
+        },
+        {
+          "actionIndex": 1,
+          "dq9ActionId": 55,
+          "actorId": 193,
+          "targetId": 193
+        },
+        {
+          "actionIndex": 2,
+          "dq9ActionId": 2,
+          "actorId": 193,
+          "targetId": 0
+        },
+        {
+          "actionIndex": 3,
+          "dq9ActionId": 109,
+          "actorId": 194,
+          "targetId": 0
+        },
+        {
+          "actionIndex": 4,
+          "dq9ActionId": 929,
+          "actorId": 192,
+          "targetId": 193
+        }
+      ],
+      "builds": [
+        {
+          "actionIndex": 0,
+          "dq9ActionId": 70,
+          "actorId": 0,
+          "targetId": 193,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x027e3488",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0x00000002",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0x00000000",
+              "row4Nonzero": false
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x00000000",
+              "row4Nonzero": false
+            }
+          ],
+          "consultedRows": [
+            {
+              "sequence": 0,
+              "rowIndex": 3,
+              "actorId": 194,
+              "branch": "row4-zero-or-missing-row"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 1,
+              "actorId": 192,
+              "branch": "row4-nonzero"
+            }
+          ],
+          "consumers": [
+            {
+              "sequence": 0,
+              "rowIndex": 0,
+              "actorId": 0,
+              "kind": "normal-021E1FD8"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 3,
+              "actorId": 194,
+              "kind": "normal-021E1FD8"
+            },
+            {
+              "sequence": 2,
+              "rowIndex": 1,
+              "actorId": 192,
+              "kind": "fallback-021E2664"
+            }
+          ],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 58,
+                "goal": 58,
+                "auxiliary": 59,
+                "target": 24,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 39,
+                "goal": 38,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 24,
+                "goal": 24,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 68,
+                "goal": 77,
+                "auxiliary": 255,
+                "target": 58,
+                "routeCount": 0
+              }
+            }
+          ]
+        },
+        {
+          "actionIndex": 2,
+          "dq9ActionId": 2,
+          "actorId": 193,
+          "targetId": 0,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x00001005",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0x00000ffa",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0x00001005",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x00000ffa",
+              "row4Nonzero": true
+            }
+          ],
+          "consultedRows": [
+            {
+              "sequence": 0,
+              "rowIndex": 3,
+              "actorId": 194,
+              "branch": "row4-nonzero"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 1,
+              "actorId": 192,
+              "branch": "row4-nonzero"
+            }
+          ],
+          "consumers": [
+            {
+              "sequence": 0,
+              "rowIndex": 3,
+              "actorId": 194,
+              "kind": "fallback-021E2664"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 1,
+              "actorId": 192,
+              "kind": "fallback-021E2664"
+            }
+          ],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 59,
+                "goal": 59,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 38,
+                "goal": 37,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 24,
+                "goal": 24,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 77,
+                "goal": 58,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            }
+          ]
+        },
+        {
+          "actionIndex": 3,
+          "dq9ActionId": 109,
+          "actorId": 194,
+          "targetId": 0,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x00000002",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0x007c3000",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0xffffffff",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x00000000",
+              "row4Nonzero": false
+            }
+          ],
+          "consultedRows": [
+            {
+              "sequence": 0,
+              "rowIndex": 1,
+              "actorId": 192,
+              "branch": "row4-nonzero"
+            }
+          ],
+          "consumers": [
+            {
+              "sequence": 0,
+              "rowIndex": 3,
+              "actorId": 194,
+              "kind": "normal-021E1FD8"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 1,
+              "actorId": 192,
+              "kind": "fallback-021E2664"
+            }
+          ],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 59,
+                "goal": 59,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 38,
+                "goal": 37,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 24,
+                "goal": 24,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 77,
+                "goal": 77,
+                "auxiliary": 76,
+                "target": 59,
+                "routeCount": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "turn": 5,
+      "presentationActionOrder": [
+        {
+          "actionIndex": 0,
+          "dq9ActionId": 71,
+          "actorId": 0,
+          "targetId": 194
+        },
+        {
+          "actionIndex": 1,
+          "dq9ActionId": 929,
+          "actorId": 192,
+          "targetId": 193
+        },
+        {
+          "actionIndex": 2,
+          "dq9ActionId": 2,
+          "actorId": 193,
+          "targetId": 0
+        },
+        {
+          "actionIndex": 3,
+          "dq9ActionId": 2,
+          "actorId": 193,
+          "targetId": 0
+        },
+        {
+          "actionIndex": 4,
+          "dq9ActionId": 175,
+          "actorId": 194,
+          "targetId": 0
+        },
+        {
+          "actionIndex": 5,
+          "dq9ActionId": 942,
+          "actorId": 194,
+          "targetId": 194
+        },
+        {
+          "actionIndex": 6,
+          "dq9ActionId": 942,
+          "actorId": 194,
+          "targetId": 194
+        }
+      ],
+      "builds": [
+        {
+          "actionIndex": 0,
+          "dq9ActionId": 71,
+          "actorId": 0,
+          "targetId": 194,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x027e3488",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0x00000002",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0x00000000",
+              "row4Nonzero": false
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x00000000",
+              "row4Nonzero": false
+            }
+          ],
+          "consultedRows": [
+            {
+              "sequence": 0,
+              "rowIndex": 1,
+              "actorId": 192,
+              "branch": "row4-nonzero"
+            }
+          ],
+          "consumers": [
+            {
+              "sequence": 0,
+              "rowIndex": 0,
+              "actorId": 0,
+              "kind": "normal-021E1FD8"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 1,
+              "actorId": 192,
+              "kind": "fallback-021E2664"
+            }
+          ],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 59,
+                "goal": 59,
+                "auxiliary": 68,
+                "target": 76,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 37,
+                "goal": 38,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 24,
+                "goal": 24,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 76,
+                "goal": 76,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            }
+          ]
+        },
+        {
+          "actionIndex": 2,
+          "dq9ActionId": 2,
+          "actorId": 193,
+          "targetId": 0,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x027e3488",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0x00000002",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0x00000000",
+              "row4Nonzero": false
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x00000000",
+              "row4Nonzero": false
+            }
+          ],
+          "consultedRows": [
+            {
+              "sequence": 0,
+              "rowIndex": 3,
+              "actorId": 194,
+              "branch": "row4-zero-or-missing-row"
+            }
+          ],
+          "consumers": [
+            {
+              "sequence": 0,
+              "rowIndex": 3,
+              "actorId": 194,
+              "kind": "normal-021E1FD8"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 1,
+              "actorId": 192,
+              "kind": "fallback-021E2664"
+            }
+          ],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 68,
+                "goal": 68,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 38,
+                "goal": 37,
+                "auxiliary": 255,
+                "target": 24,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 24,
+                "goal": 24,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 76,
+                "goal": 76,
+                "auxiliary": 255,
+                "target": 76,
+                "routeCount": 0
+              }
+            }
+          ]
+        },
+        {
+          "actionIndex": 3,
+          "dq9ActionId": 2,
+          "actorId": 193,
+          "targetId": 0,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x00000002",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0x007c2800",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0xffffffff",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x00000000",
+              "row4Nonzero": false
+            }
+          ],
+          "consultedRows": [
+            {
+              "sequence": 0,
+              "rowIndex": 3,
+              "actorId": 194,
+              "branch": "row4-zero-or-missing-row"
+            }
+          ],
+          "consumers": [
+            {
+              "sequence": 0,
+              "rowIndex": 3,
+              "actorId": 194,
+              "kind": "normal-021E1FD8"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 1,
+              "actorId": 192,
+              "kind": "fallback-021E2664"
+            }
+          ],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 68,
+                "goal": 68,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 38,
+                "goal": 37,
+                "auxiliary": 255,
+                "target": 24,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 24,
+                "goal": 24,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 76,
+                "goal": 76,
+                "auxiliary": 255,
+                "target": 76,
+                "routeCount": 0
+              }
+            }
+          ]
+        },
+        {
+          "actionIndex": 4,
+          "dq9ActionId": 175,
+          "actorId": 194,
+          "targetId": 0,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x00000002",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0x007c2000",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0xffffffff",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x00000000",
+              "row4Nonzero": false
+            }
+          ],
+          "consultedRows": [],
+          "consumers": [
+            {
+              "sequence": 0,
+              "rowIndex": 3,
+              "actorId": 194,
+              "kind": "normal-021E1FD8"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 1,
+              "actorId": 192,
+              "kind": "fallback-021E2664"
+            }
+          ],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 68,
+                "goal": 68,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 38,
+                "goal": 37,
+                "auxiliary": 255,
+                "target": 24,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 24,
+                "goal": 24,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 76,
+                "goal": 76,
+                "auxiliary": 66,
+                "target": 68,
+                "routeCount": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "turn": 6,
+      "presentationActionOrder": [
+        {
+          "actionIndex": 0,
+          "dq9ActionId": 72,
+          "actorId": 0,
+          "targetId": 192
+        },
+        {
+          "actionIndex": 1,
+          "dq9ActionId": 944,
+          "actorId": 0,
+          "targetId": 0
+        },
+        {
+          "actionIndex": 2,
+          "dq9ActionId": 912,
+          "actorId": 193,
+          "targetId": 0
+        },
+        {
+          "actionIndex": 3,
+          "dq9ActionId": 19,
+          "actorId": 193,
+          "targetId": 0
+        },
+        {
+          "actionIndex": 4,
+          "dq9ActionId": 944,
+          "actorId": 193,
+          "targetId": 193
+        },
+        {
+          "actionIndex": 5,
+          "dq9ActionId": 1,
+          "actorId": 194,
+          "targetId": 0
+        },
+        {
+          "actionIndex": 6,
+          "dq9ActionId": 944,
+          "actorId": 194,
+          "targetId": 194
+        }
+      ],
+      "builds": [
+        {
+          "actionIndex": 0,
+          "dq9ActionId": 72,
+          "actorId": 0,
+          "targetId": 192,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x027e3488",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0x00000002",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0x00000000",
+              "row4Nonzero": false
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x00000000",
+              "row4Nonzero": false
+            }
+          ],
+          "consultedRows": [
+            {
+              "sequence": 0,
+              "rowIndex": 3,
+              "actorId": 194,
+              "branch": "row4-zero-or-missing-row"
+            }
+          ],
+          "consumers": [
+            {
+              "sequence": 0,
+              "rowIndex": 0,
+              "actorId": 0,
+              "kind": "normal-021E1FD8"
+            },
+            {
+              "sequence": 1,
+              "rowIndex": 3,
+              "actorId": 194,
+              "kind": "normal-021E1FD8"
+            }
+          ],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 68,
+                "goal": 47,
+                "auxiliary": 56,
+                "target": 37,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 37,
+                "goal": 37,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 24,
+                "goal": 24,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 66,
+                "goal": 66,
+                "auxiliary": 255,
+                "target": 66,
+                "routeCount": 0
+              }
+            }
+          ]
+        },
+        {
+          "actionIndex": 2,
+          "dq9ActionId": 912,
+          "actorId": 193,
+          "targetId": 0,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x00000002",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0x007c3000",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0xffffffff",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x00000000",
+              "row4Nonzero": false
+            }
+          ],
+          "consultedRows": [
+            {
+              "sequence": 0,
+              "rowIndex": 3,
+              "actorId": 194,
+              "branch": "row4-zero-or-missing-row"
+            }
+          ],
+          "consumers": [
+            {
+              "sequence": 0,
+              "rowIndex": 3,
+              "actorId": 194,
+              "kind": "normal-021E1FD8"
+            }
+          ],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 56,
+                "goal": 56,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 37,
+                "goal": 37,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 24,
+                "goal": 24,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 66,
+                "goal": 66,
+                "auxiliary": 255,
+                "target": 66,
+                "routeCount": 0
+              }
+            }
+          ]
+        },
+        {
+          "actionIndex": 5,
+          "dq9ActionId": 1,
+          "actorId": 194,
+          "targetId": 0,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x00001002",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0x00000ffd",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0x00001002",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x00000ffd",
+              "row4Nonzero": true
+            }
+          ],
+          "consultedRows": [],
+          "consumers": [
+            {
+              "sequence": 0,
+              "rowIndex": 3,
+              "actorId": 194,
+              "kind": "normal-021E1FD8"
+            }
+          ],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 56,
+                "goal": 56,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 37,
+                "goal": 37,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 24,
+                "goal": 24,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 66,
+                "goal": 66,
+                "auxiliary": 75,
+                "target": 56,
+                "routeCount": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "turn": 7,
+      "presentationActionOrder": [
+        {
+          "actionIndex": 0,
+          "dq9ActionId": 24,
+          "actorId": 0,
+          "targetId": 194
+        },
+        {
+          "actionIndex": 1,
+          "dq9ActionId": 19,
+          "actorId": 193,
+          "targetId": 0
+        },
+        {
+          "actionIndex": 2,
+          "dq9ActionId": 55,
+          "actorId": 193,
+          "targetId": 193
+        }
+      ],
+      "builds": [
+        {
+          "actionIndex": 0,
+          "dq9ActionId": 24,
+          "actorId": 0,
+          "targetId": 194,
+          "physicalRows": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "row4Raw": "0x027e3488",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "row4Raw": "0x00000002",
+              "row4Nonzero": true
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "row4Raw": "0x00000000",
+              "row4Nonzero": false
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "row4Raw": "0x00000000",
+              "row4Nonzero": false
+            }
+          ],
+          "consultedRows": [],
+          "consumers": [
+            {
+              "sequence": 0,
+              "rowIndex": 0,
+              "actorId": 0,
+              "kind": "normal-021E1FD8"
+            }
+          ],
+          "resultingCameraState": [
+            {
+              "rowIndex": 0,
+              "actorId": 0,
+              "nodes": {
+                "start": 56,
+                "goal": 56,
+                "auxiliary": 64,
+                "target": 75,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 1,
+              "actorId": 192,
+              "nodes": {
+                "start": 37,
+                "goal": 37,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 2,
+              "actorId": 193,
+              "nodes": {
+                "start": 24,
+                "goal": 24,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            },
+            {
+              "rowIndex": 3,
+              "actorId": 194,
+              "nodes": {
+                "start": 75,
+                "goal": 75,
+                "auxiliary": 255,
+                "target": 255,
+                "routeCount": 0
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
