@@ -60,7 +60,7 @@ namespace {
     uint64_t BruteForceRequest(Player copiedPlayers[2], int hours, int minutes, int seconds, int turns,
                                int damages[350], int aActions[350]);
 
-    void dumpTableMain(BattleResult &result1, Genome &genome, uint64_t seed, int turns);
+    void dumpTableMain(BattleResult &result1, Genome &genome, uint64_t seed, int turns, std::stringstream &ss);
 
     void printHeader(std::stringstream &ss);
 
@@ -104,9 +104,9 @@ namespace {
         ss << std::string(99, '-') << "\n"; // 区切り線を出力
     }
 
-    std::string dumpTable(BattleResult &result, int32_t gene[350], int PastTurns);
+    std::string dumpTable(BattleResult &result, const int32_t gene[350], int PastTurns);
 
-    std::string dumpTable(BattleResult &result, int32_t gene[350], int PastTurns) {
+    std::string dumpTable(BattleResult &result, const int32_t gene[350], int PastTurns) {
         std::stringstream ss6;
         printHeader(ss6);
         int currentTurn = -1;
@@ -440,7 +440,9 @@ namespace {
         auto seed = BruteForceRequest(players, hours, minutes, seconds, valuesIndex, values, aActions);
         std::cout << "foundTurn: " << (foundTurn + foundTurnOffset) << ", " << valuesIndex << std::endl;
         if (foundSeeds == 1) {
-            SearchRequest(players, seed, aActions,foundTurn + foundTurnOffset, THREAD_COUNT);
+            std::stringstream ss;
+            SearchRequest(players, seed, aActions,foundTurn + foundTurnOffset, THREAD_COUNT, ss);
+            std::cout << ss.str() << std::endl;
         }
         return 0;
     }
@@ -454,19 +456,34 @@ namespace {
      * @param seed テーブル生成と表示に使用されるランダムシード値。
      * @param turns テーブル表示を省略するターン数(リリースバイナリでのみ使用)
      */
-    void dumpTableMain(BattleResult &result1, Genome &genome, uint64_t seed, int turns) {
-        std::cout << dumpTable(result1, genome.actions, turns) << std::endl;
+    void dumpTableMain(BattleResult &result1, Genome &genome, uint64_t seed, int turns, std::stringstream &ss) {
+        ss << dumpTable(result1, genome.actions, turns) << std::endl;
 
-        std::cout << "ver: " << version << ", seed: ";
-        std::cout << "0x" << std::hex << seed << std::dec << ", actions: ";
+        ss << "ver: " << version << ", seed: ";
+        ss << "0x" << std::hex << seed << std::dec << ", actions: ";
 
         for (auto i = 0; i < 100; ++i) {
             if (genome.actions[i] == 0 || genome.actions[i] == -1) {
                 break;
             }
-            std::cout << genome.actions[i] << ", ";
+            ss << genome.actions[i] << ", ";
         }
-        std::cout << std::endl;
+        ss << std::endl;
+    }
+
+    void dumpTableMain(BattleResult &result1, const int32_t actions[], uint64_t seed, int turns, std::stringstream &ss) {
+        ss << dumpTable(result1, actions, turns) << std::endl;
+
+        ss << "ver: " << version << ", seed: ";
+        ss << "0x" << std::hex << seed << std::dec << ", actions: ";
+
+        for (auto i = 0; i < 100; ++i) {
+            if (actions[i] == 0 || actions[i] == UINT32_MAX) {
+                break;
+            }
+            ss << actions[i] << ", ";
+        }
+        ss << std::endl;
     }
 
     void PerformanceDebug(const char *name, int turnProcessed, double elapsed_time1, uint64_t seeds) {
@@ -515,6 +532,7 @@ namespace {
         start.players[1] = copiedPlayers[1];
         start.position = 1;
         start.nowState = 0;
+
         BattleEmulator::Main(&start.position, turns, gene, start.players, nullptr, seed,
                              nullptr, nullptr, -2, &start.nowState);
 
@@ -546,6 +564,15 @@ namespace {
             uint64_t replayState = 0;
             BattleEmulator::Main(&replayPosition, genome.turn, genome.actions, replayPlayers,
                                  &result1, seed, nullptr, nullptr, -1, &replayState);
+
+            if (replayPlayers[0].hp <= 0) {
+                BattleResult result;
+                BattleEmulator::Main(&start.position, 100, gene, start.players, &result, seed,
+                                 nullptr, nullptr, -1, &start.nowState);
+                dumpTableMain(result, gene, seed, turns, ss);
+                return;
+            }
+
 #if defined(ACTION_SEARCH_USE_OPTIMIZED)
             ActionSearchState replayEnd{};
             replayEnd.players[0] = replayPlayers[0]; replayEnd.players[1] = replayPlayers[1];
@@ -556,7 +583,7 @@ namespace {
                 return;
             }
 #endif
-            dumpTableMain(result1, genome, seed, turns);
+            dumpTableMain(result1, genome, seed, turns, ss);
             ss << "BattleResult.position=" << result1.position
                       << ", RNG.position=" << replayPosition << std::endl;
         }
