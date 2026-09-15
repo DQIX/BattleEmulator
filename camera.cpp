@@ -119,11 +119,10 @@ inline void AssertCameraMapping(const int action) noexcept {
             continue;
         }
 
-        // The entry value is compiler-stack residue. If its producer has not
-        // been reproduced for this action path yet, do not invent a fallback
-        // rule: retain the current-only behavior for that future participant.
+        // Every live setup has a concrete stack-scratch value here. Production
+        // lifecycle code must therefore keep this slot known; reaching unknown
+        // means the compatibility state was lost earlier and is a hard bug.
         if (!RosterField4IsKnown(actorSlot)) {
-            std::cout << actorSlot << std::endl;
             assert(false && "unknown roster row+4 pattern for future participant");
             return false;
         }

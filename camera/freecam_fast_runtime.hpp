@@ -705,6 +705,12 @@ inline void ResetBattle() noexcept {
     state.targetRecord02161720ActorId = kInvalidBattleActor;
     state.rosterField4CompatibilityValid = false;
     state.rosterField4Known.fill(false);
+    // The 021E08BC turn-setup stack frame recreates the measured physical-row
+    // scratch prefix before the first presentation setup of every turn. Fresh
+    // multi-turn ROM capture repeats [nonzero, nonzero, zero, zero] at a later
+    // turn's action-0 build, so arm the existing turn-setup residue injection
+    // each turn rather than leaving the just-cleared compatibility unknown.
+    state.battleEntryRendererResiduePending = true;
     state.presentationGoalSetupActive = false;
     InvalidateCurrentRoutes(state);
     for (std::size_t index = 0; index < actionOrder.size(); ++index) {
@@ -839,8 +845,13 @@ inline void InvalidateRosterField4Compatibility() noexcept {
             return ApplyBattleHudRendererResidueCompatibility();
         }
         default:
-            InvalidateRosterField4Compatibility();
-            return false;
+            // An unmodelled producer is not a write. 021E1958 reuses stale
+            // stack words, so failing to recognize the just-finished
+            // presentation path must not erase the compatibility state that
+            // the previous setup/producer left behind. Known producers above
+            // replace the state; 021E2904 mutates individual slots during a
+            // setup. Preserve the existing scratch image otherwise.
+            return state.rosterField4CompatibilityValid;
     }
     return SetRosterField4Compatibility(
         std::span<const bool>(pattern.data(), state.presentationActorCount)

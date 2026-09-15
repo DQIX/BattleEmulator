@@ -1894,3 +1894,60 @@ producerを一つ前まで追うと、DQ9 `0x0390` setupがfuture C2へ `goal=42
 Ghidra `batch_decompile` で `021DC9CC, 021E08BC, 02163F68, 021DC1D4, 0204A264` を同時確認した結果、ROMの `FUN_02163F68` はactdata record `+0x14` high nibbleが2または5のときだけ `021E08BC` goal setupを許可する。これは既存 `build_freecam_action_metadata.mjs` がROMから `targetScopeCode = word14 >>> 28` として採掘し、`freecam_fast_generated.hpp::kTargetScopeCode`へ生成済み。DQ9 19はscope 4なのでgoal setupをスキップし、DQ9 70はscope 2なので実行する。
 
 production fixは `SetupCurrentAndFuturePresentationGoals()` 冒頭で、mined `TargetScope::single` / `single_formation` 以外ならgoalを初期化せず既存goalからrouteだけ再計画するgate。BACT post effect・action history・tracking-camera処理は従来どおり残す。修正後の同一C++ turnはROMと同じterminal列 `0x0215962C @77 -> 0x0216F0E4 @78 -> 0x0216FE40 @79`、next-position `80`、けものづきroute `0` / aux `60` / target `42`になった。
+
+
+了解。ここからは battle MCP に戻します。今はスカラが選択済みなので、confirmOption をそのまま使って対象確定まで進め、自然captureとrenderer probeを回収します。
+
+battle MCPでスカラ1ターンを正常に完了できました。ここからROM実測を回収します。見るのは2点だけです：自然row+4がどこで1100→1111になったかと、同じ区間で既存renderer footprint [0x02392920,0x02392920,8,15] を実際に残したcallがあるか。
+
+ROM側で重要な事実が取れました。スカラの最初のsetupは1100、その次のsetupから1111で、C++がdefault invalidateしているのは確実に誤りです。さらに同じターン中に既存renderer ABIがexact [0x02392920,0x02392920,8,15] を実際に作っています。次はその「最初に1111へ変わった1回」だけ捕まえてgeneric lifecycleへ接続します。
+
+古いprobeインスタンスが1本残ってMCP名が競合していました。これは調査の残骸なので止め、現在のmodified probeだけに統一します。その後、同じseed/captureを明示的に再armしてbattle MCPでスカラを実行します。
+
+renderer probeを有効にしたままbattle MCPを動かすと、F284のexec hookでbattle MCPの入力処理が邪魔されます。なので順序を変えます。fresh State → battle MCPでスカラにカーソルを合わせる（selectOnly）→ その瞬間だけrenderer probeを起動 → Aで確定、という流れにします。これならbattle MCPを正しく使いつつ、必要なproducerだけ捕まえられます。
+
+battle MCPのconfirmOptionはtop→spellへのカーソル移動で自身のrelease確認に失敗していますが、spell menu内でスカラ選択済みの状態からは前に正常完走しています。そこだけ生かします。入力MCPの別バグ修正には脱線せず、menu到達だけ低位入力、選択確認と実行はbattle MCPで行います。
+
+いまspell menu内までbattle MCPで状態確認できています。ここからはbattle MCPのconfirmOption(selectOnly)でスカラへ移動させます。top→menu遷移時にだけ出ていたrelease不具合を避けられるので、低位入力でカーソルを動かす必要もありません。
+
+battle MCP内部のカーソル移動だけが壊れているので、そこだけDS入力へ退避します。選択状態の確認と最終確定はbattle MCPで行います。これ以上battle MCP自身の入力バグ修正には寄りません。
+
+原因が分かりました。battle MCPのrelease不具合ではなく、以前のrenderer probeのF284 exec hookが残留して入力途中でpauseしていたのが犯人です。つまりbattle MCPは悪くありません。残留probeを全部止めれば、battle MCPだけでスカラ操作できます。
+
+renderer probeをbattle MCPより先に有効にすると、exec hookの一時停止をbattle MCPが「入力不可」と見てしまいます。順序を逆にします。battle MCPでスカラをwaitForNextMenu:falseでキューへ入れて即returnさせ、その直後にprobeを起動します。これならbattle MCP操作を邪魔せず、action実行中のproducerだけ拾えます。
+
+決定打が取れました。1111を作った最初のcallは callerPc = 0x02050BD0、つまり既に実装済みの battle HUD renderer chain そのものです。しかも発生時点は「スカラ固有」ではなく、次action index 1のphase 1、021E1958 buildより前です。だからcase 41ではなく、既存ApplyBattleHudRendererResidueCompatibility()をaction setup前のgeneric lifecycleへ移すのが筋です。今、その既存呼び出し位置を直します。
+
+1111を「毎action前に入れる」のも危険です。既存miningには1110が残るsetupもあるので、generic rendererが走る条件を1つだけ静的に確認します。020515ECのcaller条件をGhidraで見て、action IDではなく既存runtime state/metadataで判定できるかを詰めます。
+
+ここが本丸です。ROMでは「未知producerを知らない」ことはstack内容の消去を意味しません。C++だけがdefaultでknownを全消去していたため、次setupでassertしていました。unknown typeでは何も書かず、既存scratch stateを保持するように直します。assert自体は残します。
+元ケースはassertを残したままexit 0になりました。ただし、まだturn境界でknownを全消去しているので「いかなる場合でも」には届きません。row+4はstack scratchなので、未知actionでもturn開始でもC++都合で消すのが根本的に間違いです。ここも履歴上の人工invalidateを消すべきか、a.txtの最終結論を確認してから直します。
+
+a.txtの最終結論ではBeginTurnの無条件保持は一度撤回されています。だからそこは勝手に消しません。代わりに、ROMでturn2先頭の実row+4をbattle MCPで1ターン追加して採ります。ここが既知なら、turn境界のassertまでgenericに閉じられます。
+
+ぼうぎょはpresentation setup自体を通らず、turn2のrow buildが増えませんでした。turn境界の先頭setupを直接見るため、次はbattle MCPで通常攻撃→C0を1ターンだけ実行します。
+
+決定打が取れました。1111を作った最初のcallは callerPc = 0x02050BD0、つまり既に実装済みの battle HUD renderer chain そのものです。しかも発生時点は「スカラ固有」ではなく、次action index 1のphase 1、021E1958 buildより前です。だからcase 41ではなく、既存ApplyBattleHudRendererResidueCompatibility()をaction setup前のgeneric lifecycleへ移すのが筋です。今、その既存呼び出し位置を直します。
+
+1111を「毎action前に入れる」のも危険です。既存miningには1110が残るsetupもあるので、generic rendererが走る条件を1つだけ静的に確認します。020515ECのcaller条件をGhidraで見て、action IDではなく既存runtime state/metadataで判定できるかを詰めます。
+
+ここが本丸です。ROMでは「未知producerを知らない」ことはstack内容の消去を意味しません。C++だけがdefaultでknownを全消去していたため、次setupでassertしていました。unknown typeでは何も書かず、既存scratch stateを保持するように直します。assert自体は残します。
+
+元ケースはassertを残したままexit 0になりました。ただし、まだturn境界でknownを全消去しているので「いかなる場合でも」には届きません。row+4はstack scratchなので、未知actionでもturn開始でもC++都合で消すのが根本的に間違いです。ここも履歴上の人工invalidateを消すべきか、a.txtの最終結論を確認してから直します。
+
+a.txtの最終結論ではBeginTurnの無条件保持は一度撤回されています。だからそこは勝手に消しません。代わりに、ROMでturn2先頭の実row+4をbattle MCPで1ターン追加して採ります。ここが既知なら、turn境界のassertまでgenericに閉じられます。
+
+ぼうぎょはpresentation setup自体を通らず、turn2のrow buildが増えませんでした。turn境界の先頭setupを直接見るため、次はbattle MCPで通常攻撃→C0を1ターンだけ実行します。
+
+fresh multi-turn ROMで、turn2のaction0 buildが再び**raw [0x027e3488, 2, 0, 0] = 1100**になりました。これはturn開始時の同じscratch footprintが再現されている直接証拠です。なのでBeginTurnでknownを消すだけだった現行コードを、毎turn 1100を再適用する旧lifecycleへ戻すのが正しいです。これとdefault保持で、consumerをskipせずassert原因そのものを消せます。
+
+元ケース＋3ターン連続（BUFF→ぼうぎょ→通常攻撃）は、assertを残したままexit 0まで通りました。次に「たまたまこの列だけ」にならないよう、既存の全action候補scanモードを使って広く回し、unknown assertが再発しないか確認します。
+
+5万seed×3turnの既存scanもexit 0でした。type0/1/4/21/22/31を含む全12種類の敵common actionを大量に踏んでもunknown assertは再発していません。最後に既存validationとソース上のassert保持を確認し、調査用probeの一時変更を元に戻します。
+
+assert自体はちゃんと残っています。skipもproductionから消えています。最後に「別経路でcompatibilityをinvalidateしてまたunknownになる穴」がないか全call siteを確認します。ここがゼロなら、今回の4参加者runtimeでは論理的にもassert再発経路を閉じられます。
+
+テスト側に旧仕様「unknown typeはinvalidateする」が残っていました。productionだけ変えてテストを放置すると後で戻されるので、unknown producerは既存scratchを保持することをvalidationへ固定します。ついでにcamera.cppのskip時代の古いコメントも消します。
+
+runtimeはもう変えていませんが、念のため最後にBUFFをhero actionとして固定した5万seed×3turn scanも回します。これで「元seedだけ通る」ではなく、type4を毎turn踏みながら敵側の全分岐を広く通します。
+

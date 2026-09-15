@@ -344,11 +344,17 @@ bool ValidateRosterField4Compatibility() {
     }
     static_assert(metadata::PresentationType(UINT16_C(137))
         == metadata::PresentationType(UINT16_C(55)));
-    if (ApplyKnownRosterField4PostActionCompatibility(
+    if (!ApplyKnownRosterField4PostActionCompatibility(
             UINT16_C(55),
-            metadata::PresentationType(UINT16_C(55)))
-        || HasRosterField4Compatibility()) {
+            metadata::PresentationType(UINT16_C(55)))) {
         return false;
+    }
+    for (std::size_t index = 0; index < roster.size(); ++index) {
+        if (index < 4) {
+            if (!RosterField4IsKnown(index) || RosterField4IsZero(index)) return false;
+        } else if (RosterField4IsKnown(index)) {
+            return false;
+        }
     }
 
     if (!ApplyBattleHudRendererResidueCompatibility()) return false;
@@ -366,7 +372,16 @@ bool ValidateRosterField4Compatibility() {
     // the same renderer lifecycle rather than owning a separate hand-coded mask.
     if (!ApplyKnownRosterField4PostActionCompatibility(generated::kTensionGainPresentationType)) return false;
 
-    if (ApplyKnownRosterField4PostActionCompatibility(0) || HasRosterField4Compatibility()) return false;
+    if (!ApplyKnownRosterField4PostActionCompatibility(0)) return false;
+    for (std::size_t index = 0; index < roster.size(); ++index) {
+        if (index < 4) {
+            const bool expectedNonzero =
+                ((generated::kBattleHudRendererResiduePrefixMask >> index) & UINT8_C(1)) != 0;
+            if (!RosterField4IsKnown(index) || RosterField4IsZero(index) == expectedNonzero) return false;
+        } else if (RosterField4IsKnown(index)) {
+            return false;
+        }
+    }
 
     std::array<PresentationActorState, 3> actors{
         ActorState(0, 40),
