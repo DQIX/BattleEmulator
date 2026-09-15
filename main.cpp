@@ -562,8 +562,23 @@ namespace {
             Player replayPlayers[2] = {copiedPlayers[0], copiedPlayers[1]};
             int replayPosition = 1;
             uint64_t replayState = 0;
+#if defined(ACTION_SEARCH_USE_OPTIMIZED)
+            // `turns` is the actual battle turn synchronized by the brute-force
+            // match (BattleEmulator::getStartTurn()).  The observed action list
+            // can be shorter than that when a turn is completed implicitly, so
+            // replay the fixed prefix first and then apply the searched suffix
+            // with logical-turn indexing, exactly as the optimizer did.
+            BattleEmulator::Main(&replayPosition, turns, gene, replayPlayers,
+                                 &result1, seed, nullptr, nullptr, -1, &replayState);
+            if (searchResult.length > 0) {
+                BattleEmulator::Main(&replayPosition, searchResult.length, searchResult.actions.data(),
+                                     replayPlayers, &result1, seed, nullptr, nullptr, -1,
+                                     &replayState, true);
+            }
+#else
             BattleEmulator::Main(&replayPosition, genome.turn, genome.actions, replayPlayers,
                                  &result1, seed, nullptr, nullptr, -1, &replayState);
+#endif
 
 #if defined(ACTION_SEARCH_USE_OPTIMIZED)
             ActionSearchState replayEnd{};
