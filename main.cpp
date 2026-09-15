@@ -18,6 +18,8 @@
 #include "SimpleParameterOptimizer.h"
 #endif
 
+#include "BilyoumaSearch.h"
+
 #ifdef DEBUG
 
 #include <chrono>
@@ -612,6 +614,21 @@ namespace {
         std::cout << std::endl;
     }
 
+    void dumpTableMain(BattleResult &result1, int32_t actions[], uint64_t seed, int turns, std::stringstream &ss) {
+        ss << dumpTable(result1, actions, turns) << std::endl;
+
+        ss << "ver: " << version << ", seed: ";
+        ss << "0x" << std::hex << seed << std::dec << ", actions: ";
+
+        for (auto i = 0; i < 100; ++i) {
+            if (actions[i] == 0 || actions[i] == UINT32_MAX) {
+                break;
+            }
+            ss << actions[i] << ", ";
+        }
+        ss << std::endl;
+    }
+
     void PerformanceDebug(const char *name, int turnProcessed, double elapsed_time1, uint64_t seeds) {
         // 正しい計算：1秒あたりの探索回数 (万回/秒)
         double performance = (static_cast<double>(turnProcessed) * 100.0) /
@@ -689,117 +706,139 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 
 	lcg::init(seed);
 
+
+    if (true) {
+        Player player[2] = {copiedPlayers2[0], copiedPlayers2[1]};
+        int position = 1;
+        uint64_t nowstate = 0;
+        BattleEmulator::Main(&position, turns, gene, player, nullptr, seed,
+                     nullptr, nullptr, -2, &nowstate);
+
+        auto ret = BilyoumaSearch::Run(copiedPlayers2, seed, gene, turns, 2000, 19, 25);
+
+        int32_t rawActions[350];
+        std::copy(ret.actions.begin(), ret.actions.end(), rawActions);
+
+        Player player2[2] = {copiedPlayers2[0], copiedPlayers2[1]};
+        int position2 = 1;
+        uint64_t nowstate2 = 0;
+        BattleResult result;
+        BattleEmulator::Main(&position2, 100, rawActions, player2, &result, seed,
+             nullptr, nullptr, -1, &nowstate2);
+
+        dumpTableMain(result, rawActions, seed, turns, ss);
+    } else {
 #if !defined(OPTIMIZE_MODE)
 
-    // --- TableA で探索 ---
-    EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableA);
-	Genome genomeA = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 30000, gene, 0);
+        // --- TableA で探索 ---
+        EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableA);
+        Genome genomeA = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 30000, gene, 0);
 
-    // --- TableB で探索 ---
-    EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableB);
-    Genome genomeB = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 20000, gene, 0);
+        // --- TableB で探索 ---
+        EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableB);
+        Genome genomeB = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 20000, gene, 0);
 
-    // --- TableC で探索 ---
-    EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableC);
-    Genome genomeC = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 30000, gene, 0);
+        // --- TableC で探索 ---
+        EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableC);
+        Genome genomeC = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 30000, gene, 0);
 
-	// --- TableC で探索 ---
-	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableD);
-	Genome genomeD = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 30000, gene, 0);
+        // --- TableC で探索 ---
+        EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableD);
+        Genome genomeD = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 30000, gene, 0);
 
-	// --- TableC で探索 ---
-	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableF);
-	Genome genomeF = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 30000, gene, 0);
+        // --- TableC で探索 ---
+        EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableF);
+        Genome genomeF = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 30000, gene, 0);
 
-	// --- TableC で探索 ---
-	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableG);
-	Genome genomeG = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 30000, gene, 0);
+        // --- TableC で探索 ---
+        EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableG);
+        Genome genomeG = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 30000, gene, 0);
 
 
-    BattleResult resultA, resultB, resultC, resultD, resultF, resultG;
+        BattleResult resultA, resultB, resultC, resultD, resultF, resultG;
 
-	auto runMain = [&](const Genome& g, BattleResult& res) -> RunResult {
-		Player players[2] = {copiedPlayers2[0], copiedPlayers2[1]};
-		int position = 1;
-		uint64_t nowState = 0;
-		BattleEmulator::Main(&position, 100, g.actions, players, &res, seed, nullptr, nullptr, -1, &nowState);
-		bool win = players[1].hp <= 0;
-		return { win, players[1].hp, res.turn, res.position };
-	};
+        auto runMain = [&](const Genome& g, BattleResult& res) -> RunResult {
+            Player players[2] = {copiedPlayers2[0], copiedPlayers2[1]};
+            int position = 1;
+            uint64_t nowState = 0;
+            BattleEmulator::Main(&position, 100, g.actions, players, &res, seed, nullptr, nullptr, -1, &nowState);
+            bool win = players[1].hp <= 0;
+            return { win, players[1].hp, res.turn, res.position };
+        };
 
-    auto rrA = runMain(genomeA, resultA);
-    auto rrB = runMain(genomeB, resultB);
-    auto rrC = runMain(genomeC, resultC);
-    auto rrD = runMain(genomeD, resultD);
-    auto rrF = runMain(genomeF, resultF);
-    auto rrG = runMain(genomeG, resultG);
+        auto rrA = runMain(genomeA, resultA);
+        auto rrB = runMain(genomeB, resultB);
+        auto rrC = runMain(genomeC, resultC);
+        auto rrD = runMain(genomeD, resultD);
+        auto rrF = runMain(genomeF, resultF);
+        auto rrG = runMain(genomeG, resultG);
 
-    if (!rrA.win && !rrB.win && !rrC.win && !rrD.win) {
-        return false;
-    }
-
-    // 勝利したもの同士でターン数→敵残HP（メモ化済み）で比較
-    // 負けたものは無条件で除外
-	auto isBetter = [](const RunResult& a, const RunResult& b) -> bool {
-		if (a.turn != b.turn) return a.turn < b.turn;
-		return a.position < b.position;  // 同ターンなら行動数が少ない方
-    };
-
-    const Genome* chosenGenome = nullptr;
-    const BattleResult* chosenResult = nullptr;
-    const RunResult* chosenRR = nullptr;
-
-    auto tryUpdate = [&](const RunResult& rr, const Genome& g, const BattleResult& r) {
-        if (!rr.win) return;  // 負けは無価値
-        if (chosenRR == nullptr || isBetter(rr, *chosenRR)) {
-            chosenGenome = &g;
-            chosenResult = &r;
-            chosenRR = &rr;
+        if (!rrA.win && !rrB.win && !rrC.win && !rrD.win) {
+            return false;
         }
-    };
 
-	//A（ケース1）: ためる・すてみ → Multithrust のテンション蓄積戦法
-	//B（ケース3）: メラゾーマ反射しながら長期消耗戦
-	//C（ケース2）: 最短ルートでメラゾーマ反射 → 最速決着
-    tryUpdate(rrA, genomeA, resultA);
-    tryUpdate(rrB, genomeB, resultB);
-    tryUpdate(rrC, genomeC, resultC);
-    tryUpdate(rrD, genomeD, resultD);
-    tryUpdate(rrF, genomeF, resultF);
-    tryUpdate(rrG, genomeG, resultG);
+        // 勝利したもの同士でターン数→敵残HP（メモ化済み）で比較
+        // 負けたものは無条件で除外
+        auto isBetter = [](const RunResult& a, const RunResult& b) -> bool {
+            if (a.turn != b.turn) return a.turn < b.turn;
+            return a.position < b.position;  // 同ターンなら行動数が少ない方
+        };
 
-    ss << dumpTable(*chosenResult, chosenGenome->actions, foundTurn) << std::endl;
+        const Genome* chosenGenome = nullptr;
+        const BattleResult* chosenResult = nullptr;
+        const RunResult* chosenRR = nullptr;
 
-    ss << "0x" << std::hex << seed << std::dec << ": ";
+        auto tryUpdate = [&](const RunResult& rr, const Genome& g, const BattleResult& r) {
+            if (!rr.win) return;  // 負けは無価値
+            if (chosenRR == nullptr || isBetter(rr, *chosenRR)) {
+                chosenGenome = &g;
+                chosenResult = &r;
+                chosenRR = &rr;
+            }
+        };
 
-	for (auto i = 0; i < 100; ++i) {
-		if (chosenGenome->actions[i] == 0 || chosenGenome->actions[i] == -1) {
-			break;
-		}
-		ss << chosenGenome->actions[i] << ", ";
-	}
-	ss << std::endl;
+        //A（ケース1）: ためる・すてみ → Multithrust のテンション蓄積戦法
+        //B（ケース3）: メラゾーマ反射しながら長期消耗戦
+        //C（ケース2）: 最短ルートでメラゾーマ反射 → 最速決着
+        tryUpdate(rrA, genomeA, resultA);
+        tryUpdate(rrB, genomeB, resultB);
+        tryUpdate(rrC, genomeC, resultC);
+        tryUpdate(rrD, genomeD, resultD);
+        tryUpdate(rrF, genomeF, resultF);
+        tryUpdate(rrG, genomeG, resultG);
 
-	// --- 各テーブルの結果をログ出力 ---
-	auto printRunResult = [&](const char* label, const RunResult& rr) {
-		ss << "[" << label << "] ";
-		if (rr.win) {
-			ss << "Win  turn=" << (rr.turn + 1) << " position=" << rr.position;
-		} else {
-			ss << "Lose";
-		}
-		ss << std::endl;
-	};
-	printRunResult("TableA", rrA);
-	printRunResult("TableB", rrB);
-	printRunResult("TableC", rrC);
-	printRunResult("TableD", rrD);
-	printRunResult("TableF", rrF);
-	printRunResult("TableG", rrG);
+        ss << dumpTable(*chosenResult, chosenGenome->actions, foundTurn) << std::endl;
+
+        ss << "0x" << std::hex << seed << std::dec << ": ";
+
+        for (auto i = 0; i < 100; ++i) {
+            if (chosenGenome->actions[i] == 0 || chosenGenome->actions[i] == -1) {
+                break;
+            }
+            ss << chosenGenome->actions[i] << ", ";
+        }
+        ss << std::endl;
+
+        // --- 各テーブルの結果をログ出力 ---
+        auto printRunResult = [&](const char* label, const RunResult& rr) {
+            ss << "[" << label << "] ";
+            if (rr.win) {
+                ss << "Win  turn=" << (rr.turn + 1) << " position=" << rr.position;
+            } else {
+                ss << "Lose";
+            }
+            ss << std::endl;
+        };
+        printRunResult("TableA", rrA);
+        printRunResult("TableB", rrB);
+        printRunResult("TableC", rrC);
+        printRunResult("TableD", rrD);
+        printRunResult("TableF", rrF);
+        printRunResult("TableG", rrG);
 
 
 #endif
-
+    }
 	//探索成功
 	return true;
 }
@@ -1375,7 +1414,7 @@ int main(int argc, char *argv[]) {
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed =  0x01091a91;
+    uint64_t seed =  0x01091a93;
 
     int actions[350] = {
         BattleEmulator::ATTACK_ALLY,
