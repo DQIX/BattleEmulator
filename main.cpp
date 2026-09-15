@@ -55,7 +55,7 @@ namespace {
 
     void help(const char *program_name);
 
-    void SearchRequest(Player copiedPlayers[2], uint64_t seed, const int aActions[350], int turns, int numThreads);
+    void SearchRequest(Player copiedPlayers[2], uint64_t seed, const int aActions[350], int turns, int numThreads, std::stringstream &ss);
 
     uint64_t BruteForceRequest(Player copiedPlayers[2], int hours, int minutes, int seconds, int turns,
                                int damages[350], int aActions[350]);
@@ -485,7 +485,7 @@ namespace {
                 std::endl;
     }
 
-    void SearchRequest(Player copiedPlayers[2], uint64_t seed, const int aActions[350], int turns, int numThreads) {
+    void SearchRequest(Player copiedPlayers[2], uint64_t seed, const int aActions[350], int turns, int numThreads, std::stringstream &ss) {
 #ifdef DEBUG
         auto t0 = std::chrono::high_resolution_clock::now();
         BattleEmulator::ResetTurnProcessed();
@@ -552,20 +552,20 @@ namespace {
             replayEnd.position = replayPosition; replayEnd.nowState = replayState;
             if (!ActionSearchOptimized::SameState(replayEnd, optimizedMetrics.finalState) ||
                 searchResult.victory != (replayPlayers[1].hp == 0 && replayPlayers[0].hp != 0)) {
-                std::cerr << "ActionSearchOptimized: exact replay mismatch; result rejected" << std::endl;
+                ss << "ActionSearchOptimized: exact replay mismatch; result rejected" << std::endl;
                 return;
             }
 #endif
             dumpTableMain(result1, genome, seed, turns);
-            std::cout << "BattleResult.position=" << result1.position
+            ss << "BattleResult.position=" << result1.position
                       << ", RNG.position=" << replayPosition << std::endl;
         }
-        std::cout << "Search: " << (searchResult.victory ? "victory" : "best partial")
+        ss << "Search: " << (searchResult.victory ? "victory" : "best partial")
                   << ", suffix turns=" << searchResult.length
                   << ", expanded=" << searchResult.expanded
                   << ", beam=" << searchResult.completedBeamWidth << std::endl;
 #if defined(ACTION_SEARCH_USE_OPTIMIZED)
-        std::cout << "first victory ms=" << optimizedMetrics.firstVictoryMs
+        ss << "first victory ms=" << optimizedMetrics.firstVictoryMs
                   << ", best victory ms=" << optimizedMetrics.bestVictoryMs
                   << ", search elapsed ms=" << optimizedMetrics.elapsedMs << std::endl;
 #endif
@@ -624,10 +624,10 @@ namespace {
 
         int totalSeconds = hours * 3600 + minutes * 60 + seconds;
         totalSeconds = totalSeconds - 15;
-        auto time1 = static_cast<uint64_t>(floor((totalSeconds - 3.5) * (1 / 0.12515)));
+        auto time1 = static_cast<uint64_t>(floor((totalSeconds - 1.5) * (1 / 0.12515)));
         time1 = (time1 & 0xffff) << 16;
 
-        auto time2 = static_cast<uint64_t>(floor((totalSeconds + 3.5) * (1 / 0.125155)));
+        auto time2 = static_cast<uint64_t>(floor((totalSeconds + 1.5) * (1 / 0.125155)));
         time2 = (time2 & 0xffff) << 16;
 
         /*
@@ -865,40 +865,11 @@ namespace {
             gene[349] = -1;
         }
 
-        //auto genome =
-        //        ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 100000, gene, 0);
-
-        /*if (genome.turn >= 100) {
-            return "SearchRequest failed: turn limit reached.";
-        }
-
-        BattleResult result1;
-        result1 = BattleResult();
-        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
-
-        auto *position = new int(1);
-        auto *nowState = new uint64_t(0);
-
-        BattleEmulator::Main(position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
-                             nowState);
-
-        delete position;
-        delete nowState;
-
-
         std::stringstream ss;
-        ss << dumpTable(result1, genome.actions, foundTurn + foundTurnOffset) << "\n";
-        ss << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
-        ss << "0x" << std::hex << seed << std::dec << "\n" << "actions: ";
-        for (auto i = 0; i < 100; ++i) {
-            if (genome.actions[i] == 0 || genome.actions[i] == -1) {
-                break;
-            }
-            ss << genome.actions[i] << ", ";
-        }
-        ss << "\n";
-        return ss.str();*/
-        return "";
+        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
+        SearchRequest(players, seed, gene, turns, 1, ss);
+
+        return ss.str();
     }
 }
 
