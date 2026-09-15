@@ -576,10 +576,13 @@ namespace {
             }
 
             if (searchResult.length <= 10) {
+                Player Player2[2] = {copiedPlayers[0], copiedPlayers[1]};
+                int position = 1;
+                uint64_t nowstate = 0;
                 BattleResult result;
-                BattleEmulator::Main(&start.position, 100, gene, start.players, &result, seed,
-                                 nullptr, nullptr, -1, &start.nowState);
-                dumpTableMain(result, gene, seed, turns, ss);
+                BattleEmulator::Main(&position, 100, gene, Player2, &result, seed,
+                                 nullptr, nullptr, -1, &nowstate);
+                dumpTableMain(result, gene, seed, 0, ss);
                 return;
             }
 
@@ -656,10 +659,10 @@ namespace {
 
         int totalSeconds = hours * 3600 + minutes * 60 + seconds;
         totalSeconds = totalSeconds - 15;
-        auto time1 = static_cast<uint64_t>(floor((totalSeconds - 1.5) * (1 / 0.12515)));
+        auto time1 = static_cast<uint64_t>(floor((totalSeconds - 2) * (1 / 0.12515)));
         time1 = (time1 & 0xffff) << 16;
 
-        auto time2 = static_cast<uint64_t>(floor((totalSeconds + 1.5) * (1 / 0.125155)));
+        auto time2 = static_cast<uint64_t>(floor((totalSeconds + 2) * (1 / 0.125155)));
         time2 = (time2 & 0xffff) << 16;
 
         /*
