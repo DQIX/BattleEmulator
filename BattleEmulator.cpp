@@ -2790,11 +2790,15 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             // rounded by +0.5 then truncation in FUN_021581f8 => 19.
             // RandInt(100), lr: 0x02157f58.
             if (lcg::getPercent(position, 100) < 19) {
-                players[defender].confused = true;
-                players[defender].confusionTurns = 3;
-                // メダパニ成立時は、そのターンに選択済みの「ぼうぎょ」を解除する。
-                // seed 0x1A 実測: 後続の通常攻撃は raw physical damage 5 のまま通る。
-                players[defender].defence = 1.0;
+                // SHTでも判定RNGと成功側の後続処理は通常通り消費するが、
+                // 状態異常そのものは付与しない。既存状態を強制解除もしない。
+                if (players[defender].TensionLevel != 4) {
+                    players[defender].confused = true;
+                    players[defender].confusionTurns = 3;
+                    // メダパニ成立時は、そのターンに選択済みの「ぼうぎょ」を解除する。
+                    // seed 0x1A 実測: 後続の通常攻撃は raw physical damage 5 のまま通る。
+                    players[defender].defence = 1.0;
+                }
                 baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
                 if (baseDamage == 0) {
                     baseDamage = lcg::getPercent(position, 2); // lr: 0x021e81a0
@@ -2902,6 +2906,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             baseDamage = FUN_021e8458_typeD(position, 10, 62);
             tmp = Equipments::applyDamageReduction(baseDamage, Attribute::Fire);
             tmp *= 1.0 - 0.25 * players[defender].magicResistanceLevel;
+            if (players[defender].TensionLevel == 4) {
+                tmp *= 0.5;
+            }
             if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
                 tmp *= players[defender].defence;
             }
@@ -2919,6 +2926,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             baseDamage = FUN_021e8458_typeD(position, 15, 29);
             tmp = Equipments::applyDamageReduction(baseDamage, Attribute::Wind);
             tmp *= 1.0 - 0.25 * players[defender].magicResistanceLevel;
+            if (players[defender].TensionLevel == 4) {
+                tmp *= 0.5;
+            }
             if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
                 tmp *= players[defender].defence;
             }
@@ -2933,6 +2943,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             baseDamage = FUN_021e8458_typeD(position, 21, 44);
             tmp = Equipments::applyDamageReduction(baseDamage, Attribute::Wind);
             tmp *= 1.0 - 0.25 * players[defender].magicResistanceLevel;
+            if (players[defender].TensionLevel == 4) {
+                tmp *= 0.5;
+            }
             if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
                 tmp *= players[defender].defence;
             }

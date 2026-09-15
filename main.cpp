@@ -1170,6 +1170,84 @@ int main(int argc, char* argv[]){
 		return 0;
 	}
 
+	if (argc >= 5 && std::string_view(argv[1]) == "--scan-sht-route-seeds") {
+		const uint64_t startSeed = std::stoull(argv[2], nullptr, 0);
+		const uint64_t count = std::stoull(argv[3], nullptr, 0);
+		const int currentSeedPosition = std::stoi(argv[4], nullptr, 0);
+		const int emitLimit = argc >= 6 ? std::stoi(argv[5], nullptr, 0) : 16;
+		if (emitLimit < 0) throw std::invalid_argument("SHT route emitLimit must be >= 0");
+
+		constexpr int kTurns = 6;
+		int32_t scanGene[350] = {};
+		scanGene[0] = BattleEmulator::PackHeroAction(BattleEmulator::MAGIC_MIRROR, -1);
+		scanGene[1] = BattleEmulator::PackHeroAction(BattleEmulator::PSYCHE_UP_ALLY, -1);
+		scanGene[2] = BattleEmulator::PackHeroAction(BattleEmulator::PSYCHE_UP_ALLY, -1);
+		scanGene[3] = BattleEmulator::PackHeroAction(BattleEmulator::PSYCHE_UP_ALLY, -1);
+		scanGene[4] = BattleEmulator::PackHeroAction(BattleEmulator::PSYCHE_UP_ALLY, -1);
+		scanGene[5] = BattleEmulator::PackHeroAction(BattleEmulator::BUFF, -1);
+		scanGene[kTurns] = -1;
+
+		uint64_t shtCount = 0;
+		uint64_t turn6MedapaniCount = 0;
+		uint64_t turn6MedapaniConfusedCount = 0;
+		int emittedSht = 0;
+		int emittedMedapani = 0;
+		int emittedConfused = 0;
+
+		for (uint64_t offset = 0; offset < count; ++offset) {
+			const uint64_t seed = startSeed + offset;
+			if (seed == 0 || seed > 0x3fffff) continue;
+
+			Player scanPlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
+			BattleResult scanResult;
+			int scanPosition = currentSeedPosition + 1;
+			uint64_t scanState = 0;
+			lcg::init(seed);
+			BattleEmulator::Main(&scanPosition, kTurns, scanGene, scanPlayers, &scanResult,
+			                     seed, nullptr, nullptr, -1, &scanState, -1);
+
+			if (!Player::isPlayerAlive(scanPlayers[0]) || scanPlayers[0].TensionLevel != 4) continue;
+			++shtCount;
+
+			bool turn6Medapani = false;
+			for (int record = 0; record < scanResult.position; ++record) {
+				if (!scanResult.isEnemy[record] || scanResult.actorIndex[record] != 2) continue;
+				if (scanResult.turns[record] == 5 && scanResult.actions[record] == BattleEmulator::GERUNIKKU_MEDAPANI) {
+					turn6Medapani = true;
+					break;
+				}
+			}
+
+			if (turn6Medapani) ++turn6MedapaniCount;
+			if (turn6Medapani && scanPlayers[0].confused) ++turn6MedapaniConfusedCount;
+
+			auto emit = [&](const char* category, int& emitted) {
+				if (emitted >= emitLimit) return;
+				++emitted;
+				std::cout << "SHT_ROUTE_CANDIDATE category=" << category
+				          << " seed=0x" << std::hex << seed << std::dec
+				          << " position=" << scanPosition
+				          << " hp=" << scanPlayers[0].hp
+				          << " tension=" << scanPlayers[0].TensionLevel
+				          << " confused=" << scanPlayers[0].confused
+				          << " mirror=" << scanPlayers[0].hasMagicMirror
+				          << " mirrorTurn=" << scanPlayers[0].MagicMirrorTurn << '\n';
+			};
+
+			if (turn6Medapani && scanPlayers[0].confused) emit("turn6-medapani-confused", emittedConfused);
+			else if (turn6Medapani) emit("turn6-medapani", emittedMedapani);
+			else emit("sht", emittedSht);
+		}
+
+		std::cout << "SHT_ROUTE_SCAN_DONE start=0x" << std::hex << startSeed << std::dec
+		          << " count=" << count
+		          << " currentSeedPosition=" << currentSeedPosition
+		          << " sht=" << shtCount
+		          << " turn6Medapani=" << turn6MedapaniCount
+		          << " turn6MedapaniConfused=" << turn6MedapaniConfusedCount << '\n';
+		return 0;
+	}
+
 	if (argc >= 6 && std::string_view(argv[1]) == "--scan-main-sequence-seeds") {
 		const uint64_t startSeed = std::stoull(argv[2], nullptr, 0);
 		const uint64_t count = std::stoull(argv[3], nullptr, 0);
@@ -1978,9 +2056,12 @@ int main(int argc, char* argv[]){
 	//int32_t gene1[350] = {0};
 	//THIS DEBUG CODE!
 	int32_t gene1[350] = {
+		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::MAGIC_MIRROR,
 		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::BUFF,
-		//(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
-		//(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
+		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
+		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
+		(bad_karmour_A << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::ZAKI,
+		(bad_karmour_A << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::MAGIC_MIRROR,
 		// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
 		// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
 		// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::FULLHEAL,

@@ -68,6 +68,12 @@ inline void AssertCameraMapping(const int action) noexcept {
     using namespace dq9::freecam::fast;
     // FUN_02163F68 gates 021E08BC goal setup with the ROM-mined
     // actdata +0x14 high nibble: only scope codes 2 and 5 enter it.
+    if (currentAction.targetScope == TargetScope::all_on_side) {
+        // FUN_02163F68 does not enter 021E08BC for scope 3. The action still
+        // owns a presentation record, so lack of single-target goal setup must
+        // not suppress CommitActionProgressRaw / slot-1 cleanup later.
+        return true;
+    }
     if (currentAction.targetScope != TargetScope::single
         && currentAction.targetScope != TargetScope::single_formation) {
         return PlanCurrentActionRoutes(actionIndex);

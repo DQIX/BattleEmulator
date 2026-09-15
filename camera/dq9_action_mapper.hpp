@@ -62,6 +62,7 @@ inline constexpr auto kActions = [] {
     actions[BattleEmulator::MERA_ZOMA] = Describe<11>();
     actions[BattleEmulator::MERCURIAL_THRUST] = Describe<69>();
     actions[BattleEmulator::THUNDER_THRUST] = Describe<72>();
+    actions[BattleEmulator::MULTITHRUST] = Describe<73>();
     actions[BattleEmulator::BEAST_THRUST] = Describe<70>();
     actions[BattleEmulator::VITAL_POINT_THRUST] = Describe<71>();
     actions[BattleEmulator::DRAGON_SLASH] = Describe<63>();
@@ -124,6 +125,7 @@ static_assert(kActions[BattleEmulator::HELM_SPLITTER].dq9ActionId == 109);
 static_assert(kActions[BattleEmulator::INACTIVE_ENEMY].dq9ActionId == 503);
 static_assert(kActions[BattleEmulator::BUFF].dq9ActionId == 41);
 static_assert(kActions[BattleEmulator::PSYCHE_UP_ALLY].dq9ActionId == generated::kPsycheUpActionId);
+static_assert(kActions[BattleEmulator::MULTITHRUST].dq9ActionId == 73);
 static_assert(
     kActions[BattleEmulator::PSYCHE_UP_ALLY].presentationType == generated::kTensionGainPresentationType
 );
