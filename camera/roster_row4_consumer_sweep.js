@@ -544,6 +544,8 @@ function compactNaturalResult(item) {
     resultingCameraState: (item.after ?? []).map((row) => ({
       rowIndex: row.rowIndex,
       actorId: row.actorId,
+      row4Raw: row.field4,
+      row4Nonzero: row.field4 !== "0x00000000",
       nodes: row.nodes,
     })),
     terminalPc: item.terminalPc,
@@ -578,6 +580,8 @@ function compactNaturalExperiment(metadata, items) {
       resultingCameraState: (item.after ?? []).map((row) => ({
         rowIndex: row.rowIndex,
         actorId: row.actorId,
+        row4Raw: row.field4,
+        row4Nonzero: row.field4 !== "0x00000000",
         start: row.nodes?.start ?? null,
         goal: row.nodes?.goal ?? null,
         auxiliary: row.nodes?.auxiliary ?? null,
