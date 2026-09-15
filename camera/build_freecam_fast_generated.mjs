@@ -21,6 +21,13 @@ const inputs = [
   ["kMonsterPresentationMetadataBytes", "freecam-monster-presentation-metadata.bin"],
   ["kRendererMetadataBytes", "freecam-renderer-metadata.bin"],
 ];
+const rosterRow4MiningFiles = [
+  "roster_row4_mining_20260915_batch_a.json",
+  "roster_row4_mining_20260915_batch_b.json",
+  "roster_row4_mining_20260915_batch_d.json",
+  "roster_row4_mining_20260915_batch_e.json",
+  "roster_row4_mining_20260915_single_turns.json",
+];
 
 function formatBytes(bytes) {
   const lines = [];
@@ -29,6 +36,111 @@ function formatBytes(bytes) {
     lines.push(`    ${[...bytes.subarray(offset, offset + perLine)].join(", ")}`);
   }
   return lines.join(",\n");
+}
+
+function addObservedPattern(groups, key, pattern) {
+  if (!groups.has(key)) groups.set(key, { count: 0, patterns: new Set() });
+  const group = groups.get(key);
+  group.count++;
+  group.patterns.add(pattern);
+}
+
+function summarizePatternGroups(groups) {
+  return [...groups.entries()]
+    .map(([key, value]) => ({ key, count: value.count, patterns: [...value.patterns].sort() }))
+    .sort((left, right) => left.key.localeCompare(right.key, "en", { numeric: true }));
+}
+
+async function analyzeRosterRow4Mining(actionMetadata, presentationTypeOffset) {
+  const observations = [];
+  const appendBuild = (sourceFile, seed, turn, build) => {
+    const action = build.presentationAction ?? build.action ?? (
+      build.dq9ActionId === undefined
+        ? null
+        : {
+            actionIndex: build.actionIndex,
+            dq9ActionId: build.dq9ActionId,
+            actorId: build.actorId,
+            targetId: build.targetId,
+          }
+    );
+    const order = turn.presentationActionOrder ?? build.order ?? [];
+    const physicalRows = build.physicalRows ?? build.rows ?? [];
+    if (!action || physicalRows.length === 0) return;
+    const pattern = physicalRows.map((row, index) => {
+      if (row.rowIndex !== index) throw new Error(`${sourceFile}: non-contiguous physical row index`);
+      return row.row4Nonzero ? "1" : "0";
+    }).join("");
+    const previousAction = order.find((candidate) => candidate.actionIndex === action.actionIndex - 1) ?? null;
+    observations.push({
+      sourceFile,
+      seed,
+      turn: turn.turn ?? build.turn ?? build.turnSerial,
+      action,
+      previousAction,
+      pattern,
+      physicalActorOrder: physicalRows.map((row) => row.actorId).join(","),
+    });
+  };
+
+  for (const file of rosterRow4MiningFiles) {
+    const parsed = JSON.parse(await readFile(path.join(root, file), "utf8"));
+    if (parsed.schema !== "battle-emulator-roster-row4-mining-v1") {
+      throw new Error(`${file}: unsupported roster row+4 mining schema`);
+    }
+    if (Array.isArray(parsed.turns)) {
+      for (const turn of parsed.turns) {
+        for (const build of turn.builds ?? []) appendBuild(file, parsed.seed, turn, build);
+      }
+    }
+    for (const experiment of parsed.cases ?? []) {
+      for (const build of experiment.builds ?? []) {
+        appendBuild(file, experiment.seed, { turn: build.turn, presentationActionOrder: build.order }, build);
+      }
+    }
+  }
+
+  const patternCounts = new Map();
+  const physicalOrders = new Set();
+  const byCurrentAction = new Map();
+  const byPreviousAction = new Map();
+  const byPreviousPresentationType = new Map();
+  const byPreviousActionAndActor = new Map();
+  const byActionIndex = new Map();
+  for (const observation of observations) {
+    patternCounts.set(observation.pattern, (patternCounts.get(observation.pattern) ?? 0) + 1);
+    physicalOrders.add(observation.physicalActorOrder);
+    addObservedPattern(byCurrentAction, String(observation.action.dq9ActionId), observation.pattern);
+    addObservedPattern(byActionIndex, String(observation.action.actionIndex), observation.pattern);
+    if (observation.previousAction === null) {
+      addObservedPattern(byPreviousAction, "turn-start", observation.pattern);
+      addObservedPattern(byPreviousPresentationType, "turn-start", observation.pattern);
+      continue;
+    }
+    const previousId = observation.previousAction.dq9ActionId;
+    const previousType = previousId >= 0 && previousId < actionCount
+      ? actionMetadata[presentationTypeOffset + previousId]
+      : 0xff;
+    addObservedPattern(byPreviousAction, String(previousId), observation.pattern);
+    addObservedPattern(byPreviousPresentationType, String(previousType), observation.pattern);
+    addObservedPattern(
+      byPreviousActionAndActor,
+      `${previousId}:${observation.previousAction.actorId}`,
+      observation.pattern,
+    );
+  }
+
+  return {
+    files: rosterRow4MiningFiles,
+    observationCount: observations.length,
+    patternCounts: Object.fromEntries([...patternCounts.entries()].sort()),
+    physicalActorOrders: [...physicalOrders].sort(),
+    byCurrentAction: summarizePatternGroups(byCurrentAction),
+    byPreviousAction: summarizePatternGroups(byPreviousAction),
+    byPreviousPresentationType: summarizePatternGroups(byPreviousPresentationType),
+    byPreviousActionAndActor: summarizePatternGroups(byPreviousActionAndActor),
+    byActionIndex: summarizePatternGroups(byActionIndex),
+  };
 }
 
 function parseActionClassification(csv) {
@@ -490,6 +602,7 @@ if (targetScopeOffset + actionCount > actionMetadata.length) {
 }
 const targetSide = actionMetadata.subarray(targetSideOffset, targetSideOffset + actionCount);
 const targetScope = actionMetadata.subarray(targetScopeOffset, targetScopeOffset + actionCount);
+const rosterRow4Mining = await analyzeRosterRow4Mining(actionMetadata, presentationTypeOffset);
 for (let actionId = 0; actionId < actionCount; ++actionId) {
   if (present[actionId] !== 0
       && (targetSide[actionId] !== targetSideFromCsv[actionId]
@@ -622,6 +735,7 @@ console.log(JSON.stringify({
     },
   },
   triggerTable: { file: triggerTablePath, rows: triggerRows },
+  rosterRow4Mining,
   minedFreeCameraTriggerCandidates: hasAnyMinedFreeCameraTriggerSource.reduce((sum, value) => sum + value, 0),
   freeCameraMapperAllowed: freeCameraMapperAllowed.reduce((sum, value) => sum + value, 0),
 }, null, 2));
