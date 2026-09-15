@@ -620,7 +620,7 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                     trackingCameraDecision.source
                 );
             }
-            (void)CompleteActionPresentation(runtimeActorId, i);
+            (void)CompleteActionPresentation(runtimeActorId, i, runtimeDecision);
             processSlot1CleanupPresentationRecord(i, runtimeActorId);
             if (actionMetadata != nullptr) {
                 (void)ApplyKnownRosterField4PostActionCompatibility(
@@ -683,7 +683,11 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
             );
         }
         if (hasPresentationSetup && actionMetadata != nullptr) {
-            (void)CompleteActionPresentation(runtimeActorId, i);
+            (void)CompleteActionPresentation(
+                runtimeActorId,
+                i,
+                hasRuntimeDecision ? runtimeDecision : TriggerDecision{}
+            );
             // DQ9 929 is presentation type 0, but seed-0x13 live-ROM tracing
             // proves that the independent battle-HUD renderer executes while
             // it is active:

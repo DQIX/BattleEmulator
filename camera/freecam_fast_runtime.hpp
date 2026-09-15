@@ -1520,9 +1520,54 @@ inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
 
 [[nodiscard]] inline bool CompleteActionPresentation(
     const std::uint16_t actorId,
-    const int actionIndex
+    const int actionIndex,
+    const TriggerDecision& triggerDecision
 ) noexcept {
     (void)actionIndex;
+    auto& state = ThreadContext();
+
+    // Live ROM seed 0x04A678 proves that the action-BACT selector path
+    // (021DC5D4) explicitly starts routes for non-acting presentation
+    // participants through 02049C4C.  The observed one-hop routes C0 30->21
+    // on action 0 and C0 21->20 on action 2 both finish before the next action
+    // selector; the latter completion is the missing state transition that
+    // otherwise shortens the following C0 route from five nodes to four and
+    // loses one 0216FFF8 RNG call.  Direct actor-membership selectors are kept
+    // provisional: live DQ9 0x009B is the control case where future goals are
+    // assigned but must not be committed at action completion.
+    //
+    // Only the ROM-confirmed one-hop non-actor case is advanced here.  Longer
+    // routes have a frame-timed 02049D84 lifecycle and are deliberately left
+    // untouched until that timing is modeled from live evidence.
+    if (triggerDecision.callFreeCamera
+        && triggerDecision.source == TriggerSource::action_bact
+        && state.currentRoutes.valid) {
+        for (std::size_t routeIndex = 0; routeIndex < state.currentRoutes.actorCount; ++routeIndex) {
+            const auto& route = state.currentRoutes.actors[routeIndex];
+            if (route.actorId == actorId
+                || route.actorId == detail::kInvalidPresentationActor
+                || route.count != 2) {
+                continue;
+            }
+            const std::size_t participantIndex = FindPresentationActorIndex(route.actorId);
+            if (participantIndex >= state.presentationActorCount) return false;
+            auto& participant = state.presentationActors[participantIndex];
+            if (!participant.movementEnabled || route.nodes[0] != participant.startNode) continue;
+            const std::uint8_t node = route.nodes[1];
+            if (node >= detail::kPresentationNodePositions.size()) return false;
+            const auto position = detail::kPresentationNodePositions[node];
+            if (!position.valid) return false;
+            // 02049C4C starts movement only when the next route-node world
+            // differs from the presentation object's current world.
+            if (participant.worldX == position.x && participant.worldZ == position.z) continue;
+            participant.startNode = node;
+            participant.goalNode = node;
+            participant.worldX = position.x;
+            participant.worldZ = position.z;
+            state.nearestNodeCache[participantIndex] = {};
+        }
+    }
+
     // Fresh live-ROM seed 0x2D7A91, turn 3, DQ9 0x009B proves that
     // future participants may receive temporary goals (C0 56->55, C2 68->61)
     // without committing those goals to start nodes when the action completes.
