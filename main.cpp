@@ -52,7 +52,7 @@ namespace {
 
     void help(const char *program_name);
 
-    void SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads);
+    void SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], std::stringstream &ss);
 
     uint64_t BruteForceRequest(const Player copiedPlayers[2], int hours, int minutes, int seconds, int turns,
                                int aActions[350], int damages[350]);
@@ -348,7 +348,9 @@ namespace {
                 auto seed = BruteForceRequest(BasePlayers, hours, minutes, seconds, result.AactionsCounter, aActions,
                                               damages);
                 if (foundSeeds == 1) {
-                    SearchRequest(BasePlayers, seed, aActions, THREAD_COUNT);
+                    std::stringstream ss;
+                    SearchRequest(BasePlayers, seed, aActions, ss);
+                    std::cout << ss.str() << std::endl;
                 }
             }
         } catch (const std::runtime_error &e) {
@@ -358,19 +360,19 @@ namespace {
         return 0;
     }
 
-    void dumpTableMain(BattleResult &result1, Genome &genome, uint64_t seed, int turns) {
-        std::cout << dumpTable(result1, genome.actions, turns) << std::endl;
+    void dumpTableMain(BattleResult &result1, Genome &genome, uint64_t seed, int turns, std::stringstream &ss) {
+        ss << dumpTable(result1, genome.actions, turns) << std::endl;
 
-        std::cout << "ver: "<< version << ", atk: "<< BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
-        std::cout << "0x" << std::hex << seed << std::dec << ", actions: ";
+        ss << "ver: "<< version << ", atk: "<< BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
+        ss << "0x" << std::hex << seed << std::dec << ", actions: ";
 
         for (auto i = 0; i < 100; ++i) {
             if (genome.actions[i] == 0 || genome.actions[i] == -1) {
                 break;
             }
-            std::cout << genome.actions[i] << ", ";
+            ss << genome.actions[i] << ", ";
         }
-        std::cout << std::endl;
+        ss << std::endl;
     }
 
     void writeSearchSummary(std::ostream &out, const ReokonnResult &search) {
@@ -405,7 +407,7 @@ namespace {
 
 #if defined(MULTITHREADING)
 
-    void SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads) {
+    void SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], std::stringstream &ss) {
 #if defined(DEBUG)
 
         auto t0 = std::chrono::high_resolution_clock::now();
@@ -423,7 +425,7 @@ namespace {
 
         auto search = ReokonnSearch::Run(copiedPlayers, seed, gene, turns);
         if (!search.inputValid) {
-            std::cout << "SearchRequest failed: invalid search input." << std::endl;
+            ss << "SearchRequest failed: invalid search input." << std::endl;
             return;
         }
         Genome genome{};
@@ -432,11 +434,11 @@ namespace {
         auto turnProcessed = BattleEmulator::getTurnProcessed();
 
 #if defined(MINGW_BUILD)
-        dumpTableMain(search.replay, genome, seed, 0);
+        dumpTableMain(search.replay, genome, seed, 0, ss);
 #else
         dumpTableMain(search.replay, genome, seed, turns);
 #endif
-        writeSearchSummary(std::cout, search);
+        writeSearchSummary(ss, search);
 
 #if defined(DEBUG)
 
@@ -663,7 +665,7 @@ int main(int argc, char *argv[]) {
 
     //ver: v8.0.1, atk: 51, def: 61, seed: 0x6cc478c, actions: 25, 59, 59, 61, 61, 62, 59, 62, 59, 61, 27, 61, 62, 25, 62, 25, 59, 62, 59, 27, 62, 59, 62, 25, 25, 59, 62, 61, 26, 56, 61,
     //ver: v8.0.1, atk: 61, def: 61, seed: 0x693bdce9, actions: 27, 25, 25, 26, 25, 26, 25, 25, 56, 59, 25, 25, 53, 53,
-    uint64_t time1 = 0x03005d91;
+    uint64_t time1 = 0x03005d95;;
 
     int dummy[100];
     lcg::init(time1, false);
@@ -767,10 +769,12 @@ int main(int argc, char *argv[]) {
 
 #if defined(DEBUG3)
 
-    uint64_t seed = 0x03005d91;
+    uint64_t seed = 0x03005d95;;
 
     int actions[350] = {BattleEmulator::ATTACK_ALLY, -1,};
-    SearchRequest(BasePlayers, seed, actions, THREAD_COUNT);
+    std::stringstream ss;
+    SearchRequest(BasePlayers, seed, actions, ss);
+    std::cout << ss.str() << std::endl;
 
     std::cout << performanceLogger.rdbuf() << std::endl;
 
