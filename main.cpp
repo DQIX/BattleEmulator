@@ -714,8 +714,7 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
         BattleEmulator::Main(&position, turns, gene, player, nullptr, seed,
                      nullptr, nullptr, -2, &nowstate);
 
-        auto ret = BilyoumaSearch::Run(copiedPlayers2, seed, gene, turns, 2000, 19, 100);
-        std::cout << "!" << std::endl;
+        auto ret = BilyoumaSearch::Run(copiedPlayers2, seed, gene, turns, 2000, 19, 25);
 
         int32_t rawActions[350];
         std::copy(ret.actions.begin(), ret.actions.end(), rawActions);
@@ -727,9 +726,7 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
         BattleEmulator::Main(&position2, 100, rawActions, player2, &result, seed,
              nullptr, nullptr, -1, &nowstate2);
 
-        std::stringstream ss2;
-        dumpTableMain(result, rawActions, seed, turns, ss2);
-        std::cout << ss2.str() << std::endl;
+        dumpTableMain(result, rawActions, seed, turns, ss);
     } else {
 #if !defined(OPTIMIZE_MODE)
 
@@ -1417,7 +1414,7 @@ int main(int argc, char *argv[]) {
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed =  0x01091a91;
+    uint64_t seed =  0x01091a93;
 
     int actions[350] = {
         BattleEmulator::ATTACK_ALLY,
