@@ -32,7 +32,6 @@ public:
 
     //2C
     static constexpr int SKY_ATTACK = 8;
-    static constexpr int MERA_ZOMA = 9; //kafrizzらしい
     static constexpr int FREEZING_BLIZZARD = 10; //ここえるふぶき
     static constexpr int SWITCH_2A = 11;
     static constexpr int LULLAB_EYE = 12; //あやしいひとみ

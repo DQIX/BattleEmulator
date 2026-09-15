@@ -9,20 +9,11 @@
 void camera::Main(int *position, const int32_t actions[5], uint64_t * NowState, bool preemptive1, bool bakuti) {
     bool preemptive = true;
     uint64_t before = -1;
-    auto moture = false;
     for (int i = 0; i < 3; ++i) {
         int32_t after = actions[i];
         //一部の特異点の挙動について対策する
 
-        //守備力が高すぎる場合(ダメージ0)true、盾ガードは偽
-        if (bakuti && after == BattleEmulator::SKY_ATTACK) {
-            moture = true;
-        }
-        if (moture && after == BattleEmulator::MERA_ZOMA) {
-            onFreeCameraMove(position, after, 1, NowState);
-            continue;
-        }
-        if (after == BattleEmulator::ATTACK_ALLY||after == BattleEmulator::SKY_ATTACK||after == BattleEmulator::MERA_ZOMA) {
+        if (after == BattleEmulator::ATTACK_ALLY||after == BattleEmulator::SKY_ATTACK) {
             onFreeCameraMove(position, after, preemptive ? 1 : 0, NowState);
         }else if(after == BattleEmulator::MERCURIAL_THRUST){
             (*position)++;//追尾カメラ

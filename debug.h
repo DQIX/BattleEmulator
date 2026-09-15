@@ -41,6 +41,21 @@
 #define DEBUG_COUT3(x)
 #endif
 
+// TRACE boundary/RNG diagnostics are available in debug builds only.
+#if !defined(NDEBUG)
+#define DEBUG_TRACE_BOUNDARIES 1
+#endif
+
+#ifdef DEBUG_TRACE_BOUNDARIES
+namespace battle_trace {
+void setEnabled(bool enabled);
+bool enabled();
+}
+#define DEBUG_TRACE(statement) do { if (::battle_trace::enabled()) { statement; } } while (false)
+#else
+#define DEBUG_TRACE(statement)
+#endif
+
 
 class debug {
 

@@ -1,0 +1,125 @@
+## Procedure before claiming a ROM/C++ mismatch
+
+**最終ターンの乱数ずれは一切問題としない。ダメージさえあってればよい。**
+
+1. Read the current `main.cpp` CLI branch being invoked; do not rely on remembered argument order.
+2. Identify whether each observed action ID is a DQ9 ID or a BattleEmulator common/internal ID.
+3. Map through C:\Users\owner\Documents\tunnelworkspace\BattleArrow\BattleEmulator\camera\dq9-action-target-classification.csv and verify the corresponding constant in `BattleEmulator.h`.
+4. For `--trace-turn`, pass the common/internal action ID, not the DQ9 ID.
+5. Compare action identity and RNG checkpoints before comparing damage numbers.
+6. For guard/status/state actions, verify actual HP/state effects instead of treating an internal damage-helper trace value as final damage.
+7. Only after those checks may an observed difference be called a behavioral mismatch.
+
+
+## Tool boundary
+
+Do not assume Ghidra/decompiler access. In this environment ChatGPT may have CLion/source-file access and DeSmuME ROM-harness probes, but no Ghidra authority unless a tool explicitly provides it. Diagnose with the available C++ source/runtime and ROM harness evidence; do not fabricate disassembly/decompiler findings.
+
+When using `desmume_harness__restart_analyze`, inspect its returned `paused`/`running` state before sending commands through `battle_command_mcp`. If the emulator is paused, resume it first; otherwise `confirmOption` can fail with `fight action menu did not open` even though the seed and command mapping are correct. Treat that as a harness execution-state issue, not a ROM/C++ behavioral mismatch.
+
+重要な前提資料
+C:\Users\owner\Documents\tunnelworkspace\BattleArrow\dq9-skill-catalog\reports\battle-structure-interim-report.md
+C:\Users\owner\Documents\tunnelworkspace\BattleArrow\analysis
+
+## Mandatory mismatch repro file
+
+At the **first confirmed ROM/C++ divergence**, stop broad testing and immediately create a **new UTF-8 text/Markdown file** under this `BattleEmulator` directory. Do not overwrite an older mismatch file. The new file must record at minimum:
+
+- initial seed exactly as used,
+- every C++ CLI argument needed to reproduce the run, preferably the complete `--trace-battle` or `--trace-main-sequence` argument string,
+- ROM command sequence up to and including the divergent turn, using DQ9 command/option IDs and targets,
+- first divergent turn/action index,
+- ROM observed value and C++ observed value,
+- RNG position/checkpoint immediately before and after the divergence when available.
+
+A provisional observation is not enough to create a false mismatch: first apply the ID mapping and internal-damage-helper rules in this document. Once the difference is confirmed as semantic, save the repro file before deeper diagnosis so the seed and command arguments cannot be lost.
+
+## Multi-turn debugging is the default goal
+
+When the user asks to continue ROM-vs-C++ battle debugging, the intended unit of comparison is **multiple consecutive turns in the same battle state**, not many isolated one-turn trials. A one-turn trace is useful only to localize an already-observed multi-turn divergence or to verify one specific mechanic.
+
+Use the finite multi-turn CLI paths already present in `main.cpp`:
+
+```text
+--trace-battle <initialSeed> <turnCount> <BattleEmulator common/internal action ID> <heroTargetOverride> <currentSeedPosition>
+```
+
+`--trace-battle` repeats the same hero action for `turnCount` turns. `main.cpp` fills the gene with that common/internal action and starts at `currentSeedPosition + 1`.
+
+For a different hero command on each turn, use:
+
+```text
+--trace-main-sequence <initialSeed> <currentSeedPosition> <action> <action> ...
+```
+
+Each `action` is a BattleEmulator common/internal action ID. `target` is packed with it using `BattleEmulator::PackHeroAction`. Prefer these bounded multi-turn paths over unbounded search/exploration algorithms for direct ROM/C++ comparison.
+
+The ROM side must likewise remain in one continuous battle for the compared turns: set the initial seed once, then issue each turn's command through `battle_command_mcp.js` without reloading the State between compared turns. Compare per-turn action order, mapped action identity, RNG positions/checkpoints, real HP/state changes, and final battle state.
+
+Do not turn "multi-turn debugging" into "run one turn on many seeds". Seed diversity is secondary; consecutive-state fidelity across turns is the primary test.
+
+Before using turn N+1 as battle-core evidence, verify that the full end-of-turn RNG phase after turn N is still aligned. Remember the representation rule: when C++ reports final next `position = P`, an aligned `Ctable_jp.readSeed()` normally reports last-consumed position `P-1`. If core logic matched but an out-of-scope camera/presentation path consumed an extra RNG before the next turn, stop that seed at the last aligned core turn. Do not call the next turn's changed speed order/enemy actions a battle-core mismatch; choose another seed whose presentation path leaves the next-turn phase aligned.
+
+**デバッグトレースのposition表示はROM側C-tableトレースと1ずれる。** C++側の `TRACE boundary ... position=P` は「次に読むRNG index」を表し、ROM側 `Ctable_jp.js` のログは消費した乱数を `#N` として表示するため、同じ地点でも数値をそのまま比較しないこと。通常はC++の次読込 `P` に対してROM側の直前消費表示が `#(P-1)` になる。
+
+`MERCURIAL_THRUST`（しっぷうづき）と `SKY_ATTACK`（急降下）は、量子化対象外の重いカメラ経路が混ざるため、ROM/C++の最終position差をbattle-core不一致として扱わない。このブランチでは詳細カメラを実装せず、量子化カメラだけを対象とする。
+
+
+275. [13E] - Barbarus (A)
+ Type: Dragon [Float]
+     Level: 53    # of turns: 2
+     HP:    3098    MP:     255
+     Exp:  32500  Gold:       0
+     Atk: 238     Def: 288  Agl: 160
+     Evade:  4%  Block:  0%
+     Fire: 075                               Ice: 075
+     Wind: 100                               Lightning: 100
+     Earth: 100                              Dark: 050
+     Light: 150                              Dazzle: 000
+     Sleep: 000                              Death: 000
+     Drain: 100                              Confuse: 000
+     Fizzle: 000                             Stun: 000
+     Poison: 000                             Paralyze: 000
+     Blunt: 000                              Sap: 050
+     Decelerate: 025                         Magic Resist: 050
+     Charm: 005
+
+Enraged by: Below 25% HP (100%) [2-4] [Grudge]
+Common: Yggdrasil leaf (Always)
+Rare:   --
+
+AI Scheme: 1, AI prob: 1
+    (85/256) [001] Attack                     (38/256) [259] (1) Switch Barbarus B
+    (58/256) [135] (1) Claw Slash             (27/256) [0A0] (1) War Cry
+    (48/256) [00F] (1) Kazam
+
+275. [2EE] - Barbarus (B)
+ Type: Dragon [Float]
+     Level: 53    # of turns: 2
+     HP:    3098    MP:     255
+     Exp:  32500  Gold:       0
+     Atk: 238     Def: 288  Agl: 160
+     Evade:  4%  Block:  0%
+     Fire: 075                               Ice: 075
+     Wind: 100                               Lightning: 100
+     Earth: 100                              Dark: 050
+     Light: 150                              Dazzle: 000
+     Sleep: 000                              Death: 000
+     Drain: 100                              Confuse: 000
+     Fizzle: 000                             Stun: 000
+     Poison: 000                             Paralyze: 000
+     Blunt: 000                              Sap: 050
+     Decelerate: 025                         Magic Resist: 050
+     Charm: 005
+
+Enraged by: Below 25% HP (100%) [2-4] [Grudge]
+Common: Yggdrasil leaf (Always)
+Rare:   --
+
+AI Scheme: 1, AI prob: 1
+    (85/256) [135] (1) Claw Slash             (38/256) [216] (1) Dark Breath
+    (58/256) [230] (1) Wave of Panic          (27/256) [258] (1) Switch Barbarus A
+    (48/256) [001] Attack
+
+
+

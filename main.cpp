@@ -5,6 +5,10 @@
 #include <sstream>
 #include <fstream>
 #include <vector>
+#include <algorithm>
+#include <stdexcept>
+#include <string>
+#include <string_view>
 
 #include "lcg.h"
 #include "BattleEmulator.h"
@@ -859,11 +863,103 @@ EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed
 }
 #endif
 
-int main(){
+int main(int argc, char* argv[]){
 	showHeader();
 
 	//https://zenn.dev/reputeless/books/standard-cpp-for-competitive-programming/viewer/library-ios-iomanip#3.1-c-%E8%A8%80%E8%AA%9E%E3%81%AE%E5%85%A5%E5%87%BA%E5%8A%9B%E3%82%B9%E3%83%88%E3%83%AA%E3%83%BC%E3%83%A0%E3%81%A8%E3%81%AE%E5%90%8C%E6%9C%9F%E3%82%92%E7%84%A1%E5%8A%B9%E3%81%AB%E3%81%99%E3%82%8B
 	//std::cin.tie(0)->sync_with_stdio(0);
+
+#if defined(GOUKETU) && defined(DEBUG_TRACE_BOUNDARIES)
+	auto makeDebugGene = [](int32_t (&gene)[350], const int turns, const int action) {
+		const int boundedTurns = std::clamp(turns, 1, 349);
+		for (int i = 0; i < boundedTurns; ++i) gene[i] = action;
+		gene[boundedTurns] = -1;
+	};
+
+	auto printTrace = [](const uint64_t traceSeed, const int tracePosition,
+	                     const Player (&tracePlayers)[2], const BattleResult& traceResult) {
+		std::cout << "TRACE seed=0x" << std::hex << traceSeed << std::dec
+		          << " position=" << tracePosition
+		          << " hp=" << tracePlayers[0].hp << ',' << tracePlayers[1].hp << '\n';
+		for (int i = 0; i < traceResult.position; ++i) {
+			std::cout << "TRACE record[" << i << "] turn=" << traceResult.turns[i]
+			          << " action=" << traceResult.actions[i]
+			          << " damage=" << traceResult.damages[i]
+			          << " enemy=" << traceResult.isEnemy[i] << '\n';
+		}
+	};
+
+	if (argc >= 3 && std::string_view(argv[1]) == "--trace-turn") {
+		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
+		const int traceAction = argc >= 4 ? std::stoi(argv[3], nullptr, 0) : BattleEmulator::DEFENCE;
+		const int traceTarget = argc >= 5 ? std::stoi(argv[4], nullptr, 0) : -1;
+		const int currentSeedPosition = argc >= 6 ? std::stoi(argv[5], nullptr, 0) : 0;
+		(void)traceTarget; // 1vs1: target selection is intentionally irrelevant.
+		int32_t traceGene[350] = {};
+		makeDebugGene(traceGene, 1, traceAction);
+		Player tracePlayers[2] = {copiedPlayers[0], copiedPlayers[1]};
+		BattleResult traceResult;
+		int tracePosition = currentSeedPosition + 1;
+		uint64_t traceState = 0;
+		lcg::init(traceSeed);
+		battle_trace::setEnabled(true);
+		BattleEmulator::Main(&tracePosition, 1, traceGene, tracePlayers, &traceResult,
+		                     traceSeed, nullptr, nullptr, -1, &traceState);
+		battle_trace::setEnabled(false);
+		printTrace(traceSeed, tracePosition, tracePlayers, traceResult);
+		return 0;
+	}
+
+	if (argc >= 3 && std::string_view(argv[1]) == "--trace-battle") {
+		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
+		const int traceTurns = argc >= 4 ? std::stoi(argv[3], nullptr, 0) : 10;
+		const int traceAction = argc >= 5 ? std::stoi(argv[4], nullptr, 0) : BattleEmulator::DEFENCE;
+		const int traceTarget = argc >= 6 ? std::stoi(argv[5], nullptr, 0) : -1;
+		const int currentSeedPosition = argc >= 7 ? std::stoi(argv[6], nullptr, 0) : 0;
+		(void)traceTarget; // 1vs1: target selection is intentionally irrelevant.
+		if (traceTurns < 1 || traceTurns > 349) throw std::invalid_argument("trace turns must be 1..349");
+		int32_t traceGene[350] = {};
+		makeDebugGene(traceGene, traceTurns, traceAction);
+		Player tracePlayers[2] = {copiedPlayers[0], copiedPlayers[1]};
+		BattleResult traceResult;
+		int tracePosition = currentSeedPosition + 1;
+		uint64_t traceState = 0;
+		lcg::init(traceSeed);
+		battle_trace::setEnabled(true);
+		BattleEmulator::Main(&tracePosition, traceTurns, traceGene, tracePlayers, &traceResult,
+		                     traceSeed, nullptr, nullptr, -1, &traceState);
+		battle_trace::setEnabled(false);
+		printTrace(traceSeed, tracePosition, tracePlayers, traceResult);
+		return 0;
+	}
+
+	if (argc >= 5 && std::string_view(argv[1]) == "--trace-main-sequence") {
+		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
+		const int currentSeedPosition = std::stoi(argv[3], nullptr, 0);
+		const int traceTurns = argc - 4;
+		if (traceTurns < 1 || traceTurns > 349) {
+			throw std::invalid_argument("trace main sequence turns must be 1..349");
+		}
+		int32_t traceGene[350] = {};
+		for (int step = 0; step < traceTurns; ++step) {
+			const std::string_view token(argv[step + 4]);
+			const std::size_t separator = token.find(':');
+			traceGene[step] = std::stoi(std::string(token.substr(0, separator)), nullptr, 0);
+		}
+		traceGene[traceTurns] = -1;
+		Player tracePlayers[2] = {copiedPlayers[0], copiedPlayers[1]};
+		BattleResult traceResult;
+		int tracePosition = currentSeedPosition + 1;
+		uint64_t traceState = 0;
+		lcg::init(traceSeed);
+		battle_trace::setEnabled(true);
+		BattleEmulator::Main(&tracePosition, traceTurns, traceGene, tracePlayers, &traceResult,
+		                     traceSeed, nullptr, nullptr, -1, &traceState);
+		battle_trace::setEnabled(false);
+		printTrace(traceSeed, tracePosition, tracePlayers, traceResult);
+		return 0;
+	}
+#endif
 
 #if defined(OPTIMIZE_MODE)
 	int actions1[350] = {};

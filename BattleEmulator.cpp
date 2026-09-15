@@ -121,8 +121,6 @@ std::string BattleEmulator::getActionName(int actionId) {
             return "Mid Heal(behoimi)";
         case BattleEmulator::FREEZING_BLIZZARD:
             return "freezing blizzard";
-        case BattleEmulator::MERA_ZOMA:
-            return "Mera Zoma";
         case BattleEmulator::DOUBLE_UP:
             return "Double up";
         case BattleEmulator::MULTITHRUST:
@@ -212,6 +210,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
     int exCounter = 0;
     int exCounter1 = 0;
     uint64_t tmpState = -1;
+
 
     auto startPos = static_cast<int>(((*NowState) >> 12) & 0xfffff);
     if (startPos != 0) {
@@ -424,6 +423,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             int basedamage = 0;
             if ((t == 0 && !player0_has_initiative) || (t == 1 && player0_has_initiative)) {
                 for (int c: enemyAction) {
+                    DEBUG_TRACE(std::cout << "TRACE boundary start FUN_02158dfc position=" << *position << '\n');
                     //--------start_FUN_02158dfc-------
                     if (lcg::getPercent(position, 100) < mitoreP) {
                         //0x021588ec
@@ -435,7 +435,10 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     }
                     (*position)++;//0x02159b10
                     //--------end_FUN_02158dfc-------
+                    DEBUG_TRACE(std::cout << "TRACE boundary end FUN_02158dfc position=" << *position << '\n');
+                    DEBUG_TRACE(std::cout << "TRACE boundary start FUN_021ebd9c_ct position=" << *position << '\n');
                     basedamage = callAttackFun(c, position, players, 1, 0, NowState);
+                    DEBUG_TRACE(std::cout << "TRACE boundary end FUN_021ebd9c_ct position=" << *position << '\n');
 
                     if (players[0].sleeping) {
                         actionTable = SLEEPING;
@@ -487,6 +490,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     } else {
                         Player::reduceHp(players[0], basedamage);
                     }
+                    DEBUG_TRACE(std::cout << "TRACE boundary start FUN_021594bc position=" << *position << '\n');
                     //--------start_FUN_021594bc-------
                     if (Player::isPlayerAlive(players[0]) && Player::isPlayerAlive(players[1])) {
                         (*position) += 1;
@@ -501,6 +505,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         }
                     }
                     //--------end_FUN_021594bc-------
+                    DEBUG_TRACE(std::cout << "TRACE boundary end FUN_021594bc position=" << *position << '\n');
                 }
             } else {
                 int32_t action = actionTable & 0xffff;
@@ -512,6 +517,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     skipTurn = true;
                 }
                 if (!skipTurn) {
+                    DEBUG_TRACE(std::cout << "TRACE boundary start FUN_02158dfc position=" << *position << '\n');
                     //--------start_FUN_02158dfc-------
                     if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
                         (*position) += 1;
@@ -557,7 +563,10 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
 
                     //--------end_FUN_02158dfc-------
+                    DEBUG_TRACE(std::cout << "TRACE boundary end FUN_02158dfc position=" << *position << '\n');
+                    DEBUG_TRACE(std::cout << "TRACE boundary start FUN_021ebd9c_ct position=" << *position << '\n');
                     basedamage = callAttackFun(action, position, players, 0, 1, NowState);
+                    DEBUG_TRACE(std::cout << "TRACE boundary end FUN_021ebd9c_ct position=" << *position << '\n');
                     if (mode == -1) {
                         auto atk1 = -1;
                         if (players[0].AtkBuffTurn > 0) {
@@ -601,6 +610,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             }
                         }
                     }
+                    DEBUG_TRACE(std::cout << "TRACE boundary start FUN_021594bc position=" << *position << '\n');
                     //--------start_FUN_021594bc-------
                     if (Player::isPlayerAlive(players[0]) && Player::isPlayerAlive(players[1])) {
                         (*position) += 1;
@@ -663,6 +673,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             }
                         }
                     }
+                    DEBUG_TRACE(std::cout << "TRACE boundary end FUN_021594bc position=" << *position << '\n');
                 } else {
                     if (mode == -1) {
                         auto atk1 = -1;
@@ -693,6 +704,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             //--------end_FUN_021594bc-------
         }
         if (Player::isPlayerAlive(players[0]) && Player::isPlayerAlive(players[1])) {
+            DEBUG_TRACE(std::cout << "TRACE rng lr=0x0215962c consume=" << *position << '\n');
             (*position) += 1;
         }
         camera::Main(position, actions, NowState, player0_has_initiative, TiggerSkyAttack);
@@ -1414,52 +1426,6 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             }
             resetCombo(NowState);
             return totalDamage;
-        case MERA_ZOMA:
-            (*position) += 2;
-            (*position)++; //0x021ec6f8 不明
-            (*position)++; //敵の会心判定
-            if (players[0].hasMagicMirror) {
-                if (lcg::getPercent(position, 0x2710) < 100) {
-                    //こっちの会心判定
-                    kaisinn = true;
-                }
-                (*position)++; //盾ガード 0x021586fc 0%
-                (*position)++; //ニセ回避 0x02157f58 100%
-                tmp = BattleEmulator::FUN_021e8458_typeD(position, 12, 190);
-                if (kaisinn) {
-                    tmp *= lcg::floatRand(position, 1.5, 2.0);
-                }
-                tmp *= 1.25;
-                tmp = processCombo(Id & 0xffff, tmp, NowState);
-                baseDamage = static_cast<int>(floor(tmp));
-                (*position)++; //不明 0x021e54fc
-                ProcessRage(position, baseDamage, players, preEnemyHp);
-            } else {
-                if (!players[0].paralysis && !players[0].sleeping&& !players[0].inactive) {
-                    if (lcg::getPercent(position, 100) < shieldGuardP) {
-                        //TODO 盾の条件調べる
-                        tate = true;
-                    }
-                }
-                (*position)++; //ニセ回避 0x02157f58 100%
-                baseDamage = FUN_021e8458_typeD(position, 12, 116);
-                tmp = Equipments::applyDamageReduction(baseDamage, Attribute::Fire);
-                if (players[defender].TensionLevel == 4) {
-                    tmp *= 0.5;
-                }
-                if (!players[0].paralysis && !players[0].sleeping&& !players[0].inactive) {
-                    tmp *= players[defender].defence;
-                }
-                tmp = processCombo(Id & 0xffff, tmp, NowState);
-                baseDamage = static_cast<int>(floor(tmp));
-                if (!tate) {
-                    (*position)++; //0x021e54fc 不明
-                } else {
-                    baseDamage = 0;
-                }
-                process7A8(position, baseDamage, players, defender); //必殺チャージ(敵)　0x021ed7a8
-            }
-            break;
         case BattleEmulator::FREEZING_BLIZZARD:
             (*position) += 2;
             (*position)++; // 会心判定
@@ -2151,7 +2117,6 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
             }
 
-            tmp *= 1.25; //雷属性
             baseDamage = static_cast<int>(floor(tmp));
 
             if (!kaihi) {
