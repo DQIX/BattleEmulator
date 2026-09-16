@@ -137,6 +137,8 @@ private:
 
     static int CalculateMoreHealBase(const Player players[2]);
 
+    static int CalculateHealBase(const Player players[2]);
+
     static int CalculateMidHealBase(const Player players[2]);
 
     static int FUN_0208aecc(int *position, uint64_t *NowState);

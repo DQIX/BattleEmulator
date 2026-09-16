@@ -1615,11 +1615,6 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             }
             (*position)++; // lr=0x02157f58, max=100, avoidance stage
 
-            // lr=0x02075724 float[-4.296875,4.296875], then lr=0x02075738 float[-1,1].
-            baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
-            if (baseDamage == 0) {
-                baseDamage = lcg::getPercent(position, 2); // lr=0x021e81a0, max=2
-            }
             baseDamage = static_cast<int>(floor(players[1].defaultATK * lcg::floatRand(position, 0.8500, 0.9500))); // lr=0x021d9464
 
             //TODO: この処理を直す
@@ -2056,7 +2051,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 kaisinn = true;
             }
             (*position)++; //回避
-            baseDamage = FUN_021e8458_typeD(position, 5, 35);
+            baseDamage = FUN_021e8458_typeD(position, 5, CalculateHealBase(players));
             if (kaisinn) {
                 tmp1 = baseDamage * lcg::floatRand(position, 1.5, 2.0); //TODO
             } else {
@@ -2409,6 +2404,12 @@ int BattleEmulator::CalculateMoreHealBase(const Player *players) {
     double tmp1 = (players[0].HealPower - 200) * 0.5194;
     auto tmp2 = static_cast<int>(floor(tmp1));
     return 185 + tmp2;
+}
+
+int BattleEmulator::CalculateHealBase(const Player *players) {
+    double tmp1 = (players[0].HealPower - 50) * 0.1317;
+    auto tmp2 = static_cast<int>(floor(tmp1));
+    return 35 + tmp2;
 }
 
 int BattleEmulator::CalculateMidHealBase(const Player *players) {
