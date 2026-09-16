@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <iostream>
 #include <cmath>
+#include <array>
 #include "BattleEmulator.h"
 #include "lcg.h"
 #include "Player.h"
@@ -301,13 +302,29 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             player0_has_initiative = false;
         }
 
-        constexpr int nusisama2Actions[4] = {
-            ATTACK_ENEMY, MASSIVE_SWIPE, TIDAL_WAVE, CRITICAL_ATTACK
-        };
         int enemyAction[2] = {0, 0};
-        for (int &selectedAction : enemyAction) {
-            selectedAction = nusisama2Actions[ProcessNusisama2Action(position)];
+        enemyAction[0] = ProcessNusisama2Action(position);
+        if (enemyAction[0] == ATTACK_ENEMY || enemyAction[0] == CRITICAL_ATTACK) {
+            (*position)++; // lr=0x02156874, max=2, single-target selection
         }
+        (*position)++; // lr=0x0216139c, range=[3,4], first enemy action record
+        (*position)++; // lr=0x021613b0, range=[6,8], first enemy action record
+        (*position)++; // lr=0x02160d64, max=2, extra-action count
+        enemyAction[1] = ProcessNusisama2Action(position);
+        if (enemyAction[0] == enemyAction[1]) {
+            if (enemyAction[1] == TIDAL_WAVE) {
+                enemyAction[1] = ATTACK_ENEMY;
+            } else if (enemyAction[1] == MASSIVE_SWIPE) {
+                enemyAction[1] = TIDAL_WAVE;
+            } else if (enemyAction[1] == CRITICAL_ATTACK) {
+                enemyAction[1] = ATTACK_ENEMY;
+            }
+        }
+        if (enemyAction[1] == ATTACK_ENEMY || enemyAction[1] == CRITICAL_ATTACK) {
+            (*position)++; // lr=0x02156874, max=2, single-target selection
+        }
+        (*position)++; // lr=0x0216139c, range=[3,4], second enemy action record
+        (*position)++; // lr=0x021613b0, range=[6,8], second enemy action record
 
         int32_t actionTable = -1;
 
@@ -386,7 +403,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
                     const auto c = counter;
                     DEBUG_TRACE_BOUNDARY(traceBoundaries, "start FUN_02158dfc", *position);
-                    (*position) += 2; // lr=0x0216139c range[3,4], lr=0x02075628 max=2
+                    (*position)++; // lr=0x021588ec, max=100, charm/みとれ check
+                    (*position)++; // lr=0x02159b10, max=100, enemy pre-action status
                     DEBUG_TRACE_BOUNDARY(traceBoundaries, "end FUN_02158dfc", *position);
                     DEBUG_TRACE_BOUNDARY(traceBoundaries, "start FUN_021ebd9c_ct", *position);
                     basedamage = callAttackFun(c, position, players, 1, 0, NowState);
@@ -419,7 +437,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                                           def1, mmt1, counterJ - 1,
                                            player0_has_initiative, ehp,
                                            ahp, tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag,
-                                           1, players[1].mp);
+                                            1, players[1].mp);
                     } else if (mode != -1 && mode != -2) {
                         if (
                             c == ATTACK_ENEMY ||
@@ -1282,7 +1300,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
 
                 //ここの小数点以下は引き継がれる
+#if !defined(NUSISAMA2)
                 tmp = tmp * 1.25 * 1.1; //1.25倍は雷属性になってるから
+#endif
                 baseDamage = static_cast<int>(floor(tmp));
 
                 if (!kaihi) {
@@ -1512,7 +1532,6 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             break;
         case BattleEmulator::MASSIVE_SWIPE:
             // DQ9 0x05e: one-target battle still uses the group-attack path.
-            // Unlike a normal attack it has no shield-guard roll.
             (*position) += 2; // lr=0x021613b0 range[6,8], lr=0x02075628 max=3
             (*position)++; // lr=0x02158584, max=10000, critical threshold=0
             (*position)++; // lr=0x021ec6f8, max=100
@@ -1520,11 +1539,14 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 if (lcg::getPercent(position, 100) < 2) { // lr=0x021587b0, max=100
                     kaihi = true;
                 }
+                if (!kaihi && lcg::getPercent(position, 100) < shieldGuardP) { // lr=0x021586fc, max=100
+                    tate = true;
+                }
             }
             (*position)++; // lr=0x02157f58, max=100, avoidance stage
             // lr=0x02075724 float[-4.296875,4.296875], then lr=0x02075738 float[-1,1].
             baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
-            if (kaihi) {
+            if (kaihi || tate) {
                 baseDamage = 0;
             } else {
                 if (baseDamage == 0) {
@@ -2131,7 +2153,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
             }
 
-            tmp *= 1.25 * 1.1; //雷属性
+#if !defined(NUSISAMA2)
+            tmp *= 1.25 * 1.1; //旧ブランチの雷属性・弱点補正
+#endif
             baseDamage = static_cast<int>(floor(tmp));
 
             if (!kaihi) {
@@ -2319,18 +2343,46 @@ int BattleEmulator::ProcessEnemyRandomAction44(int *position) {
     return 5;
 }
 
-int BattleEmulator::ProcessNusisama2Action(int *position) {
-    // DQ9 monster 0x15B: Attack 133/256, Massive Swipe 48/256,
-    // Tidal Wave 58/256, Critical Attack 17/256.
-    constexpr int patternTable[4] = {133, 48, 58, 17};
-    int roll = lcg::getPercent(position, 0x100) + 1; // lr=0x0208aca8, max=256
-    for (int i = 0; i < 4; ++i) {
-        if (roll <= patternTable[i]) {
-            return i;
+namespace {
+constexpr std::size_t kNusisama2TableMax = 256;
+
+template<std::size_t N>
+constexpr std::array<int, kNusisama2TableMax> makeNusisama2ProbabilityTable(
+    const std::array<int, N>& ratios, const std::array<int, N>& ids) {
+    std::array<int, kNusisama2TableMax> table{};
+    std::size_t index = 0;
+    for (std::size_t i = 0; i < N; ++i) {
+        for (int j = 0; j < ratios[i]; ++j) {
+            table[index++] = ids[i];
         }
-        roll -= patternTable[i];
     }
-    return 3;
+    return table;
+}
+
+template<std::size_t N>
+constexpr int sumNusisama2Ratios(const std::array<int, N>& values) {
+    int result = 0;
+    for (const int value : values) result += value;
+    return result;
+}
+
+constexpr std::array<int, 6> kNusisama2Ratios = {68, 58, 48, 38, 27, 17};
+constexpr std::array<int, 6> kNusisama2Actions = {
+    BattleEmulator::ATTACK_ENEMY,
+    BattleEmulator::TIDAL_WAVE,
+    BattleEmulator::MASSIVE_SWIPE,
+    BattleEmulator::ATTACK_ENEMY,
+    BattleEmulator::ATTACK_ENEMY,
+    BattleEmulator::CRITICAL_ATTACK,
+};
+static_assert(sumNusisama2Ratios(kNusisama2Ratios) == kNusisama2TableMax);
+constexpr auto kNusisama2ActionTable =
+    makeNusisama2ProbabilityTable(kNusisama2Ratios, kNusisama2Actions);
+}
+
+int BattleEmulator::ProcessNusisama2Action(int *position) {
+    const int roll = static_cast<int>(static_cast<uint32_t>(lcg::getTop32(position)) >> 24); // lr=0x0208aca8, max=256
+    return kNusisama2ActionTable[roll];
 }
 
 int BattleEmulator::FUN_0208aecc(int *position, uint64_t *NowState) {

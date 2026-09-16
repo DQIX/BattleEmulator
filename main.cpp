@@ -29,8 +29,8 @@ int startturn = -1;
 const Player copiedPlayers[2] = {
 	// 主人公（ぬしさま2.dst）
 	{
-		314, 314.0, 326, 326, 281, 281, 196, 246, 77,
-		77, false, false, 0, false, 0, -1,
+		314, 314.0, 326, 326, 281, 281, 196, 246, 171,
+		171, false, false, 0, false, 0, -1,
 		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
 		2, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
 		false, -1, 0, -1, 0, false, 1, 1, 1 , false
