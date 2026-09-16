@@ -830,6 +830,10 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         //途中で解除してもいいように2回チェックする
         if (players[0].sleeping) {
             actionTable = SLEEPING;
+        } else if (players[0].confused || players[0].paralysis) {
+            // Status resolution owns the executed action. Normalize the selected
+            // command so skills cannot apply pre-action MP/defence side effects.
+            actionTable = ATTACK_ALLY;
         } else if (!players[0].paralysis && !players[0].inactive && actionTable == BattleEmulator::MERCURIAL_THRUST) {
             const auto heroOrder = std::find(std::begin(order), std::end(order), 0);
             std::rotate(std::begin(order), heroOrder, std::next(heroOrder));

@@ -63,6 +63,7 @@ inline constexpr auto kActions = [] {
     actions[BattleEmulator::MERCURIAL_THRUST] = Describe<69>();
     actions[BattleEmulator::THUNDER_THRUST] = Describe<72>();
     actions[BattleEmulator::MULTITHRUST] = Describe<73>();
+    actions[BattleEmulator::DOUBLE_UP] = Describe<173>();
     actions[BattleEmulator::BEAST_THRUST] = Describe<70>();
     actions[BattleEmulator::VITAL_POINT_THRUST] = Describe<71>();
     actions[BattleEmulator::DRAGON_SLASH] = Describe<63>();

@@ -437,6 +437,7 @@ public:
 std::span<const Command> commandProfile() noexcept { return profile; }
 bool canSearchCommand(const State& s, Command c) noexcept {
     if (c.action == BE::FLEE_ALLY) return false; // Known unfaithful pre-action skip, NOT a legal-set edit.
+    if ((s.players[0].confused || s.players[0].paralysis) && c.action != BE::ATTACK_ALLY) return false;
     bool member = false;
     for (Command p : profile) if (p.action == c.action && p.target == c.target) { member = true; break; }
     if (!member || !BE::IsHeroCommandSelectable(s, c)) return false;

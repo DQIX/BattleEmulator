@@ -461,6 +461,9 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
         const auto* actionMetadata = dq9::freecam::actions::Find(after);
         const auto* binding = dq9::freecam::bindings::Find(after);
         const bool hasActionMetadata = actionMetadata != nullptr && actionMetadata->mapped();
+        if (!hasActionMetadata) {
+            assert(false && "BattleEmulator common action lacks DQ9 presentation metadata");
+        }
         TriggerDecision runtimeDecision{};
         bool hasRuntimeDecision = false;
         bool hasPresentationSetup = false;
