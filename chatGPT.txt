@@ -64,6 +64,13 @@ Before using turn N+1 as battle-core evidence, verify that the full end-of-turn 
 
 `MERCURIAL_THRUST`（しっぷうづき）と `SKY_ATTACK`（急降下）は、量子化対象外の重いカメラ経路が混ざるため、ROM/C++の最終position差をbattle-core不一致として扱わない。このブランチでは詳細カメラを実装せず、量子化カメラだけを対象とする。
 
+ 重要な反証が出ました。今回のズレの直接原因は混乱条件ではなく、私が探索だけ --initial-position=1 にしたことで
+  す。--trace-main-sequence ... 1 は内部で next-position 2 から始めますが、探索の --initial-position はそのまま next-
+  position を受け取り、既定値も 2 です。つまり探索は位置1、実演とROMは位置2という別世界を比較していました。
+
+  加えて探索器は既に評価・多様性分類で confused/paralysis/sleeping を参照し、デバッガでも confused=true の状態を保持して
+  いました。ここで条件を足すと誤修正になります。正しい位置2で探索し直し、その結果をROMと --trace-main-sequence に再投入
+  します。先ほどの不一致記録も「比較条件不一致」として訂正します。
 
 275. [13E] - Barbarus (A)
  Type: Dragon [Float]
