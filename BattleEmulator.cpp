@@ -1300,9 +1300,6 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
 
                 //ここの小数点以下は引き継がれる
-#if !defined(NUSISAMA2)
-                tmp = tmp * 1.25 * 1.1; //1.25倍は雷属性になってるから
-#endif
                 baseDamage = static_cast<int>(floor(tmp));
 
                 if (!kaihi) {
