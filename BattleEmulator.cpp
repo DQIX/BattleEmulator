@@ -1715,10 +1715,18 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 tmp = OffensivePower * lcg::floatRand(position, 0.95, 1.05);
                 // Selector 45's success-side float RNG is consumed even when the hit was
                 // already blocked. Weapon-element resistance is not applied to this direct result.
+                if (players[attacker].TensionLevel != 0) {
+                    tmp *= Ally_TensionTable[players[attacker].TensionLevel - 1];
+                    tmp += players[attacker].TensionLevel * Ally_TensionLevel;
+                }
                 baseDamage = static_cast<int>(tmp);
             } else {
                 kaihi = true;
             }
+
+            // Tension is consumed by the attempted physical action even when its selector
+            // or the ordinary physical avoidance path makes the final damage zero.
+            players[attacker].TensionLevel = 0;
 
             if (kaihi) {
                 baseDamage = 0;
