@@ -2785,12 +2785,12 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 if (baseDamage != 0) {
                     (*position)++; // lr: 0x021e54fc
                 }
-                // Fresh ROM seed 0x00E176, turn 2: successful Eerie Light with
-                // generic damage 0 still consumes the post-effect RandInt(100).
-                (*position)++; // max: 100, lr: 0x021ed7a8
-            } else {
-                (*position)++; // max: 100, lr: 0x021ed7a8
             }
+            // 0x021ed7a8 uses the same defender-state gate as the other enemy
+            // post-effect charge checks. Fresh ROM seed 0x00E176 confirms that
+            // a successful zero-damage Eerie Light still reaches this gate, while
+            // a later failed Eerie Light skips it once the defender is ineligible.
+            process7A8(position, baseDamage, players, defender);
             baseDamage = 0;
             resetCombo(NowState);
             break;
@@ -2822,9 +2822,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 if (baseDamage != 0) {
                     (*position)++; // lr: 0x021e54fc
                 }
-            } else {
-                (*position)++; // max: 100, lr: 0x021ed7a8
             }
+            process7A8(position, baseDamage, players, defender); // lr: 0x021ed7a8
             baseDamage = 0;
             resetCombo(NowState);
             break;
