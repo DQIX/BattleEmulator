@@ -2000,3 +2000,226 @@ turn6でlive ROMのaction IDは 173 と確定しました。静的表ではな�
 turn6も境界は一致しました。ROM last 320 ↔ C++ next 321、Hero HP274。liveで すてみ=action173 は確定しましたが、common33がmapper未登録でもこのturnのRNG/HPは一致しているため、まだ「登録漏れバグ」とは断定しません。後続turn7/8でpresentation stateまで影響が出るかを先に見ます。
 
 turn7のROMはlast 374、Hero presentation startは66、freecam無しでした。まずC++ 7-turn prefixでnext 375 を確認し、その後turn8のさみだれづきを勝利までlive実演します。
+
+4ターンだけの完全トレースでも、ROMが止まった 274 の直後にC++だけ FE40(275) → FE68(276,max4) → FFF8(277) を実行することを再確認しました。onFreeCameraMove 1回分そのものなので、次は position>=275 の条件付き停止で「どの action / param5 / 呼び出し元がこの1回を発火させたか」を取ります。
+
+CLion実行時証拠が取れました。余分な1回は turn 4 のザキ自身からで、camera::Main:595 → onFreeCameraMove、action=71(ZAKI), param5=1 です。つまり「後続の別アクションが余分」ではなく、Bを倒す2回目ザキの runtime decision がROMと違って free-camera を発火させています。 ahora caller側の route / target / decision source を同じ停止点で採っています。
+
+ここで重要な絞り込みができました。turn 4 ザキはそのターン最初の presentation record なので presentationActionRecordIndex=-1、したがって param5=1 自体は「前アクションがC2だから」の判定ではありません。一方、C++はHeroの current route を count=2 と生成しているため action-BACT selector を通してしまっています。ROMがこのfree-camera呼び出しをしないなら、まず疑うべきはこのザキ用route/setupの成立条件です。
+
+C++側の比較もはっきりしました。turn 3 のザキは actorRouteCount=0 で selector が抑制され、turn 4 だけ Hero route [67,76]（count=2）が生成されて selector が発火しています。つまり修正点は「ザキだから一律抑制」ではなく、turn 4 の goal/route [67→76] がROMにも本当に存在するかです。BattleArrowにこの目的の既存 freecam_setup_probe_mcp.js / freecam_trigger_probe_mcp.js があるので、中身を確認して今回の一点観測に使えるか判定します。
+
+ROMの専用freecam probeを同じ4ターンへ流しています。観測量が多く実行自体は継続中なので、重複コマンドは投げず、その間にCLion側の停止点を片付けます。ここまでで探索本体ではなく camera runtime の route成立差に絞れているため、探索コードにはまだ触れていません。
+
+freecam probe側はフック数が多く、4ターン一括実演がかなり重くなっています。重複実行は避けたまま、C++側では turn 3→4 の状態変化をさらに絞っています。現時点で確定している修正候補は「action 24を特別扱い」ではなく、turn-end後のHero presentation位置がROMよりずれて [67→76] route を捏造しているケースです。
+
+了解。今はトップメニューに戻っている状態として扱います。追加観測を勝手に再実行せず、まず camera\a.txt の前提を読んで、さっきの「turn 4 ザキ route [67→76] が怪しい」という仮説を既存の確定事項と突き合わせます。
+
+a.txt はUTF-8で全体を読みました。今回に直結する前提も確認できました。特に「selector suppressionそのものを疑う前にpresentation producerを正す」「future participantの一時goalを勝手にstartへcommitしない」「turn-end recenterはpresentation側だけ」「0x4Fはaction_bact経路で実行された場合だけ適用」が既に確定済みです。さっきのROM probe結果も、その前提に沿うとかなり明瞭です。
+
+ROM側の決定的な証拠まで取れました。turn 4 のザキではROMも 021E1FD8 に入り、Heroの start=67、target Bの start=60 を使っていますが、Heroには goalを変えず67のまま、auxだけ77 を設定し、routeは0です。つまり selectorではなく、C++ AssignPresentationGoal() の「keepGoal判定またはdistance layer」がROMと食い違っています。ここをCLionで同じ引数・layer値まで止めます。
+
+CLionで同じ関数まで止めたところ、原因が一段手前に確定しました。C++の AssignPresentationGoal() 自体は conflictPivot=31 / expansion=0 / maxLayer=2 でROMと整合する一方、target B の presentation start を58として受け取っています。ROMはturn 4開始時にBが start=60。なので [67→76] の誤routeはこの関数の計算ミスではなく、turn 3終了までにC++がBのpresentation位置を誤って58へ持ち越した結果です。
+
+さらに一つ前まで遡れました。C++はturn 3の最初のザキ時点で、future participantのBに route [76,77] を作っています。ROMは同じ箇所で [76,59]。その後ROMはBを59へ進め、turn-end recenterで60になる一方、C++は別位置へ進めた結果、turn 4でBが58になっています。つまり最初の誤状態遷移はturn 3の「future B → C1」のgoal assignmentです。
+
+a.txt の後半に、まさに未完了だった同系統の宿題が残っていました。021E1FD8 のgoal/aux差は過去にも「depthや候補選択ではなく、021E1B1C が作るlocal distance-level mapの差」まで絞られており、presentation_level_probe.js まで用意済みです。今回のturn 3 future-B差も同じ層なので、その既存probeを使ってROMの実level mapを採り、generated paintとの差だけ直します。
+
+未保存だった presentation_level_probe.js はログ上では作成済み扱いでしたが、現在のワークスペースには実体がありません。ここは記憶で再現せず、ROM関数 021E1F2C の実引数レジスタを確認してから、同じread-only probeを最小限で復元します。
+
+021E1F2C の実シグネチャも確認できました。r0=startNode, r1=pivot（実際は未使用）, r2=local levels map, r3=maximumLayer です。なのでROMを一度だけturn 3まで再演し、この4引数と6近傍のlevel値だけ採れば差が直接出ます。ログに記載されていた未保存probeを、この仕様どおりread-onlyで復元します。
+
+level probeの近傍順も、ROM 02170F58 とC++ PresentationNeighbors() が一致する形へ修正しました。次は重いtrigger/setup probeを外し、指定5本＋このread-only level probeだけで battle.dst をfresh再演してturn 3まで採ります。
+
+ROMのlevel probeも取れました。過去の未解決例と同じく、実ROMでは例えば start=59 / pivot=23 / maxLayer=3 の近傍levelが [0,0,3,3,2,2] で、C++のgenerated paintと比較できる材料が揃いました。ただし今回のfuture-B 76→59 はkeep-goal経路ではないため 021E1F2C を通りません。次は 021E1FD8 本体の候補選択を直接1対1で確認します。
+
+021E1D90 も確認できました。ROMはまさに r0=actor start, r1=候補配列, r2=候補数 を受けて、world座標距離が最小の候補を選ぶだけです。したがってturn3のBで、ROMが渡した候補集合とC++の outerCandidates/innerCandidates を直接比較すれば、distance関数を疑わず最初の差を確定できます。
+
+条件付き停止がその箇所では掛からずそのまま終了したので、ここは「future B が target=193 の通常assignmentを通る」という仮定を置きません。C++の既存CameraDebugEventではroute [76,77] だけ確定しているので、次は条件を actorId=194 のみに狭めず広げ、実際にどのtargetで AssignPresentationGoal が呼ばれたかデバッガで取ります。
+
+止まってます。今はCLionの条件付きbreakpointで actorId=194 に入ったところなので、故障ではなく意図した停止です。ここで実target・pivot・levelを採って、ROMの [76→59] とC++の [76→77] の最初の差を確定して続けます。
+
+デバッグセッション自体が今終了していました。さっきの「停止」はユーザー側の BattleEmulator.cpp:1722 breakpointに当たったあと、そのセッションが終端まで抜けた形です。ユーザーbreakpointは触らず、次はそこを起点にIDEの run-to-line で AssignPresentationGoal へ直接進めて、不要な停止を避けます。
+
+さっきの停止はもう解消しています。ただ、ここで重要な食い違いが1つ出ました。私が再投入した --trace-main-sequence ... currentSeedPosition=0 は2ターンでHero死亡し、最初に得た8ターン探索列の世界線と一致しません。なのでカメラ修正を続ける前に、探索側が使った正確な開始seed positionをコード／探索出力から取り直して、同じ世界線へ戻します。
+
+再現ファイルが既に残っていました。GERUNIKKU_RNG_DIVERGENCE_20260916_TURN4.md が、まさに今回の gene 70:2 62 71:1 71:3 ... の再現条件を保存しています。これを正本にして、開始positionを取り違えた私の再実行だけ修正します。
+
+探索は同じ条件で再実演し、完全再現しました。verified=1 / replayFailures=0 / 8 turns / rngPosition=446 / GENE 70:2 62 71:1 71:3 62 33 62 34:2。開始条件は再現ファイルどおり --initial-position=2、full replay側は currentSeedPosition=1 です。これで世界線の取り違えは解消しました。
+
+full replayも正しい条件で position=446 / hp=84,0,0,0 まで再現しました。つまり探索→Mainの内部検証は改めて問題なしです。ただしturn 4の余分な #275-277 も再現しており、ROMとの差は残っています。ここからは再現済みのturn 3 future-B goal [76→59] vs C++ [76→77] だけを潰します。
+
+今のROM/C++差は「乱数」ではなく 021E1FD8 の候補集合まで落ちています。ここはソースへprintfを足さず、CLionを正しく position=1 の4ターンprefixで止め、future B（start 76）の levels / outerCandidates / innerCandidates を直接読むのが最短です。ユーザーの既存breakpointはそのまま残し、そこから run-to-line で進めます。
+
+CLionは今、user breakpointを保ったままturn 1のMainへ戻ったところです。run-to-line自体は壊れていませんが、既存のuser breakpointが先に割り込むので、削除せず順に通過させてturn 3の actor194/start76 条件breakpointまで進めます。
+
+当たりました。根因がかなり明確です。turn 3 future B（actor194/start76）で、C++は targetIndex=0＝Hero を渡しています。ROMは同じfuture Bについて target=C1(actor193) を resolve-target で実測済みです。だからC++は goalPivot=66 / expansion=0 から [76→77] を作り、ROMはC1側 goalPivot≈23 / expansion=1 から [76→59] を作っています。距離paintを直す前に、future participantのtarget解決が誤っています。
+
+これで target 解決バグまで閉じました。C++ callerでも primaryTargetId=193 は正しく、壊しているのは ResolvePresentationTarget() です。actor194 の stale cachedTargetId=0 が primary target 193 より優先され、future BをHero向きとして扱っています。ROM 021E2818 の優先順位移植自体ではなく、cachedTargetIdの生命周期が長すぎるのが原因候補です。次にその0がいつセットされ、ROMではどこで消えるかだけ追います。
+
+cachedTargetId の書込み箇所を確認すると、C++は AssignPresentationGoal() の末尾で一度セットした後、productionでは消す処理が存在しません。これはかなり怪しいです。ROM側ではこの値は presentation +0x4C の一時target cacheなので、いま 0204A278（書込み）と reset/commit 系 02049B10 を読み、どのタイミングで無効化されるかを確定してから修正します。
+
+ROMの 0204A278 は確かに presentation +0x4C へtarget actor IDを書きます。一方 02049B10（0x4F reset）はgoal/aux nodeは消しますが、+0x4Cそのものは消していません。なので「turn endで単純クリア」ではありません。ROMではturn3のBの+0x4Cが実際に193へ更新済みなので、C++がその更新機会を落としている可能性を追います。
+
+021E2818 の優先順位自体はC++と一致しています（+0x4C→+0x4D→action primary target）。問題は、ROMではturn3 setupに入る時点でC2の+0x4Cが193なのに、C++では前ターン由来の0のままという点です。freecam_setup_probe_mcp.js が+0x4C writerまで既に見ているか確認し、無ければ既存関数 0204A278 だけを軽く観測して「いつ193になるか」を採ります。
+
+ターゲットcacheの生命周期だけに絞って続けます。今から 021E1F2C の一時probeを外し、0204A278(+0x4C write) のread-only probeへ切り替えて、C2のcacheがROMではいつ 0→193 になるかを同じ3ターンで採ります。
+
+一時probeは切替完了です。現在は指定5本＋target-cache probeだけ。これから battle.dst をfresh reloadし、seed 0x2D6A91 position=1 から3ターンだけ再演して、0204A278 の書込み列を回収します。
+
+3ターン再演は非同期化されましたが、入力は既に送られている可能性があるので再送しません。同じasync IDの完了だけ回収します。
+
+ROM側のtarget-cache lifecycleが取れました。C2(actor194)はturn3のsetupに入る前に、0204A278 で cachedTargetId: 0xFF → 193(C1) と書かれています（cache-write #34 → setup-entry #35）。C++はこの「setup前cache構築」を丸ごと持っておらず、前ターンの0を保持していました。次はこの#34のcall stackを実機で1回だけ取り、どの一般lifecycleから来る書込みかを確定します。
+
+狙いどおり止まりました。PCは 0x0204A278、つまりC2→C1 cache writeそのものです。confirmOption のtimeoutは故障ではなく、この意図的pauseで待たされた結果です。ここで実機call stackをそのまま取ります。
+
+call stackで一般経路まで取れました。0204A278(C2, C1) の直接callerは 021E05C8、所属関数は 021E050C。さらに 021DBFD0 → 021E050C から呼ばれており、021E08BCのgoal setupより前のturn/action preparation側です。これがC++に欠落しているlifecycleです。今この 021E050C を静的に割って、どのactorへどのtargetを事前cacheする処理かをそのまま移植します。
+
+ROMの 021E050C は単純でした。各ターンの全action recordを先に走査し、各actionの参加actorへ「そのaction recordのtarget actor ID」を presentation+0x4C に書いてから、個別actionの 021E08BC setupへ進みます。C++にはこのpre-passがなく、AssignPresentationGoal() の副作用だけでcacheを更新していたため、未来actionのC2が古いHero targetを見ていました。これをaction ID例外なしのturn pre-passとして入れます。
+
+実装点は最小です。BeginTurn() 直後にROM 021E050C と同じ「全action recordの actor→target cache pre-pass」を1回入れます。既存の AssignPresentationGoal() 内cache writeはROM 021E1FD8→0204A278 に対応するので消しません。自己対象だけは既存metadataでpresentation targetへ補正します。
+
+production patchは camera.cpp だけで、IDEの即時errorは0件です。次はビルド込みで正確4ターンprefixを再実走し、まずturn3 future-BがC1 targetを使って [76→59] へ戻るか、そしてturn4の余分な #275-277 が消えるかを見ます。
+
+target-cache pre-passの修正は入ったので、ここから検証です。まずcamera.cppのコンパイルエラー確認→正確な4ターンprefix実走で、turn3のC2 routeとturn4余計な3 RNGが同時に消えるか見ます。
+
+修正は効いていますが、まだ完全には閉じていません。turn1のpresentationはROM期待どおり [59,30,23,33] → [58,38,23,68] まで戻りました。一方turn4末尾の余分な #275–277 はまだ残っています。まず3ターンprefixだけに縮めて、target-cache pre-pass後のturn3 future-B routeがどこまで変わったか確認します。
+
+pre-pass修正でturn3最初の差は閉じました。C++もザキsetupでC2を goal=59 にできています。ただし次のactionではROM/C++とも57、その次のDQ9 10 setupだけ再び分岐し、ROM goal=59 に対してC++ goal=57。つまり残りはtarget cacheではなく、turn3 actionIndex=2のfuture-participant goal条件に1本だけ絞れました。
+
+条件付きbreakpointがその行では最適化で拾えず、セッションがそのまま終了しました。ロジック結果は通常実走で取れているので、次は既に安定して止まるAssignPresentationGoal側へ置き、C2/start76/C1の3回のhitを順に見て、3回目（DQ9 10 setup）だけ比較します。
+
+turn3 actionIndex=2では、C2は通常AssignPresentationGoalを通っていませんでした。ROM/C++とも直前のDQ9 155後にrow+4が全nonzeroになり、C2は021E2664の強制fallbackへ入るケースです。C++はそこで57を保持、ROMは59へ動かす。次はこのfallbackの入力gridを同じ瞬間で比較します。
+
+訂正。この直前の「ROM/C++ともC2がfallback」は誤りです。fresh ROMを取り直すと、seed 0x2D6A91 turn3 DQ9 10 setupではC2 physical row+4はzeroで、021E2664 fallback probeは0件でした。ROMは通常のresolve-target/assign-goal経路へ入り、future C2のtargetをC1(actor193)として解決してgoal=59を設定します。ここで観測した `[2, 0x007c2000, 0xffffffff, 0]` はこのDQ9 10 setup時点のscratchであり、「直前DQ9 155のpost-action residueそのもの」ではありません。
+
+この取り違えから一時的に `presentationType 22 -> TTTT` を削除し、DQ9 155だけTTTFへ変更する案を試しましたが、これは撤回してproductionを元に戻しました。過去の担当者の記録を再監査すると、DQ9 0x009B/type22後の次021E1958で先頭4 physical rowが全nonzeroになることを実測し、その後5万seed×3turnでtype0/1/4/21/22/31を広く通してexit 0まで確認していました。
+
+さらに2026-09-16に別seedでROMを再検証しました。battle.dst / position=1 / Heroスカラで、DQ9 155(Eerie Light)が出るseed 0x3 と0x5の両方とも、DQ9 155 setupのphysical row+4は `[37300512,37300512,8,15]`、すなわちTTTTでした。seed 0x3では次action DQ9 19 setupでも同じTTTTが保持されていました。したがって旧 `case 22 -> TTTT` は今回のTTTF観測では反証されず、削除は不適切です。
+
+ROM 021E050C -> 0204A278 のturn/action preparation target-cache pre-pass自体は実在し、seed 0x2D6A91ではC2 cachedTargetIdがsetup前にC1(193)へ更新されることも実測済みです。ただし、C++のcombat `actions/actors/targets[]` をそのままROMのpresentation action-record列と同一視して全recordをpre-passする実装も撤回しました。ROMのfuture C2解決ではpresentation recordがDQ9 929/C2->C1として参照される場面がある一方、同じ時点のC++ future combat recordはcommon action 1/C2->Heroであり、両record列は1対1ではありません。lifecycle不足は本物ですが、combat record配列への単純pre-passは一般化しすぎです。
+
+撤回後のproductionコードで回帰確認済みです。`--trace-sequence-summary 0x2D7A91 1 69:1` は既知期待どおりnext position=88、`--trace-sequence-summary 0x2726D6 1 69:3` はnext position=80。さらに `--scan-main-sequence-seeds 1 50000 1 31 30 62` と `--scan-camera 30 -1 3 1 50000 1` は両方exit 0でした。現在のrepro `0x2D6A91 / 70:2 62 71:1 71:3` は依然C++ next=278、ROM next=275で、turn4の余分な3 RNGは未解決です。今回のtype22削除とcombat-record単純pre-passはいずれも解決策ではありません。
+
+
+それ、かなり重要です。row+4だけでなく「カメラ側が未初期化stack値を入力として使う」前提なら、値を意味のある状態へ正規化する修正は逆に壊します。a.txtの未初期化ゴミ関連を拾い直して、今回の 021E050C → 021E08BC も「presentation recordの意味」だけでなく、どのstack residueがそのまま分岐/RNG入力になるかを優先して見ます。
+
+a.txtにも残っていました。021E1958 は row+4 を初期化せず、021E08BC がそのstack残骸のゼロ/非ゼロを分岐材料として読んでいます。なので厳密には「ゴミ値そのものをRandIntへ渡す」というより、未初期化ゴミでカメラ経路を選び、その結果RNGを引く/引かないが変わるタイプですね。今回の3 RNG差にも直結し得るので、ここを正規化しない前提で続けます。
+
+Ghidraで 021E050C を取り直しました。ここは「combatのactor/target配列をなぞる」処理ではなく、ROMがすでに構築済みの0x28-byte presentation action-record poolそのものを全走査し、各recordのsnapshot actorへ record +0x14 のtargetをcacheします。なので前回の単純pre-pass撤回は正しかったです。次はC++側で、そのrecord pool相当がどこまで既に再現されているかを見ます。
+
+C++側を見ると、いま BeginTurn() に渡しているのは actor順だけで、ROM 021E050C が走査する「presentation record + snapshot + target」の構造自体がありません。ここが残りの本命です。まず既存の観測スクリプトにrecord pool dumpがないか探し、同じ3ターンでROMの実record列をそのまま取ります。
+
+既存の read_action_records_tmp.js がありました。これを使えばROMの0x28-byte record poolを直接読めます。今回はさらに +0x10 のsnapshot linked listを全部辿る形にして、021E050C が実際にcacheへ書く (record action, snapshot actor, target) をそのまま採ります。
+
+未初期化ゴミの件を踏まえて、record pool観測も「意味を推測して再構成」せず、生のsnapshot chainを採るようにします。これで C2→C1 cacheを書いたrecordが本当に929なのか、またそのrecordがcombat列のどこから派生したのかを切り分けられます。
+
+システム側からは「リクエストの安全性を確認できなかったため、この操作はOpenAIによってブロックされた」という趣旨の停止指示でした。そこは別経路で回避せず、実行操作は止めて、いま取れるread-only観測と静的解析だけで続けます。
+
+実行操作はブロックされたので、動的再演の代わりに「なぜROMには929/C2→C1があるのにcombat列はC2→Heroなのか」をコード側から詰めます。もし929が通常行動ではなく保護/リアクション用presentation recordなら、BeginTurn(actions[])から作る設計自体が不足していることになります。
+
+ROM再演は安全チェックで止められましたが、C++側は通常実走できます。まず同じ3ターンprefixの TRACE iron-plan / action record列を取り、C2が「本当に通常攻撃だけ」なのか、「guard計画は別レイヤで存在するのにcameraへ渡していない」のかを確認します。
+
+システム側からは「このツール呼び出しはOpenAIの安全性チェックによってブロックされた。送信内容を再確認せよ」という趣旨でした。実行系はここで回避せず止め、既存の保存済みtraceと静的解析だけで続けます。
+
+未初期化scratchの前提を固定したうえで、いまは「ROMのpresentation record poolがどう作られるか」を追っています。特に C2→C1 / action 929 が通常の敵行動recordなのか、別の補助recordなのかを静的に切り分けます。
+
+02160158 のcallerは13本あり、turn recordは単一生成器ではありません。0215EDBC 自身もallocatorを直接呼ぶので、まずその中の「初期turn record生成」と、後からrecordを追加する別callerを分けます。ここで929が後付けrecordなら、combat配列との1対1不一致が自然に説明できます。
+
+かなり大きい事実が出ました。ROM 0215EDBC はturn開始時に各actorのprimary recordを作ったあと、02160CFC の返す追加件数ぶん 別のaction recordを追加生成します。つまり battle+0x821C は「後で実行されたcombat action列」そのものではなく、実行前に組まれたpresentation/battle record poolです。これで両列が1対1でない理由が構造的に説明できます。
+
+ROM record poolは、実行済みreal actionだけでなく、実行後に追加されるpresentation/status用recordも同じpoolへ混ざる構造でした。次にallocatorの他callerを監査して、929を「実行action以外」として追加する経路が存在するかを潰します。
+
+ここで別の可能性がかなり強くなりました。021E050C は「今ターンのrecordだけ」ではなく battle+0x8E24 件を先頭から全走査しています。もし 0x8E24 がターンごとに0へ戻らない累積poolなら、turn3のC2 cache=C1は過去ターンの929 recordの残留効果でも説明できます。これを先に確定します。
+
+0x8E24 は 0215EDBC 内で各real/synthetic record追加ごとに増え、直後の 0215FE68 ではリセットされません。少なくともturn処理関数の中には「今ターンだけへ戻す」処理が見えないので、battle-wideの累積poolである可能性が高いです。ただしC2 cacheの最終値がC1なら、結局その時点までの最後のC2 recordがC1 targetである必要があります。ここを929の生成条件から詰めます。
+
+追加件数テーブルも読めました。02160CFC のprofile別件数は [0,0,1,2,0,0,0,0] で、既存コメントどおりIron側profile 0なら追加行動0、Geruniku profile 2なら1です。したがってC2の929は、少なくともこの「extra-action生成」ではありません。次は後処理のrecordコピー／派生recordかどうかを既存採掘ログで見ます。
+
+既存採掘ログがかなり使えます。1ターンの実ROMでは典型的に「片方のIronが929→Geruniku、もう片方が通常攻撃→Hero」という5-record列になっています。つまり929は補助recordではなく、そのIronの実actionとして普通にaction orderへ入っています。今回も C2→C1 が見えたなら、そのturnのC2はROM上では「かばう」を選んでいた可能性が高いです。まず採掘ツールがturnごとのorderをどう切っているか確認します。
+
+採掘スクリプトを見ると controller+0x57C8 のaction indexは各turnで0へ戻り、battle+0x821C + index*0x28 をそのまま読む設計です。なのでrecord poolもturnごとに再利用・resetされているはずです。0216AE9C の前処理 0216AF7C を確認して、0x8E24 resetを確定します。
+
+0216AF7C はrecord count resetではなく、4人分のactor metadata更新と 0204A278 target cache初期化側でした。count resetは別なので、0215FE68 内から呼ばれるcleanupを1段掘ります。ここは「累積poolかturn poolか」を曖昧なまま進めません。
+
+未初期化ゴミの件と合わせると、カメラ側でやるべきことは「recordを意味的に作り替える」ではなく、ROMと同じrecord順とstack residueを入力として持つことです。次に、C++が camera::Main へ渡す actions/actors/targets が本当に実行record列なのか、それとも情報を落とした派生配列なのかを確認します。
+
+ここで、C++側のズレを説明できる候補が1つあります。Iron A/Bは同型なので、同じAI roll列をA/Bへ割り当てる順番だけ逆だと、全体RNG消費や敵行動の種類は近いまま、929を使うactorだけC0↔C2で入れ替わります。今回の「ROM C2=929 / C++ C2=通常攻撃」と非常に相性がいい仮説です。まず実行時RNG量が同じになり得るか、929と通常攻撃の本体処理を比較します。
+
+次は「C0/C2へ同じIron AIのRNG列を割り当てる順番がROMとC++で逆なのでは」を潰します。これが成立すると、C2だけ 929→C1 と 通常攻撃→Hero が入れ替わり、カメラcache差をかなり自然に説明できます。まず両actionのRNG消費数とspeed-order生成を静的に比較します。
+
+RNG数だけ見ると、通常攻撃と929は完全同型ではありません。なので「単純にA/Bの行動だけ交換したのにturn3末尾まで同じposition」という仮説は、そのままでは弱いです。次は保存済みの各turn境界とLCG列から、turn3開始時のspeed順・Ironのslot rollを静的に再計算して、ROMの929=C2とC++ plannerの割当が本当に食い違うかを直接確認します。
+
+保存済み境界は turn1=86、turn2=169、turn3=231 と取れているので、turn3の最初のspeed RNGは位置169からです。ここは実行せずLCG式だけで再計算できます。Iron A/Bは同個体なので、まず169–172の乱数値と初期speedを突き合わせて、どちらが先にAI選択されるべきかを確定します。
+
+LCGを静的に当てると面白い結果です。turn3が本当にnext=169開始なら、C++ planner自身は
+
+speed順: Hero → Geruniku → Iron A → Iron B
+Iron A: slot1 = 通常攻撃
+Iron B: slot0 = 929/かばう
+になるはずです。つまり ROMの「C2→C1=929」と一致し、a.txt末尾の「C++ future combat recordはC2通常攻撃」という観測と矛盾します。ここは推測を進めず、turn開始169の前に隠れたRNG消費がないかコード順を確認します。
+
+ひとつ確認します。a.txtの「common action 1 / C2→Hero」を私が“通常攻撃”と読んでいますが、このプロジェクトの内部enum番号が本当にそうかを固定します。ここを取り違えると、今の矛盾は丸ごと消える可能性があります。
+
+矛盾の次の候補は、ROMとC++で「speed RNGをどのactorへ割り当てる順」が違うことです。C++は固定 [Hero,C0,C1,C2] に169–172を割りますが、ROMは FUN_021555C0 が返すactor列へ順に振っています。この列順を静的に確定します。
+
+ROMのspeed RNG割当元が見えてきました。FUN_021555C0 は単純な固定4人配列ではなく、0216017C と 0216029C の2列を連結してactor一覧を作ります。ここを読むと [Hero,C0,C1,C2] 前提が正しいか一発で分かります。
+
+ROM側のactor列生成で重要な差が見えました。敵は [C0,C1,C2] を単純列挙せず、battle+0x81B1 の遭遇グループ順を走査します。同種Iron 2体が先にまとまり、その後Gerunikuなら [C0,C2,C1] になります。これだとspeed RNGのactor割当がC++と変わります。いまロード済みStateをread-onlyで直接読んでgroup順を確定します。
+
+Stateのenemy group順はread-onlyで確認でき、実際に [C0,C1,C2] でした。なのでspeed RNGのactor割当順差は否定です。つまり本筋へ戻ると、ROMのrecord poolをC++ camera入力へ落としていないことが依然残ります。既存ログに今回turn3のrecord列そのものが残っていないか、最後にそこを掘ります。
+
+ここまでで「speed順」「enemy group順」はROM/C++一致側でした。なので、a.txt line2100の“C++ common1/C2→Hero”は少なくとも静的plannerと整合しません。いったんその1行を絶対視せず、現在の camera.cpp がどのfuture recordからprimaryTargetを作り、どの未初期化row+4でnormal/fallbackを分けるかをコード順で監査します。
+
+現在コードで決定的に欠けているものが見えています。SetupCurrentAndFuturePresentationGoals() は未来recordのtargetを読む前に ResolvePresentationTarget() を呼ぶのに、ROMならその前に 021E050C が全record分のcachedTargetIdを書き終えている。C++にはその段階が一切ありません。未初期化row+4は別軸なので維持しつつ、まずcache prepassを「正しいrecord入力」で入れる必要があります。既存runtimeへrecord表現を最小追加できるか確認します。
+
+もう1本、見落とすと危ない初期化経路があります。ROMのturn準備 0216AF7C も4actorへ 0204A278 を呼んでいます。C++ BeginTurn() はcachedTargetIdを触っていないので、stale cacheが残る原因がrecord prepass以前のturn初期化漏れかもしれません。ここを再確認します。
+
+0216AF7C は actor ID 0..3、つまり味方側4枠だけでした。今回のC2(0xC2) stale cacheには直接効きません。敵側について 0204A278 を書く一般callerを全部列挙し、021E050C 以外にturn境界で0xFF化/上書きする経路がないか確認します。
+
+未初期化ゴミはそのまま別レイヤとして維持します。いま一番大事なのは、敵C2の stale cachedTargetId=0 がROMではいつ0xFFへ戻り、いつC1へ再設定されるかです。02164158 → 021E050C → 021E05F0 → 021E08BC の実際の呼び順をGhidraで確定します。
+
+021DC9CC の順序は確定しました。各actionのsetup直前は 021E05F0 → 021E08BC です。一方 021E050C は別の 021DBFD0 からもっと前に走ります。つまりROMは「全recordでcacheを先に埋める → actionごとに05F0で妥当性/未来targetを補修 → 08BC」という二段構えです。
+
+021DBFD0 はturn/action処理へ入る初期化フェーズで、そこで 021E050C を1回だけ走らせています。その後、各action直前の 021DC9CC が 021E05F0 → 021E08BC。つまりcacheの順序はほぼ確定です。
+
+ただ、ユーザーの指摘どおり今回もう一つ同等に重要なのが、各actionごとに再利用される未初期化stack scratchです。prepassだけ直しても、DQ9 155後→DQ9 10 setupでC2のrow+4がROMだけ0になる差が残っていたので、そこを次に追います。
+
+これ、かなり本丸っぽいです。021DC9CC は 021E05F0 がreturnした直後に 021E08BC を呼ぶので、08BC の未初期化row+4は「前actionの抽象的なpost-action state」より先に、直前の05F0 stack frameの残骸をそのまま踏んでいる可能性が高いです。
+
+つまり [2, 0x007c2000, 0xffffffff, 0] をaction155の意味に結びつける必要はなく、05F0 のlocal offsetと 08BC のrow buffer offsetを重ねれば一般則として説明できるかもしれません。ここをassemblyで重ねます。
+
+assemblyを重ねると、かなりきれいに一致しました。
+
+021E05F0: 9 regs push + sub sp,#0xDC = 合計 0x100
+021E08BC: 9 regs push + sub sp,#0x1EC = 合計 0x210
+05F0のrow buffer = sp+0x4C
+08BCのrow buffer = sp+0x15C
+
+どちらもcaller基準では まったく同じ絶対アドレス（caller SP - 0xB4） です。つまり05F0→08BCで同じ未初期化row scratchをそのまま再利用しています。これは「ゴミを意味化しない」が完全に正しいです。
+
+ここで1点、さらに整理できました。021E2904 はsetup中に row+4=1 を明示的に書くので、scratchは「完全に読み取り専用のゴミ」でもありません。ただし次setup入口の [2, 0x007c2000, 0xffffffff, 0] は1だけでは説明できないので、08BC終了後〜次の05F0までに別frameが同じstack帯を上書きしていることになります。
+
+次は 021DC9CC のcaller state machineを追って、action間に挟まる関数のstack frameを重ねます。
+
+もう一段あります。021DC70C 自身のframeはちょうど 0x80 bytes（9 regs=0x24 + locals=0x5C）。その中で 021DC9CC を呼んでsetupした後、action表示/演出用のローカル sp+0x0C などを使います。次actionのsetupまでにこの同じ上位stack帯が再利用されるので、[2, 0x007c2000, 0xffffffff, 0] の出所はここ周辺のaction後処理である可能性が高いです。まずDC9CC自身のframe量と絶対重なりを計算します。
+
+DC9CC 自身は16-byte pushだけなので、05F0/08BCのrow buffer絶対位置は DC70C entry SPから -0x144 です。DC70C の自前locals（-0x80まで）は届きません。したがって、setup後に呼ばれる深いcalleeが -0x144 付近までstackを使って初めて、次setupのゴミ値が変わります。
+
+これは過去の「final writer」調査と同じ問題なので、a.txtのその区間を再利用します。
+
+過去ログを突き合わせると、scratchモデルの誤りも見えています。現在の ApplyKnownRosterField4PostActionCompatibility(type22) は名前どおり「action後にTTTTを置く」近似ですが、今回確定した実ROMでは DQ9155 setup入口はTTTT、その後の次DQ910 setup入口はTTTF です。つまりtype22を「post-action TTTT」と扱うのはタイミングが粗すぎます。
+
+旧TTTT観測そのものは正しい。ただしそれをaction終了後へ再適用し続けるのは別問題です。現在コードのhelperと呼び出し位置を精査します。
+
+ここは結論を更新します。旧TTTTを削除するのは誤りですが、「type22だからaction終了後にTTTTを再注入」も厳密には粗いです。観測が保証しているのは特定setup入口のTTTTであって、次setupまで不変ということではありません。実際、次のDQ910入口ではC2だけzeroです。
+
+つまり今回の残り3 RNGは、target-cache lifecycleに加えて、この「setup内/演出中のstack上書きをpost-action表が潰している」可能性をかなり真面目に疑うべきです。a.txt末尾も確認してから最小修正候補を絞ります。
+
+いまの静的証拠だけでも、旧TTTTを「消す」のではなく、TTTT観測を残しつつ注入タイミングを細かくする方向が正しそうです。次はDQ9 155のaction後に、同じstack帯 DC70C SP-0xC4 を実際に踏めるcalleeを絞り、その上書きが [2, 0x007C2000, 0xFFFFFFFF, 0] を説明できるか見ます。
+
+DQ9 155 の固定metadataでは operation_type=22 (0x16) ですが、DC70C の特殊分岐は別の7-bit値 0x22 を見ています。ここは同名っぽい値を混同しません。実際に155がどちらの枝へ入るかはactdata word18 のraw bitfieldが必要なので、生成スクリプトからraw定義を確認しつつ、021D9378 のstack深さも先に見ます。
+
+021D9300 自体は浅く、021D9378まででも DC70C の現在SPから約0x78下までしか届かず、row scratch (-0xC4) には未到達です。実際に踏むなら、その先の 021D94F0 系が必要です。ここを見れば、DQ9 155 の演出処理がTTTTを次setupまで維持できない理由を静的に説明できる可能性があります。
+
+かなり強い静的対応が出ました。021D94F0 は巨大な 0x368 byte frameを作るため、次setupのrow+4領域を完全に踏みます。しかも今回の4ワードは 021D94F0 entry基準でおよそ [-0x38, -0x2C, -0x20, -0x14] に対応し、後半2つはcallee-saved register push領域そのものです。観測の 0xFFFFFFFF, 0 が保存レジスタ値なら非常に自然です。呼出直前のレジスタ配置まで確認します。
