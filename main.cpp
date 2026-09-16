@@ -5,6 +5,8 @@
 #include <sstream>
 #include <fstream>
 #include <vector>
+#include <string_view>
+#include <stdexcept>
 
 #include "lcg.h"
 #include "BattleEmulator.h"
@@ -24,52 +26,25 @@
 
 int startturn = -1;
 
-#if defined(RUBII)
-
 const Player copiedPlayers[2] = {
-	// プレイヤー1
+	// 主人公（ぬしさま2.dst）
 	{
-		305, 305.0, 310, 310, 313, 313, 170, 222, 120, // 最初のメンバー
-		165, false, false, 0, false, 0, -1,
+		314, 314.0, 326, 326, 281, 281, 196, 246, 77,
+		77, false, false, 0, false, 0, -1,
 		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
+		2, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
 		false, -1, 0, -1, 0, false, 1, 1, 1 , false
 	}, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 
-	// プレイヤー2
+	// ぬしさま2
 	{
-		1653, 1653.0, 234, 234, 256, 256, 172, 25, 25, // 最初のメンバー
-		255, false, false, 0, false, 0, -1,
+		3520, 3520.0, 278, 278, 256, 256, 128, 0, 50,
+		50, false, false, 0, false, 0, -1,
 		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
 		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
 		false, -1, 0, -1, 0, false, 0, 0, 0 ,false
 	} // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 };
-
-#elif defined(gilyumei1)
-
-const Player copiedPlayers[2] = {
-	// プレイヤー1
-	{
-		301, 301.0, 320, 320, 295, 295, 187, 226, 120, // 最初のメンバー
-		165, false, false, 0, false, 0, -1,
-		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-		2, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-		false, -1, 0, -1, 0, false, 1, 1, 0, false
-	}, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
-
-	// プレイヤー2
-	{
-		2306, 2306.0, 220, 220, 256, 256, 162, 25, 25, // 最初のメンバー
-		255, false, false, 0, false, 0, -1,
-		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-		false, -1, 0, -1, 0, false, 0, 0, 0 ,false
-	} // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
-};
-
-
-#endif
 
 
 // 勝利フラグと確定した敵残HPを返す
@@ -851,7 +826,89 @@ EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed
 }
 #endif
 
-int main(){
+int main(int argc, char* argv[]){
+	auto makeTraceGene = [](int32_t (&gene)[350], const int turns, const int action) {
+		for (int i = 0; i < turns; ++i) gene[i] = action;
+		gene[turns] = -1;
+	};
+
+	auto printTrace = [](const uint64_t traceSeed, const int tracePosition,
+	                     const Player (&tracePlayers)[2], const BattleResult& traceResult) {
+		std::cout << "TRACE seed=0x" << std::hex << traceSeed << std::dec
+		          << " position=" << tracePosition
+		          << " hp=" << tracePlayers[0].hp << ',' << tracePlayers[1].hp << '\n';
+		for (int i = 0; i < traceResult.position; ++i) {
+			std::cout << "TRACE record[" << i << "] turn=" << traceResult.turns[i]
+			          << " action=" << traceResult.actions[i]
+			          << " damage=" << traceResult.damages[i]
+			          << " enemy=" << traceResult.isEnemy[i]
+			          << " actor=" << traceResult.actorIndex[i]
+			          << " actorMp=" << traceResult.actorMp[i]
+			          << " aiGate=0x" << std::hex << traceResult.aiResourceGateMask[i] << std::dec
+			          << " originalSlot=" << traceResult.aiOriginalSlot[i]
+			          << " resolvedSlot=" << traceResult.aiResolvedSlot[i] << '\n';
+		}
+	};
+
+	if (argc >= 3 && std::string_view(argv[1]) == "--trace-turn") {
+		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
+		const int traceAction = argc >= 4 ? std::stoi(argv[3], nullptr, 0) : BattleEmulator::DEFENCE;
+		const int currentSeedPosition = argc >= 5 ? std::stoi(argv[4], nullptr, 0) : 0;
+		int32_t traceGene[350] = {};
+		makeTraceGene(traceGene, 1, traceAction);
+		Player tracePlayers[2] = {copiedPlayers[0], copiedPlayers[1]};
+		BattleResult traceResult;
+		int tracePosition = currentSeedPosition + 1;
+		uint64_t traceState = 0;
+		lcg::init(traceSeed);
+		BattleEmulator::Main(&tracePosition, 1, traceGene, tracePlayers, &traceResult,
+		                     traceSeed, nullptr, nullptr, -1, &traceState);
+		printTrace(traceSeed, tracePosition, tracePlayers, traceResult);
+		return 0;
+	}
+
+	if (argc >= 3 && std::string_view(argv[1]) == "--trace-battle") {
+		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
+		const int traceTurns = argc >= 4 ? std::stoi(argv[3], nullptr, 0) : 10;
+		const int traceAction = argc >= 5 ? std::stoi(argv[4], nullptr, 0) : BattleEmulator::DEFENCE;
+		const int currentSeedPosition = argc >= 6 ? std::stoi(argv[5], nullptr, 0) : 0;
+		if (traceTurns < 1 || traceTurns > 349) throw std::invalid_argument("trace turns must be 1..349");
+		int32_t traceGene[350] = {};
+		makeTraceGene(traceGene, traceTurns, traceAction);
+		Player tracePlayers[2] = {copiedPlayers[0], copiedPlayers[1]};
+		BattleResult traceResult;
+		int tracePosition = currentSeedPosition + 1;
+		uint64_t traceState = 0;
+		lcg::init(traceSeed);
+		BattleEmulator::Main(&tracePosition, traceTurns, traceGene, tracePlayers, &traceResult,
+		                     traceSeed, nullptr, nullptr, -1, &traceState);
+		printTrace(traceSeed, tracePosition, tracePlayers, traceResult);
+		return 0;
+	}
+
+	if (argc >= 5 && std::string_view(argv[1]) == "--trace-main-sequence") {
+		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
+		const int currentSeedPosition = std::stoi(argv[3], nullptr, 0);
+		const int traceTurns = argc - 4;
+		if (traceTurns < 1 || traceTurns > 349) {
+			throw std::invalid_argument("trace main sequence turns must be 1..349");
+		}
+		int32_t traceGene[350] = {};
+		for (int step = 0; step < traceTurns; ++step) {
+			traceGene[step] = std::stoi(argv[step + 4], nullptr, 0);
+		}
+		traceGene[traceTurns] = -1;
+		Player tracePlayers[2] = {copiedPlayers[0], copiedPlayers[1]};
+		BattleResult traceResult;
+		int tracePosition = currentSeedPosition + 1;
+		uint64_t traceState = 0;
+		lcg::init(traceSeed);
+		BattleEmulator::Main(&tracePosition, traceTurns, traceGene, tracePlayers, &traceResult,
+		                     traceSeed, nullptr, nullptr, -1, &traceState);
+		printTrace(traceSeed, tracePosition, tracePlayers, traceResult);
+		return 0;
+	}
+
 	showHeader();
 
 	//https://zenn.dev/reputeless/books/standard-cpp-for-competitive-programming/viewer/library-ios-iomanip#3.1-c-%E8%A8%80%E8%AA%9E%E3%81%AE%E5%85%A5%E5%87%BA%E5%8A%9B%E3%82%B9%E3%83%88%E3%83%AA%E3%83%BC%E3%83%A0%E3%81%A8%E3%81%AE%E5%90%8C%E6%9C%9F%E3%82%92%E7%84%A1%E5%8A%B9%E3%81%AB%E3%81%99%E3%82%8B

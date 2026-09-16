@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.28)
-project(newDirectory)
+project(nusisama2)
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -57,15 +57,8 @@ set(SOURCES
         LinearIdPool.h
 )
 
-add_executable(gilyumei2_rubii ${SOURCES})
-target_compile_definitions(gilyumei2_rubii PRIVATE RUBII=1)
-
-
-add_executable(gilyumei2_rubii_opt ${SOURCES})
-target_compile_definitions(gilyumei2_rubii_opt PRIVATE gilyumei1=1 OPTIMIZE_MODE=1)  # `#define MULTITHREADING` を適用
-
-add_executable(gilyumei1 ${SOURCES})
-target_compile_definitions(gilyumei1 PRIVATE gilyumei1=1)
+add_executable(nusisama2 ${SOURCES})
+target_compile_definitions(nusisama2 PRIVATE NUSISAMA2=1)
 
 
 string(TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)
@@ -79,7 +72,7 @@ if(MINGW)
 elseif(MSVC)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi /O2")
     set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
-    target_compile_options(newDirectory PRIVATE /utf-8)
+    target_compile_options(nusisama2 PRIVATE /utf-8)
 endif()
 
 # MinGWの最適化フラグに応じたマクロ設定

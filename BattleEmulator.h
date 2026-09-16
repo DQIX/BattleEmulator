@@ -105,6 +105,8 @@ public:
 	static const int HATCHET_MAN = 66;// 魔人切り
 	static const int UPWARD_SLICE = 67;// 切り上げ
 	static const int MULTISLASH = 68;// さみだれ斬り
+	static constexpr int TIDAL_WAVE = 69; // つなみ (DQ9 action 0x225)
+	static constexpr int MASSIVE_SWIPE = 70; // なぎはらい (DQ9 action 0x05e)
 
 
     static bool
@@ -155,6 +157,8 @@ private:
     static int ProcessEnemyRandomAction2A(int *position);
 
     static int ProcessEnemyRandomAction44(int *position);
+
+    static int ProcessNusisama2Action(int *position);
 
     static void process7A8(int *position, int baseDamage, Player players[2], int defender);
 };

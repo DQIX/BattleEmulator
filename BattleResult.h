@@ -16,7 +16,8 @@ public:
 
 	static void
 	add(BattleResult* obj1, int action, int damage, bool isEnemy, int AtkBuffTurn, int BuffTurns, int MagicMirrorTurn, int turn,
-	    bool player0_has_initiative, int ehp, int ahp, uint64_t nowState, int scTurn, int amp, int defenseFlag){
+	    bool player0_has_initiative, int ehp, int ahp, uint64_t nowState, int scTurn, int amp, int defenseFlag,
+	    int actorIndex, int actorMp){
 		if(!obj1) return; // ← これが最重要
 		const int pos = obj1->position;
 		obj1->actions[pos] = action;
@@ -33,6 +34,8 @@ public:
 		obj1->scTurn[pos] = scTurn;
 		obj1->amp[pos] = amp;
 		obj1->defenseFlag[pos] = defenseFlag;
+		obj1->actorIndex[pos] = actorIndex;
+		obj1->actorMp[pos] = actorMp;
 		obj1->turn = turn;
 		obj1->position = pos + 1;
 	}
@@ -52,6 +55,11 @@ public:
 	int scTurn[1000] = {};
 	int amp[1000] = {};
 	int defenseFlag[1000] = {};
+	int actorIndex[1000] = {};
+	int actorMp[1000] = {};
+	unsigned int aiResourceGateMask[1000] = {};
+	int aiOriginalSlot[1000] = {};
+	int aiResolvedSlot[1000] = {};
 	uint64_t state[1000] = {};
 };
 

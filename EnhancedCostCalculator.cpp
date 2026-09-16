@@ -420,7 +420,7 @@ constexpr std::array<double, 201> GENOME_G = {
     };
 
 
-#elif defined(gilyumei1)
+#elif defined(NUSISAMA2)
 static constexpr std::array<double, 201> GENOME_A = {
     0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
         /* 27 */ 1.44634,
