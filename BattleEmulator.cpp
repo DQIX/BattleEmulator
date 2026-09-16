@@ -2080,8 +2080,6 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
         case MULTITHRUST:
             players[attacker].mp -= 4;
             attackCount = lcg::intRangeRand(position, 3, 4);
-            std::cout << "TEMP multithrust attackCount=" << attackCount
-                      << " nextPosition=" << *position << '\n';
             (*position)++;
             {
                 int aliveTargets[3]{};
@@ -2103,11 +2101,6 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     // number of living enemies on the opposing side.
                     hitTargets[hit] = aliveTargets[lcg::getPercent(position, aliveTargetCount)];
                 }
-                std::cout << "TEMP multithrust targets=";
-                for (int hit = 0; hit < attackCount; ++hit) {
-                    std::cout << (hit ? "," : "") << hitTargets[hit];
-                }
-                std::cout << " nextPosition=" << *position << '\n';
             hasKaisinn = false;
             for (int i = 0; i < attackCount; ++i) {
                 const int hitDefender = hitTargets[i];
@@ -2161,12 +2154,6 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 } else {
                     baseDamage = 0;
                 }
-
-                std::cout << "TEMP multithrust hit=" << i
-                          << " target=" << hitDefender
-                          << " avoided=" << kaihi
-                          << " damage=" << baseDamage
-                          << " nextPosition=" << *position << '\n';
 
                 preHP[hitDefender] = std::max(0, preHP[hitDefender] - baseDamage);
                 multithrustDamageByTarget[hitDefender] += baseDamage;
@@ -3150,10 +3137,13 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position)++; //関係ない
             (*position)++; //会心
             (*position)++; //回避
-            if (FUN_0207564c(position, players[attacker].defaultATK, players[attacker].def) == 0) {
-                (*position)++; // 0 damage, max: 2, lr: 0x021e81a0
+            baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[attacker].def);
+            if (baseDamage == 0) {
+                baseDamage = lcg::getPercent(position, 100);
             }
-            (*position)++; //不明 0x021e54fc
+            if (baseDamage != 0) {
+                (*position)++; //不明 0x021e54fc
+            }
             baseDamage = 0;
             resetCombo(NowState);
             players[attacker].TensionLevel = 0;
