@@ -1210,6 +1210,23 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                                     }
                                 }
 
+                                if (players[0].magicResistanceLevel != 0) {
+                                    --players[0].magicResistanceTurns;
+                                    if (players[0].magicResistanceTurns <= 0) {
+                                        // ROM 0x02183c8c: 1.0, 0.875, 0.625, 0.375.
+                                        // RandInt(100)/100 has only 0.01 steps, so .5 thresholds
+                                        // can be quantized to the integer side of the comparison.
+                                        constexpr int probabilityByAbsTurn[4] = {37, 62, 87, 100};
+                                        const int probability1 =
+                                            probabilityByAbsTurn[std::abs(players[0].magicResistanceTurns)];
+                                        const int probability2 = lcg::getPercent(position, 100); // lr: 0x0215abdc
+                                        if (probability1 >= probability2) {
+                                            players[0].magicResistanceLevel = 0;
+                                            players[0].magicResistanceTurns = -1;
+                                        }
+                                    }
+                                }
+
                                 --players[0].InsulateTurns;
                                 if (players[0].InsulateLevel != 0 && players[0].InsulateTurns <= 0) {
                                     constexpr int probability[4] = {62, 75, 87, 100};
@@ -2790,6 +2807,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 if (players[defender].magicResistanceLevel > -2) {
                     --players[defender].magicResistanceLevel;
                 }
+                // ROM combat +0x74 starts at 5. Existing C++ turn counters keep
+                // one extra step because post-action processing is represented here.
+                players[defender].magicResistanceTurns = 6;
                 // seed 0x2A実測: 成功時もgeneric physical-baseを通る。
                 // ATK125/DEF282では0なのでfloat RNGなしで021e81a0へ進み、
                 // 021e81a0の0/1結果を内部damageとして扱う。1ならHP damageには

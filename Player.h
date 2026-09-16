@@ -54,6 +54,7 @@ struct Player {
     // initialization for Player and must retain their existing field ordering.
     int MagicMirrorRecoveryTurn = 0;
     uint8_t aiResourceGateMask = 0;
+    int magicResistanceTurns = -1;
 
     [[nodiscard]] constexpr bool operator==(const Player&) const = default;
 
