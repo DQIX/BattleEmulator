@@ -1987,7 +1987,7 @@ int main(int argc, char* argv[]){
 
 	auto counter = 0;
 	int actions[350] = {0};
-	actions[counter++] = BattleEmulator::BUFF;
+	actions[counter++] = BattleEmulator::MAGIC_MIRROR;
 	//actions[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
 	actions[counter] = -1;
 
@@ -2001,7 +2001,7 @@ int main(int argc, char* argv[]){
 	std::stringstream ss;
 	SearchRequest(copiedPlayers, time1, actions, false, ss, searchLimits);
 
-	if(false){
+	if(true){
 		SearchRequest(copiedPlayers, time1+1, actions, false, ss, searchLimits);
 		ss << std::endl;
 

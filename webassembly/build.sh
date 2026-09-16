@@ -22,6 +22,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+cd "${ROOT}"
+
 # ------------------------------------------------------------
 # ブランチごとのビルド variant 定義
 # 形式:
@@ -29,8 +31,8 @@ done
 # ------------------------------------------------------------
 declare -A BRANCH_VARIANTS
 
-BRANCH_VARIANTS[ganasadai1_new_arugo]="
-ganasadai1_gouketu: -Dganasadai=1
+BRANCH_VARIANTS[gerunikku1_new_arugo]="
+gerunikku1_gouketu: -Dgerunikku=1
 "
 
 
@@ -50,10 +52,8 @@ SRC_FILES=(
   BattleEmulator.cpp
   camera.cpp
   debug.cpp
-  ActionOptimizer.cpp
-  EnhancedCostCalculator.cpp
-  EnhancedHashCalculator.cpp
-  EnhancedHeapQueue.cpp
+  GerunikkuSearch.cpp
+  GerunikkuSearchCli.cpp
 )
 
 # Generated camera kernels are intentionally not tracked. Rebuild them from
