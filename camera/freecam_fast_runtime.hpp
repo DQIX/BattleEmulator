@@ -1519,6 +1519,27 @@ inline void SetTargetRecord02161720ActorId(const std::uint16_t actorId) noexcept
 
 inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
 
+// Before overlay_d_00:0216F62C checks the camera-placement bounds, the ROM's
+// movement lifecycle has copied the presentation transform into the battle
+// actor transform through __Vector3_Operator_= (02013920). Live seed
+// 0x1FA72D / turn 2 shows Iron Man B entering action 0x0018 with
+// presentation/battle X,Z = 31925,0 immediately before the bounds clamp,
+// despite its base battle transform being 9009,-10240 at the end of turn 1.
+[[nodiscard]] inline bool SyncCameraPlacementActorWorldFromPresentation(
+    const std::uint16_t actorId
+) noexcept {
+    auto& state = ThreadContext();
+    const std::size_t actorIndex = FindPresentationActorIndex(actorId);
+    if (actorIndex >= state.presentationActorCount) return false;
+    auto& actor = state.presentationActors[actorIndex];
+    actor.battleWorldKnown = true;
+    actor.battleWorldX = actor.worldX;
+    actor.battleWorldY = actor.worldY;
+    actor.battleWorldZ = actor.worldZ;
+    state.nearestNodeCache[actorIndex] = {};
+    return true;
+}
+
 // Exact final bounds branch of overlay_d_00:0216F62C. The camera-placement
 // routine clamps X/Z to +/-0x6000. If either component changes, it runs the
 // global 0216964C actor reset first, then restores only the actor currently
@@ -1600,6 +1621,13 @@ inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
             participant.goalNode = node;
             participant.worldX = position.x;
             participant.worldZ = position.z;
+            // 02049D84 advances the battle actor +0x44/+0x4C physical world
+            // together with the presentation object while this route is in
+            // flight.  A completed one-hop route therefore leaves both
+            // coordinate timelines at the route endpoint.
+            participant.battleWorldKnown = true;
+            participant.battleWorldX = position.x;
+            participant.battleWorldZ = position.z;
             state.nearestNodeCache[participantIndex] = {};
         }
     }

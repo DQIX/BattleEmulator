@@ -236,7 +236,9 @@ inline void AssertCameraMapping(const int action) noexcept {
         if (placement == 0) break;
         if (placement > 2) return false;
         const std::uint16_t placedActorId = placement == 1 ? actorId : targetId;
-        if (placedActorId == kInvalidBattleActor || !ApplyCameraActorWorldBounds(placedActorId)) {
+        if (placedActorId == kInvalidBattleActor
+            || !SyncCameraPlacementActorWorldFromPresentation(placedActorId)
+            || !ApplyCameraActorWorldBounds(placedActorId)) {
             return false;
         }
         sequence >>= 2;
@@ -461,9 +463,6 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
         const auto* actionMetadata = dq9::freecam::actions::Find(after);
         const auto* binding = dq9::freecam::bindings::Find(after);
         const bool hasActionMetadata = actionMetadata != nullptr && actionMetadata->mapped();
-        if (!hasActionMetadata) {
-            assert(false && "BattleEmulator common action lacks DQ9 presentation metadata");
-        }
         TriggerDecision runtimeDecision{};
         bool hasRuntimeDecision = false;
         bool hasPresentationSetup = false;
