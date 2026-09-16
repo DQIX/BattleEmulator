@@ -98,6 +98,7 @@ double EnhancedCostCalculator::calculateResourceCost(const Genome &genome) {
     }
 
     resourceCost += (3 - genome.AllyPlayer.SpecialMedicineCount) * getActionCost(SimpleParameterOptimizerNode::SpecialMedicineCost);
+    resourceCost += (1 - genome.AllyPlayer.MagicWaterCount) * getActionCost(SimpleParameterOptimizerNode::MagicWaterCost);
     resourceCost += (2 - genome.AllyPlayer.ElfinElixirCount) * getActionCost(SimpleParameterOptimizerNode::ElfinElixirCost);
 
     return resourceCost;
@@ -502,6 +503,7 @@ double EnhancedCostCalculator::calculateResourceCost(const Genome &genome) {
     }
 
     resourceCost += (3 - genome.AllyPlayer.SpecialMedicineCount) * s_genome[SimpleParameterOptimizerNode::SpecialMedicineCost];
+    resourceCost += (1 - genome.AllyPlayer.MagicWaterCount) * s_genome[SimpleParameterOptimizerNode::MagicWaterCost];
     resourceCost += (2 - genome.AllyPlayer.ElfinElixirCount) * s_genome[SimpleParameterOptimizerNode::ElfinElixirCost];
 
     return resourceCost;

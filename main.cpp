@@ -33,11 +33,11 @@ int startturn = -1;
 const Player copiedPlayers[2] = {
 	// プレイヤー1
 	{
-		309, 309, 324, 324, 299, 299, 193, 193, 234, 165, // 最初のメンバー
-		165, false, false, 0, false, 0, -1,
+		309, 309, 324, 324, 299, 299, 193, 193, 234, 168, // 最初のメンバー
+		168, false, false, 0, false, 0, -1,
 		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-		3, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-		false, -1, 0, -1, 0, false, 1, 1, 1
+		6, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
+		false, -1, 0, -1, 0, false, 0, 0, 1
 	},
 
 	// プレイヤー2
@@ -357,26 +357,44 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
     // --- TableA で探索 ---
     EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableA);
 	Genome genomeA = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
+#ifdef DEBUG3
+	const auto nodesA = ActionOptimizer::getNodesUsed();
+#endif
 
     // --- TableB で探索 ---
     EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableB);
     Genome genomeB = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
+#ifdef DEBUG3
+	const auto nodesB = ActionOptimizer::getNodesUsed();
+#endif
 
     // --- TableC で探索 ---
     EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableC);
     Genome genomeC = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
+#ifdef DEBUG3
+	const auto nodesC = ActionOptimizer::getNodesUsed();
+#endif
 
 	// --- TableC で探索 ---
 	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableD);
 	Genome genomeD = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
+#ifdef DEBUG3
+	const auto nodesD = ActionOptimizer::getNodesUsed();
+#endif
 
 	// --- TableC で探索 ---
 	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableF);
 	Genome genomeF = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
+#ifdef DEBUG3
+	const auto nodesF = ActionOptimizer::getNodesUsed();
+#endif
 
 	// --- TableC で探索 ---
 	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableG);
 	Genome genomeG = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
+#ifdef DEBUG3
+	const auto nodesG = ActionOptimizer::getNodesUsed();
+#endif
 
 
     BattleResult resultA, resultB, resultC, resultD, resultF, resultG;
@@ -397,7 +415,7 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
     auto rrF = runMain(genomeF, resultF);
     auto rrG = runMain(genomeG, resultG);
 
-    if (!rrA.win && !rrB.win && !rrC.win && !rrD.win) {
+    if (!rrA.win && !rrB.win && !rrC.win && !rrD.win && !rrF.win && !rrG.win) {
         return false;
     }
 
@@ -459,6 +477,10 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 	printRunResult("TableD", rrD);
 	printRunResult("TableF", rrF);
 	printRunResult("TableG", rrG);
+#ifdef DEBUG3
+	ss << "[Nodes] A=" << nodesA << " B=" << nodesB << " C=" << nodesC
+	   << " D=" << nodesD << " F=" << nodesF << " G=" << nodesG << std::endl;
+#endif
 
 
 #endif
@@ -1085,7 +1107,7 @@ int main(int argc, char* argv[]){
 	SearchRequest(copiedPlayers, time1, actions, false, ss);
 	ss << std::endl;
 
-	if(false){
+	if(true){
 		SearchRequest(copiedPlayers, time1+1, actions, false, ss);
 		ss << std::endl;
 

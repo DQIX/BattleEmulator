@@ -46,13 +46,13 @@ constexpr bool validateActionTable(const ActionEntry (&table)[N]){
 constexpr ActionEntry ACTION_TABLE[] = {
 	{
 		BattleEmulator::MIDHEAL, [](const Genome& g){
-			return (g.AllyPlayer.hp / g.AllyPlayer.maxHp) < 0.7 && g.AllyPlayer.mp >= 4;
+			return static_cast<double>(g.AllyPlayer.hp) / g.AllyPlayer.maxHp < 0.7 && g.AllyPlayer.mp >= 4;
 		},
 		[](const Genome&, const Genome&){ return true; }
 	},
 	{
 		BattleEmulator::DEFENDING_CHAMPION, [](const Genome& g){
-			return g.AllyPlayer.mp >= 2;
+			return g.AllyPlayer.mp >= 3;
 		},
 		[](const Genome&, const Genome&){ return true; }
 	},
@@ -125,7 +125,7 @@ constexpr ActionEntry ACTION_TABLE[] = {
 	},
 	{
 		BattleEmulator::GOSPEL_SONG,
-		[](const Genome& g){ return g.AllyPlayer.specialChargeTurn >= 1; },
+		[](const Genome& g){ return g.AllyPlayer.specialCharge && g.AllyPlayer.specialChargeTurn >= 1; },
 		[](const Genome& b, const Genome& a){ return true; }
 	},
 	{
@@ -434,7 +434,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 		}
 	}
 
-	Node_Used = Pool.getSize();
+	Node_Used = static_cast<uint32_t>(Pool.size());
 
 	if(solutionFound){
 		return bestSolution;
