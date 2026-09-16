@@ -1561,8 +1561,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
                 baseDamage = static_cast<int>(floor(tmp));
             }
-            (*position)++; // lr=0x02158ac4, max=100（0ダメージでも消費）
             if (baseDamage != 0) {
+                (*position)++; // lr=0x02158ac4, max=100
                 (*position)++; // lr=0x021e54fc, max=100, 武器特殊効果（0ダメージ時は消費なし）
                 players[defender].sleeping = false;
                 players[defender].sleepingTurn = -1;
@@ -1580,9 +1580,6 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position)++; // lr=0x02157f58, max=100, avoidance stage
             // lr=0x02075724 float[-4.296875,4.296875], then lr=0x02075738 float[-1,1].
             baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
-            if (baseDamage == 0) {
-                baseDamage = lcg::getPercent(position, 2); // lr=0x021e81a0, max=2
-            }
             tmp = 80.0 * (1.0 + lcg::floatRand(position, -0.1, 0.1)); // lr=0x021d9e74
             if (players[defender].TensionLevel == 4) {
                 tmp *= 0.5;
