@@ -24,6 +24,10 @@ constexpr int Ally_Level = 50;
 constexpr double Ally_TensionTable[4] = {1.5, 2.5, 4.0, 6.0};
 constexpr int Ally_TensionLevel = 1 + static_cast<int>(Ally_Level / 10.0);
 constexpr int shieldGuardP = 9; //盾ガード率 9%
+#if defined(GOUKETU)
+constexpr int GouketuEquippedATK = 324;
+constexpr int GouketuBareHandsATK = 179;
+#endif
 
 
 
@@ -210,6 +214,20 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         if (genePosition != -1) {
             genePosition = counterJ - 1;
         }
+#if defined(GOUKETU)
+        bool equipmentChangedThisTurn = false;
+        bool bareHandsThisTurn = false;
+        if (genePosition != -1 && Gene[genePosition] != 0 && Gene[genePosition] != -1) {
+            bareHandsThisTurn = (Gene[genePosition] & ACTION_BARE_HANDS) != 0;
+            const int requestedDefaultATK = bareHandsThisTurn ? GouketuBareHandsATK : GouketuEquippedATK;
+            if (!players[0].paralysis && !players[0].sleeping &&
+                players[0].defaultATK != requestedDefaultATK) {
+                players[0].defaultATK = requestedDefaultATK;
+                RecalculateBuff(players);
+                equipmentChangedThisTurn = true;
+            }
+        }
+#endif
         TiggerSkyAttack = false;
         //現在ターンを保存
         (*NowState) &= ~0xFFFFF000;
@@ -435,6 +453,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         }
         if (genePosition != -1 && Gene[genePosition] != 0 && Gene[genePosition] != -1) {
             actionTable = Gene[genePosition];
+#if defined(GOUKETU)
+            actionTable &= ACTION_ID_MASK;
+#endif
             if (actionTable == TURN_SKIPPED || actionTable == SLEEPING || actionTable == CURE_SLEEPING || actionTable ==
                 CURE_PARALYSIS || actionTable == PARALYSIS) {
                 actionTable = ATTACK_ALLY;
@@ -632,7 +653,14 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         } else if (players[0].hasMagicMirror) {
                             mmt1 = 0;
                         }
-                        BattleResult::add(result, action, basedamage, false, atk1,
+                        int resultAction = action;
+#if defined(GOUKETU)
+                        if (equipmentChangedThisTurn) {
+                            resultAction |= ACTION_EQUIPMENT_CHANGED;
+                            if (bareHandsThisTurn) resultAction |= ACTION_BARE_HANDS;
+                        }
+#endif
+                        BattleResult::add(result, resultAction, basedamage, false, atk1,
                                           def1, mmt1, counterJ - 1,
                                           player0_has_initiative, ehp, ahp,
                                           tmpState, players[0].specialChargeTurn, players[0].mp);
@@ -725,7 +753,14 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         } else if (players[0].hasMagicMirror) {
                             mmt1 = 0;
                         }
-                        BattleResult::add(result, action, 0, false, atk1,
+                        int resultAction = action;
+#if defined(GOUKETU)
+                        if (equipmentChangedThisTurn) {
+                            resultAction |= ACTION_EQUIPMENT_CHANGED;
+                            if (bareHandsThisTurn) resultAction |= ACTION_BARE_HANDS;
+                        }
+#endif
+                        BattleResult::add(result, resultAction, 0, false, atk1,
                                           def1, mmt1, counterJ - 1,
                                           player0_has_initiative, ehp, ahp,
                                           tmpState, players[0].specialChargeTurn, players[0].mp);
