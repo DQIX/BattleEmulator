@@ -2223,3 +2223,44 @@ DQ9 155 の固定metadataでは operation_type=22 (0x16) ですが、DC70C の�
 021D9300 自体は浅く、021D9378まででも DC70C の現在SPから約0x78下までしか届かず、row scratch (-0xC4) には未到達です。実際に踏むなら、その先の 021D94F0 系が必要です。ここを見れば、DQ9 155 の演出処理がTTTTを次setupまで維持できない理由を静的に説明できる可能性があります。
 
 かなり強い静的対応が出ました。021D94F0 は巨大な 0x368 byte frameを作るため、次setupのrow+4領域を完全に踏みます。しかも今回の4ワードは 021D94F0 entry基準でおよそ [-0x38, -0x2C, -0x20, -0x14] に対応し、後半2つはcallee-saved register push領域そのものです。観測の 0xFFFFFFFF, 0 が保存レジスタ値なら非常に自然です。呼出直前のレジスタ配置まで確認します。
+
+
+その通り。目的Xはずっと 0x2D6A91 / 70:2 62 71:1 71:3 の ROM/C++ ミスマッチを直して、C++ next=275 に合わせることです。私は「未初期化scratchの一般解析」へ寄りすぎて、修正そのものから離れていました。
+
+ここからは再調査を広げません。既に取れている差分列を使って、最初にROMとC++が分岐するturn3のpresentation stateだけを直し、4ターンprefixで275になるまで実装→実走→回帰確認します。
+
+修正点が見えました。type22のTTTT自体ではなく、適用タイミングが逆です。
+
+ROMで確定しているのは「DQ9 155 の setup入口がTTTT」。ところがC++は今、155の SetupCurrentAndFuturePresentationGoals() が終わった後にTTTTを再注入しています。これだとsetup中に起きた 021E2904 相当のslot更新を潰してしまい、次のDQ9 10までTTTTを誤保持します。
+
+なので最小修正は、type22だけTTTTをsetup直前へ移し、post-action再注入を止めることです。旧TTTTは消しません。これを入れて4ターンprefix=275を直接確認します。
+
+目的Xに戻して、保存済みのturn3実データから最初の分岐だけ拾います。今見るのは「155の後、DQ9 10 setupまでに何のpresentation producerが入るか」だけです。ここが既存type1=1110と一致するなら、そのproducerを正しいタイミングへ接続して275まで持っていきます。
+
+保存済み事実から、直せる形まで絞れました。DQ9 10は既存mapper上 Merami / presentationType=1 で、ROMのDQ9 10 setup実測 TTTF は既存type1 first-four TTTF と一致します。つまり今回だけの値を新設する必要はありません。
+
+ただしそれだけでは stale cachedTargetId=0 がC1を上書きするので、次は SetupCurrentAndFuturePresentationGoals() 内のfuture target解決を読み、ROM 021E05F0 相当の「setup直前補修」を既存primaryTarget=193から最小実装します。
+
+ここは過去ログ内に primaryTargetId=193 と「combat recordはC2→Hero」が混在しているので、そこだけ現在コードで1回確定します。新しいROM観測は不要です。既存CLI/CameraDebugEventにfuture actor/targetが出せる入口があるかを使い、なければO3 debuggerでその変数だけ見ます。
+
+まず現状を1回だけ再実走して、直接デバッガで得た primaryTargetId=193 が今のHEADでも成立するか確認します。これが成立すれば、修正は「current type1 scratchをsetup前に反映 + future record target cacheをfresh primaryへ同期」の2点で閉じられます。
+
+現HEADの実走が取れました。重要なのは、過去ログの曖昧さが解消したことです。turn1でも DQ9 155 → DQ9 10 があり、C++は155 event後 row4=1110、10 eventではsetupの結果 1111 になっています。つまり「type22 TTTTを後置する」説明だけでは現コードの実状態すら合っていません。
+
+3ターンだけに縮めてturn3の 185/183/180 のeventを全部取り、どの瞬間にC2がfallbackへ落ちるかをそのまま修正します。
+
+現C++ traceで過去の矛盾は解消しました。turn3の実record列は
+Zaki(Hero→C0) → 155(C1→Hero) → 10(C1→Hero) → 929(C2→C1)
+です。つまりROMのC2 cache=C1と、C++側の最後のfuture recordも一致しています。以前の「C2→Hero」は誤観測でした。
+
+なので、撤回したreal-record cache prepassは今回のworldlineでは正しかった。これを戻しつつ、DQ9 10 setupのscratchだけはROM実測TTTFへ合わせる必要があります。まず同seedのturn1 DQ9 10 setupがTTTFか既存ログにあるか確認して、type1 setup適用を安全に決めます。
+
+まずcache lifecycleだけ戻します。これはROMで直接確認済みの 021E050C 相当で、現在の実record列もC2最後=929→C1なので今回の誤観測問題はありません。これ単独でturn3 action0の [76→77] を [76→59] に戻るか確認し、その後DQ9 10の残差だけ直します。
+
+目的Xだけに戻します。まずROMで直接確認済みの 021E050C 相当――turn開始時にreal action recordsを順番に走査して actor→target cache を上書きする処理だけ復元します。これでturn3最初のC2 goalが59へ戻るかを先に確認し、効いたらDQ9 10入口のTTTFだけを次に直します。
+
+target-cache prepassのpatchは入りました。IDE検査が長引いているので待ち続けず、実ビルドを兼ねて3ターンprefixを走らせます。ここでturn3 action0のC2 goalが77→59へ変われば、まず第一段階は成功です。
+
+第一段階は成功です。target-cache prepassだけで、turn3 action0のC2 goalは 77→59 に戻りました。残る差は予想どおりDQ9 10 setupだけで、C++はC2 goal57 / row4=1111、ROMはgoal59 / C2 row4=0です。
+
+DQ9 10は既存の presentationType=1 で、既存ROM測定済みtype1 scratchはfirst-four TTTF。新しい例外値は作らず、この既存type1 residueをsetup入口で適用する最小修正を入れます。

@@ -55,6 +55,43 @@ inline void AssertCameraMapping(const int action) noexcept {
     return (((*NowState) >> 8) & UINT64_C(0xf)) == 0;
 }
 
+[[nodiscard]] std::uint16_t PresentationRecordTargetId(
+    const int commonActionId,
+    const std::uint16_t actorId,
+    const BattleActorRef rawTarget
+) noexcept {
+    const auto* metadata = dq9::freecam::actions::Find(commonActionId);
+    if (metadata != nullptr && metadata->mapped()
+        && metadata->targetScope == dq9::freecam::fast::TargetScope::self) {
+        return actorId;
+    }
+    return rawTarget.valid()
+        ? dq9::freecam::fast::Dq9ActorId(rawTarget)
+        : dq9::freecam::fast::kInvalidBattleActor;
+}
+
+[[nodiscard]] bool PreloadPresentationTargetCache(
+    const int32_t* actions,
+    const BattleActorRef* actors,
+    const BattleActorRef* targets,
+    const int actionCount
+) noexcept {
+    using namespace dq9::freecam::fast;
+    auto& state = ThreadContext();
+    for (int index = 0; index < actionCount; ++index) {
+        if (actions[index] < 0) break;
+        if (!actors[index].valid()) continue;
+        const std::uint16_t actorId = Dq9ActorId(actors[index]);
+        const std::uint16_t targetId = PresentationRecordTargetId(
+            actions[index], actorId, targets[index]);
+        if (targetId == kInvalidBattleActor) continue;
+        const std::size_t actorSlot = FindPresentationActorIndex(actorId);
+        if (actorSlot >= state.presentationActorCount) continue;
+        state.presentationActors[actorSlot].cachedTargetId = static_cast<std::uint8_t>(targetId);
+    }
+    return true;
+}
+
 [[nodiscard]] bool SetupCurrentAndFuturePresentationGoals(
     const int actionIndex,
     const int actionCount,
@@ -80,15 +117,6 @@ inline void AssertCameraMapping(const int action) noexcept {
     }
     if (!BeginPresentationGoalSetup()) return false;
 
-    const auto presentationRecordTargetId = [](const int commonActionId,
-                                               const std::uint16_t actorId,
-                                               const std::uint16_t rawTargetId) noexcept {
-        const auto* metadata = dq9::freecam::actions::Find(commonActionId);
-        return metadata != nullptr && metadata->mapped()
-            && metadata->targetScope == TargetScope::self
-            ? actorId
-            : rawTargetId;
-    };
     const std::uint16_t currentPresentationTargetId =
         currentAction.targetScope == TargetScope::self ? currentActorId : currentTargetId;
 
@@ -136,12 +164,12 @@ inline void AssertCameraMapping(const int action) noexcept {
             if (!AssignActorFallbackPresentationGoal(actorId, true)) return false;
             continue;
         }
-        if (!targets[futureIndex].valid()) continue;
-        const std::uint16_t primaryTargetId = presentationRecordTargetId(
+        const std::uint16_t primaryTargetId = PresentationRecordTargetId(
             actions[futureIndex],
             actorId,
-            Dq9ActorId(targets[futureIndex])
+            targets[futureIndex]
         );
+        if (primaryTargetId == kInvalidBattleActor) continue;
         const std::uint16_t resolvedTargetId = ResolveActorPresentationTarget(actorSlot, primaryTargetId);
         if (resolvedTargetId == kInvalidBattleActor) continue;
         // Live 021E0D34..021E0D5C passes the current action record to
@@ -162,8 +190,7 @@ inline void AssertCameraMapping(const int action) noexcept {
     for (int previousIndex = 0; previousIndex < actionIndex; ++previousIndex) {
         if (!RebuildPresentationOccupancy()) return false;
         if (actions[previousIndex] < 0
-            || !actors[previousIndex].valid()
-            || !targets[previousIndex].valid()) continue;
+            || !actors[previousIndex].valid()) continue;
 
         const std::uint16_t actorId = Dq9ActorId(actors[previousIndex]);
         const std::size_t actorSlot = FindPresentationActorIndex(actorId);
@@ -171,11 +198,12 @@ inline void AssertCameraMapping(const int action) noexcept {
         visited[actorSlot] = true;
         if (!IsActorPresentationMovementEligible(actorSlot, currentPresentationTargetId)) continue;
 
-        const std::uint16_t primaryTargetId = presentationRecordTargetId(
+        const std::uint16_t primaryTargetId = PresentationRecordTargetId(
             actions[previousIndex],
             actorId,
-            Dq9ActorId(targets[previousIndex])
+            targets[previousIndex]
         );
+        if (primaryTargetId == kInvalidBattleActor) continue;
         if (!RosterField4IsKnown(actorSlot)) {
             assert(false && "unknown roster row+4 pattern for previous participant");
             return false;
@@ -315,6 +343,10 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
         const bool applied = ApplyBattleEntryRendererResidueCompatibility();
         assert(applied && "battle-entry renderer residue compatibility failed");
     }
+    if (runtimeReady) {
+        const bool cacheReady = PreloadPresentationTargetCache(actions, actors, targets, actionCount);
+        assert(cacheReady && "presentation target-cache preload failed");
+    }
 #if defined(gerunikku)
     const int debugTurnSerial = gCameraDebugTurnSerial++;
 #endif
@@ -430,6 +462,18 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
             : kInvalidBattleActor;
         if (runtimeReady && hasActionMetadata
             && actors[i].valid() && targets[i].valid()) {
+            if (actionMetadata->presentationType == UINT8_C(1)) {
+                // 021E1958 does not initialize row+4. Live ROM captures of
+                // presentation type 1 (including DQ9 10 / Merami) show the
+                // measured type-1 stack residue is already present when
+                // 021E08BC begins this action's setup. Apply that existing
+                // compatibility image here, before future-participant goal
+                // resolution, rather than only after the action completes.
+                const bool applied = ApplyKnownRosterField4PostActionCompatibility(
+                    actionMetadata->presentationType
+                );
+                assert(applied && "type-1 setup residue compatibility failed");
+            }
             if (SetupCurrentAndFuturePresentationGoals(
                     i,
                     actionCount,
