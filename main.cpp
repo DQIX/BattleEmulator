@@ -13,6 +13,7 @@
 #include "debug.h"
 #include "ActionOptimizer.h"
 #include "EnhancedCostCalculator.h"
+#include "NusisamaSearch.h"
 
 #ifdef DEBUG
 
@@ -302,6 +303,22 @@ void showHeader(){
 //int main(int argc, char *argv[]) {
 
 bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream &ss){
+	(void)dropbug;
+	int turns = 0;
+	while (turns < 349 && aActions[turns] != -1 && aActions[turns] != 0) ++turns;
+	const auto found = NusisamaSearch::Run(copiedPlayers2, seed, aActions, turns);
+	if (!found.victory || !found.replayVerified) return false;
+	ss << dumpTable(found.replay, found.actions.data(), startturn) << '\n';
+	ss << "0x" << std::hex << seed << std::dec << ": ";
+	for (int i = 0; i < found.length; ++i) ss << found.actions[i] << ", ";
+	ss << "\n[NusisamaSearch] Win turn=" << found.replay.turn + 1
+	   << " position=" << found.replay.position << " suffix=" << found.length - turns
+	   << " rng=" << found.finalState.rngPosition << " first_ms=" << found.firstVictoryMs
+	   << " elapsed_ms=" << found.elapsedMs << " exact=1\n";
+	return true;
+}
+
+bool SearchRequestLegacy(const Player copiedPlayers2[2], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream &ss){
 	int32_t gene[350] = {0};
 	auto turns = 0;
 	for(int i = 0; i < 349; ++i){
@@ -827,6 +844,38 @@ EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed
 #endif
 
 int main(int argc, char* argv[]){
+	if (argc == 2 && std::string_view(argv[1]) == "--search-variants") {
+		for (int i = 0; i < NusisamaSearch::VariantCount(); ++i)
+			std::cout << i << " " << NusisamaSearch::VariantName(i) << '\n';
+		return 0;
+	}
+	if (argc >= 3 && std::string_view(argv[1]) == "--search") {
+		const uint64_t seed = std::stoull(argv[2], nullptr, 0);
+		const int budget = argc > 3 ? std::stoi(argv[3]) : NusisamaSearch::DefaultBudgetMs;
+		const int variant = argc > 4 ? std::stoi(argv[4]) : NusisamaSearch::DefaultVariant;
+		const int length = std::max(0, argc - 5);
+		if (length > 90) throw std::invalid_argument("search prefix is limited to 90 turns");
+		std::array<int32_t, 350> prefix; prefix.fill(-1);
+		for (int i = 0; i < length; ++i) prefix[i] = std::stoi(argv[i + 5], nullptr, 0);
+		const auto found = NusisamaSearch::Run(copiedPlayers, seed, prefix.data(), length, budget, variant);
+		if (found.victory) std::cout << dumpTable(found.replay, found.actions.data(), startturn) << '\n';
+		std::cout << "SEARCH variant=" << variant << " name=" << NusisamaSearch::VariantName(variant)
+		          << " seed=0x" << std::hex << seed << std::dec
+		          << " prefix=" << length << " victory=" << found.victory
+		          << " exact=" << found.replayVerified << " position=" << found.replay.position
+		          << " turns=" << (found.victory ? found.replay.turn + 1 : -1)
+		          << " suffix=" << found.length - length << " rng=" << found.finalState.rngPosition
+		          << " nowState=" << found.finalState.nowState
+		          << " hp=" << found.finalState.players[0].hp << ',' << found.finalState.players[1].hp
+		          << " first_ms=" << found.firstVictoryMs << " best_ms=" << found.bestVictoryMs
+		          << " elapsed_ms=" << found.elapsedMs << " expanded=" << found.expanded
+		          << " duplicates=" << found.duplicates << " rejected=" << found.rejectedReplay
+		          << " width=" << found.completedWidth << '\n';
+		std::cout << "ACTIONS";
+		for (int i = 0; i < found.length; ++i) std::cout << ' ' << found.actions[i];
+		std::cout << '\n';
+		return found.victory ? 0 : 2;
+	}
 	auto makeTraceGene = [](int32_t (&gene)[350], const int turns, const int action) {
 		for (int i = 0; i < turns; ++i) gene[i] = action;
 		gene[turns] = -1;
@@ -1015,26 +1064,26 @@ int main(int argc, char* argv[]){
 	SearchRequest(copiedPlayers, time1, actions, false, ss);
 	ss << std::endl;
 
-	if(true){
-		SearchRequest(copiedPlayers, time1+1, actions, false, ss);
-		ss << std::endl;
-
-		SearchRequest(copiedPlayers, time1+2, actions, false, ss);
-		ss << std::endl;
-
-		SearchRequest(copiedPlayers, time1+6, actions, false, ss);
-		ss << std::endl;
-
-		SearchRequest(copiedPlayers, time1+10, actions, false, ss);
-		ss << std::endl;
-
-
-		SearchRequest(copiedPlayers, time1+40, actions, false, ss);
-		ss << std::endl;
-
-		SearchRequest(copiedPlayers, time1+70, actions, false, ss);
-		ss << std::endl;
-	}
+	// if(true){
+	// 	SearchRequest(copiedPlayers, time1+1, actions, false, ss);
+	// 	ss << std::endl;
+	//
+	// 	SearchRequest(copiedPlayers, time1+2, actions, false, ss);
+	// 	ss << std::endl;
+	//
+	// 	SearchRequest(copiedPlayers, time1+6, actions, false, ss);
+	// 	ss << std::endl;
+	//
+	// 	SearchRequest(copiedPlayers, time1+10, actions, false, ss);
+	// 	ss << std::endl;
+	//
+	//
+	// 	SearchRequest(copiedPlayers, time1+40, actions, false, ss);
+	// 	ss << std::endl;
+	//
+	// 	SearchRequest(copiedPlayers, time1+70, actions, false, ss);
+	// 	ss << std::endl;
+	// }
 
 	std::cout << ss.str();
 	return 0;

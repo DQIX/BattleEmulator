@@ -45,6 +45,8 @@ set(SOURCES
         Equipment.h
         ActionOptimizer.cpp
         ActionOptimizer.h
+        NusisamaSearch.cpp
+        NusisamaSearch.h
         Genome.h
         EnhancedCostCalculator.h
         EnhancedCostCalculator.cpp
@@ -59,6 +61,19 @@ set(SOURCES
 
 add_executable(nusisama2 ${SOURCES})
 target_compile_definitions(nusisama2 PRIVATE NUSISAMA2=1)
+
+option(NUSISAMA_BUILD_EVALUATION "Build the fixed-budget search benchmark" OFF)
+if(NUSISAMA_BUILD_EVALUATION)
+    set(EVALUATION_SOURCES ${SOURCES})
+    list(REMOVE_ITEM EVALUATION_SOURCES main.cpp)
+    add_executable(nusisama_benchmark evaluation/Benchmark.cpp
+        evaluation/BaselineTimed.cpp ${EVALUATION_SOURCES})
+    target_include_directories(nusisama_benchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_definitions(nusisama_benchmark PRIVATE NUSISAMA2=1)
+    if(MSVC)
+        target_compile_options(nusisama_benchmark PRIVATE /utf-8)
+    endif()
+endif()
 
 
 string(TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)
