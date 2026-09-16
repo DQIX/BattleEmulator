@@ -56,6 +56,8 @@ struct Player {
     int SpecialAntidoteCount = 2;
     bool acrobaticStar = false;
     int acrobaticStarTurn = 0;
+    int BarrierLevel = 0;
+    int BarrierTurns = -1;
 
     /**
      * @brief プレイヤーが生存しているかを判定する関数

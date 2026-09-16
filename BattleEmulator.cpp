@@ -18,6 +18,9 @@
 #include "Equipment.h"
 #include "InputBuilder.h"
 
+#define TRACE_BOUNDARY(label) TRACE(std::cout << "TRACE boundary " << label << " position=" << *position << '\n')
+#define TRACE_ACTION_BOUNDARY(label, actionId) TRACE(std::cout << "TRACE boundary " << label << " action=" << (actionId) << " position=" << *position << '\n')
+
 
 thread_local int preHP[3] = {0, 0, 0};
 
@@ -39,14 +42,13 @@ constexpr int baseHP = 103;
 #elif defined(BattleEmulatorLV13)
 constexpr int kaisinnP = 200;
 constexpr int baseHP = 79;
-#elif defined(erusionn_lv21)
+#elif defined(isinobannninn)
 constexpr int kaisinnP = 500;
-constexpr int baseHP = 143;
+constexpr int baseHP = 139;
 constexpr double ShieldGuardP = 4.5;
-constexpr double mitoreP = 0.1160;
-constexpr int Ally_Level = 24;
+constexpr int Ally_Level = 23;
 #endif
-constexpr double Enemy_level = 35.0;
+constexpr double Enemy_level = 7.0;
 constexpr int DragonSlashKaisinnP = kaisinnP / 2;
 constexpr int WooshSlashKaisinnP = 100;
 constexpr int multithrust3KaisinnP = DragonSlashKaisinnP / 3;
@@ -265,6 +267,14 @@ const char *BattleEmulator::getActionName(int actionId) {
             return "Crack";
         case DOUBLE_TROUBLE:
             return "Double Trouble";
+        case MAGIC_BARRIER:
+            return "Magic Barrier";
+        case KABUFF:
+            return "Kabuff";
+        case STAMP:
+            return "Stamp";
+        case STOMP:
+            return "Stomp";
         case ZAMMLE:
             return "Zammlle";
         case INACTIVE_ENEMY:
@@ -392,6 +402,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
 
     for (int counterJ = startPos; counterJ < RunCount; ++counterJ) {
+        TRACE_BOUNDARY("turn-start");
         processTurn();
         if (genePosition != -1) {
             genePosition = counterJ - 1;
@@ -427,7 +438,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         int32_t actions[3] = {0, 0, 0};
         int actionsPosition = 0;
         double speed0 = players[0].speed * lcg::floatRand(position, 0.51, 1.0);
+        TRACE_BOUNDARY("speed-hero-complete");
         double speed1 = players[1].speed * lcg::floatRand(position, 0.51, 1.0);
+        TRACE_BOUNDARY("speed-enemy-complete");
 
         // 素早さを比較
         if (speed0 > speed1) {
@@ -440,68 +453,38 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         int enemyAction[2] = {0, 0};
         int preAction = 0;
         while (counter != 2) {
-            uint8_t state = (*NowState) & 0xf;
-            if (state == TYPE_2A) {
-                enemyAction[counter] = ProcessEnemyRandomAction44(position);
-                if (preAction != 0 && counter == 1 && enemyAction[0] == enemyAction[1]) {
-                    if (enemyAction[1] == DOUBLE_TROUBLE) {
-                        enemyAction[1] = ATTACK_ENEMY;
-                    } else if (enemyAction[1] == ZAMMLE) {
-                        enemyAction[1] = DOUBLE_TROUBLE;
-                    } else if (enemyAction[1] == CRACKLE_ENEMY) {
-                        enemyAction[1] = SWITCH_2B;
-                    } else if (enemyAction[1] == SWEET_BREATH) {
-                        enemyAction[1] = KASAP;
-                    }
-                }
+            enemyAction[counter] = ProcessEnemyRandomAction44(position);
 
-                if (enemyAction[counter] == ATTACK_ENEMY) {
-                    (*position)++; //0x02156874
-                    (*position) += 2; //0x0216139c && 0x021613b0
-                }
-                if (enemyAction[counter] == SWITCH_2B) {
-                    (*NowState) &= ~0xff;
-                    (*NowState) |= TYPE_2B;
-                    (*position) += 2; //0x0216139c && 0x021613b0
-                    preAction = 0;
-                    continue;
-                }
-                if (enemyAction[counter] == DOUBLE_TROUBLE || enemyAction[counter] == ZAMMLE) {
-                    (*position)++; //0x02156874
-                }
-            } else if (state == TYPE_2B) {
-                int roll = FUN_0208aecc(position, NowState);
-                enemyAction[counter] = AttackTable2B[roll];
-                if (enemyAction[counter] == SWITCH_2A) {
-                    (*NowState) &= ~0xff;
-                    (*NowState) |= TYPE_2A;
-                    (*position) += 2; //0x0216139c && 0x021613b0
-                    preAction = 0;
-                    continue;
-                }
+            if (enemyAction[counter] == KABUFF && players[1].BuffLevel >= 2) {
+                enemyAction[counter] = ATTACK_ENEMY;
+            }
+            if (enemyAction[counter] == MAGIC_BARRIER && players[1].BarrierLevel >= 2) {
+                enemyAction[counter] = ATTACK_ENEMY;
+            }
+            if (enemyAction[counter] == PSYCHE_UP && players[1].TensionLevel >= 4) {
+                enemyAction[counter] = ATTACK_ENEMY;
+            }
 
-                if (enemyAction[counter] == PSYCHE_UP && players[1].TensionLevel == 4) {
-                    if (roll == 1) {
-                        enemyAction[counter] = CRACKLE_ENEMY;
-                    } else if (roll == 3) {
-                        enemyAction[counter] = DOUBLE_TROUBLE;
-                    }
-                }
+            if (preAction != 0 && counter == 1 && enemyAction[0] == enemyAction[1]) {
+                enemyAction[1] = ATTACK_ENEMY;
+            }
 
-                if (enemyAction[counter] == ATTACK_ENEMY) {
-                    (*position)++; //0x02156874
-                    (*position) += 2; //0x0216139c && 0x021613b0
-                }
-                if (enemyAction[counter] == DOUBLE_TROUBLE) {
-                    (*position)++; //0x02156874
-                }
+            if (enemyAction[counter] == ATTACK_ENEMY) {
+                (*position)++;
+                (*position) += 2;
+            } else if (enemyAction[counter] == STAMP || enemyAction[counter] == KABUFF) {
+                (*position)++;
+            } else if (enemyAction[counter] == STOMP) {
+                (*position) += 2;
             }
             if (counter == 0) {
-                (*position)++; //0x02160d64
+                (*position)++;
             }
             preAction = enemyAction[counter];
             counter++;
         }
+        TRACE_ACTION_BOUNDARY("enemy-plan-0", enemyAction[0]);
+        TRACE_ACTION_BOUNDARY("enemy-plan-1", enemyAction[1]);
 
         int32_t actionTable = -1;
 
@@ -544,17 +527,11 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             if ((t == 0 && !player0_has_initiative) || (t == 1 && player0_has_initiative)) {
                 for (int c: enemyAction) {
                     //--------start_FUN_02158dfc-------
-                    if (lcg::getPercent(position, 100) < mitoreP) {
-                        //0x021588ec
-                        //次の乱数が90%以上(一致含む)なら見惚れないらしい。
-                        int mitore = lcg::getPercent(position, 100); //0x02158964
-                        if (mitore < 90) {
-                            c = INACTIVE_ENEMY;
-                        }
-                    }
                     (*position)++; //0x02159b10
                     //--------end_FUN_02158dfc-------
+                    TRACE_ACTION_BOUNDARY("enemy-action-core-start", c);
                     basedamage = callAttackFun(c, position, players, 1, 0, NowState);
+                    TRACE_ACTION_BOUNDARY("enemy-action-core-complete", c);
                     actions[actionsPosition++] = c;
 
                     if (players[0].sleeping) {
@@ -626,6 +603,27 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     } else {
                         break;
                     }
+
+                    players[1].BuffTurns--;
+                    if (players[1].BuffLevel != 0 && players[1].BuffTurns <= 0) {
+                        constexpr int probability[4] = {62, 75, 87, 100};
+                        const int probability1 = probability[std::abs(players[1].BuffTurns)];
+                        const int probability2 = lcg::getPercent(position, 100);
+                        if (probability1 >= (probability2 + (probability1 == 75 ? 1 : 0))) {
+                            players[1].BuffLevel = 0;
+                            RecalculateBuff(players);
+                        }
+                    }
+
+                    players[1].BarrierTurns--;
+                    if (players[1].BarrierLevel != 0 && players[1].BarrierTurns <= 0) {
+                        constexpr int probability[4] = {37, 62, 87, 100};
+                        const int probability1 = probability[std::abs(players[1].BarrierTurns)];
+                        const int probability2 = lcg::getPercent(position, 100);
+                        if (probability1 >= (probability2 + (probability1 == 75 ? 1 : 0))) {
+                            players[1].BarrierLevel = 0;
+                        }
+                    }
                     //--------end_FUN_021594bc-------
                 }
             } else {
@@ -662,7 +660,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
 
                     //--------end_FUN_02158dfc-------
+                    TRACE_ACTION_BOUNDARY("hero-action-core-start", action);
                     basedamage = callAttackFun(action, position, players, 0, 1, NowState);
+                    TRACE_ACTION_BOUNDARY("hero-action-core-complete", action);
                     actions[actionsPosition++] = action;
 
                     if (mode == -1) {
@@ -833,7 +833,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         if (Player::isPlayerAlive(players[0]) && Player::isPlayerAlive(players[1])) {
             (*position) += 1;
         }
+        TRACE_BOUNDARY("camera-start");
         camera::Main(position, actions, NowState);
+        TRACE_BOUNDARY("turn-terminal");
 
 #ifdef DEBUG2
         //DEBUG_COUT2((*position));
@@ -934,6 +936,37 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 (*position)++; //不明 0x021e54fc
             }
             players[attacker].TensionLevel = 0;
+            baseDamage = 0;
+            break;
+        case BattleEmulator::KABUFF:
+            (*position) += 2;
+            (*position)++; //0x021ec6f8
+            (*position)++; //0x02158584
+            (*position)++; //0x02157f58
+            baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[attacker].def);
+            if (baseDamage == 0) {
+                baseDamage = lcg::getPercent(position, 2);
+            }
+            if (baseDamage != 0) {
+                (*position)++; //0x021e54fc
+            }
+            if (players[attacker].BuffLevel != 2) {
+                players[attacker].BuffLevel++;
+                players[attacker].BuffTurns = 7;
+                RecalculateBuff(players);
+            }
+            baseDamage = 0;
+            resetCombo(NowState);
+            break;
+        case BattleEmulator::MAGIC_BARRIER:
+            (*position) += 2;
+            (*position)++; //0x02158584
+            (*position)++; //0x021ec6f8
+            (*position)++; //0x02157f58
+            FUN_0207564c(position, players[attacker].atk, players[attacker].def);
+            (*position)++; //0x021e54fc
+            players[attacker].BarrierTurns = 6;
+            players[attacker].BarrierLevel++;
             baseDamage = 0;
             break;
         case MIDHEAL:
@@ -1413,7 +1446,34 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             baseDamage = 0;
             resetCombo(NowState);
             break;
+        case BattleEmulator::STOMP:
+            (*position) += 2;
+            (*position)++; //0x02158584
+            (*position)++; //0x021ec6f8
+            (*position)++; //0x02157f58
+            baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
+            {
+                const double variance = lcg::floatRand(position, 0.9, 1.1);
+                TRACE(std::cout << "TRACE stomp-base=" << baseDamage << " variance=" << variance << '\n');
+                tmp = static_cast<double>(baseDamage) * 0.8 * variance;
+            }
+            tmp = Equipments::applyDamageReduction(tmp, Attribute::Earth);
+            if (!players[0].paralysis && !players[0].sleeping) {
+                tmp *= players[defender].defence;
+            }
+            if (players[defender].TensionLevel == 4) {
+                tmp *= 0.5;
+            }
+            baseDamage = static_cast<int>(floor(tmp));
+            if (baseDamage != 0) {
+                (*position)++;
+                (*position)++;
+            }
+            process7A8(position, baseDamage, players, defender);
+            resetCombo(NowState);
+            break;
         case BattleEmulator::ATTACK_ENEMY:
+        case BattleEmulator::STAMP:
         case BattleEmulator::SKY_ATTACK:
         case BattleEmulator::POISON_ATTACK:
             (*position) += 2;
@@ -1434,7 +1494,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 baseDamage = 0;
             } else {
                 tmp = static_cast<double>(baseDamage);
-                if ((Id & 0xffff) == BattleEmulator::SKY_ATTACK) {
+                if ((Id & 0xffff) == BattleEmulator::STAMP) {
+                    tmp = floor(tmp * 1.25);
+                } else if ((Id & 0xffff) == BattleEmulator::SKY_ATTACK) {
                     tmp = floor(tmp * 1.5);
                 }
 
@@ -1443,7 +1505,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 if (players[attacker].TensionLevel != 0) {
                     //TODO ダメージが正しいか調べる 特殊県産式の引数も調べる https://dragonquest9.com/?%E3%83%80%E3%83%A1%E3%83%BC%E3%82%B8%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6#tension
                     tmp *= Enemy_TensionTable[players[attacker].TensionLevel - 1];
-                    tmp += (players[attacker].TensionLevel * 4); //4 = 1*(1+(30/10))
+                    tmp += (players[attacker].TensionLevel * TensionLevel);
                 }
 
 
@@ -1842,11 +1904,11 @@ constexpr std::array<int, 6> ratios = {
 
 constexpr std::array<int, 6> ids = {
     BattleEmulator::ATTACK_ENEMY,
-    BattleEmulator::DOUBLE_TROUBLE,
-    BattleEmulator::ZAMMLE,
-    BattleEmulator::SWITCH_2B,
-    BattleEmulator::CRACKLE_ENEMY,
-    BattleEmulator::ATTACK_ENEMY
+    BattleEmulator::STAMP,
+    BattleEmulator::PSYCHE_UP,
+    BattleEmulator::MAGIC_BARRIER,
+    BattleEmulator::KABUFF,
+    BattleEmulator::STOMP
 };
 
 static_assert(sum(ratios) == TABLE_MAX, "Ratio sum must be 256");
@@ -1857,6 +1919,7 @@ constexpr auto actionTable = makeProbabilityTable(ratios, ids);
 int BattleEmulator::ProcessEnemyRandomAction44(int *position) {
     //0x0208aca8
     int rnd = lcg::getPercent(position, 0x100);
+    TRACE(std::cout << "TRACE enemy-selector rnd=" << rnd << " position=" << *position << '\n');
     return actionTable[rnd];
 }
 
@@ -1891,6 +1954,11 @@ void BattleEmulator::RecalculateBuff(Player *players) {
     int index1 = players[0].AtkBuffLevel + 2;
     if (index >= 0 && index < 5) {
         players[0].atk = static_cast<int>(floor(players[0].defaultATK * ATKMultipliers[index1]));
+    }
+
+    int enemyDefenceIndex = players[1].BuffLevel + 2;
+    if (enemyDefenceIndex >= 0 && enemyDefenceIndex < 5) {
+        players[1].def = static_cast<int>(floor(players[1].defaultDEF * DEFMultipliers[enemyDefenceIndex]));
     }
 }
 

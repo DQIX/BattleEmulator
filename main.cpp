@@ -6,6 +6,7 @@
 #include <sstream>
 #include <fstream>
 #include <memory>
+#include <algorithm>
 
 #include "lcg.h"
 #include "BattleEmulator.h"
@@ -75,18 +76,18 @@ namespace{
     constexpr int THREAD_COUNT = 4;
 #elif defined(BattleEmulatorLV13)
     constexpr int THREAD_COUNT = 5;
-#elif defined(erusionn_lv21)
+#elif defined(isinobannninn)
     constexpr int THREAD_COUNT = 5;
 #endif
     // `InputBuilder` インスタンス作成
     InputBuilder builder;
 
-#if defined(erusionn_lv21)
+#if defined(isinobannninn)
     constexpr Player BasePlayers[2] = {
         // プレイヤー1
         {
-            137, 143.0, 211, 211, 158, 158, 114, 114, 138, 88, // 最初のメンバー
-            88, false, false, 0, false, 0, -1,
+            139, 139.0, 209, 209, 148, 148, 111, 111, 128, 85,
+            85, false, false, 0, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             6, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
             false, -1, 0, -1, 0, false, 1, 1, 1, -1, 0, -1, false, 2, false, -1
@@ -94,7 +95,7 @@ namespace{
 
         // プレイヤー2
         {
-            1680, 1680.0, 160, 160, 170, 170, 125, 125, 0, 255, // 最初のメンバー
+            1054, 1054.0, 120, 120, 125, 125, 66, 66, 0, 255,
             255, false, false, 0, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             0, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
@@ -539,7 +540,7 @@ namespace{
             }
             turns++;
         }
-#if defined(erusionn_lv21)
+#if defined(isinobannninn)
         auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
 #endif
 
@@ -833,6 +834,82 @@ namespace{
 int main(int argc, char* argv[]){
     if(argc == 2 && isMatchStrWithTrim(argv[1], "h")){
         showHeader();
+        return 0;
+    }
+
+    auto makeTraceGene = [](int32_t (&gene)[350], int turns, int action) {
+        const int boundedTurns = std::max(1, std::min(turns, 349));
+        for (int i = 0; i < boundedTurns; ++i) gene[i] = action;
+        gene[boundedTurns] = -1;
+    };
+    auto printTrace = [](uint64_t seed, int position, const Player (&players)[2], const BattleResult& result) {
+        std::cout << "TRACE seed=0x" << std::hex << seed << std::dec
+                  << " position=" << position
+                  << " hp=" << players[0].hp << ',' << players[1].hp
+                  << " mp=" << players[0].mp << ',' << players[1].mp
+                  << " atk=" << players[0].atk << ',' << players[1].atk
+                  << " def=" << players[0].def << ',' << players[1].def
+                  << " buff=" << players[0].BuffLevel << ':' << players[0].BuffTurns
+                  << ',' << players[1].BuffLevel << ':' << players[1].BuffTurns
+                  << " barrier=" << players[0].BarrierLevel << ':' << players[0].BarrierTurns
+                  << ',' << players[1].BarrierLevel << ':' << players[1].BarrierTurns << '\n';
+        for (int i = 0; i < result.position; ++i) {
+            std::cout << "TRACE record[" << i << "] turn=" << result.turns[i]
+                      << " action=" << result.actions[i]
+                      << " damage=" << result.damages[i]
+                      << " enemy=" << result.isEnemy[i]
+                      << " ahp=" << result.ahp[i]
+                      << " ehp=" << result.ehp[i]
+                      << " amp=" << result.amp[i]
+                      << " state=0x" << std::hex << result.state[i] << std::dec << '\n';
+        }
+    };
+    auto runTrace = [&](uint64_t seed, int turns, int action, int currentSeedPosition) {
+        int32_t gene[350] = {};
+        makeTraceGene(gene, turns, action);
+        Player players[2] = {BasePlayers[0], BasePlayers[1]};
+        BattleResult result;
+        int position = currentSeedPosition + 1;
+        uint64_t state = 0;
+        lcg::init(seed);
+        BattleEmulator::Main(&position, turns, gene, players, &result, seed,
+                             nullptr, nullptr, -1, &state);
+        printTrace(seed, position, players, result);
+    };
+
+    if (argc >= 3 && std::string(argv[1]) == "--trace-turn") {
+        trace::setEnabled(true);
+        const uint64_t seed = std::stoull(argv[2], nullptr, 0);
+        const int action = argc >= 4 ? std::stoi(argv[3], nullptr, 0) : BattleEmulator::DEFENCE;
+        const int currentSeedPosition = argc >= 5 ? std::stoi(argv[4], nullptr, 0) : 0;
+        runTrace(seed, 1, action, currentSeedPosition);
+        return 0;
+    }
+    if (argc >= 3 && std::string(argv[1]) == "--trace-battle") {
+        trace::setEnabled(true);
+        const uint64_t seed = std::stoull(argv[2], nullptr, 0);
+        const int turns = argc >= 4 ? std::stoi(argv[3], nullptr, 0) : 10;
+        const int action = argc >= 5 ? std::stoi(argv[4], nullptr, 0) : BattleEmulator::DEFENCE;
+        const int currentSeedPosition = argc >= 6 ? std::stoi(argv[5], nullptr, 0) : 0;
+        runTrace(seed, turns, action, currentSeedPosition);
+        return 0;
+    }
+    if (argc >= 5 && std::string(argv[1]) == "--trace-main-sequence") {
+        trace::setEnabled(true);
+        const uint64_t seed = std::stoull(argv[2], nullptr, 0);
+        const int currentSeedPosition = std::stoi(argv[3], nullptr, 0);
+        const int turns = argc - 4;
+        int32_t gene[350] = {};
+        for (int i = 0; i < turns; ++i) gene[i] = std::stoi(argv[i + 4], nullptr, 0);
+        gene[turns] = -1;
+        Player players[2] = {BasePlayers[0], BasePlayers[1]};
+        BattleResult result;
+        int position = currentSeedPosition + 1;
+        uint64_t state = 0;
+        lcg::init(seed);
+        BattleEmulator::Main(&position, turns, gene, players, &result, seed,
+                             nullptr, nullptr, -1, &state);
+        printTrace(seed, position, players, result);
         return 0;
     }
 

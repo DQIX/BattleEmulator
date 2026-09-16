@@ -4,3 +4,19 @@
 
 #include "debug.h"
 
+#ifndef NDEBUG
+namespace trace {
+    namespace {
+        bool traceEnabled = false;
+    }
+
+    void setEnabled(const bool value) noexcept {
+        traceEnabled = value;
+    }
+
+    bool enabled() noexcept {
+        return traceEnabled;
+    }
+}
+#endif
+

@@ -57,13 +57,15 @@ void camera::onFreeCameraMove(int *position, const int action, const int param5,
         } else {
             (*position)++;
             if (counter == 0) {
-                (*position)++;//引数5が1なら強制的に実行
+                (*position)++;//lr=0x0216fff8
+                (*position) += 2;//lr=0x02170048, 0x02170098
                 counter = 0;
                 break;
             }
             (*position)++;
             counter = 0;
-            (*position)++;
+            (*position)++;//lr=0x0216fff8
+            (*position) += 2;//lr=0x02170048, 0x02170098
         }
     } while (false);
     (*NowState) &= ~0xf00;
