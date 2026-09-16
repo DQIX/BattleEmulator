@@ -2376,3 +2376,39 @@ ROMの位置付きLR列が取れました。turn1末尾は #79=0215962C → #80=
 新seedのズレは既知系統の再発です。ROMのけものづき(DQ9 0x46)はHero start=59 goal=59 のroute0なのに、C++はaction0で 59→49 のroute2を生成しています。a.txt に過去の同型「けものづきだけ余計なroute」修正履歴があるので、推測せずその確定条件と現コードの差だけ突き合わせます。
 
 過去の同型修正は現コードに残っています。今回の違いで気になる点が1つあり、69:2 のC++ camera eventはtarget=C0、ROMもUIではゲルニックを選んだのに実ダメージはC0へ入っています。つまりこの技では入力target表記と実presentation
+
+了解。camera\a.txt は単なるメモではなく前担当者の思考経緯・実測の引き継ぎ資料として扱います。安全チェック系の一時失敗は停止理由にせず、同じ目的のまま入力を狭めて再試行します。
+
+差分を見る限り、state.presentationOccupancy 自体を削除したわけではなく、BuildPresentationOccupancy(..., state.presentationOccupancy) の第2引数だけ消しています。ここは「前回occupancyの0xFF等を引き継ぐための入力」なら致命的なので、まずその関数契約とa.txtの旧検討箇所を照合します。
+
+ここはかなり怪しいです。a.txtには「既存0xFF markerを継承する修正が根因修正」と明記され、現在の未コミット差分はまさにその引数を BeginPresentationGoalSetup() から外しています。まず現状のC++再演で既知reproが再び崩れているかを確認し、崩れていればこの削除だけ戻して差を測ります。
+
+a.txt末尾まで追うと、state.presentationOccupancy 引数の削除は事故ではなく、ROM実測後の意図的な巻き戻しでした。既存mapを丸ごと持ち越すとROMの5点以外の古いFFまで残って配置が壊れたため撤回し、正しい修正は「DQ9 9..11/flag80 の proximity conflict を eligibility 前に生成する」側へ移されています。なのでこの削除は現時点では戻しません。今は末尾で未解決の 0x00E176 けものづき turn1（ROM route0 / C++ route2）から継続します。
+
+現在の実ビルドでも既知4ターンは next=275 に閉じ、探索も verified=1 / replayFailures=0 で同じ9ターン列を返しました。つまりoccupancy引数削除後でも既知修正は維持されています。続けて探索列を通常Mainへ trace current=0 で実演し、その後a.txt末尾の未解決 0x00E176 / 69:2 を直接再現します。
+
+末尾未解決だった 0x00E176 / 69:2 も現ビルドではすでに解消済みでした。現在は position=83（ROM last-consumed 82と規約一致）、Heroのcamera routeも0です。これはa.txt上の後続要約にある「かばうredirect後もpresentation recordは元選択targetを保持」の修正が効いています。次は未コミットのedge総当たりを実行して候補を拾い、別のfresh ROM seedで6ターン以上を再監査します。
+
+既存DeSmuME laneは「登録だけ残ってChrome死亡」の状態でした。これは戦闘不一致ではないので、死んだlane登録だけ閉じて同じIDでfresh battle.dst を起動し直します。指定5本以外は読み込みません。
+
+新しいedge総当たりは現状 FAIL decision-edges で止まりました。ただしこれはROM比較ではなく、前担当者が追加したC++内自己検査なので、この失敗だけでproductionを変えません。どの仮定が現コードと食い違うかCLionで値を切り、ROMで検証すべき候補だけ抽出します。
+
+まずedge検査の失敗箇所を切り分けつつ、同時にfresh ROM側の操作面を確認します。C++自己検査はROMの代替にせず、「ROMで当てるべき分岐候補」を絞るためだけに使います。
+
+最初の判定行で実際に止まりました。ここから各assert直前の Decision 値をCLionで読むので、どの「edge仮定」が壊れているかをソース改変なしで特定できます。
+
+最初の2条件は実値で正常です。suppressed={call=false,param5=false}、route=2の最初のザキは {call=true,param5=true}。失敗はもっと後段なので、残り4条件を順に切ります。
+
+原因は自己検査側に出ています。2回目 Decide 時も state.hasPreviousAction=false / presentationActionRecordIndex=-1 のままで、テストが「turnActionIndex=1を渡せばlater扱いになる」と誤認しています。a.txtにも同じ既知失敗が記録されており、productionの新変更とは無関係です。正しい履歴更新APIを使う形にテストだけ直せるか確認します。
+
+decision-edges の失敗はproductionの挙動ではなく、テストが最初のactionをcommitせずに2本目をlater扱いしていたことまで確定しました。探索本体やcamera本体は触らず、まずこの自己検査だけ実際のpresentation履歴に合わせて直し、総当たりを最後まで通します。
+
+decision-edges は修正後に通りました。次の停止は consecutive-attack-reset です。ここもproductionを直す前に、自己検査が現ROM由来の履歴条件を正しく作っているかを同じ要領で切ります。
+
+自己検査は最後まで通りました。2か所ともproductionバグではなく、テストがpresentation履歴を手で半分だけ作っていたのが原因で、実API CommitActionProgress を使う形に直しただけです。総当たり結果は goalCases=23408 / PASS freecam-edge-validation、探索本体・camera本体は無変更です。次はa.txt最終尾の未完了実測を拾い、fresh ROM seedで6ターン超を再監査します。
+
+a.txt最終行で途切れていた未完了テーマは、まさに 0x00E176 / けものづき 69:2 の presentation target/route 差でした。現C++ではこの1ターンはすでに route0・next=83まで直っているので、ROM側を同じseed/worldlineで再演して「偶然ではなく本当に閉じた」ことを確認し、そのまま8ターン列を続行します。
+
+ROM再演へ入ります。まず battle.dst の同一laneでseedを 0x00E176 / position=1 に固定し、監査ログだけ初期化して現在UIを確認します。ここからは1ターンずつROM→C++の最初のズレを基準に追います。
+
+登録名はファ

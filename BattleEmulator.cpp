@@ -2784,8 +2784,10 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
                 if (baseDamage != 0) {
                     (*position)++; // lr: 0x021e54fc
-                    (*position)++; // max: 100, lr: 0x021ed7a8
                 }
+                // Fresh ROM seed 0x00E176, turn 2: successful Eerie Light with
+                // generic damage 0 still consumes the post-effect RandInt(100).
+                (*position)++; // max: 100, lr: 0x021ed7a8
             } else {
                 (*position)++; // max: 100, lr: 0x021ed7a8
             }

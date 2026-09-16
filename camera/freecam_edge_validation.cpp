@@ -173,6 +173,13 @@ bool ValidateDecisionEdges() {
         .targetAuxiliaryNode = 1,
     });
     if (!firstAction.callFreeCamera || !firstAction.param5) return false;
+    if (!CommitActionProgress<ZakiAction>(
+            0,
+            static_cast<int>(order.size()),
+            Dq9ActorId(actorRef),
+            Dq9ActorId(targetRef))) {
+        return false;
+    }
 
     const auto laterAction = Decide<ZakiAction>({
         .actorId = Dq9ActorId(actorRef),
@@ -250,9 +257,13 @@ bool ValidateConsecutiveAttackReset() {
     state.currentRoutes.actorCount = 2;
     state.currentRoutes.actors[0].actorId = Dq9ActorId(actorRef);
     state.currentRoutes.actors[1].actorId = Dq9ActorId(targetRef);
-    state.hasPreviousAction = true;
-    state.previousAction = {1, Dq9ActorId(actorRef), Dq9ActorId(targetRef)};
-    state.previousActionIndex = 0;
+    if (!CommitActionProgress<AttackAction>(
+            0,
+            static_cast<int>(order.size()),
+            Dq9ActorId(actorRef),
+            Dq9ActorId(targetRef))) {
+        return false;
+    }
     state.targetRecord02161720ActorId = Dq9ActorId(targetRef);
 
     const auto decision = Decide<AttackAction>({
