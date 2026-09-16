@@ -2224,7 +2224,6 @@ DQ9 155 の固定metadataでは operation_type=22 (0x16) ですが、DC70C の�
 
 かなり強い静的対応が出ました。021D94F0 は巨大な 0x368 byte frameを作るため、次setupのrow+4領域を完全に踏みます。しかも今回の4ワードは 021D94F0 entry基準でおよそ [-0x38, -0x2C, -0x20, -0x14] に対応し、後半2つはcallee-saved register push領域そのものです。観測の 0xFFFFFFFF, 0 が保存レジスタ値なら非常に自然です。呼出直前のレジスタ配置まで確認します。
 
-
 その通り。目的Xはずっと 0x2D6A91 / 70:2 62 71:1 71:3 の ROM/C++ ミスマッチを直して、C++ next=275 に合わせることです。私は「未初期化scratchの一般解析」へ寄りすぎて、修正そのものから離れていました。
 
 ここからは再調査を広げません。既に取れている差分列を使って、最初にROMとC++が分岐するturn3のpresentation stateだけを直し、4ターンprefixで275になるまで実装→実走→回帰確認します。
@@ -2264,3 +2263,25 @@ target-cache prepassのpatchは入りました。IDE検査が長引いている�
 第一段階は成功です。target-cache prepassだけで、turn3 action0のC2 goalは 77→59 に戻りました。残る差は予想どおりDQ9 10 setupだけで、C++はC2 goal57 / row4=1111、ROMはgoal59 / C2 row4=0です。
 
 DQ9 10は既存の presentationType=1 で、既存ROM測定済みtype1 scratchはfirst-four TTTF。新しい例外値は作らず、この既存type1 residueをsetup入口で適用する最小修正を入れます。
+
+TTTF適用まで入って、DQ9 10時点のC2 row4 は 1110 へ直りました。つまりfallback誤突入は消えています。ただしgoalはまだ57のままなので、残る差はもう normal AssignPresentationGoal の入力1本です。
+
+ここからはその関数のC2/start76/target=C1で、ROM59に対してC++57を選ぶ入力差だけ見ます。
+
+残差はrow4ではなくなりました。C2はnormal assignmentへ入っています。なので次に比較するのは、DQ9 10 setupでの AssignPresentationGoal(C2→C1) の target側 start/goal/aux とoccupancy だけです。ここで57/59の選択差が出ます。
+
+normal assignmentの差を1回だけデバッガで取ります。条件はC2→C1だけ。action0/action1/action2の3 hitを順に見て、3回目だけ何が57を保持させているかを確認します。ユーザーbreakpointは触りません。
+
+いまC++側の3回目（DQ9 10）を止めて確認すると、C2→C1、pivot=23、expansion=1までは正しいです。57と59はC++では両方 outer candidate(level=3)で、近い57を選んでいます。ROMが59を選ぶなら、ROM側では57が候補集合から落ちているのが残差です。
+
+これはscratch再調査ではなく、目的Xの最後の候補集合差です。ROMのDQ9 10/C2だけ 021E1D90 の候補列を1回取って、57を落としているoccupancy条件をそのまま移します。
+
+ROMは今ちょうど 0x021E1D90 で停止しています。probe条件に入る前の別呼び出しが先に当たった可能性があるので、現在action/start/countだけ読んで、目的のDQ9 10/C2でなければそのまま再開します。
+
+決定的な差が取れました。ROMのDQ9 10 / C2→C1で 021E1D90 に渡るouter candidatesは
+
+[2, 8, 10, 19, 28, 38, 39, 44, 52, 59, 60, 61]
+
+です。57は候補に存在しません。C++では57がlevel=3になっているので、57を選んでいた原因はtarget/cacheではなく、最後に残った distance-layer paintの1セル差です。39もROMではouter候補なのにC++ではlevel=2なので、39↔57付近のpaint差を直せば目的Xが閉じます。
+
+Xの最後の差はかなり小さいです。ROM候補集合に57がなく39があり、C++は逆方向のlevelになっています。まず同じoccupancyに対して generic再帰とgenerated展開が一致するかだけ即判定します。generated側がズレていればそこを直し、違わなければoccupancy producerへ1段だけ戻ります。
