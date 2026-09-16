@@ -219,6 +219,10 @@ struct PresentationActorState {
     return actor.battleWorldKnown ? actor.battleWorldX : actor.worldX;
 }
 
+[[nodiscard]] constexpr std::int32_t BattleWorldY(const PresentationActorState& actor) noexcept {
+    return actor.battleWorldKnown ? actor.battleWorldY : actor.worldY;
+}
+
 [[nodiscard]] constexpr std::int32_t BattleWorldZ(const PresentationActorState& actor) noexcept {
     return actor.battleWorldKnown ? actor.battleWorldZ : actor.worldZ;
 }
@@ -432,6 +436,85 @@ constexpr void InvalidatePresentationConflicts(
             }
         }
     }
+}
+
+// overlay_d_25:021E0BB4..021E0C58 builds the 021E2904 conflict list for
+// current actions 9..11 before 021E2850 checks presentation movement
+// eligibility.  Each valid presentation node is treated as a world point at
+// Y=0 and selected when its Euclidean distance from the current actor->target
+// battle-world segment is strictly below 0x1800 (FUN_02030FA0 result gate).
+[[nodiscard]] constexpr bool IsPresentationNodeNearBattleWorldSegment(
+    const PresentationActorState& actor,
+    const PresentationActorState& target,
+    const std::uint8_t node
+) noexcept {
+    const PresentationNodePosition point = PresentationNodeWorldPosition(node);
+    if (!point.valid) return false;
+
+    using i128 = __int128;
+    const i128 ax = BattleWorldX(actor);
+    const i128 ay = BattleWorldY(actor);
+    const i128 az = BattleWorldZ(actor);
+    const i128 bx = BattleWorldX(target);
+    const i128 by = BattleWorldY(target);
+    const i128 bz = BattleWorldZ(target);
+    const i128 px = point.x;
+    const i128 py = 0;
+    const i128 pz = point.z;
+
+    const i128 vx = bx - ax;
+    const i128 vy = by - ay;
+    const i128 vz = bz - az;
+    const i128 wx = px - ax;
+    const i128 wy = py - ay;
+    const i128 wz = pz - az;
+    const i128 segmentSquared = vx * vx + vy * vy + vz * vz;
+    const i128 thresholdSquared = i128{0x1800} * i128{0x1800};
+
+    if (segmentSquared == 0) {
+        return wx * wx + wy * wy + wz * wz < thresholdSquared;
+    }
+
+    const i128 projection = wx * vx + wy * vy + wz * vz;
+    if (projection <= 0) {
+        return wx * wx + wy * wy + wz * wz < thresholdSquared;
+    }
+    if (projection >= segmentSquared) {
+        const i128 dx = px - bx;
+        const i128 dy = py - by;
+        const i128 dz = pz - bz;
+        return dx * dx + dy * dy + dz * dz < thresholdSquared;
+    }
+
+    const i128 pointSquared = wx * wx + wy * wy + wz * wz;
+    const i128 perpendicularNumerator = pointSquared * segmentSquared - projection * projection;
+    return perpendicularNumerator < thresholdSquared * segmentSquared;
+}
+
+constexpr void InvalidatePresentationBattleWorldSegmentConflicts(
+    const PresentationActorState& actor,
+    const PresentationActorState& target,
+    PresentationOccupancyMap& occupancy,
+    const std::span<PresentationActorState> actors,
+    const std::span<bool> rosterField4Nonzero = {},
+    const std::span<bool> rosterField4Known = {}
+) noexcept {
+    std::array<std::uint8_t, 81> nodes{};
+    std::size_t count = 0;
+    for (std::uint8_t node = 0; node < occupancy.size(); ++node) {
+        if (IsPresentationNodeNearBattleWorldSegment(actor, target, node)) {
+            nodes[count++] = node;
+        }
+    }
+    InvalidatePresentationConflicts(
+        std::span<const std::uint8_t>(nodes.data(), count),
+        occupancy,
+        actor.actorId,
+        target.actorId,
+        actors,
+        rosterField4Nonzero,
+        rosterField4Known
+    );
 }
 
 struct PresentationGoalDecision {

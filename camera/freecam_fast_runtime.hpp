@@ -1066,8 +1066,7 @@ inline void InvalidateRosterField4Compatibility() noexcept {
         std::span<const detail::PresentationActorState>(
             state.presentationActors.data(),
             state.presentationActorCount
-        ),
-        state.presentationOccupancy
+        )
     );
     state.presentationGoalSetupActive = true;
     return true;
@@ -1089,6 +1088,42 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     const auto& state = ThreadContext();
     return index < state.presentationActorCount
         && detail::IsPresentationMovementEligible(state.presentationActors[index], targetActorId);
+}
+
+[[nodiscard]] inline bool InvalidateCurrentActionPresentationProximity(
+    const std::uint16_t actorId,
+    const std::uint16_t targetId,
+    const std::uint16_t dq9ActionId
+) noexcept {
+    auto& state = ThreadContext();
+    if (!state.presentationGoalSetupActive) return false;
+    // Exact 021E0B78..021E0B80 gate. 021E08BC performs this conflict pass
+    // only for current DQ9 actions 9, 10, and 11, and only when 020499F0
+    // reports flag 0x80 on the current actor. It runs before 021E2850, so an
+    // actor rejected by normal movement eligibility can still write 0xFFs.
+    if (dq9ActionId < 9 || dq9ActionId > 11) return true;
+    const std::size_t actorIndex = FindPresentationActorIndex(actorId);
+    const std::size_t targetIndex = FindPresentationActorIndex(targetId);
+    if (actorIndex >= state.presentationActorCount || targetIndex >= state.presentationActorCount) return false;
+    const auto& actor = state.presentationActors[actorIndex];
+    if ((actor.presentationFlags & detail::kPresentationFlag80) == 0) return true;
+
+    detail::InvalidatePresentationBattleWorldSegmentConflicts(
+        actor,
+        state.presentationActors[targetIndex],
+        state.presentationOccupancy,
+        std::span<detail::PresentationActorState>(
+            state.presentationActors.data(),
+            state.presentationActorCount
+        ),
+        state.rosterField4CompatibilityValid
+            ? std::span<bool>(state.rosterField4Nonzero.data(), state.presentationActorCount)
+            : std::span<bool>{},
+        state.rosterField4CompatibilityValid
+            ? std::span<bool>(state.rosterField4Known.data(), state.presentationActorCount)
+            : std::span<bool>{}
+    );
+    return true;
 }
 
 [[nodiscard]] inline bool AssignActorPresentationGoal(

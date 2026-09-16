@@ -240,8 +240,7 @@ inline bool SetPresentationActor(
         std::span<const PresentationActorState>(
             state.presentationActors.data(),
             state.presentationActorCount
-        ),
-        state.presentationOccupancy
+        )
     );
     state.presentationGoalSetupActive = true;
     return true;

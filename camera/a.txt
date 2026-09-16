@@ -2285,3 +2285,94 @@ ROMは今ちょうど 0x021E1D90 で停止しています。probe条件に入る
 です。57は候補に存在しません。C++では57がlevel=3になっているので、57を選んでいた原因はtarget/cacheではなく、最後に残った distance-layer paintの1セル差です。39もROMではouter候補なのにC++ではlevel=2なので、39↔57付近のpaint差を直せば目的Xが閉じます。
 
 Xの最後の差はかなり小さいです。ROM候補集合に57がなく39があり、C++は逆方向のlevelになっています。まず同じoccupancyに対して generic再帰とgenerated展開が一致するかだけ即判定します。generated側がズレていればそこを直し、違わなければoccupancy producerへ1段だけ戻ります。
+generic再帰とgenerated展開は、問題のDQ9 10/C2→C1入力81 byteで完全一致しました。したがってpaint実装ではなく入力occupancy producerが原因でした。
+ROMのDQ9 10/actionIndex=2/pivot=23の021E1B1C入力を新規read-only `occupancy_input_probe.js` で直接採取すると、0xFF markerはnode 30,31,40,48,49に残っていました。元C++ではこの5 nodeが0で、これだけでROMのouter candidatesに39が入り57が落ちる差を再現できます。
+さらに既存2904 probeをaction10向けに絞って実測すると、ROMは021E2904を同setup中に2回呼び、1回目 [22,30,31,40]、2回目 [30,31,40,48,49] を0xFF化していました。両方ともcurrent C1(actor193)→Hero(actor0)、LR=021E0C5Cです。
+021E08BCのruntime disassemblyで、これはDQ9 action ID 9..11かつcurrent actor flag0x80のとき、021E2850 movement eligibilityより前に実行される一般proximity conflict passだと確定しました。02030FA0へcurrent actor/targetのbattle-world 3D線分と各presentation node点(Y=0)を渡し、距離<0x1800のnodeだけを021E2904へ渡しています。C++は2904相当をAssignPresentationGoal内、つまりeligibility後にしか持っていなかったため、flag0x80でeligibility=falseになるC1のmarkerを丸ごと落としていました。
+productionへ、battle-world point-to-segment距離判定と、DQ9 9..11/flag0x80のpre-eligibility conflict passを一般実装しました。既存021E1FD8→021E2904相当は別xrefなので維持しています。これで目的X `0x2D6A91 / 70:2 62 71:1 71:3` はC++ next=275となり、ROM last-consumed=274規約と一致、従来余分だった#275-277のcamera RNGは消えました。
+追加のランダム22bit監査で、かばうredirect時にC++が実defenderをcamera actionTargetsへ記録していた別の一般バグも確定しました。ROMのpresentation action recordは実ダメージ先がかばうでC0へredirectされても元の選択target C1を保持します。戦闘damage targetはredirectしたまま、presentation recordだけredirect前targetを保持するよう分離しました。seed 0x00E176 turn1は修正前C++ next=85/ROM last=82から、修正後C++ next=83/ROM last=82へ一致し、Hero routeもROM同様0になりました。
+同じランダム監査でEERIE_LIGHT(DQ9 0x009B/common185)の成功かつ内部generic damage=0経路を実測し、ROMは021E81A0=0なら021E54FCも021ED7A8も消費しないことを確定しました。失敗経路は021ED7A8を1回、成功かつ内部damage非0経路は021E54FC→021ED7A8を消費します。C++の無条件021ED7A8をこの分岐へ修正しました。
+ランダム22bit seed 0x3F7C19、6ターン `69:2 30 62 34:2 30 31` をfresh ROM/C++で監査し、ROM last-consumed = 85,158,235,313,395,469、Hero HP = 264,254,232,179,96,95、C++ next = 86,159,236,314,396,470 と全6ターン一致しました。
+GPT-6 Pro探索本体は編集していません。`--search 0x2D6A91 1000 --initial-position=1 --variant=0` は win=1 verified=1 replayFailures=0、GENE `62 71:1 71:3 62 37 33 62 62 34:2`、rngPosition=445、HP=143,0,0,0。位置規約どおり通常Mainは `--trace-main-sequence 0x2D6A91 0 ...` として再演し、最終position=445/HP=143,0,0,0まで一致しました。
+
+}
+API_CURRENT.md の要点も反映しました。特に registerexec は停止型ではなく、callback時点の状態を読んだ後に自動step/resumeする仕様なので、今回の81-byte probeは余計な resume() を入れずに使うのが正しいです。いま fresh battle.dst / seed 0x2D6A91 で実戦列をそのまま進めます。
+
+turn1はROM実測で seed position=85、ゲルニックHP 1854→1794 まで一致しました。turn2は confirmCommand("fight") 自体はtimeout表示でしたが、直後のskill一覧は正常に開いているので、操作失敗扱いにはせず現在状態を正として ためる を確定します。
+
+turn2もROM last-consumed=168で、既知のC++ next=169と規約どおり一致しました。ここまでは戦闘コア/RNG同期は正常です。次のturn3「ザキ→A」で、今回のprobeが DQ9 10 / pivot23 の81-byte入力を拾う本命区間に入ります。
+
+turn3選択直前で emulator が paused=true になっていました。これは戦闘ロジックの不一致ではなく操作面の状態なので、API_CURRENT.mdどおり推測で連打せず、pause理由を確認してから再開します。probeのexec hook自体はnon-stoppingです。
+
+決定打です。ROMの81-byte入力を取れました。generated再帰ではなく、その手前のoccupancyが違います。ROMは actionIndex=2 / DQ9 10 / pivot23 入力で FF を 30,31,40,48,49 に保持していますが、C++はそこを全て落としていました。これで 39=outer / 57=除外 の両方が説明できます。
+
+原因はコード上でも矛盾していました。slow runtime のコメントは「occupancyはdurableで conflict markerを失ってはいけない」と明記しているのに、BeginPresentationGoalSetup() だけ空mapから再構築しています。ROM実測と完全一致するので、fast/slow両方を同じ最小修正にします。
+
+IDE検査は非同期化されましたが、これはエラーではありません。待ち時間を無駄にせず、同時に実ビルド兼4ターン再現を走らせ、next=275 に閉じるかを先に確認します。
+
+4ターン再実走はまだ position=278 のままです。つまり「Begin時に既存mapを渡す」だけでは不足でした。ROM/C++の入力差は確定しているので、次はその既存map自体がBegin前に消されている箇所だけ追います。探索本体には触れていません。
+
+ResetPresentationGoalsToStart() 自体はoccupancyを消していません。一方、turn-end global recenter には空map再構築がありますが、これはaction間ではありません。なので「修正が効かなかった」のは、action2直前に別の空map再構築があるか、ビルドされた経路が別かの二択です。CLionでaction2の実入力を再度止めて、パッチ後にFFが入ったかを直接確認します。
+
+いまのパッチ後C++入力も直接読みました。FFは入りましたが、ROMの5点だけでなく別action由来のFFまで持ち越し、C0/Hero配置まで変わっています。つまり「setup間でmap全体を永続化」は広すぎます。ROM入力と元C++入力はFF 5セル以外ほぼ一致していたので、この広い変更はいったん撤回し、action2 setup内でその5セルを作るproducerを直します。
+
+元C++では action2 の current C1→Hero が AssignPresentationGoal() 自体に入っていませんでした。つまりROMの5個のFFは「current C1の通常goal assignmentが書いた」とは限りません。次はROM action10 setup内の 021E2904 実呼び出しを直接取り、誰が [30,31,40,48,49] を作っているか確定します。
+
+既存の presentation_2904_probe_tmp.js がまさに必要な観測器でした。ただし seed13/actionId1 固定なので、今回は actionIndex=2 && actionId=10 にだけ条件を置き換えて再利用します。これ以外のscriptは増やしません。
+
+状態を battle.dst へ戻しました。次は同じseedで3ターンを再演し、action2/DQ9 10 内の 021E2904 ノード列と、その直後grid値だけ回収します。
+
+再演はturn2まで正常です。ここからturn3「ザキ→A」を流し、021E2904 と81-byte mapを同じworldlineで揃えて読みます。
+
+ROM側のproducerまで確定しました。DQ9 10 / actionIndex2 では 021E2904 が2回呼ばれ、
+1回目 [22,30,31,40]、
+2回目 [30,31,40,48,49]
+をFF化しています。2回目の結果がそのままC2のdistance paint入力に残っています。つまり修正対象はpaintではなく、C++でこの2段のconflict invalidation経路が欠けていることです。
+
+ROM側の2回の 021E2904 はどちらも同じ復帰点 LR=0x021E0C5C でした。ここを現在APIのdisassembleで読めば、C++で欠けている分岐を直接 021E08BC の制御フローへ対応づけられます。
+
+0x021E0C5C 周辺で根因がコード順まで確定しました。ROMは 021E2904 を 021E2850（movement eligibility）より先に呼んでいます。C++は逆に、eligibilityを通った actor だけ AssignPresentationGoal() 内でinvalidateするため、current C1がeligible=falseになるDQ9 10でFF生成を丸ごと落としていました。次に2904へ渡すnode listの生成条件を直前命令から移植します。
+
+021E08BC の該当ブロックも読めました。2904の前には「current/future actorか」「dynamic actor取得」「actor flags」「actionの特定3値」「battle-world座標2点」「全81nodeとの距離<0x1800」という一般条件があり、その後に初めてeligibility判定です。つまりaction10決め打ちではなく、この一般ブロックをC++へ戻すべきです。まず2回の呼び出しがどのactor/target pairかだけ実測で名前付けします。
+
+021E2904 の引数も読めました。r3 はcurrent dynamic actor object、stack第5引数はtarget dynamic actor objectで、両方とも +4 がactor IDです。2回の呼び出しが誰→誰かをprobeへ追加して再演すれば、C++側のどのparticipant処理へ入れるべきかが確定します。
+
+actor pair再演はまだ実行中です。その間に 021E08BC の前半を読み、2904前処理をC++のsuffix loopへどう対応させるかを詰めています。ここは固定action例外ではなく、ROMの一般条件をそのまま移す方針です。
+
+actor pairも確定しました。2回とも C1(193)→Hero(0) です。つまりfuture C2自身ではなく、current C1→Heroのpre-eligibility proximity invalidationが2回走り、そのFFをfuture C2が読む構造です。C++ではC1がeligibility=falseなのでこのpre-passを丸ごと飛ばしています。
+
+実装に必要な幾何も既にROM命令で読めています。current actor/target のbattle-world 3D座標と各presentation nodeの座標を 02030FA0 に渡し、返り値 <0x1800 のnodeだけ集めて2904へ渡しています。既存コードに同じ「線分/点距離」移植がないか、BattleArrow側の旧/参考実装も検索して重複実装を避けます。
+
+ここで既存C++のもう1点も確認します。今の AssignPresentationGoal() 内の PresentationNeighbors(conflictPivot) invalidation は、実ROMの2904と同じものを誤った場所へ置いた可能性があります。2904のxrefが 021E0C58 だけなら、これを「current action 9..11のpre-eligibility線分invalidate」へ移すのが一般修正です。
+
+2D幾何も確認できました。第2回のROM list [30,31,40,48,49] は、C1 base battle-world (0,-10240) → Hero (0,10240) の線分から距離 <0x1800 の有効nodeと完全一致します（30/31/48/49は横距離5320、40は線分上、22/58は端点から8192で除外）。なので 02030FA0 のpoint-to-segment判定を一般helperとして移植できます。
+
+この修正は3点だけです。① battle-world 3D線分→node距離 <0x1800 helper、②ROMどおり「DQ9 ID 9..11かつflag80 current actor」の2904をeligibility前に実行、③既存 1FD8→2904 相当はそのまま残します。探索本体には触れません。
+
+一般修正を入れたところまで来ました。いま最優先で4ターン再現をビルド込みで走らせ、目的Xの 278→275 が閉じたか確認します。閉じなければ、新FF入力をCLionで直接見て差を1段だけ追います。
+
+目的Xは閉じました。修正後、同じ4ターン列で C++ next=275、余分だったcamera RNG #275–277 は消え、最後の消費は #274 です。原因は予想どおりpaintではなく、ROMの「C1→Hero proximity conflictをmovement eligibilityより先に書く」順序欠落でした。探索本体は未変更です。
+
+4ターンはROM規約まで一致したので、次は依頼どおりGPT-6 Proの探索を実際に起動します。CLIだけ読み、出た行動列をそのまま --trace-main-sequence へ渡してfresh replay一致を確認します。探索本体は触りません。
+
+探索は1秒で勝利列を返し、内部fresh replayも verified=1 / replayFailures=0 でした。列は 62, 71:1, 71:3, 62, 37, 33, 62, 62, 34:2。これを今そのまま通常 Main の --trace-main-sequence に通して、search stateだけでなく本体の最終RNG/HP/action-recordまで一致するか確認します。
+
+ここで明確な探索バグが出ました。探索は verified=1 と出したのに、その GENE を通常 --trace-main-sequence へそのまま渡すと4ターン目で主人公HP0、探索側の「9ターン勝利」と一致しません。これは編集条件の「明確なバグ」に該当するので、探索本体ではなくまずfresh replay検証の状態初期化を追います。
+
+原因は探索本体ではありませんでした。CLIの位置規約が違います。--search --initial-position=N は「次に読む位置N」ですが、--trace-main-sequence の第3引数は「現在の消費位置」で、内部で +1 します。私が search=1 を trace=1 に渡して1個ずらしていました。探索はまだ編集しません。正しく trace=0 で再演します。
+
+探索列は正しい位置規約で通常 Main と完全一致しました。最終 position=445 / HP=143,0,0,0 が探索側と同一で、synthetic 944も同じ経路です。探索本体にバグは見つからず、変更不要です。次は別のランダム22bit seedを固定し、6ターン以上の別技列でROM/C++同期を監査します。
+
+ランダム22bit seedは 0x00E176 に確定しました。生成された選択列を合法コマンドへ固定して、8ターン 69:2, 30, 62, 34:2, 30, 31, 33, 62（けものづき→スカラ→ためる→さみだれづき→スカラ→ミラーシールド→すてみ→ためる）でまずC++を通し、生存して6ターン以上進めることを確認します。
+
+ランダム列はC++で8ターン完走できました。境界は 85,163,243,356,436,524,605,693、HPは最後45なので十分監査できます。目的X用の専用probe 2本は役目を終えたので停止し、指定5本だけに戻して同じ8ターンをROMで実演します。
+
+ランダムseed監査でさっそく新しいズレが出ました。turn1の戦闘結果はC0 HP 357 で一致していますが、ROMのLCG位置は 82、C++はnext 85（ROM規約なら期待84）で、C++が2 RNG余分です。目的Xとは別の実ミスマッチなので、このturn1だけへ縮めてカメラLR列を切ります。
+
+turn1はHPまで一致しているので、戦闘計算ではなくcamera側の2消費差です。C++は末尾で 0216FE40/0216FFF8/0216F0E4/... が出ています。ROMの指定script記録にもtracking/freecamが見えるので、Ctableの位置付きLR列を直接取り、最初の余分な2本を特定します。
+
+ROMの位置付きLR列が取れました。turn1末尾は #79=0215962C → #80=0216F0E4 → #81=0216FE40 → #82=0216F0E4。C++は同区間で #80=FE40, #81=FE68, #82=F0E4, #83=FE40, #84=F0E4 なので、最初のfreecamが早すぎ＋FE68 1本＋freecam 1本が余分です。1ターンC++ camera eventへ縮めます。
+
+新seedのズレは既知系統の再発です。ROMのけものづき(DQ9 0x46)はHero start=59 goal=59 のroute0なのに、C++はaction0で 59→49 のroute2を生成しています。a.txt に過去の同型「けものづきだけ余計なroute」修正履歴があるので、推測せずその確定条件と現コードの差だけ突き合わせます。
+
+過去の同型修正は現コードに残っています。今回の違いで気になる点が1つあり、69:2 のC++ camera eventはtarget=C0、ROMもUIではゲルニックを選んだのに実ダメージはC0へ入っています。つまりこの技では入力target表記と実presentation

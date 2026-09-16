@@ -131,6 +131,16 @@ inline void AssertCameraMapping(const int action) noexcept {
         return PlanCurrentActionRoutes(actionIndex);
     }
 
+    // overlay_d_25:021E0BB4..021E0C68 performs the current-action 9..11
+    // battle-world proximity conflict pass before 021E2850 movement
+    // eligibility. In particular, a flag-0x80 actor can deliberately write
+    // the shared 0xFF occupancy markers and then be rejected by 021E2850;
+    // future participants in the same setup must still see those markers.
+    if (!InvalidateCurrentActionPresentationProximity(
+            currentActorId,
+            currentPresentationTargetId,
+            currentAction.dq9ActionId)) return false;
+
     const std::array<std::uint16_t, 1> currentActionActorIds{currentActorId};
     std::array<bool, dq9::freecam::detail::kMaxPresentationActors> visited{};
     for (int futureIndex = actionIndex; futureIndex < actionCount; ++futureIndex) {

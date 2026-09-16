@@ -1083,6 +1083,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
                             int target = primaryHeroTarget();
                             if (target < 0) return false;
+                            const int presentationTarget = target;
                             bool targetWasGuardRedirect = false;
                             if (target == 2 && isGuardableHeroAction(action) && players[2].guardedBy >= 0 &&
                                 Player::isPlayerAlive(players[players[2].guardedBy])) {
@@ -1092,8 +1093,19 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
                             traceBoundary("end FUN_02158dfc");
                             traceBoundary("start FUN_021ebd9c_ct");
+                            const int presentationActionIndex = actionsPosition;
                             const int basedamage = callAttackFun(action, position, players, 0, target, NowState,
                                                                  targetWasGuardRedirect);
+                            // かばう redirects the battle damage target, but the ROM's 0x28-byte
+                            // presentation action record keeps the originally selected target.
+                            // Keep camera/presentation input separate from the post-redirect defender.
+                            if (targetWasGuardRedirect
+                                && presentationActionIndex >= 0
+                                && presentationActionIndex < actionsPosition
+                                && presentationTarget >= 0
+                                && presentationTarget < 4) {
+                                actionTargets[presentationActionIndex] = battleActorRefs[presentationTarget];
+                            }
                             traceBoundary("end FUN_021ebd9c_ct");
                             addResult(action, basedamage, false);
                             if (isHealingAction(action)) {
@@ -2772,9 +2784,11 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
                 if (baseDamage != 0) {
                     (*position)++; // lr: 0x021e54fc
+                    (*position)++; // max: 100, lr: 0x021ed7a8
                 }
+            } else {
+                (*position)++; // max: 100, lr: 0x021ed7a8
             }
-            (*position)++; // max: 100, lr: 0x021ed7a8
             baseDamage = 0;
             resetCombo(NowState);
             break;
