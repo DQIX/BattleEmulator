@@ -117,6 +117,7 @@ void lcg::init(uint64_t seed, bool init) {
 
 uint8_t lcg::getSeed(int *position) {
     assert(position != nullptr);
+    assert((*position) >= 0);
     assert((*position) < ARRAY_SIZE);
 
     if (!init_mode) {
@@ -134,6 +135,7 @@ uint8_t lcg::getSeed(int *position) {
 
 [[nodiscard]] int32_t lcg::getTop32(int *position) {
     assert(position != nullptr);
+    assert((*position) >= 0);
     assert((*position) < ARRAY_SIZE);
 
     if (!init_mode) {
@@ -156,6 +158,7 @@ uint8_t lcg::getSeed(int *position) {
  */
 [[nodiscard]] int lcg::getPercent(int *position, int max) {
     assert(position != nullptr);
+    assert((*position) >= 0);
     assert((*position) < ARRAY_SIZE);
 
     if (!init_mode) {
@@ -176,6 +179,7 @@ uint8_t lcg::getSeed(int *position) {
 
 [[nodiscard]] double lcg::floatRand(int *position, double min, double max) {
     assert(position != nullptr);
+    assert((*position) >= 0);
     assert((*position) < ARRAY_SIZE);
 
     uint64_t top;
@@ -194,6 +198,7 @@ uint8_t lcg::getSeed(int *position) {
 
 [[nodiscard]] double lcg::floatRandAttack(int *position) {
     assert(position != nullptr);
+    assert((*position) >= 0);
     assert((*position) < ARRAY_SIZE);
 
     uint64_t top;
@@ -223,5 +228,7 @@ uint8_t lcg::getSeed(int *position) {
  * @note minおよびmaxは端の値を含みます。
  */
 [[nodiscard]] int lcg::intRangeRand(int *position, int min, int max) {
+    assert(position != nullptr);
+    assert((*position) >= 0);
     return min + getPercent(position, max - min + 1);
 }

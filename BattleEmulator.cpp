@@ -653,7 +653,7 @@ std::string BattleEmulator::getActionName(int actionId) {
         case KABUFF:
             return "Kabuff";
         case VITAL_POINT_THRUST:
-            return "Priority Thrust";
+            return "kilyusilyo Thrust";
         case THUNDER_THRUST:
             return "issenn Thrust";
         default:

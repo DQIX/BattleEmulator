@@ -1596,9 +1596,12 @@ inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
     // Only the ROM-confirmed one-hop non-actor case is advanced here.  Longer
     // routes have a frame-timed 02049D84 lifecycle and are deliberately left
     // untouched until that timing is modeled from live evidence.
+    const auto* currentActorRoute = FindCurrentRoute(actorId);
     if (triggerDecision.callFreeCamera
         && triggerDecision.source == TriggerSource::action_bact
-        && state.currentRoutes.valid) {
+        && state.currentRoutes.valid
+        && currentActorRoute != nullptr
+        && currentActorRoute->count != 0) {
         for (std::size_t routeIndex = 0; routeIndex < state.currentRoutes.actorCount; ++routeIndex) {
             const auto& route = state.currentRoutes.actors[routeIndex];
             if (route.actorId == actorId

@@ -1983,7 +1983,7 @@ int main(int argc, char* argv[]){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x1d49c93;
+	uint64_t time1 = 0x1d49c9b;
 
 	auto counter = 0;
 	int actions[350] = {0};
