@@ -1127,6 +1127,34 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             baseDamage = 0;
             resetCombo(NowState);
             break;
+        case FIRE_BREATH:
+            (*position) += 2;
+            (*position)++; //会心
+            (*position)++; //不明
+            if (!players[0].paralysis && !players[0].sleeping && !players[0].isStunned) {
+                if (lcg::getPercent(position, 100) < 2) {
+                    kaihi = true;
+                }
+            }
+            (*position)++; //ニセ回避 0x02157f58
+            baseDamage = FUN_021e8458_typeD(position, 5, 28);
+            tmp = Equipments::applyDamageReduction(baseDamage, Attribute::Fire);
+
+            if (players[defender].TensionLevel == 4) {
+                tmp *= 0.5;
+            }
+
+            if (!players[0].paralysis && !players[0].sleeping && !players[0].isStunned) {
+                tmp *= players[defender].defence;
+            }
+            baseDamage = static_cast<int>(floor(tmp));
+            if (!kaihi) {
+                (*position)++; //0x021e54fc 不明
+            } else {
+                baseDamage = 0;
+            }
+            process7A8(position, baseDamage, players, defender);
+            break;
         case ZAMMLE:
             (*position) += 2;
             (*position)++; // 0x021ec6f8
@@ -1472,10 +1500,38 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             process7A8(position, baseDamage, players, defender);
             resetCombo(NowState);
             break;
+        case LIGHTNING:
+            (*position) += 2;
+            (*position)++; //0x021ec6f8 不明
+            (*position)++; //敵の会心判定
+            (*position)++; //ニセ回避 0x02157f58 100%
+            baseDamage = FUN_021e8458_typeD(position, 8, 36);
+
+            tmp = static_cast<double>(baseDamage);
+
+            if (players[attacker].TensionLevel != 0) {
+                //TODO ダメージが正しいか調べる 特殊県産式の引数も調べる https://dragonquest9.com/?%E3%83%80%E3%83%A1%E3%83%BC%E3%82%B8%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6#tension
+                tmp *= Enemy_TensionTable[players[attacker].TensionLevel - 1];
+                tmp += (players[attacker].TensionLevel * TensionLevel); //4 = 1*(1+(30/10))
+                players[attacker].TensionLevel = 0;
+            }
+
+            tmp = Equipments::applyDamageReduction(tmp, Attribute::ThunderExplosion);
+            if (players[defender].TensionLevel == 4) {
+                tmp *= 0.5;
+            }
+            if (!players[0].paralysis && !players[0].sleeping) {
+                tmp *= players[defender].defence;
+            }
+            baseDamage = static_cast<int>((tmp));
+            (*position)++; //0x021e54fc 不明
+            process7A8(position, baseDamage, players, defender); //必殺チャージ(敵)　0x021ed7a8
+            break;
         case BattleEmulator::ATTACK_ENEMY:
         case BattleEmulator::STAMP:
         case BattleEmulator::SKY_ATTACK:
         case BattleEmulator::POISON_ATTACK:
+        case CLAW_SLASH:
             (*position) += 2;
             (*position)++;
             (*position)++; //会心
@@ -1498,6 +1554,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     tmp = floor(tmp * 1.25);
                 } else if ((Id & 0xffff) == BattleEmulator::SKY_ATTACK) {
                     tmp = floor(tmp * 1.5);
+                } else if ((Id & 0xffff) == CLAW_SLASH) {
+                    tmp = floor(tmp * 1.25);
                 }
 
                 //テンションがある場合、この時点でオフセットが計算されて、最低4ダメージが保証されて下の0x021e81a0でダメージがある判定になる。

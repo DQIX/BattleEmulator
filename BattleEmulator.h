@@ -111,12 +111,15 @@ public:
 
     static constexpr int DOUBLE_TROUBLE = 80;// 往復びんた
     static constexpr int ZAMMLE = 81; //ドルクマ
-    static constexpr int CRACKLE_ENEMY = 82; //ヒャダルコ
-    static constexpr int MAGIC_BARRIER = 83; //マジックバリア
-    static constexpr int KABUFF = 84; //スクルト
-    static constexpr int STAMP = 85; //ふみつけ
-    static constexpr int STOMP = 86; //じひびき
-
+    static constexpr int CRACKLE_ENEMY = 180; //ヒャダルコ
+    static constexpr int MAGIC_BARRIER = 181; //マジックバリア
+    static constexpr int KABUFF = 182; //スクルト
+    static constexpr int STAMP = 183; //ふみつけ
+    static constexpr int STOMP = 184; //じひびき
+    static constexpr int FIRE_BREATH = 83; //火の息
+    static constexpr int CLAW_SLASH = 85; //爪できりさく
+    static constexpr int LIGHTNING = 162;//稲妻
+    
 
     static void ResetTurnProcessed();
 

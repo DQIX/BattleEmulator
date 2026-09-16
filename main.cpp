@@ -86,21 +86,15 @@ namespace{
     constexpr Player BasePlayers[2] = {
         // プレイヤー1
         {
-            139, 139.0, 209, 209, 148, 148, 111, 111, 128, 85,
-            85, false, false, 0, false, 0, -1,
-            // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-            6, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-            false, -1, 0, -1, 0, false, 1, 1, 1, -1, 0, -1, false, 2, false, -1
+            297, 297.0, 306, 306, 269, 269, 184, 184, 230, 158,
+            158
         }, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
 
         // プレイヤー2
         {
-            1054, 1054.0, 120, 120, 125, 125, 66, 66, 0, 255,
-            255, false, false, 0, false, 0, -1,
-            // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-            0, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-            false, -1, 0, -1, 0, false, 0, 0, 0, -1, 0, -1, false, 2, false, -1
-        } // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
+            2280, 2280.0, 188, 188, 214, 214, 145, 145, 0, 50,
+            50
+        }
     };
 #endif
     /**
