@@ -230,8 +230,8 @@ std::string BattleEmulator::getActionName(int actionId) {
 
 bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
                          BattleResult* result,
-                          uint64_t seed, const int eActions[350], const int damages[350], int mode,
-                          uint64_t *NowState) {
+                           uint64_t seed, const int eActions[350], const int damages[350], int mode,
+                           uint64_t *NowState, const bool traceBoundaries) {
     resetCombo(NowState);
     player0_has_initiative = false;
     TiggerSkyAttack = false;
@@ -385,11 +385,12 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     }
 
                     const auto c = counter;
+                    DEBUG_TRACE_BOUNDARY(traceBoundaries, "start FUN_02158dfc", *position);
                     (*position) += 2; // lr=0x0216139c range[3,4], lr=0x02075628 max=2
-
-
-                    //--------end_FUN_02158dfc-------
+                    DEBUG_TRACE_BOUNDARY(traceBoundaries, "end FUN_02158dfc", *position);
+                    DEBUG_TRACE_BOUNDARY(traceBoundaries, "start FUN_021ebd9c_ct", *position);
                     basedamage = callAttackFun(c, position, players, 1, 0, NowState);
+                    DEBUG_TRACE_BOUNDARY(traceBoundaries, "end FUN_021ebd9c_ct", *position);
 
                     if (players[0].sleeping) {
                         actionTable = SLEEPING;
@@ -446,13 +447,14 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     } else {
                         Player::reduceHp(players[0], basedamage);
                     }
-                    //--------start_FUN_021594bc-------
+                    DEBUG_TRACE_BOUNDARY(traceBoundaries, "start FUN_021594bc", *position);
                     if (Player::isPlayerAlive(players[0]) && Player::isPlayerAlive(players[1])) {
                         (*position) += 1;
                     } else {
+                        DEBUG_TRACE_BOUNDARY(traceBoundaries, "end FUN_021594bc", *position);
                         break;
                     }
-                    //--------end_FUN_021594bc-------
+                    DEBUG_TRACE_BOUNDARY(traceBoundaries, "end FUN_021594bc", *position);
                 }
             } else {
                 int32_t action = actionTable & 0xffff;
@@ -464,7 +466,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     skipTurn = true;
                 }
                 if (!skipTurn) {
-                    //--------start_FUN_02158dfc-------
+                    DEBUG_TRACE_BOUNDARY(traceBoundaries, "start FUN_02158dfc", *position);
                     if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
                         (*position) += 1;
                     } else if (players[0].inactive) {
@@ -508,8 +510,10 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     }
 
 
-                    //--------end_FUN_02158dfc-------
+                    DEBUG_TRACE_BOUNDARY(traceBoundaries, "end FUN_02158dfc", *position);
+                    DEBUG_TRACE_BOUNDARY(traceBoundaries, "start FUN_021ebd9c_ct", *position);
                     basedamage = callAttackFun(action, position, players, 0, 1, NowState);
+                    DEBUG_TRACE_BOUNDARY(traceBoundaries, "end FUN_021ebd9c_ct", *position);
                     if (mode == -1) {
                         auto atk1 = -1;
                         if (players[0].AtkBuffTurn > 0) {
@@ -554,7 +558,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             }
                         }
                     }
-                    //--------start_FUN_021594bc-------
+                    DEBUG_TRACE_BOUNDARY(traceBoundaries, "start FUN_021594bc", *position);
                     if (Player::isPlayerAlive(players[0]) && Player::isPlayerAlive(players[1])) {
                         (*position) += 1;
                         //TODO: 順序調べる
@@ -603,6 +607,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             }
                         }
                     }
+                    DEBUG_TRACE_BOUNDARY(traceBoundaries, "end FUN_021594bc", *position);
                 } else {
                     if (mode == -1) {
                         auto atk1 = -1;
@@ -1621,6 +1626,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     (*position)++; // lr=0x021e54fc, max=100, 武器特殊効果
                 }
                 if (players[defender].TensionLevel == 4) {
+                    // スーパーハイテンション中は受けるダメージを半減する。
                     tmp = baseDamage * 0.5;
                 } else {
                     tmp = baseDamage;

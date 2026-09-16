@@ -32,6 +32,19 @@
 #define DEBUG_COUT2(x)
 #endif
 
+#if !defined(NDEBUG)
+#define DEBUG_TRACE_BOUNDARIES 1
+#endif
+
+#ifdef DEBUG_TRACE_BOUNDARIES
+#define DEBUG_TRACE_IF(condition, statement) do { if (condition) { statement; } } while (false)
+#define DEBUG_TRACE_BOUNDARY(condition, label, position) \
+    do { if (condition) { std::cout << "TRACE boundary " << label << " position=" << position << '\n'; } } while (false)
+#else
+#define DEBUG_TRACE_IF(condition, statement) do { } while (false)
+#define DEBUG_TRACE_BOUNDARY(condition, label, position) do { } while (false)
+#endif
+
 
 //#define DEBUG3 1
 
