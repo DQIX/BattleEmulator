@@ -646,6 +646,16 @@ std::string BattleEmulator::getActionName(int actionId) {
             return "Medapani";
         case GERUNIKKU_BAGIMA_STRONG:
             return "Bagima (strong)";
+        case ZAKI:
+            return "Zaki";
+        case ZARAKI:
+            return "?Zaraki";
+        case KABUFF:
+            return "Kabuff";
+        case VITAL_POINT_THRUST:
+            return "Priority Thrust";
+        case THUNDER_THRUST:
+            return "issenn Thrust";
         default:
             return "Unknown Action";
     }

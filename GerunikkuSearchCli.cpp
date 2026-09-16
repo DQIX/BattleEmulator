@@ -32,6 +32,15 @@ void printResult(const Result& r, std::uint64_t seed, std::ostream& os) {
     os << '\n';
     if (!r.error.empty()) os << "SEARCH_ERROR " << r.error << '\n';
 }
+
+Result runRequest(const Player players[4], const std::uint64_t seed,
+                  const std::span<const std::int32_t> prefix, const Limits& limits,
+                  std::ostream& os) {
+    Result result = search(players, seed, prefix, limits);
+    printResult(result, seed, os);
+    return result;
+}
+
 int runCli(int argc, char* argv[], const Player players[4]) {
     try {
         if (argc < 4) throw std::invalid_argument(
@@ -55,8 +64,7 @@ int runCli(int argc, char* argv[], const Player players[4]) {
                 prefix.push_back(BattleEmulator::PackHeroAction(action, target));
             }
         }
-        const Result result = search(players, seed, prefix, limits);
-        printResult(result, seed, std::cout);
+        const Result result = runRequest(players, seed, prefix, limits, std::cout);
         return !result.validInput || !result.verified ? 1 : result.won ? 0 : 2;
     } catch (const std::exception& ex) {
         std::cerr << "SEARCH_ERROR " << ex.what() << '\n';

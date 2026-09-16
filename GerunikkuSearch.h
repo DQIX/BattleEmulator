@@ -11,7 +11,7 @@
 namespace gerunikku_search {
 struct Limits {
     double milliseconds = 250.0;
-    int initialPosition = 2; // Same next-RNG-entry convention as the existing search.
+    int initialPosition = 1; // First RNG entry, matching normal Main/BruteForce startup.
     int maxSuffixTurns = 64;
     int maxBeamWidth = 96;
     // 0: diverse beam + directed neighborhood repair; 1: plain beam;

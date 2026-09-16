@@ -70,7 +70,8 @@ std::string rtrim(const std::string& s);
 
 std::string trim(const std::string& s);
 
-bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream& ss);
+bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aActions[350], bool dropbug,
+                   std::stringstream& ss, const gerunikku_search::Limits& limits = {});
 
 uint64_t BruteForceRequest(const Player copiedPlayers2[4], int hours, int minutes, int seconds, int turns,
                            int eActions[350],
@@ -376,13 +377,13 @@ void showHeader(){
 
 //int main(int argc, char *argv[]) {
 
-bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream &ss){
+bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aActions[350], bool dropbug,
+                   std::stringstream &ss, const gerunikku_search::Limits& limits){
 #if defined(gerunikku) && !defined(OPTIMIZE_MODE)
 	int knownTurns = 0;
 	while (knownTurns < 349 && aActions[knownTurns] > 0) ++knownTurns;
-	const auto searched = gerunikku_search::search(copiedPlayers2, seed,
-		std::span<const int32_t>(aActions, knownTurns));
-	gerunikku_search::printResult(searched, seed, ss);
+	const auto searched = gerunikku_search::runRequest(copiedPlayers2, seed,
+		std::span<const int32_t>(aActions, knownTurns), limits, ss);
 	return searched.validInput && searched.verified && searched.won;
 #endif
 	int32_t gene[350] = {0};
@@ -1982,37 +1983,42 @@ int main(int argc, char* argv[]){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x450ff41f;
+	uint64_t time1 = 0x1d49c93;
 
 	auto counter = 0;
 	int actions[350] = {0};
 	actions[counter++] = BattleEmulator::BUFF;
-	actions[counter++] = BattleEmulator::FLEE_ALLY;
 	//actions[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
 	actions[counter] = -1;
 
+	gerunikku_search::Limits searchLimits;
+	searchLimits.milliseconds = 1000.0;
+	searchLimits.initialPosition = 1;
+	searchLimits.maxBeamWidth = 96;
+	searchLimits.maxSuffixTurns = 64;
+	searchLimits.variant = 0;
+
 	std::stringstream ss;
-	SearchRequest(copiedPlayers, time1, actions, false, ss);
-	ss << std::endl;
+	SearchRequest(copiedPlayers, time1, actions, false, ss, searchLimits);
 
 	if(false){
-		SearchRequest(copiedPlayers, time1+1, actions, false, ss);
+		SearchRequest(copiedPlayers, time1+1, actions, false, ss, searchLimits);
 		ss << std::endl;
 
-		SearchRequest(copiedPlayers, time1+2, actions, false, ss);
+		SearchRequest(copiedPlayers, time1+2, actions, false, ss, searchLimits);
 		ss << std::endl;
 
-		SearchRequest(copiedPlayers, time1+6, actions, false, ss);
+		SearchRequest(copiedPlayers, time1+6, actions, false, ss, searchLimits);
 		ss << std::endl;
 
-		SearchRequest(copiedPlayers, time1+10, actions, false, ss);
+		SearchRequest(copiedPlayers, time1+10, actions, false, ss, searchLimits);
 		ss << std::endl;
 
 
-		SearchRequest(copiedPlayers, time1+40, actions, false, ss);
+		SearchRequest(copiedPlayers, time1+40, actions, false, ss, searchLimits);
 		ss << std::endl;
 
-		SearchRequest(copiedPlayers, time1+70, actions, false, ss);
+		SearchRequest(copiedPlayers, time1+70, actions, false, ss, searchLimits);
 		ss << std::endl;
 	}
 
