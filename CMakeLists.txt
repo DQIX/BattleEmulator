@@ -45,6 +45,8 @@ set(SOURCES
         Equipment.h
         ActionOptimizer.cpp
         ActionOptimizer.h
+        ErugiosuSearch.cpp
+        ErugiosuSearch.h
         Genome.h
         EnhancedCostCalculator.h
         EnhancedCostCalculator.cpp
@@ -58,7 +60,15 @@ set(SOURCES
 )
 
 add_executable(newDirectory_gouketu ${SOURCES})
-target_compile_definitions(newDirectory_gouketu PRIVATE GOUKETU=1)
+target_compile_definitions(newDirectory_gouketu PRIVATE GOUKETU=1 ERUGIOSU_SEARCH_BUILD=1)
+
+option(BUILD_ERUGIOSU_BENCHMARK "Build the actual-search benchmark driver" OFF)
+if(BUILD_ERUGIOSU_BENCHMARK)
+    add_executable(erugiosu_benchmark ${SOURCES} optimization/Benchmark.cpp)
+    target_compile_definitions(erugiosu_benchmark PRIVATE
+        GOUKETU=1 ERUGIOSU_SEARCH_BUILD=1 ERUGIOSU_BENCHMARK=1)
+    target_include_directories(erugiosu_benchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
 
 
 add_executable(newDirectory_gouketu_opt ${SOURCES})

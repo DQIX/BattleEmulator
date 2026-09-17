@@ -11,6 +11,7 @@
 #include "debug.h"
 #include "ActionOptimizer.h"
 #include "EnhancedCostCalculator.h"
+#include "ErugiosuSearch.h"
 
 #ifdef DEBUG
 
@@ -109,11 +110,10 @@ void printHeader(std::stringstream& ss);
 // ヘッダーを出力する関数
 void printHeader(std::stringstream& ss){
 	ss << std::left << std::setw(6) << "turn"
-		<< std::setw(18) << "sp"
-		<< std::setw(18) << "aAct"
 #if defined(GOUKETU)
 		<< std::setw(8) << "equip"
 #endif
+		<< std::setw(18) << "aAct"
 		<< std::setw(18) << "eAct1"
 		<< std::setw(18) << "eAct2"
 		<< std::setw(6) << "aD"
@@ -200,11 +200,11 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 				if(turn > PastTurns){
 					ss6
 						<< std::left << std::setw(6) << (currentTurn + 1)
-						<< std::setw(18) << sp
-						<< std::setw(18) << aAction
 #if defined(GOUKETU)
 						<< std::setw(8) << equipmentChange
 #endif
+						<< std::setw(18) << aAction
+
 						<< std::setw(18) << eAction[0]
 						<< std::setw(18) << eAction[1]
 						<< std::setw(6) << aDamage
@@ -293,11 +293,10 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 	if(currentTurn != -1){
 		ss6
 			<< std::left << std::setw(6) << (currentTurn + 1)
-			<< std::setw(18) << sp
-			<< std::setw(18) << aAction
 #if defined(GOUKETU)
 			<< std::setw(8) << equipmentChange
 #endif
+			<< std::setw(18) << aAction
 			<< std::setw(18) << eAction[0]
 			<< std::setw(18) << eAction[1]
 			<< std::setw(6) << aDamage
@@ -359,6 +358,33 @@ void showHeader(){
 //int main(int argc, char *argv[]) {
 
 bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream &ss){
+#if defined(GOUKETU) && !defined(OPTIMIZE_MODE) && !defined(ERUGIOSU_LEGACY_SEARCH)
+	{
+		int prefixLength = 0;
+		while(prefixLength < 350 && aActions[prefixLength] != -1 && aActions[prefixLength] != 0)
+			++prefixLength;
+		const auto answer = ErugiosuSearch::Run(copiedPlayers2, seed, aActions, prefixLength);
+		if(!answer.victory || !answer.replayVerified){
+			ss << "[Erugiosu] victory=0 elapsed_ms=" << answer.elapsedMs;
+			if(!answer.error.empty()) ss << " error=" << answer.error;
+			ss << '\n';
+			return false;
+		}
+		ss << dumpTable(answer.replay, answer.actions.data(), startturn);
+		ss << "[Erugiosu] victory=1 BattleResult.position=" << answer.replay.position
+		   << " equipment_changes=" << answer.finalState.equipmentChanges - answer.root.equipmentChanges
+		   << " total_equipment_changes=" << answer.finalState.equipmentChanges
+		   << " elapsed_ms=" << answer.elapsedMs
+		   << " first_victory_ms=" << answer.firstVictoryMs
+		   << " replay_verified=1\n";
+		ss << "[lanes] zero_change_position=" << answer.zeroChange.position
+		   << " equipment_aware_position=" << answer.equipmentAware.position << '\n';
+		ss << "0x" << std::hex << seed << std::dec << ": ";
+		for(int i = 0; i < answer.length; ++i) ss << answer.actions[i] << ", ";
+		ss << '\n';
+		return true;
+	}
+#endif
 	int32_t gene[350] = {0};
 	auto turns = 0;
 	for(int i = 0; i < 349; ++i){
@@ -883,7 +909,14 @@ EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed
 }
 #endif
 
-int main(){
+#if defined(ERUGIOSU_BENCHMARK)
+int RunErugiosuBenchmark(int argc, char **argv, const Player initial[2]);
+#endif
+
+int main(int argc, char **argv){
+#if defined(ERUGIOSU_BENCHMARK)
+	return RunErugiosuBenchmark(argc, argv, copiedPlayers);
+#endif
 	showHeader();
 
 	//https://zenn.dev/reputeless/books/standard-cpp-for-competitive-programming/viewer/library-ios-iomanip#3.1-c-%E8%A8%80%E8%AA%9E%E3%81%AE%E5%85%A5%E5%87%BA%E5%8A%9B%E3%82%B9%E3%83%88%E3%83%AA%E3%83%BC%E3%83%A0%E3%81%A8%E3%81%AE%E5%90%8C%E6%9C%9F%E3%82%92%E7%84%A1%E5%8A%B9%E3%81%AB%E3%81%99%E3%82%8B
@@ -904,7 +937,7 @@ int main(){
 #ifdef DEBUG2
 	//THIS DEBUG CODE!
 	//THIS DEBUG CODE
-	uint64_t time1 = 0x932ca66;
+	uint64_t time1 = 0x4a1ff68;
 
 	int dummy[100];
 	lcg::init(time1);
@@ -925,13 +958,15 @@ int main(){
 	auto* NowState = new uint64_t(0); //エミュレーターの内部ステートを表すint
 
 	Player players1[2];
-	int32_t gene1[350] = {0};
+	//int32_t gene1[350] = {0};
 	//THIS DEBUG CODE!
-	//int32_t gene1[350] = {30, 31, 62, 62, 50, 53, 62, 30, 31, 34, 53, 33, 31, 34, 34, 34, 34, 53,};
+
+	//0x4a1ff68: 31, 30, 53, 62, 65567, 65598, 65598, 65598, 31, 33, 30, 34, 34,
+	int32_t gene1[350] = {31, 30, 53, 62, 65567, 65598, 65598, 65598, 31, 33, 30, 34, 34,};
 	//gene1[19-1] = BattleEmulator::DEFENCE;
 	int counter = 0;
 
-	gene1[counter++] = BattleEmulator::INSULATE;
+	//gene1[counter++] = BattleEmulator::INSULATE;
 	//gene1[counter++] = BattleEmulator::INSULATE;
 	// gene1[counter++] = BattleEmulator::BUFF;
 	// gene1[counter++] = BattleEmulator::BUFF;
@@ -979,11 +1014,10 @@ int main(){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x04a1ff68;
+	uint64_t time1 = 0x04a1ff18;
 
 	auto counter = 0;
 	int actions[350] = {0};
-	actions[counter++] = BattleEmulator::DEFENCE;
 	actions[counter++] = BattleEmulator::MAGIC_MIRROR;
 	//actions[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
 	actions[counter] = -1;

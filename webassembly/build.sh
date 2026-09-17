@@ -31,7 +31,7 @@ declare -A BRANCH_VARIANTS
 
 BRANCH_VARIANTS[erugiosu_new_arugo]="
 erugiosu_super: -DSUPER=1
-erugiosu_gouketu: -DGOUKETU=1
+erugiosu_gouketu: -DGOUKETU=1 -DERUGIOSU_SEARCH_BUILD=1
 "
 
 
@@ -52,6 +52,7 @@ SRC_FILES=(
   camera.cpp
   debug.cpp
   ActionOptimizer.cpp
+  ErugiosuSearch.cpp
   EnhancedCostCalculator.cpp
   EnhancedHashCalculator.cpp
   EnhancedHeapQueue.cpp
