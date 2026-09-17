@@ -2710,3 +2710,91 @@ Turn 3/4の比較条件は揃いました。Turn 3 action0はcurrent actor route
 HeroはTurn 4 C1 setup時点でやはりC++だけ battleWorld=node57 です。action0条件化後もそうなので、犯人は次のDQ9 73後処理です。C++ stateのflagsが0x20になっているので、ApplyBactOpcode4fPostTrackingEffects のglobal reset系が物理座標をコピーしている可能性をROM action1→action2の実スナップショットと照合します。
 
 DQ9 73 の4F metadataは mode0（mask=1）でした。ROMではこの後処理が走ればbattleWorldはbaseへ戻るはずで、実際ROMは (0,10240)。C++で戻っていないので、次は「73がaction_bactとして実行されたか」のsource判定が欠けている線を確認します。
+
+続きから入ります。a.txt は読まず、確定済みの「021695A8 は base へ巻き戻すのではなく、現在の presentation transform を actor world へ同期する」をまず最小修正として反映し、その直後に 0x2A7C91 Turn 1→2 を ROM/C++ で再検証します。CLion 読み取りは迂回せず、files__ と debugger skill に従います。
+
+作業環境は前回の同一分離を継続でき、files__ は BattleArrow、CLion は BattleEmulator を正しく向いています。これでパス迂回なしです。次に debugger skill と修正対象だけ読み、すぐパッチします。
+
+確定済みの 021695A8 誤解を今すぐ直します。今回は関数名まで広く変えず、内部の「base へ戻す」代入だけを「現在の presentation world → battle world 同期」に置き換え、turn-end の説明と assert 文言だけ合わせます。
+
+修正を反映しました。baseBattleWorld* は一切書き換えず保持し、battleWorld* だけを解決後の world* に同期する変更です。同じ 021695A8 を使う BACT mode0 にも自然に効くため、turn-end 専用ハックにはしていません。今から同じ2ターンを再実行します。
+
+再実行では RNG も start node も変わっていません。つまり battleWorld の base→current 同期は正しい修正ですが、Turn 2 の誤配置を作っている本体はその前段、0204AB8C が呼ぶ 02049B10(actor,0) の start-node 更新です。C++ は今ここを「aux→goal→start」と簡略化していますが、ROM 実測 [48,29,31,51] と合っていないので、02049B10 をデコンパイルしてその部分を即修正します。
+
+02049B10 自体の順序は C++ の aux→goal→start で合っていました。なので次の差は「Turn 1 の最後に ROM が持っている goal/aux が C++ と違う」です。state3 の 0204A1B0 呼び出し直前に、各 actor の旧 start/goal/aux/current world を取るよう既存の狭い probe を増強します。ここで producer を1段戻します。
+
+ROM の state3 直前を増強して見ると、021695A8 に入る時点で既に goal/aux は全員 0xFF、start は [48,29,31,51] でした。つまり turn-end restore/recenter は原因ではなく、その直前までに C0/C1 の start を 29/31 へ確定させる処理が C++ から抜けています。次は Turn 1 全体の 0204A1B0 書き込みを LR 付きで追い、どの post-action 処理が producer か特定します。
+
+さっきの replay は古い同名 probe が再起動されており、全ターン 0204A1B0 追跡版に差し替わっていませんでした（event kind が旧版のままなのを確認）。観測の取り違えを避けるため、probe の script-id を新しくして明示的に再登録してから同じ1ターンをもう一度取ります。
+
+全書き込み版は実行中で、長いアニメーション待ちに入っただけです。重複入力は送っていません。その間に C++ 側の「action 完了時に goal/aux を start へ反映する箇所」を絞り、ROM の LR が取れたら直ちに対応付けます。
+
+producer が取れました。Turn 1 後半で C0/C1 を ROM の最終配置へ動かしているのは 02049B10 ではなく、LR 0x0204A0EC の movement lifecycle です。実測では C0 39→29、C1 4→30 をここで書き、その後 02049B10 が C1 の aux 31 を start 31 に確定しています。C++ はこの movement 更新を飛ばしているため Turn 2 が [66,21,47,69] にずれています。02049D84 系をデコンパイルして最小の外部挙動を実装します。
+
+021DC1D4 の decompile と実測を重ねると流れが揃いました。C0通常攻撃の selector 後、ROM は planner が作った C0 30→39 / C1 5→4 / C2 33→42 を 02049D84 で次 selector 前に完走させています。C++ には「通常攻撃なら non-actor route を完了する」コード自体がありますが、このケースでは判定に使う previousAction が1手ずれていて発火していない可能性が高いです。まず CommitActionProgressRaw と previousAction 更新順を確認します。
+
+previousAction 更新順と route の寿命を今確認しています。ここで「通常攻撃なのに movement 完走ブロックが発火しない」理由が静的に確定すれば、その場で generic な lifecycle 修正に入れます。
+
+更新順は問題ありませんでした。CommitActionProgressRaw は CompleteActionPresentation の直前に current action を previousAction へ入れるので、通常攻撃判定自体は成立します。ずれているのは時点で、ROM の 02049D84 完走は「次 action の route plan 後・selector 前」に起きています。C++ はそれを前 action 完了側で処理しようとしているため、別の route を見ています。selector 前の setup 順を確認して移します。
+
+もう一段整理できました。ROM の 02049D84 は current action の selector 後に走るので lifecycle point 自体は CompleteActionPresentation で正しいです。ただし 021DC1D4 の param5=1 分岐では selector 前に全 participant へ 02049B10 cleanup が入り、C++ はそれを action0 専用にしか再現していません。Turn 1 の C0 通常攻撃も ROM は param5=1 なので、この cleanup が C1/C2 の start を次の goal へ進めています。CompleteActionPresentation 全体を確認して、既存 action0 特例を param5=1 の一般則へ最小拡張します。
+
+原因はコード上でも確定です。既存の cleanup 実装内容そのものは 021DC1D4 の mode1 と合っていますが、条件が actionIndex == 0 に固定されていました。ROM は actionIndex>0 でも param5=1 なら同じ cleanup へ入ります。Turn 1 の C0通常攻撃がまさにそれです。条件だけを ROM の分岐条件へ一般化します。
+
+mode1 cleanup の条件修正を反映しました。アクションIDやナイトリッチ固有条件は追加していません。まず同じ 0x2A7C91 / ザキA→ためる だけを再実行し、Turn 2 の start node と E7 freecam 判定が ROM 側へ寄るか見ます。
+
+今の再実行結果が変わらない理由はコード仮説ではなく、実行バイナリが再ビルドされていません。出力の Build date が修正前と同じ 2026-09-17 08:19:46 UTC のままです。CLion の run configuration が make-before-run 無効なので、まず CLion 経由でビルドしてから同じ検証をやり直します。
+
+build_project はこの CLion MCP には公開されていません。Build date がコンパイル時刻そのものかも確認します。もし固定/generated 値なら、さっきの「未ビルド」判断は撤回して、実行ファイルに修正が入ったか別の方法（ソース行 breakpoint / 実行時状態）で検証します。
+
+Build date は CMake configure 時の固定値でした。未ビルドの根拠にはならないので、その判断は撤回します。修正が実行バイナリに入っているか、CLion debugger で変更した mode1 条件へ実際に到達するかを直接確認します。
+
+修正バイナリには入っています。CLion debugger が actionIndex=1 の新しい mode1 cleanup 分岐内部（targetId = ...）で停止しました。つまり条件拡張は実行されています。それでも最終 trace が変わらないので、cleanup 後に別処理が同じ start/goal を戻しているか、debug出力の「after」が別時点です。ここで分岐直前の state と route を直接読みます。
+
+debugger で action1 mode1 cleanup 直前の state を確認できました。C0 は start30/goal30/aux39、C1 は 6→5、C2 は 32→33、route も C1/C2 の2-nodeです。新条件は正しく発火しています。次は action2 setup に入る直前まで進めて、C0 の aux39 がどこで消えるかを一点追跡します。
+
+CLion の RESUME がゲートウェイ側で非同期化されましたが、重複操作はしません。gateway__await_async は使わず、現在の debugger status を読み直して停止位置だけ確認します。
+
+action2 setup 直後を debugger で止めました。C0 は start30 / goal12 / auxFF / conflictInvalidated=true。つまり aux39 は action2 setup の previous-participant 処理に入った時点では存在したものの、canReuseAuxiliary が false になって fallback goal 12 を選び、その後 aux を消しています。ROM は同じ箇所で goal39 を採用しているので、次は 021E08BC の aux再利用条件と C++ occupancy 判定を直接比較します。
+
+021E08BC の decompile を照合しました。aux再利用条件は C++ と同じ式でした。したがって分岐式ではなく occupancy map の中身が違うのが確定です。C++ の aux39 の occupancy 値と C0 actor class を debugger で読み、ROM 側の同じ occupancy を setup probe で一点比較します。
+
+C++ 側は aux39 の occupancy が 255 (0xFF)、C0 class が 246 (0xF6) なので reuse 不可→fallback 12 になっています。ROM は同じ aux39 を reuse しているため、occupancy39 は 0xF2未満 か 0xF6 のどちらかです。occupancy を作る 021E1A1C の呼び出し直後を ROM で直接読むため、callsite を絞ります。
+
+return は 0x021E0DA0 で確定し、呼び出し前 r0 = sp+0x109 が occupancy 81-byte buffer です。action2 previous-participant loopの各 rebuild 後に occupancy[39] を直接記録する最小 probe を追加します。
+
+State load 後の resume と入力を同一 micro-macro に詰めたため、probe hook の短い停止と入力開始が衝突しました。seed/行動はまだ確定していないので、状態を読み直してから resume → seed固定 → 行動 を分けます。
+
+DeSmuME は seed 固定後に再び manual pause 状態へ戻っていました。これは probe hook の同期停止で、戦闘状態や seed は壊れていません。再度 resume して、running を確認してから入力だけ送ります。
+
+今の pause は camera probe の hook 位置ではなく PC 0x020CB6C4 で、021E08BC/0204A1B0 とは無関係です。seed setter が CPU 同期後に paused を残す可能性を確認し、不要な targeted probe をいったん止めて観測系を最小化します。
+
+seed setter 自体には pause 処理はありません。現在の manual pause は残留 probe/trigger 側の可能性があるので、登録中 persistent script の trigger を列挙し、0x020CB6C4 を掴んでいるものがないか確認します。
+
+続けます。いま確定している境界は「aux39 の再利用条件は ROM/C++ 同じ、C++ の occupancy39 だけが 0xFF で違う」です。次は 021E1A1C と C++ BuildPresentationOccupancy を並べ、occupancy の producer 差が確定したら即パッチします。
+
+021E1A1C 自体も C++ と一致しています。重要なのは、C0 aux39 は occupancy rebuild なら必ず 0xF6 で塗られるはずなのに、C++ では action2 の proximity conflict pass が先に 39 を 0xFF 化し、C0 aux を消している点です。つまり次の比較対象は 021E2904 の conflict node list です。
+
+C++ 側の conflict 判定は battle-world を使うので、ここは推測せず ROM の 021E2904 実引数を取ります。DeSmuME は残留した targeted probe が pause を汚しているので、10/11だけ止め、指定の5本だけで naitoritti.dst を再ロードしてから、021E2904 一点だけの probe を載せ直します。
+
+DeSmuME の3レーンは全て dead になっていました。古い pause を直すより naitoritti_debug_0917e を同じIDで fresh 再作成し、最初から指定5本だけを載せます。戦闘状態・seed は naitoritti.dst から作り直せるので競合はありません。
+
+dead レーンがハーネスの管理表に残っていて start/restart の両方を弾いています。実体はもう死んでいるので、管理表を close_all_sessions で掃除してから同じIDを再作成します。これはエミュレータ作業レーンだけの整理です。
+
+fresh レーンは指定5本だけで正常起動しました。ここから追加するのは 021E2904 一点の probe だけです。actionIndex=2 / DQ9 E7 の node list に 39 が本当に含まれるか、ROM の occupancy39 が invalidation 前に何だったかを同時に取ります。
+
+ROM 実測で原因範囲がさらに狭まりました。Turn 1 action2 E7 の 021E2904 node list は [58,59,48,50,40,41] で、39 は含まれません。しかも invalidation 前の occupancy39 は 246 (0xF6)。C++ はここで39まで近傍扱いして 0xFF にしていました。次は proximity 計算の入力 world 座標を ROM/C++ で直接比較します。
+
+座標付き probe へ更新しました。State 再ロード直後は一時 pause なので、CPUを再開してから seed 固定→ザキAを再演します。これで E7 の proximity 入力 actorWorld/targetWorld をそのまま取れます。
+
+入力は送信済みで、長いアニメーション待ちが非同期化された状態です。重複入力せず、現在状態だけ確認して完了後に probe を読みます。
+
+決定的です。E7 proximity の ROM 入力は C2 world (26604,204,-9216)、Hero (5320,204,9216)。C++ の同じ時点は C2 (9009,204,-10240)、Hero (-5320,12868,9216) でした。node39 判定式ではなく、action間の battle-world 同期が欠けているのが直接原因です。ここを movement lifecycle (02049D84) から詰めて直します。
+
+02049D84 の外部挙動が確定しました。これは presentation node だけでなく、移動中ずっと補間位置を actor world +0x44/+0x48/+0x4C に直接書き、完走時も goal 座標を actor world に残します。ROM の E7 proximity が (26604,204,-9216) → (5320,204,9216) を見ているのはこの結果です。C++ の route progression が actor world を同時更新しているかを確認し、欠けていればそこを直します。
+
+C++ には普通攻撃用の「non-actor route 完走」と「target world 同期」が既にありますが、mode1 cleanup が途中で return するため action1 C0通常攻撃では両方とも到達不能です。ROM の C2/ Hero world はまさにその2処理の結果に対応します。さらに Y だけ C++ が 12868 へ汚れている経路もあるので、battleWorldY の代入箇所を全部点検してから順序を直します。
+
+もう一つ直接原因が見えています。C++ の Hero battleWorldY=12868 は SyncCameraPlacementActorWorldFromPresentation() が presentation worldY を丸ごとコピーして作っていますが、ROM の 021E2904 実測では Hero/C2 とも Y=204 のままです。route 完走順だけでなく、この camera-placement world sync の Y 再現も誤っています。初期 worldY の出所と ROM の copy 幅を確認します。
+
+初期値を見ると C++ の Hero presentation Y=12868 / battle Y=204 は意図的に分離されています。したがって「camera placement で presentation Y を battle Yへコピー」が正しいなら ROM も12868になるはずですが、実測は204のままです。ここは 0216F62C と 0204A1B0/0204A9F4 をデコンパイルして、X/Zだけの同期なのか、route movement が先にYを204へ落としているのかを確定します。
