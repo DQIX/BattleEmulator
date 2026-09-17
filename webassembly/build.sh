@@ -50,6 +50,7 @@ SRC_FILES=(
   camera.cpp
   debug.cpp
   ActionOptimizer.cpp
+  ZilyadamaSearch.cpp
   EnhancedCostCalculator.cpp
   EnhancedHashCalculator.cpp
   EnhancedHeapQueue.cpp
@@ -60,6 +61,8 @@ EMCC_FLAGS=(
   -std=c++20
   -O3
   -sALLOW_MEMORY_GROWTH=1
+  # Search + exact replay keep several BattleResult buffers on the C++ stack.
+  -sSTACK_SIZE=1048576
   -sENVIRONMENT=worker,web
   -sWASM_BIGINT=1
   -sNO_EXIT_RUNTIME=1

@@ -46,6 +46,8 @@ set(SOURCES
         BattleResult.h
         ActionOptimizer.cpp
         ActionOptimizer.h
+        ZilyadamaSearch.cpp
+        ZilyadamaSearch.h
         Genome.h
         ActionBanManager.h
         InputBuilder.cpp
@@ -60,6 +62,12 @@ set(SOURCES
         SimpleParameterOptimizer.cpp
         SimpleParameterOptimizer.h
 )
+
+# Exact requested profiles; the actual BasePlayers values remain authoritative.
+add_executable(zilyadama_v6_tamahane ${SOURCES})
+target_compile_definitions(zilyadama_v6_tamahane PRIVATE MULTITHREADING=1 lv16_sp22_tamahagane_atk123_def86=1)
+add_executable(zilyadama_v6_hagane ${SOURCES})
+target_compile_definitions(zilyadama_v6_hagane PRIVATE MULTITHREADING=1 lv16_sp22_hagane_atk106=1)
 
 # シングルスレッド版（multithreading = OFF）
 add_executable(zbe_multi_lv19_tahamane_atk130 ${SOURCES})
@@ -93,7 +101,7 @@ add_definitions(-DBUILD_DATE="${BUILD_DATE}" -DBUILD_TIME="${BUILD_TIME}")
 if(MINGW)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections") #-fno-inline-small-functions
-    set(CMAKE_EXE_LINKER_FLAGS "-static -Wl,--gc-sections")
+    set(CMAKE_EXE_LINKER_FLAGS "-Wl,--gc-sections")
 elseif(MSVC)
 #    set_property(TARGET zbe_multi_lv19_tahamane_atk130 PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 #    set_property(TARGET zbe_multi_lv19_hagane_atk113 PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
