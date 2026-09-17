@@ -88,7 +88,7 @@ namespace {
 	constexpr Player BasePlayers[2] = {
 		// プレイヤー1
 		{
-			297, 297.0, 296, 296, 264, 264, 184, 184, 227, 150, // 最初のメンバー
+			297, 297.0, BattleEmulator::EQUIPPED_ATK, BattleEmulator::EQUIPPED_ATK, 264, 264, 184, 184, 227, 150, // 最初のメンバー
 			158, false, false, 0, false, 0, -1,
 			// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
 			6, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
@@ -114,6 +114,7 @@ namespace {
 	void printHeader(std::stringstream &ss) {
 		ss << std::left << std::setw(6) << "turn"
 				<< std::setw(18) << "sp"
+				<< std::setw(8) << "equip"
 				<< std::setw(18) << "aAct"
 				<< std::setw(18) << "eAct1"
 				<< std::setw(6) << "aD"
@@ -128,9 +129,9 @@ namespace {
 #endif
 				<< "\n";
 #if defined(MINGW_BUILD)
-		ss << std::string(105, '-') << "\n"; // 区切り線を出力
+		ss << std::string(113, '-') << "\n"; // 区切り線を出力
 #else
-		ss << std::string(117, '-') << "\n"; // 区切り線を出力
+		ss << std::string(125, '-') << "\n"; // 区切り線を出力
 #endif
 	}
 
@@ -151,13 +152,14 @@ namespace {
 		int currentTurn = -1;
 		int eDamage[2] = {-1, -1}, aDamage = -1;
 		bool initiative_tmp, def_f = false;
-		std::string eAction[2], aAction, sp, tmpState, DEFTurn1, specialChargeTurn1,
+		std::string eAction[2], aAction, equipmentChange, sp, tmpState, DEFTurn1, specialChargeTurn1,
 				ahp2,
 				ehp2, amp2, poisonTurn1, SpeedTurn1, tmp_state;
 		auto counter = 0;
 		// データのループ
 		for (int i = 0; i < result.position; ++i) {
 			auto action = result.actions[i];
+			auto actionId = action & BattleEmulator::ACTION_ID_MASK;
 			auto damage = result.damages[i];
 			auto DEFTurn = result.BuffTurnss[i];
 			auto turn = result.turns[i];
@@ -190,6 +192,7 @@ namespace {
 						ss6
 								<< std::left << std::setw(6) << (currentTurn + 1)
 								<< std::setw(18) << sp
+								<< std::setw(8) << equipmentChange
 								<< std::setw(18) << aAction
 								<< std::setw(18) << eAction[0]
 								<< std::setw(6) << aDamage
@@ -211,6 +214,7 @@ namespace {
 				eAction[0] = "";
 				eAction[1] = "";
 				aAction = "";
+				equipmentChange = "";
 				eDamage[0] = 0;
 				eDamage[1] = 0;
 				aDamage = 0;
@@ -226,14 +230,17 @@ namespace {
 
 			// 敵か味方の行動を適切な変数に格納
 			if (isEnemy) {
-				eAction[counter] = BattleEmulator::getActionName(action);
+				eAction[counter] = BattleEmulator::getActionName(actionId);
 				eDamage[counter] = damage;
 				counter++;
 				ahp2 = std::to_string(ahp1);
 			} else {
 				ehp2 = std::to_string(ehp1);
 				amp2 = std::to_string(amp);
-				aAction = BattleEmulator::getActionName(action);
+				aAction = BattleEmulator::getActionName(actionId);
+				if ((action & BattleEmulator::ACTION_EQUIPMENT_CHANGED) != 0) {
+					equipmentChange = (action & BattleEmulator::ACTION_BARE_HANDS) != 0 ? "sude" : "on";
+				}
 				aDamage = damage;
 				if (DEFTurn >= 0) {
 					DEFTurn1 = std::to_string(DEFTurn);
@@ -258,17 +265,17 @@ namespace {
 				}
 
 				if (eAction[0] != "magic Burst" && eAction[1] != "magic Burst") {
-					if (!initiative && (action == BattleEmulator::TURN_SKIPPED || action == BattleEmulator::PARALYSIS ||
-					                    action == BattleEmulator::SLEEPING)) {
+					if (!initiative && (actionId == BattleEmulator::TURN_SKIPPED || actionId == BattleEmulator::PARALYSIS ||
+					                    actionId == BattleEmulator::SLEEPING)) {
 						sp = "---------------";
 					}
-					if (!defenseFlag && action == BattleEmulator::INACTIVE_ALLY) {
+					if (!defenseFlag && actionId == BattleEmulator::INACTIVE_ALLY) {
 						sp = "---------------";
 					}
-					if ((action == BattleEmulator::CURE_SLEEPING || action == BattleEmulator::CURE_PARALYSIS)) {
+					if ((actionId == BattleEmulator::CURE_SLEEPING || actionId == BattleEmulator::CURE_PARALYSIS)) {
 						sp = "---------------";
 					}
-					if (!initiative && defenseFlag && action != BattleEmulator::DEFENCE) {
+					if (!initiative && defenseFlag && actionId != BattleEmulator::DEFENCE) {
 						sp = "Defense !Sleep";
 					}
 				}
@@ -280,6 +287,7 @@ namespace {
 			ss6
 					<< std::left << std::setw(6) << (currentTurn + 1)
 					<< std::setw(18) << sp
+					<< std::setw(8) << equipmentChange
 					<< std::setw(18) << aAction
 					<< std::setw(18) << eAction[0]
 					<< std::setw(6) << aDamage
