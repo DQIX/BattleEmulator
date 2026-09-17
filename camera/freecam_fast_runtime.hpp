@@ -1656,15 +1656,20 @@ inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
         if (currentOldAux != detail::kInvalidPresentationNode
             && currentOldGoal != detail::kInvalidPresentationNode) {
             currentActor.startNode = currentOldGoal;
-            // Fresh ROM seed 0x2D6A91, turn 3 action 0: once 021DC1D4 has
-            // selected the current actor's aux transform and then restored
-            // start=oldGoal, actor+0x44/+0x4C already matches that transform.
-            // Hero is (-5320,-9216) here (nearest node 30); keeping the old
-            // physical X/Z incorrectly selects node 22 in the next setup.
-            currentActor.battleWorldKnown = true;
-            currentActor.battleWorldX = currentActor.worldX;
-            currentActor.battleWorldZ = currentActor.worldZ;
-            state.nearestNodeCache[currentActorIndex] = {};
+            // The ROM advances actor+0x44/+0x4C to the selected presentation
+            // transform only when the current actor actually has an in-flight
+            // presentation route. Fresh 0x2D6A91 observations distinguish the
+            // two otherwise-identical Zaki action-0 cases: turn 3 has route
+            // 22->21 and reaches aux/world node 30 before the next setup,
+            // while turn 4 has no Hero route and keeps the battle actor at its
+            // prior physical world even though presentation aux/world is 57.
+            const detail::PresentationActorRoute* currentRoute = FindCurrentRoute(actorId);
+            if (currentRoute != nullptr && currentRoute->count >= 2) {
+                currentActor.battleWorldKnown = true;
+                currentActor.battleWorldX = currentActor.worldX;
+                currentActor.battleWorldZ = currentActor.worldZ;
+                state.nearestNodeCache[currentActorIndex] = {};
+            }
         }
 
         state.presentationGoalSetupActive = false;
