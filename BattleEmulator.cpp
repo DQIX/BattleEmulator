@@ -454,7 +454,10 @@ constexpr double Ally_TensionTable[4] = {1.5, 2.5, 4.0, 6.0};
 constexpr int shieldGuardP = 7;
 constexpr int kaisinnP = 500;
 constexpr int WooshSlashKaisinnP = 100;
-constexpr int Enemy_level = 51;
+// bestiary.txt: this encounter's fright knight (Night Lich) is Level 36;
+// the two stenchurion escorts are Level 34.  Both map to the same
+// CalculateTensionOffset additive term (1 + floor(level / 10)) == 4.
+constexpr int Enemy_level = 36;
 constexpr int baseHP = 301;
 #elif defined(hayate)
 constexpr int Ally_Level = 49;
