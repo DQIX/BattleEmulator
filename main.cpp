@@ -7,6 +7,7 @@
 #include <fstream>
 #include <memory>
 #include <algorithm>
+#include <string_view>
 
 #include "lcg.h"
 #include "BattleEmulator.h"
@@ -76,13 +77,13 @@ namespace{
     constexpr int THREAD_COUNT = 4;
 #elif defined(BattleEmulatorLV13)
     constexpr int THREAD_COUNT = 5;
-#elif defined(isinobannninn)
+#elif defined(gureinaru)
     constexpr int THREAD_COUNT = 5;
 #endif
     // `InputBuilder` インスタンス作成
     InputBuilder builder;
 
-#if defined(isinobannninn)
+#if defined(gureinaru)
     constexpr Player BasePlayers[2] = {
         // プレイヤー1
         {
@@ -534,7 +535,7 @@ namespace{
             }
             turns++;
         }
-#if defined(isinobannninn)
+#if defined(gureinaru)
         auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
 #endif
 
@@ -828,6 +829,39 @@ namespace{
 int main(int argc, char* argv[]){
     if(argc == 2 && isMatchStrWithTrim(argv[1], "h")){
         showHeader();
+        return 0;
+    }
+
+    if (argc >= 5 && std::string_view(argv[1]) == "--trace-sequence-summary") {
+        const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
+        const int currentSeedPosition = std::stoi(argv[3], nullptr, 0);
+        lcg::init(traceSeed);
+        Player tracePlayers[2] = {BasePlayers[0], BasePlayers[1]};
+        int position = currentSeedPosition + 1;
+        uint64_t traceState = 0;
+        for (int step = 0; step < argc - 4; ++step) {
+            const std::string_view token(argv[step + 4]);
+            const std::size_t separator = token.find(':');
+            const int action = std::stoi(std::string(token.substr(0, separator)), nullptr, 0);
+            const int target = separator == std::string_view::npos
+                ? -1
+                : std::stoi(std::string(token.substr(separator + 1)), nullptr, 0);
+            int32_t gene[350] = {};
+            gene[step] = action;
+            gene[step + 1] = -1;
+            BattleResult result;
+            BattleEmulator::Main(&position, 1, gene, tracePlayers, &result, traceSeed,
+                                 nullptr, nullptr, -1, &traceState);
+            std::cout << "TRACE_SUMMARY step=" << (step + 1)
+                      << " action=" << action
+                      << " target=" << target
+                      << " position=" << position
+                      << " hp=" << tracePlayers[0].hp << ',' << tracePlayers[1].hp << ",0,0"
+                      << " heroMp=" << tracePlayers[0].mp << '\n';
+            if (tracePlayers[0].hp <= 0 || tracePlayers[1].hp <= 0) {
+                break;
+            }
+        }
         return 0;
     }
 

@@ -42,13 +42,13 @@ constexpr int baseHP = 103;
 #elif defined(BattleEmulatorLV13)
 constexpr int kaisinnP = 200;
 constexpr int baseHP = 79;
-#elif defined(isinobannninn)
+#elif defined(gureinaru)
 constexpr int kaisinnP = 500;
-constexpr int baseHP = 139;
+constexpr int baseHP = 297;
 constexpr double ShieldGuardP = 4.5;
-constexpr int Ally_Level = 23;
+constexpr int Ally_Level = 47;
 #endif
-constexpr double Enemy_level = 7.0;
+constexpr double Enemy_level = 41.0;
 constexpr int DragonSlashKaisinnP = kaisinnP / 2;
 constexpr int WooshSlashKaisinnP = 100;
 constexpr int multithrust3KaisinnP = DragonSlashKaisinnP / 3;
@@ -275,6 +275,14 @@ const char *BattleEmulator::getActionName(int actionId) {
             return "Stamp";
         case STOMP:
             return "Stomp";
+        case LIGHT_BREATH:
+            return "Light Breath";
+        case FLAME_BREATH:
+            return "Flame Breath";
+        case CLAW_SLASH:
+            return "Claw Slash";
+        case TERRIBLE_LIGHTNING:
+            return "Terrible Lightning";
         case ZAMMLE:
             return "Zammlle";
         case INACTIVE_ENEMY:
@@ -450,41 +458,24 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         }
 
         auto counter = 0;
-        int enemyAction[2] = {0, 0};
-        int preAction = 0;
-        while (counter != 2) {
+        int enemyAction[1] = {0};
+        while (counter != 1) {
             enemyAction[counter] = ProcessEnemyRandomAction44(position);
-
-            if (enemyAction[counter] == KABUFF && players[1].BuffLevel >= 2) {
-                enemyAction[counter] = ATTACK_ENEMY;
-            }
-            if (enemyAction[counter] == MAGIC_BARRIER && players[1].BarrierLevel >= 2) {
-                enemyAction[counter] = ATTACK_ENEMY;
-            }
-            if (enemyAction[counter] == PSYCHE_UP && players[1].TensionLevel >= 4) {
-                enemyAction[counter] = ATTACK_ENEMY;
-            }
-
-            if (preAction != 0 && counter == 1 && enemyAction[0] == enemyAction[1]) {
-                enemyAction[1] = ATTACK_ENEMY;
-            }
 
             if (enemyAction[counter] == ATTACK_ENEMY) {
                 (*position)++;
                 (*position) += 2;
-            } else if (enemyAction[counter] == STAMP || enemyAction[counter] == KABUFF) {
+            } else if (enemyAction[counter] == CLAW_SLASH) {
                 (*position)++;
-            } else if (enemyAction[counter] == STOMP) {
+            } else if (enemyAction[counter] == TERRIBLE_LIGHTNING) {
                 (*position) += 2;
             }
             if (counter == 0) {
                 (*position)++;
             }
-            preAction = enemyAction[counter];
             counter++;
         }
         TRACE_ACTION_BOUNDARY("enemy-plan-0", enemyAction[0]);
-        TRACE_ACTION_BOUNDARY("enemy-plan-1", enemyAction[1]);
 
         int32_t actionTable = -1;
 
@@ -874,6 +865,7 @@ constexpr double Ally_TensionTable[4] = {1.5, 2.5, 4.0, 6.0};
 
 constexpr int TensionLevel = 1 + static_cast<int>(Enemy_level / 10.0);
 constexpr int Ally_TensionLevel = 1 + static_cast<int>(Ally_Level / 10.0);
+
 /*
 <?php
 $base = 103;
@@ -1127,7 +1119,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             baseDamage = 0;
             resetCombo(NowState);
             break;
-        case FIRE_BREATH:
+        case LIGHT_BREATH:
+        case FLAME_BREATH:
             (*position) += 2;
             (*position)++; //会心
             (*position)++; //不明
@@ -1137,8 +1130,13 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
             }
             (*position)++; //ニセ回避 0x02157f58
-            baseDamage = FUN_021e8458_typeD(position, 5, 28);
-            tmp = Equipments::applyDamageReduction(baseDamage, Attribute::Fire);
+            if ((Id & 0xffff) == LIGHT_BREATH) {
+                baseDamage = FUN_021e8458_typeD(position, 10, 65);
+                tmp = Equipments::applyDamageReduction(baseDamage, Attribute::Light);
+            } else {
+                baseDamage = FUN_021e8458_typeD(position, 5, 28);
+                tmp = Equipments::applyDamageReduction(baseDamage, Attribute::Fire);
+            }
 
             if (players[defender].TensionLevel == 4) {
                 tmp *= 0.5;
@@ -1500,7 +1498,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             process7A8(position, baseDamage, players, defender);
             resetCombo(NowState);
             break;
-        case LIGHTNING:
+        case TERRIBLE_LIGHTNING:
             (*position) += 2;
             (*position)++; //0x021ec6f8 不明
             (*position)++; //敵の会心判定
@@ -1957,16 +1955,16 @@ constexpr std::array<int, 6> ratios = {
     48,
     38,
     27,
-    17  // 239 + 17 = 256
+    17
 };
 
 constexpr std::array<int, 6> ids = {
     BattleEmulator::ATTACK_ENEMY,
-    BattleEmulator::STAMP,
-    BattleEmulator::PSYCHE_UP,
-    BattleEmulator::MAGIC_BARRIER,
-    BattleEmulator::KABUFF,
-    BattleEmulator::STOMP
+    BattleEmulator::FLAME_BREATH,
+    BattleEmulator::CLAW_SLASH,
+    BattleEmulator::ATTACK_ENEMY,
+    BattleEmulator::LIGHT_BREATH,
+    BattleEmulator::TERRIBLE_LIGHTNING
 };
 
 static_assert(sum(ratios) == TABLE_MAX, "Ratio sum must be 256");

@@ -38,6 +38,7 @@ struct Player {
     double defence = 1.0;
     bool sleeping = false;
     int sleepingTurn = -1;
+    bool isStunned = false;
     int BuffLevel = 0;
     int BuffTurns = -1;
     bool hasMagicMirror = false;

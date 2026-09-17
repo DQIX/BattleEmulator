@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.28)
-project(isinobannninn_new_arugo)
+project(gureinaru)
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -68,10 +68,10 @@ set(SOURCES
 #add_executable(rbe_single ${SOURCES})
 #target_compile_definitions(rbe_single PRIVATE NO_MULTITHREADING BattleEmulatorLV19)  # `#define NO_MULTITHREADING` を適用
 # マルチスレッド版（multithreading = ON）
-add_executable(isinobannninn_new_arugo ${SOURCES})
-add_executable(isinobannninn_new_arugo_opt ${SOURCES})
-target_compile_definitions(isinobannninn_new_arugo PRIVATE MULTITHREADING=1 isinobannninn=1)
-target_compile_definitions(isinobannninn_new_arugo_opt PRIVATE OPTIMIZE_MODE=1 isinobannninn=1)
+add_executable(gureinaru ${SOURCES})
+add_executable(gureinaru_opt ${SOURCES})
+target_compile_definitions(gureinaru PRIVATE MULTITHREADING=1 gureinaru=1)
+target_compile_definitions(gureinaru_opt PRIVATE OPTIMIZE_MODE=1 gureinaru=1)
 
 string(TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)
 string(TIMESTAMP BUILD_TIME "%H:%M:%S" UTC)
@@ -82,14 +82,14 @@ if(MINGW)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections") #  -fno-inline-small-functions
     set(CMAKE_EXE_LINKER_FLAGS "-static -Wl,--gc-sections")
 elseif(MSVC)
-    target_compile_options(isinobannninn_new_arugo PRIVATE /W4 /MP)
-    target_compile_options(isinobannninn_new_arugo_opt PRIVATE /W4 /MP)
+    target_compile_options(gureinaru PRIVATE /W4 /MP)
+    target_compile_options(gureinaru_opt PRIVATE /W4 /MP)
 
-    target_link_options(isinobannninn_new_arugo PRIVATE /INCREMENTAL:NO /DEBUG)
-    target_link_options(isinobannninn_new_arugo_opt PRIVATE /INCREMENTAL:NO /DEBUG)
+    target_link_options(gureinaru PRIVATE /INCREMENTAL:NO /DEBUG)
+    target_link_options(gureinaru_opt PRIVATE /INCREMENTAL:NO /DEBUG)
 
-    target_compile_options(isinobannninn_new_arugo PRIVATE /utf-8)
-    target_compile_options(isinobannninn_new_arugo_opt PRIVATE /utf-8)
+    target_compile_options(gureinaru PRIVATE /utf-8)
+    target_compile_options(gureinaru_opt PRIVATE /utf-8)
 
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi /O2")
     set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")

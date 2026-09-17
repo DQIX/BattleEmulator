@@ -116,9 +116,10 @@ public:
     static constexpr int KABUFF = 182; //スクルト
     static constexpr int STAMP = 183; //ふみつけ
     static constexpr int STOMP = 184; //じひびき
-    static constexpr int FIRE_BREATH = 83; //火の息
-    static constexpr int CLAW_SLASH = 85; //爪できりさく
-    static constexpr int LIGHTNING = 162;//稲妻
+    static constexpr int LIGHT_BREATH = 82; //ひかりのブレス
+    static constexpr int FLAME_BREATH = 83; //かえんのいき
+    static constexpr int CLAW_SLASH = 85; //ツメできりさく
+    static constexpr int TERRIBLE_LIGHTNING = 162; //いなずま
     
 
     static void ResetTurnProcessed();
