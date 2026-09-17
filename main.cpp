@@ -1983,7 +1983,7 @@ int main(int argc, char* argv[]){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x1d49c9b;
+	uint64_t time1 = 0x1d460493;
 
 	auto counter = 0;
 	int actions[350] = {0};
@@ -1992,7 +1992,7 @@ int main(int argc, char* argv[]){
 	actions[counter] = -1;
 
 	gerunikku_search::Limits searchLimits;
-	searchLimits.milliseconds = 1000.0;
+	searchLimits.milliseconds = 1500.0;
 	searchLimits.initialPosition = 1;
 	searchLimits.maxBeamWidth = 96;
 	searchLimits.maxSuffixTurns = 64;
