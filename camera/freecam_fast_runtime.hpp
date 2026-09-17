@@ -800,14 +800,14 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     return SetRosterField4CompatibilityPrefix(prefix);
 }
 
-// Stack compatibility produced during the battle-entry renderer lifecycle.
-// Fresh live-ROM capture of the first 021E1958 roster build gives the first
-// four physical work rows as nonzero, nonzero, zero, zero. This is not an
-// actor/monster/action mask: these are physical stack-overlap rows, and only
-// the zero/nonzero state consumed by 021E08BC is represented here. Rows past
-// the measured prefix deliberately remain unknown.
+// Stack compatibility present at the first 021E1958 roster build of a turn.
+// Natural naitoritti ROM captures at turns 1, 2, and 3 all show the first four
+// physical work-row +4 words nonzero. This is not an actor/monster/action
+// mask: these are physical stack-overlap rows, and only the zero/nonzero state
+// consumed by 021E08BC is represented here. Rows past the measured prefix
+// deliberately remain unknown.
 [[nodiscard]] inline bool ApplyBattleEntryRendererResidueCompatibility() noexcept {
-    constexpr std::array<bool, 4> prefix{true, true, false, false};
+    constexpr std::array<bool, 4> prefix{true, true, true, true};
     return SetRosterField4CompatibilityPrefix(prefix);
 }
 
@@ -862,6 +862,20 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     const std::uint16_t dq9ActionId,
     const std::uint8_t presentationType
 ) noexcept {
+    if (dq9ActionId == UINT16_C(1)) {
+        // Natural naitoritti captures prove ordinary attacks do not replace
+        // the stale row+4 image in this path. In turn 2 it remains TTTT across
+        // all three enemy attacks even though DQ9 1 shares presentation type 1
+        // with DQ9 71, whose observed post-action image is TTTF.
+        return ThreadContext().rosterField4CompatibilityValid;
+    }
+    if (dq9ActionId == UINT16_C(24)) {
+        // Natural naitoritti capture proves Zaki does not replace the stale
+        // row+4 image in this path: the next 021E1958 build remains TTTT.
+        // Preserve the existing scratch state instead of applying the older
+        // presentation-type-17 TTFF approximation globally to DQ9 24.
+        return ThreadContext().rosterField4CompatibilityValid;
+    }
     if (dq9ActionId == UINT16_C(55) || dq9ActionId == UINT16_C(137)) {
         // Live ROM evidence now covers both measured presentation-type-31
         // actions used here. After DQ9 137 (seed 0x3EBB94) and DQ9 55
@@ -1663,11 +1677,16 @@ inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
     // routes have a frame-timed 02049D84 lifecycle and are deliberately left
     // untouched until that timing is modeled from live evidence.
     const auto* currentActorRoute = FindCurrentRoute(actorId);
+    const bool currentActorHasRoute =
+        currentActorRoute != nullptr && currentActorRoute->count != 0;
+    const bool ordinaryAttackCompletesNonActorOneHopRoutes =
+        state.hasPreviousAction && state.previousAction.dq9ActionId == UINT16_C(1);
+    const bool completesNonActorOneHopRoutes =
+        (triggerDecision.source == TriggerSource::action_bact && currentActorHasRoute)
+        || ordinaryAttackCompletesNonActorOneHopRoutes;
     if (triggerDecision.callFreeCamera
-        && triggerDecision.source == TriggerSource::action_bact
-        && state.currentRoutes.valid
-        && currentActorRoute != nullptr
-        && currentActorRoute->count != 0) {
+        && completesNonActorOneHopRoutes
+        && state.currentRoutes.valid) {
         for (std::size_t routeIndex = 0; routeIndex < state.currentRoutes.actorCount; ++routeIndex) {
             const auto& route = state.currentRoutes.actors[routeIndex];
             if (route.actorId == actorId

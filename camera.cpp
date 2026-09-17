@@ -144,6 +144,12 @@ inline void AssertCameraMapping(const int action) noexcept {
     const std::array<std::uint16_t, 1> currentActionActorIds{currentActorId};
     std::array<bool, dq9::freecam::detail::kMaxPresentationActors> visited{};
     for (int futureIndex = actionIndex; futureIndex < actionCount; ++futureIndex) {
+        // overlay_d_25:021E08BC rebuilds the shared occupancy map at the
+        // beginning of every suffix action-record iteration (021E0BE4), not
+        // just once before the loop. This is observable after a future
+        // participant's fallback changes its goal: the next participant sees
+        // that new goal rather than the actor's old start node.
+        if (!RebuildPresentationOccupancy()) return false;
         if (actions[futureIndex] < 0 || !actors[futureIndex].valid()) continue;
         const std::uint16_t actorId = Dq9ActorId(actors[futureIndex]);
         const std::size_t actorSlot = FindPresentationActorIndex(actorId);
@@ -474,18 +480,6 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
             : kInvalidBattleActor;
         if (runtimeReady && hasActionMetadata
             && actors[i].valid() && targets[i].valid()) {
-            if (actionMetadata->presentationType == UINT8_C(1)) {
-                // 021E1958 does not initialize row+4. Live ROM captures of
-                // presentation type 1 (including DQ9 10 / Merami) show the
-                // measured type-1 stack residue is already present when
-                // 021E08BC begins this action's setup. Apply that existing
-                // compatibility image here, before future-participant goal
-                // resolution, rather than only after the action completes.
-                const bool applied = ApplyKnownRosterField4PostActionCompatibility(
-                    actionMetadata->presentationType
-                );
-                assert(applied && "type-1 setup residue compatibility failed");
-            }
             if (SetupCurrentAndFuturePresentationGoals(
                     i,
                     actionCount,

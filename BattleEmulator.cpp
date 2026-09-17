@@ -167,11 +167,17 @@ inline bool resolveIronSlot(int actor, int slot, int *position, Player players[4
 #if defined(naitoritti)
     (void)guardAlreadyPlanned;
     switch (slot) {
-        case 0:
-        case 3:
         case 5:
             if (!Player::isPlayerAlive(players[0])) return false;
             (*position)++; // target handler, max:2, lr:0x02156874
+            selection = {BattleEmulator::ATTACK_ENEMY, 0, slot};
+            return true;
+        case 0: // DQ9 0x0001: observed planning-side prelude before the normal attack.
+        case 3: // DQ9 0x0001: observed planning-side prelude before the normal attack.
+            if (!Player::isPlayerAlive(players[0])) return false;
+            (*position)++; // target handler, max:2, lr:0x02156874
+            (*position)++; // RandIntRange(3,4), lr:0x0216139c
+            (*position)++; // RandIntRange(6,8), lr:0x021613b0
             selection = {BattleEmulator::ATTACK_ENEMY, 0, slot};
             return true;
         case 1: // DQ9 0x0049 さみだれづき
