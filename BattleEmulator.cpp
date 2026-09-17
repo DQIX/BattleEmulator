@@ -1846,11 +1846,20 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             // or the ordinary physical avoidance path makes the final damage zero.
             players[attacker].TensionLevel = 0;
 
+            // Live ROM lethal selector-success path does not run the defender's rage
+            // transition before death.  The two ordinary post-damage RNG checks still
+            // run, and the later selector-success loop still checks the other living
+            // enemy actors.  Calling ProcessRage here for a lethal defender consumed an
+            // extra 0x021eb8c8 + 0x021eb8f0 pair and shifted the following camera RNG.
+            const bool defenderWillDie = !kaihi && baseDamage >= players[defender].hp;
+
             if (kaihi) {
                 baseDamage = 0;
             } else {
                 if (baseDamage != 0) {
-                    ProcessRage(position, baseDamage, players, defender);
+                    if (!defenderWillDie) {
+                        ProcessRage(position, baseDamage, players, defender);
+                    }
                     (*position)++; // damageによる状態回復, max: 100, lr: 0x02158ac4
                     (*position)++; // action後状態判定, max: 100, lr: 0x021e54fc
                 }
@@ -1861,7 +1870,6 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 // exactly these six RNG calls while skipping 0x02158ac4/0x021e54fc.
                 // Dead actors are not checked. On a lethal hit the caller has not reduced HP
                 // yet, so exclude the defender that this damage is about to kill as well.
-                const bool defenderWillDie = !kaihi && baseDamage >= players[defender].hp;
                 for (int rageActor = 1; rageActor < 4; ++rageActor) {
                     if (!Player::isPlayerAlive(players[rageActor]) ||
                         (rageActor == defender && defenderWillDie)) {

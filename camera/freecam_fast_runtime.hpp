@@ -1485,9 +1485,9 @@ inline void SetTargetRecord02161720ActorId(const std::uint16_t actorId) noexcept
 //   021E71A4 -> 021695A8 -> 0204AB8C -> 02049B10 -> 0204A904.
 // 02049B10 first resolves aux -> goal -> start and clears transient route
 // state. 0204AB8C then overwrites battle actor +0x44/+0x48/+0x4C from the
-// presentation object's base transform at +0x04/+0x08/+0x0C. Live ROM
-// tracing on seed 0x1AB6C4 confirms Hero 0,18432 -> 0,10240 and the three
-// enemies restoring to -9009/-10240, 0/-10240, 9009/-10240 respectively.
+// presentation object's current transform at +0x04/+0x08/+0x0C. This is a
+// presentation->battle-world synchronization, not a restore to the encounter's
+// initial/base battle transform.
 [[nodiscard]] inline bool RestoreAllPresentationActorsToBaseBattleWorld() noexcept {
     auto& state = ThreadContext();
     if (state.presentationActorCount > state.presentationActors.size()) return false;
@@ -1517,12 +1517,10 @@ inline void SetTargetRecord02161720ActorId(const std::uint16_t actorId) noexcept
         // 0x01/0x20 and sets 0x02; 0204A904 clears 0x04.
         actor.presentationFlags = (originalFlags & ~UINT32_C(0x75)) | UINT32_C(0x02);
 
-        if (actor.baseBattleWorldKnown) {
-            actor.battleWorldKnown = true;
-            actor.battleWorldX = actor.baseBattleWorldX;
-            actor.battleWorldY = actor.baseBattleWorldY;
-            actor.battleWorldZ = actor.baseBattleWorldZ;
-        }
+        actor.battleWorldKnown = true;
+        actor.battleWorldX = actor.worldX;
+        actor.battleWorldY = actor.worldY;
+        actor.battleWorldZ = actor.worldZ;
         state.nearestNodeCache[index] = {};
     }
 
