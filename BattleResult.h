@@ -60,6 +60,8 @@ public:
 	int aiResourceGateMask[1000] = {};
 	int aiOriginalSlot[1000] = {};
 	int aiResolvedSlot[1000] = {};
+	// 0: no change, 1: equipped, 2: bare hands.
+	int equipmentChange[1000] = {};
 };
 
 #endif //NEWDIRECTORY_BATTLERESULT_H

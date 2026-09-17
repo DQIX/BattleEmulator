@@ -140,6 +140,7 @@ public:
     struct SearchCommand {
         int action = -1;
         int target = -1;
+        bool bareHands = false;
     };
 
     // Shared BattleEmulator ecosystem/common action IDs are currently below 200.
@@ -148,11 +149,14 @@ public:
     static constexpr int HERO_ACTION_MASK = 0x1FFF;
     static constexpr int HERO_TARGET_SHIFT = 13;
     static constexpr int HERO_TARGET_MASK = 0x3;
+    static constexpr int HERO_BARE_HANDS_BIT = 1 << 15;
 
-    [[nodiscard]] static constexpr int PackHeroAction(const int action, const int target = -1) noexcept {
+    [[nodiscard]] static constexpr int PackHeroAction(const int action, const int target = -1,
+                                                      const bool bareHands = false) noexcept {
         if (action < 0) return -1;
         const int encodedTarget = target >= 1 && target <= 3 ? target : 0;
-        return (action & HERO_ACTION_MASK) | (encodedTarget << HERO_TARGET_SHIFT);
+        return (action & HERO_ACTION_MASK) | (encodedTarget << HERO_TARGET_SHIFT)
+            | (bareHands ? HERO_BARE_HANDS_BIT : 0);
     }
 
     [[nodiscard]] static constexpr int HeroActionId(const int packed) noexcept {
@@ -163,6 +167,10 @@ public:
         if (packed < 0) return -1;
         const int target = (packed >> HERO_TARGET_SHIFT) & HERO_TARGET_MASK;
         return target == 0 ? -1 : target;
+    }
+
+    [[nodiscard]] static constexpr bool HeroBareHands(const int packed) noexcept {
+        return packed >= 0 && (packed & HERO_BARE_HANDS_BIT) != 0;
     }
 
     struct SearchState {

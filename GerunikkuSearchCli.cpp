@@ -2,11 +2,43 @@
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <vector>
 
 std::string dumpTable(const BattleResult&, const int32_t[350], int);
 namespace gerunikku_search {
+namespace {
+std::int32_t parsePackedCommand(const std::string_view token) {
+    const auto firstColon = token.find(':');
+    const std::string_view actionText = token.substr(0, firstColon);
+    const int action = std::stoi(std::string(actionText), nullptr, 0);
+    int target = -1;
+    bool bareHands = false;
+    if (firstColon != token.npos) {
+        const std::string_view remainder = token.substr(firstColon + 1);
+        const auto secondColon = remainder.find(':');
+        const std::string_view second = remainder.substr(0, secondColon);
+        if (second == "sude" || second == "on") {
+            bareHands = second == "sude";
+        } else if (!second.empty()) {
+            target = std::stoi(std::string(second), nullptr, 0);
+        }
+        if (secondColon != remainder.npos) {
+            const std::string_view equipment = remainder.substr(secondColon + 1);
+            if (equipment == "sude") bareHands = true;
+            else if (equipment == "on") bareHands = false;
+            else throw std::invalid_argument("equipment must be on or sude");
+        }
+    }
+    if (action <= 0 || action > BattleEmulator::HERO_ACTION_MASK
+        || target < -1 || target == 0 || target > 3) {
+        throw std::invalid_argument("invalid fixed prefix command");
+    }
+    return BattleEmulator::PackHeroAction(action, target, bareHands);
+}
+}
+
 void printResult(const Result& r, std::uint64_t seed, std::ostream& os) {
     os << dumpTable(r.battle, r.gene.data(), r.pastTurns - 1);
     os << std::fixed << std::setprecision(3)
@@ -28,6 +60,7 @@ void printResult(const Result& r, std::uint64_t seed, std::ostream& os) {
         os << ' ' << BattleEmulator::HeroActionId(r.gene[i]);
         int target = BattleEmulator::HeroTargetId(r.gene[i]);
         if (target != -1) os << ':' << target;
+        if (BattleEmulator::HeroBareHands(r.gene[i])) os << ":sude";
     }
     os << '\n';
     if (!r.error.empty()) os << "SEARCH_ERROR " << r.error << '\n';
@@ -44,7 +77,7 @@ Result runRequest(const Player players[4], const std::uint64_t seed,
 int runCli(int argc, char* argv[], const Player players[4]) {
     try {
         if (argc < 4) throw std::invalid_argument(
-            "usage: --search <seed> <milliseconds> [--initial-position=N] [--beam=N] [--depth=N] [--variant=0|1|2] [past action:target ...]");
+            "usage: --search <seed> <milliseconds> [--initial-position=N] [--beam=N] [--depth=N] [--variant=0|1|2] [past action[:target][:sude|on] ...]");
         const std::uint64_t seed = std::stoull(argv[2], nullptr, 0);
         Limits limits;
         limits.milliseconds = std::stod(argv[3]);
@@ -56,12 +89,7 @@ int runCli(int argc, char* argv[], const Player players[4]) {
             else if (token.starts_with("--depth=")) limits.maxSuffixTurns = std::stoi(std::string(token.substr(8)));
             else if (token.starts_with("--variant=")) limits.variant = std::stoi(std::string(token.substr(10)));
             else {
-                const auto colon = token.find(':');
-                int action = std::stoi(std::string(token.substr(0, colon)), nullptr, 0);
-                int target = colon == token.npos ? -1 : std::stoi(std::string(token.substr(colon + 1)), nullptr, 0);
-                if (action <= 0 || action > BattleEmulator::HERO_ACTION_MASK || target < -1 || target == 0 || target > 3)
-                    throw std::invalid_argument("invalid fixed prefix command");
-                prefix.push_back(BattleEmulator::PackHeroAction(action, target));
+                prefix.push_back(parsePackedCommand(token));
             }
         }
         const Result result = runRequest(players, seed, prefix, limits, std::cout);

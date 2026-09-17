@@ -44,6 +44,8 @@ void AppendLastActionPresentationChildSlot1(const std::uint16_t dq9ActionId) noe
 namespace {
 constexpr std::uint16_t kHeroBodyItemId = UINT16_C(0x3382);
 constexpr std::uint16_t kHeroPrimaryWeaponItemId = UINT16_C(0x5021);
+constexpr int kGerunikkuEquippedATK = 320;
+constexpr int kGerunikkuBareHandsATK = 175;
 
 void InitializeBattleActorRefs() noexcept {
     using dq9::freecam::fast::BattleActorRef;
@@ -272,12 +274,17 @@ inline EnemySelection selectGerunikuAction(int *position, Player players[4], uin
 #endif
 
 namespace {
-[[nodiscard]] constexpr double HeroSpearLightningMultiplier(const int attacker, const int defender) noexcept {
+[[nodiscard]] constexpr double HeroSpearLightningMultiplier(const Player players[4], const int attacker,
+                                                            const int defender) noexcept {
 #if defined(gerunikku)
     if (attacker != 0) return 1.0;
+    // The Lightning modifier belongs to いなずまのやり, not to the hero.
+    // Bare hands must therefore use the normal 1.0 multiplier.
+    if (players[attacker].defaultATK != kGerunikkuEquippedATK) return 1.0;
     if (defender == 2) return 1.25; // ゲルニック将軍: Lightning 125
     if (defender == 1 || defender == 3) return 0.5; // てっこうまじん: Lightning 050
 #else
+    (void)players;
     (void)attacker;
     (void)defender;
 #endif
@@ -695,6 +702,25 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         if (genePosition != -1) {
             genePosition = counterJ - 1;
         }
+#if defined(gerunikku)
+        bool equipmentChangedThisTurn = false;
+        bool bareHandsThisTurn = false;
+        const int packedHeroCommand = heroActionOverride > 0
+            ? heroActionOverride
+            : (genePosition != -1 && Gene != nullptr ? Gene[genePosition] : -1);
+        if (packedHeroCommand != 0 && packedHeroCommand != -1) {
+            bareHandsThisTurn = HeroBareHands(packedHeroCommand);
+            const int requestedDefaultATK = bareHandsThisTurn
+                ? kGerunikkuBareHandsATK : kGerunikkuEquippedATK;
+            // Equipment changes are rejected while paralyzed or confused.
+            if (!players[0].paralysis && !players[0].confused
+                && players[0].defaultATK != requestedDefaultATK) {
+                players[0].defaultATK = requestedDefaultATK;
+                RecalculateBuff(players, 0);
+                equipmentChangedThisTurn = true;
+            }
+        }
+#endif
         TiggerSkyAttack = false;
         //現在ターンを保存
         (*NowState) &= ~0xFFFFF000;
@@ -927,6 +953,11 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                               players[0].specialChargeTurn, players[0].mp, defenseFlag);
             if (result != nullptr) {
                 const int pos = result->position - 1;
+#if defined(gerunikku)
+                if (!isEnemy && equipmentChangedThisTurn) {
+                    result->equipmentChange[pos] = bareHandsThisTurn ? 2 : 1;
+                }
+#endif
 #if defined(gerunikku)
                 result->enemyHpA[pos] = enemyHpA;
                 result->enemyHpB[pos] = enemyHpB;
@@ -1441,7 +1472,7 @@ bool BattleEmulator::StepSearchState(const SearchState& source, const SearchComm
 
     const int mode = result != nullptr ? -1 : -2;
     if (result != nullptr) *result = BattleResult{};
-    const int packedAction = PackHeroAction(command.action, command.target);
+    const int packedAction = PackHeroAction(command.action, command.target, command.bareHands);
     Main(&destination->position, 1, nullptr, destination->players, result,
          0, nullptr, nullptr, mode, &destination->nowState,
          -1, traceBoundaries, packedAction, false);
@@ -1464,7 +1495,7 @@ bool BattleEmulator::StepSearchStateInPlace(SearchState* state, const SearchComm
 
     const int mode = result != nullptr ? -1 : -2;
     if (result != nullptr) *result = BattleResult{};
-    const int packedAction = PackHeroAction(command.action, command.target);
+    const int packedAction = PackHeroAction(command.action, command.target, command.bareHands);
     Main(&state->position, 1, nullptr, state->players, result,
          0, nullptr, nullptr, mode, &state->nowState,
          -1, traceBoundaries, packedAction, false);
@@ -2169,7 +2200,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
 
                 //ここの小数点以下は引き継がれる
-                tmp *= HeroSpearLightningMultiplier(attacker, hitDefender);
+                tmp *= HeroSpearLightningMultiplier(players, attacker, hitDefender);
                 baseDamage = static_cast<int>((tmp));
 
                 if (!kaihi) {
@@ -3103,7 +3134,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     tmp = baseDamage;
                 }
 
-                tmp *= HeroSpearLightningMultiplier(attacker, defender);
+                tmp *= HeroSpearLightningMultiplier(players, attacker, defender);
                 if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
                     tmp *= players[defender].defence;
                 }
@@ -3296,7 +3327,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
             }
 
-            tmp *= HeroSpearLightningMultiplier(attacker, defender);
+            tmp *= HeroSpearLightningMultiplier(players, attacker, defender);
             baseDamage = static_cast<int>((tmp));
 
             vitalPointInstantDeath = false;

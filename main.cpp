@@ -91,7 +91,9 @@ void printHeader(std::stringstream& ss);
 // ヘッダーを出力する関数
 void printHeader(std::stringstream& ss){
 	ss << std::left << std::setw(6) << "turn"
-		<< std::setw(18) << "sp"
+#if defined(gerunikku)
+		<< std::setw(8) << "equip"
+#endif
 		<< std::setw(18) << "aAct"
 		<< std::setw(8) << "target"
 		<< std::setw(18) << "eAct1"
@@ -124,7 +126,8 @@ void printHeader(std::stringstream& ss){
 		//<< std::setw(6) << "MMT"
 		//<< std::setw(6) << "Tab"
 		<< std::setw(6) << "Sct" << "\n";
-	ss << std::string(196, '-') << "\n"; // 区切り線を出力
+	ss << std::string(205, '-') << "\n"; // 区切り線を出力
+
 }
 
 std::string dumpTable(const BattleResult& result,const int32_t gene[350], int PastTurns);
@@ -147,7 +150,7 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 	int currentTurn = -1;
 	int eDamage[4] = {-1, -1, -1, -1}, aDamage = -1;
 	bool initiative_tmp = false;
-	std::string eAction[4], aAction, sp, tmpState, ATKTurn1, DEFTurn1, magicMirrorTurn1, specialChargeTurn1, amp1, ahp2,
+	std::string eAction[4], aAction, equipmentChange, sp, tmpState, ATKTurn1, DEFTurn1, magicMirrorTurn1, specialChargeTurn1, amp1, ahp2,
 	            ehp2, enemyHpA2, enemyHpB2, enemyAlive2, amp2;
 	auto counter = 0;
 	// データのループ
@@ -186,7 +189,9 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 				if(turn > PastTurns){
 					ss6
 						<< std::left << std::setw(6) << (currentTurn + 1)
-						<< std::setw(18) << sp
+#if defined(gerunikku)
+						<< std::setw(8) << equipmentChange
+#endif
 						<< std::setw(18) << aAction;
 					appendHeroTargetColumn(currentTurn);
 					ss6
@@ -229,6 +234,7 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 			eAction[2] = "";
 			eAction[3] = "";
 			aAction = "";
+			equipmentChange = "";
 			eDamage[0] = 0;
 			eDamage[1] = 0;
 			eDamage[2] = 0;
@@ -261,6 +267,10 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 #endif
 			amp2 = std::to_string(amp);
 			aAction = BattleEmulator::getActionName(action);
+#if defined(gerunikku)
+			if(result.equipmentChange[i] == 1) equipmentChange = "on";
+			else if(result.equipmentChange[i] == 2) equipmentChange = "sude";
+#endif
 			aDamage = damage;
 			if(ATKTurn >= 0){
 				ATKTurn1 = std::to_string(ATKTurn);
@@ -300,7 +310,9 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 	if(currentTurn != -1){
 		ss6
 			<< std::left << std::setw(6) << (currentTurn + 1)
-			<< std::setw(18) << sp
+#if defined(gerunikku)
+<< std::setw(8) << equipmentChange
+#endif
 			<< std::setw(18) << aAction;
 		appendHeroTargetColumn(currentTurn);
 		ss6
@@ -814,12 +826,44 @@ int main(int argc, char* argv[]){
 		gene[boundedTurns] = -1;
 	};
 
+	auto parseDebugCommand = [](const std::string_view token) {
+		BattleEmulator::SearchCommand command{};
+		const std::size_t firstColon = token.find(':');
+		command.action = std::stoi(std::string(token.substr(0, firstColon)), nullptr, 0);
+		if (firstColon == std::string_view::npos) return command;
+		const std::string_view remainder = token.substr(firstColon + 1);
+		const std::size_t secondColon = remainder.find(':');
+		const std::string_view second = remainder.substr(0, secondColon);
+		if (second == "sude" || second == "on") {
+			command.bareHands = second == "sude";
+		} else if (!second.empty()) {
+			command.target = std::stoi(std::string(second), nullptr, 0);
+		}
+		if (secondColon != std::string_view::npos) {
+			const std::string_view equipment = remainder.substr(secondColon + 1);
+			if (equipment == "sude") command.bareHands = true;
+			else if (equipment == "on") command.bareHands = false;
+			else throw std::invalid_argument("equipment must be on or sude");
+		}
+		return command;
+	};
+
+	auto parseEquipmentArg = [](const int argcValue, char* argvValue[], const int index) {
+		if (argcValue <= index) return false;
+		const std::string_view equipment(argvValue[index]);
+		if (equipment == "sude") return true;
+		if (equipment == "on") return false;
+		throw std::invalid_argument("equipment must be on or sude");
+	};
+
 	auto printTrace = [](const uint64_t traceSeed, const int tracePosition,
 	                     const Player (&tracePlayers)[4], const BattleResult& traceResult) {
 		std::cout << "TRACE seed=0x" << std::hex << traceSeed << std::dec
 		          << " position=" << tracePosition
 		          << " hp=" << tracePlayers[0].hp << ',' << tracePlayers[1].hp << ','
-		          << tracePlayers[2].hp << ',' << tracePlayers[3].hp << '\n';
+		          << tracePlayers[2].hp << ',' << tracePlayers[3].hp
+		          << " heroAtk=" << tracePlayers[0].atk
+		          << " heroDefaultAtk=" << tracePlayers[0].defaultATK << '\n';
 		for (int i = 0; i < traceResult.position; ++i) {
 			std::cout << "TRACE record[" << i << "] turn=" << traceResult.turns[i]
 			          << " action=" << traceResult.actions[i]
@@ -827,6 +871,7 @@ int main(int argc, char* argv[]){
 			          << " enemy=" << traceResult.isEnemy[i]
 			          << " actor=" << traceResult.actorIndex[i]
 			          << " actorMp=" << traceResult.actorMp[i]
+			          << " equipment=" << traceResult.equipmentChange[i]
 			          << " aiGate=0x" << std::hex << traceResult.aiResourceGateMask[i] << std::dec
 			          << " originalSlot=" << traceResult.aiOriginalSlot[i]
 			          << " resolvedSlot=" << traceResult.aiResolvedSlot[i] << '\n';
@@ -838,8 +883,9 @@ int main(int argc, char* argv[]){
 		const int traceAction = argc >= 4 ? std::stoi(argv[3], nullptr, 0) : BattleEmulator::DEFENCE;
 		const int traceTarget = argc >= 5 ? std::stoi(argv[4], nullptr, 0) : -1;
 		const int currentSeedPosition = argc >= 6 ? std::stoi(argv[5], nullptr, 0) : 0;
+		const bool bareHands = parseEquipmentArg(argc, argv, 6);
 		int32_t traceGene[350] = {};
-		makeDebugGene(traceGene, 1, traceAction);
+		makeDebugGene(traceGene, 1, BattleEmulator::PackHeroAction(traceAction, traceTarget, bareHands));
 		Player tracePlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
 		BattleResult traceResult;
 		int tracePosition = currentSeedPosition + 1;
@@ -857,6 +903,7 @@ int main(int argc, char* argv[]){
 		const int benchTarget = std::stoi(argv[4], nullptr, 0);
 		const int currentSeedPosition = std::stoi(argv[5], nullptr, 0);
 		const int iterations = std::stoi(argv[6], nullptr, 0);
+		const bool bareHands = parseEquipmentArg(argc, argv, 7);
 		if (iterations < 1) throw std::invalid_argument("benchmark iterations must be positive");
 
 		lcg::init(benchSeed, true);
@@ -868,7 +915,7 @@ int main(int argc, char* argv[]){
 		std::uint64_t checksum = 0;
 		const auto started = std::chrono::steady_clock::now();
 		for (int iteration = 0; iteration < iterations; ++iteration) {
-			if (!BattleEmulator::StepSearchState(root, {benchAction, benchTarget}, &child)) {
+			if (!BattleEmulator::StepSearchState(root, {benchAction, benchTarget, bareHands}, &child)) {
 				throw std::runtime_error("failed to execute benchmark search step");
 			}
 			checksum += static_cast<std::uint64_t>(child.position);
@@ -891,9 +938,10 @@ int main(int argc, char* argv[]){
 		const int traceAction = argc >= 5 ? std::stoi(argv[4], nullptr, 0) : BattleEmulator::DEFENCE;
 		const int traceTarget = argc >= 6 ? std::stoi(argv[5], nullptr, 0) : -1;
 		const int currentSeedPosition = argc >= 7 ? std::stoi(argv[6], nullptr, 0) : 0;
+		const bool bareHands = parseEquipmentArg(argc, argv, 7);
 		if (traceTurns < 1 || traceTurns > 349) throw std::invalid_argument("trace turns must be 1..349");
 		int32_t traceGene[350] = {};
-		makeDebugGene(traceGene, traceTurns, traceAction);
+		makeDebugGene(traceGene, traceTurns, BattleEmulator::PackHeroAction(traceAction, traceTarget, bareHands));
 		Player tracePlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
 		BattleResult traceResult;
 		int tracePosition = currentSeedPosition + 1;
@@ -913,11 +961,12 @@ int main(int argc, char* argv[]){
 		const int heroTarget = argc >= 7 ? std::stoi(argv[6], nullptr, 0) : -1;
 		const int currentSeedPosition = argc >= 8 ? std::stoi(argv[7], nullptr, 0) : 1;
 		const int emitLimit = argc >= 9 ? std::stoi(argv[8], nullptr, 0) : 16;
+		const bool bareHands = parseEquipmentArg(argc, argv, 9);
 		if (scanTurns < 3 || scanTurns > 349) throw std::invalid_argument("iron MP gate scan turns must be 3..349");
 		if (emitLimit < 0) throw std::invalid_argument("iron MP gate emitLimit must be >= 0");
 
 		int32_t scanGene[350] = {};
-		makeDebugGene(scanGene, scanTurns, heroAction);
+		makeDebugGene(scanGene, scanTurns, BattleEmulator::PackHeroAction(heroAction, heroTarget, bareHands));
 		uint64_t matches = 0;
 		int emitted = 0;
 
@@ -1074,13 +1123,8 @@ int main(int argc, char* argv[]){
 		}
 		int32_t traceGene[350] = {};
 		for (int step = 0; step < traceTurns; ++step) {
-			const std::string_view token(argv[step + 4]);
-			const std::size_t separator = token.find(':');
-			const int action = std::stoi(std::string(token.substr(0, separator)), nullptr, 0);
-			const int target = separator == std::string_view::npos
-				? -1
-				: std::stoi(std::string(token.substr(separator + 1)), nullptr, 0);
-			traceGene[step] = BattleEmulator::PackHeroAction(action, target);
+			const auto command = parseDebugCommand(argv[step + 4]);
+			traceGene[step] = BattleEmulator::PackHeroAction(command.action, command.target, command.bareHands);
 		}
 		traceGene[traceTurns] = -1;
 		Player tracePlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
@@ -1249,13 +1293,8 @@ int main(int argc, char* argv[]){
 
 		int32_t traceGene[350] = {};
 		for (int step = 0; step < traceTurns; ++step) {
-			const std::string_view token(argv[step + 5]);
-			const std::size_t separator = token.find(':');
-			const int action = std::stoi(std::string(token.substr(0, separator)), nullptr, 0);
-			const int target = separator == std::string_view::npos
-				? -1
-				: std::stoi(std::string(token.substr(separator + 1)), nullptr, 0);
-			traceGene[step] = BattleEmulator::PackHeroAction(action, target);
+			const auto command = parseDebugCommand(argv[step + 5]);
+			traceGene[step] = BattleEmulator::PackHeroAction(command.action, command.target, command.bareHands);
 		}
 		traceGene[traceTurns] = -1;
 
@@ -1400,12 +1439,9 @@ int main(int argc, char* argv[]){
 				camera::ClearDebugEvents();
 				cameraEventOffset = 0;
 			}
-			const std::string_view token(argv[step + 4]);
-			const std::size_t separator = token.find(':');
-			const int action = std::stoi(std::string(token.substr(0, separator)), nullptr, 0);
-			const int target = separator == std::string_view::npos
-				? -1
-				: std::stoi(std::string(token.substr(separator + 1)), nullptr, 0);
+			const auto command = parseDebugCommand(argv[step + 4]);
+			const int action = command.action;
+			const int target = command.target;
 			BattleResult traceResult;
 
 			std::cout << "TRACE sequence-step=" << step
@@ -1413,7 +1449,7 @@ int main(int argc, char* argv[]){
 			          << " target=" << target
 			          << " startPosition=" << traceState.position << '\n';
 			BattleEmulator::SearchState nextState{};
-			if (!BattleEmulator::StepSearchState(traceState, {action, target}, &nextState,
+			if (!BattleEmulator::StepSearchState(traceState, command, &nextState,
 			                                     &traceResult, step == argc - 5)) {
 				throw std::runtime_error("failed to execute trace search step");
 			}
@@ -1544,13 +1580,10 @@ int main(int argc, char* argv[]){
 			throw std::runtime_error("failed to initialize trace search state");
 		}
 		for (int step = 0; step < argc - 4; ++step) {
-			const std::string_view token(argv[step + 4]);
-			const std::size_t separator = token.find(':');
-			const int action = std::stoi(std::string(token.substr(0, separator)), nullptr, 0);
-			const int target = separator == std::string_view::npos
-				? -1
-				: std::stoi(std::string(token.substr(separator + 1)), nullptr, 0);
-			if (!BattleEmulator::StepSearchStateInPlace(&traceState, {action, target})) {
+			const auto command = parseDebugCommand(argv[step + 4]);
+			const int action = command.action;
+			const int target = command.target;
+			if (!BattleEmulator::StepSearchStateInPlace(&traceState, command)) {
 				throw std::runtime_error("failed to execute summary trace search step");
 			}
 			std::cout << "TRACE_SUMMARY step=" << (step + 1)
@@ -1575,9 +1608,10 @@ int main(int argc, char* argv[]){
 		const uint64_t startSeed = std::stoull(argv[5], nullptr, 0);
 		const uint64_t count = std::stoull(argv[6], nullptr, 0);
 		const int currentSeedPosition = argc >= 8 ? std::stoi(argv[7], nullptr, 0) : 1;
+		const bool bareHands = parseEquipmentArg(argc, argv, 8);
 		if (traceTurns < 1 || traceTurns > 349) throw std::invalid_argument("scan turns must be 1..349");
 		int32_t traceGene[350] = {};
-		makeDebugGene(traceGene, traceTurns, traceAction);
+		makeDebugGene(traceGene, traceTurns, BattleEmulator::PackHeroAction(traceAction, traceTarget, bareHands));
 		std::array<int, 10> categoryCounts{};
 		auto emitCandidate = [&](const char* category, const int categoryIndex, const uint64_t seed,
 		                         const CameraDebugEvent& event) {
@@ -1680,6 +1714,7 @@ int main(int argc, char* argv[]){
 		const int currentSeedPosition = argc >= 10 ? std::stoi(argv[9], nullptr, 0) : 0;
 		const int wantedCommonAction = argc >= 11 ? std::stoi(argv[10], nullptr, 0) : -1;
 		const int maxRecord = argc >= 12 ? std::stoi(argv[11], nullptr, 0) : std::numeric_limits<int>::max();
+		const bool bareHands = parseEquipmentArg(argc, argv, 12);
 		if (searchTurns < 1 || searchTurns > 349) throw std::invalid_argument("scan-action-seeds turns must be 1..349");
 		if (perAction < 0) throw std::invalid_argument("scan-action-seeds perAction must be >= 0 (0 = emit all matches)");
 
@@ -1704,7 +1739,7 @@ int main(int argc, char* argv[]){
 		std::array<std::uint64_t, kCommonActionCapacity> bestSeed{};
 		bestRecord.fill(std::numeric_limits<int>::max());
 		int32_t searchGene[350] = {};
-		makeDebugGene(searchGene, searchTurns, heroAction);
+		makeDebugGene(searchGene, searchTurns, BattleEmulator::PackHeroAction(heroAction, heroTarget, bareHands));
 
 		for (uint64_t offset = 0; offset < count; ++offset) {
 			const uint64_t seed = startSeed + offset;
@@ -1789,8 +1824,9 @@ int main(int argc, char* argv[]){
 		const uint64_t startSeed = argc >= 5 ? std::stoull(argv[4], nullptr, 0) : 1;
 		const uint64_t count = argc >= 6 ? std::stoull(argv[5], nullptr, 0) : 10000;
 		const bool requireNoGuard = argc >= 7 && std::stoi(argv[6], nullptr, 0) != 0;
+		const bool bareHands = parseEquipmentArg(argc, argv, 7);
 		int32_t traceGene[350] = {};
-		makeDebugGene(traceGene, 1, traceAction);
+		makeDebugGene(traceGene, 1, BattleEmulator::PackHeroAction(traceAction, traceTarget, bareHands));
 		for (uint64_t offset = 0; offset < count; ++offset) {
 			const uint64_t seed = startSeed + offset;
 			if (seed == 0) continue;
