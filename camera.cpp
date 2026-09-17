@@ -787,12 +787,11 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
     // Turn-end global formation recenter. Live ROM call-stack evidence places
     // overlay26:021D9434 here in the battle turn-end state machine, after the
     // complete action sequence, not inside any one action's presentation. Its
-    // state-3 path first calls 021695A8 to synchronize each battle actor world
-    // from its current presentation transform, then performs the global
-    // formation recenter.
+    // state-3 path first calls 021695A8 to restore every actor's base battle
+    // world, then performs the global formation recenter.
     if (runtimeReady) {
         const bool restored = RestoreAllPresentationActorsToBaseBattleWorld();
-        assert(restored && "turn-end presentation-to-battle-world sync failed");
+        assert(restored && "turn-end presentation base-world restore failed");
         const bool recentered = ApplyTurnEndGlobalPresentationRecenter();
         assert(recentered && "turn-end presentation recenter failed");
     }

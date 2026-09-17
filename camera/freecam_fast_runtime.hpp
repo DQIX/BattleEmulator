@@ -1484,10 +1484,9 @@ inline void SetTargetRecord02161720ActorId(const std::uint16_t actorId) noexcept
 // Exact persistent state relevant to BACT opcode 0x4F mode0:
 //   021E71A4 -> 021695A8 -> 0204AB8C -> 02049B10 -> 0204A904.
 // 02049B10 first resolves aux -> goal -> start and clears transient route
-// state. 0204AB8C then overwrites battle actor +0x44/+0x48/+0x4C from the
-// presentation object's current transform at +0x04/+0x08/+0x0C. This is a
-// presentation->battle-world synchronization, not a restore to the encounter's
-// initial/base battle transform.
+// state. 0204AB8C then restores the battle actor +0x44/+0x48/+0x4C from the
+// persistent encounter/base battle transform tracked independently from the
+// presentation object.
 [[nodiscard]] inline bool RestoreAllPresentationActorsToBaseBattleWorld() noexcept {
     auto& state = ThreadContext();
     if (state.presentationActorCount > state.presentationActors.size()) return false;
@@ -1517,10 +1516,12 @@ inline void SetTargetRecord02161720ActorId(const std::uint16_t actorId) noexcept
         // 0x01/0x20 and sets 0x02; 0204A904 clears 0x04.
         actor.presentationFlags = (originalFlags & ~UINT32_C(0x75)) | UINT32_C(0x02);
 
-        actor.battleWorldKnown = true;
-        actor.battleWorldX = actor.worldX;
-        actor.battleWorldY = actor.worldY;
-        actor.battleWorldZ = actor.worldZ;
+        if (actor.baseBattleWorldKnown) {
+            actor.battleWorldKnown = true;
+            actor.battleWorldX = actor.baseBattleWorldX;
+            actor.battleWorldY = actor.baseBattleWorldY;
+            actor.battleWorldZ = actor.baseBattleWorldZ;
+        }
         state.nearestNodeCache[index] = {};
     }
 
@@ -1594,19 +1595,15 @@ inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
 ) noexcept {
     auto& state = ThreadContext();
 
-    // overlay_d_25:021DC1D4 enters this same 02049B10 participant-cleanup
-    // path whenever the free-camera selector chooses mode/param5 == 1. The
-    // first presentation action always reaches that path, but later actions
-    // can reach it as well (for example because a route is long or the live
-    // geometry forces the mode-1 exception). 02049B10 chooses aux -> goal ->
-    // start, except that the current target is passed param_2=1 and therefore
-    // keeps its existing start node. The current actor then restores its
-    // pre-call aux and, when both old aux and old goal were valid, restores
-    // start=old goal without moving the presentation transform again.
-    if (triggerDecision.callFreeCamera
-        && triggerDecision.param5
-        && state.hasPreviousAction
-        && state.previousActionIndex == actionIndex) {
+    // overlay_d_25:021DC1D4 has a dedicated actionIndex==0 path. It runs
+    // 02049B10 for every presentation participant before later actions are
+    // set up. 02049B10 chooses aux -> goal -> start, except that the current
+    // action target is passed param_2=1 and therefore keeps its existing
+    // start node. The current actor then restores its pre-call aux and, when
+    // both old aux and old goal were valid, restores start=old goal without
+    // moving the presentation transform again. This is generic turn/action
+    // lifecycle behavior, not an action-ID or encounter-specific rule.
+    if (actionIndex == 0 && state.hasPreviousAction && state.previousActionIndex == 0) {
         const std::uint16_t targetId = state.previousAction.targetId;
         const std::size_t currentActorIndex = FindPresentationActorIndex(actorId);
         if (currentActorIndex >= state.presentationActorCount) return false;
@@ -1737,17 +1734,10 @@ inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
         }
     }
 
-    // Fresh live-ROM seed 0x2D7A91, turn 3, DQ9 0x009B proves that
-    // future participants may receive temporary goals (C0 56->55, C2 68->61)
-    // without committing those goals to start nodes when the action completes.
-    // Only the executing actor's completed route belongs to this lifecycle;
-    // coordinated future-participant goals remain provisional for the next setup.
     // Fresh ROM seed 0x2D6A91, turn 2 action 1 (ordinary C0 attack) proves
     // that action completion copies the current target presentation X/Z to
-    // battle actor +0x44/+0x4C before action 2 setup. Hero therefore changes
-    // from base battle world (0,10240) to presentation node 41 (10641,0), while
-    // the presentation start itself remains 41. Keep Y untouched here: the
-    // camera nearest-node consumer 021E1E50 reads only +0x44/+0x4C.
+    // battle actor +0x44/+0x4C before action 2 setup. Keep Y untouched here:
+    // the camera nearest-node consumer reads only +0x44/+0x4C.
     if (ordinaryAttackCompletesNonActorRoutes) {
         const std::size_t targetIndex = FindPresentationActorIndex(state.previousAction.targetId);
         if (targetIndex < state.presentationActorCount) {
@@ -1759,6 +1749,11 @@ inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
         }
     }
 
+    // Fresh live-ROM seed 0x2D7A91, turn 3, DQ9 0x009B proves that
+    // future participants may receive temporary goals (C0 56->55, C2 68->61)
+    // without committing those goals to start nodes when the action completes.
+    // Only the executing actor's completed route belongs to this lifecycle;
+    // coordinated future-participant goals remain provisional for the next setup.
     return CommitCurrentRouteEnd(actorId);
 }
 
