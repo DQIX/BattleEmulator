@@ -682,8 +682,7 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
             }
             if (hasPresentationSetup && actionMetadata != nullptr) {
                 (void)ApplyBactOpcode4fPostTrackingEffects(
-                    actionMetadata->dq9ActionId,
-                    trackingCameraDecision.source
+                    trackingCameraDecision.bactOpcode4fModeMask
                 );
             }
             (void)CompleteActionPresentation(runtimeActorId, i, runtimeDecision);
@@ -731,8 +730,7 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
         }
         if (hasPresentationSetup && actionMetadata != nullptr) {
             (void)ApplyBactOpcode4fPostTrackingEffects(
-                actionMetadata->dq9ActionId,
-                trackingCameraDecision.source
+                trackingCameraDecision.bactOpcode4fModeMask
             );
             if (after == BattleEmulator::NIGHT_LICH_ESCORT_E7) {
                 // Live ROM: DQ9 0x00E7 executes opcode 0x4F mode2 here even
