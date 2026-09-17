@@ -64,6 +64,9 @@ inline constexpr auto kActions = [] {
     actions[BattleEmulator::THUNDER_THRUST] = Describe<72>();
     actions[BattleEmulator::MULTITHRUST] = Describe<73>();
     actions[BattleEmulator::DOUBLE_UP] = Describe<173>();
+    actions[BattleEmulator::PSYCHE_UP] = Describe<161>();
+    actions[BattleEmulator::FREEZING_BLIZZARD] = Describe<269>();
+    actions[BattleEmulator::CRITICAL_ATTACK] = Describe<244>();
     actions[BattleEmulator::BEAST_THRUST] = Describe<70>();
     actions[BattleEmulator::VITAL_POINT_THRUST] = Describe<71>();
     actions[BattleEmulator::DRAGON_SLASH] = Describe<63>();
@@ -104,6 +107,9 @@ inline constexpr auto kActions = [] {
     actions[BattleEmulator::HELM_SPLITTER] = Describe<109>();
     actions[BattleEmulator::KABUFF] = Describe<42>();
     actions[BattleEmulator::DOUBLE_EDGED_SLASH] = Describe<175>();
+    actions[BattleEmulator::NIGHT_LICH_ZAORAL] = Describe<38>();
+    actions[BattleEmulator::NIGHT_LICH_BLADE_BREAKER] = Describe<150>();
+    actions[BattleEmulator::NIGHT_LICH_ESCORT_E7] = Describe<231>();
     return actions;
 }();
 

@@ -29,21 +29,17 @@ int startturn = -1;
 constexpr Player copiedPlayers[4] = {
 	// プレイヤー1
 	{
-	301, 301, 320, 320, 282, 282, 187, 234, 161, // 最初のメンバー
-		161, false, false, 0, false, 0, -1,
-		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-		false, -1, 0, -1, 0, false, 1, 1, 1 , false
-	}, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
+		297, 297, 306, 306, 269, 269, 184, 230, 100, 161,//mpが少ないのは仕様なので勝手に直さないように
+	},
 	{
-		402, 402, 161, 161, 256, 256, 98, 0, 10,255,
+		300, 300, 148, 148, 185, 185, 136, 0, 16,16,
 	},
 	// プレイヤー2
 	{
-		1854, 1854, 125, 125, 238, 238, 148, 0, 255,255,
+		432, 432, 156, 156, 206, 206, 130, 0, 33,33,
 	},
 {
-		402, 402, 161, 161, 256, 256, 98, 0, 10,255,
+		300, 300, 148, 148, 185, 185, 136, 0, 16,16,
 	},
 
 };
@@ -375,12 +371,12 @@ void showHeader(){
 
 
 #if defined(OPTIMIZATION_O3_ENABLED)
-	std::cout << "dq9 Corvus battle emulator " << version << " (Optimized for O3), Build date: " << buildDate << ", " <<
+	std::cout << "dq9 Night Lich battle emulator " << version << " (Optimized for O3), Build date: " << buildDate << ", " <<
 		buildTime << " UTC/GMT, Compiler: " << compiler << std::endl;
 #elif defined(OPTIMIZATION_O2_ENABLED)
-	std::cout << "dq9 Corvus battle emulator " << version << " (Optimized for O2), Build date: " << buildDate << ", " << buildTime << " UTC/GMT, Compiler: " << compiler << std::endl;
+	std::cout << "dq9 Night Lich battle emulator " << version << " (Optimized for O2), Build date: " << buildDate << ", " << buildTime << " UTC/GMT, Compiler: " << compiler << std::endl;
 #elif defined(NO_OPTIMIZATION)
-	std::cout << "dq9 Corvus battle emulator " << version << " (No optimization), Build date: " << buildDate << ", " << buildTime << " UTC/GMT, Compiler: " << compiler << std::endl;
+	std::cout << "dq9 Night Lich battle emulator " << version << " (No optimization), Build date: " << buildDate << ", " << buildTime << " UTC/GMT, Compiler: " << compiler << std::endl;
 #else
 #endif
 	std::cout << "Waiting for input[q/b]: " << std::endl;

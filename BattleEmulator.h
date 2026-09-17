@@ -135,7 +135,10 @@ public:
 	static constexpr int CONFUSION_FAILED_FLEE = 192;    // DQ9 0x0396
 	static constexpr int CURE_CONFUSION = 193;           // DQ9 0x03AA
 	static constexpr int GERUNIKKU_MAGIC_MIRROR = 194;  // マホカンタ / DQ9 0x0037
-	static constexpr int MAX_COMMON_ACTION_ID = GERUNIKKU_MAGIC_MIRROR;
+	static constexpr int NIGHT_LICH_ZAORAL = 195;       // ザオラル / DQ9 0x0026
+	static constexpr int NIGHT_LICH_BLADE_BREAKER = 196;// やいばくだき / DQ9 0x0096
+	static constexpr int NIGHT_LICH_ESCORT_E7 = 197;    // 護衛 action / DQ9 0x00E7
+	static constexpr int MAX_COMMON_ACTION_ID = NIGHT_LICH_ESCORT_E7;
 
     struct SearchCommand {
         int action = -1;

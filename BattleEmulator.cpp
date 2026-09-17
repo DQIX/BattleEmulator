@@ -44,7 +44,7 @@ void AppendLastActionPresentationChildSlot1(const std::uint16_t dq9ActionId) noe
 namespace {
 constexpr std::uint16_t kHeroBodyItemId = UINT16_C(0x3382);
 constexpr std::uint16_t kHeroPrimaryWeaponItemId = UINT16_C(0x5021);
-constexpr int kGerunikkuEquippedATK = 320;
+constexpr int kGerunikkuEquippedATK = 306;
 constexpr int kGerunikkuBareHandsATK = 175;
 
 void InitializeBattleActorRefs() noexcept {
@@ -81,7 +81,7 @@ bool InitializeCameraBattle() noexcept {
             .worldX = 10641, .worldY = 0, .worldZ = -18432,
             .presentationFlags = 0x00000080, .occupancyExpansionDepth = 0, .movementEnabled = true,
             .membershipKind = CameraMembershipKind::monster,
-            .membershipKeyA = 0x013a, .battleMonsterId = 0x013a,
+            .membershipKeyA = 0x00c3, .battleMonsterId = 0x0119,
             .battleWorldKnown = true, .battleWorldX = 0, .battleWorldY = 204, .battleWorldZ = -10240,
         },
         {
@@ -104,21 +104,21 @@ struct EnemySelection {
 };
 
 constexpr int kIronActions[6] = {
-    BattleEmulator::WHIPPING_BOY,
     BattleEmulator::ATTACK_ENEMY,
+    BattleEmulator::NIGHT_LICH_ESCORT_E7,
     BattleEmulator::ATTACK_ENEMY,
     BattleEmulator::HELM_SPLITTER,
     BattleEmulator::KABUFF,
     BattleEmulator::DOUBLE_EDGED_SLASH,
 };
 
-constexpr int kGerunikuActions[6] = {
-    BattleEmulator::GERUNIKKU_BAGIMA,
-    BattleEmulator::GERUNIKKU_MERAMI,
-    BattleEmulator::EERIE_LIGHT,
-    BattleEmulator::MAGIC_MIRROR,
-    BattleEmulator::GERUNIKKU_MEDAPANI,
-    BattleEmulator::GERUNIKKU_BAGIMA_STRONG,
+constexpr int kNightLichActions[6] = {
+    BattleEmulator::ATTACK_ENEMY,
+    BattleEmulator::NIGHT_LICH_ZAORAL,
+    BattleEmulator::PSYCHE_UP,
+    BattleEmulator::NIGHT_LICH_BLADE_BREAKER,
+    BattleEmulator::FREEZING_BLIZZARD,
+    BattleEmulator::CRITICAL_ATTACK,
 };
 
 constexpr uint8_t kFallbackOrder[6][6] = {
@@ -144,17 +144,19 @@ inline int selectScheme1Slot(int *position) {
 inline bool resolveIronSlot(int actor, int slot, int *position, Player players[4], bool guardAlreadyPlanned,
                             EnemySelection &selection) {
     switch (slot) {
-        case 0: // ゲルニックかばう: handler 159
-            if (!Player::isPlayerAlive(players[2]) || players[2].guardedBy >= 0 || guardAlreadyPlanned) return false;
-            (*position)++; // max: 1, lr: 0x021ee074
-            selection = {BattleEmulator::WHIPPING_BOY, 2, slot};
-            return true;
-        case 1:
-        case 2: // 通常攻撃: formation-weighted single target
+        case 0: // ナイトリッチ戦護衛の通常攻撃
             if (!Player::isPlayerAlive(players[0])) return false;
             (*position)++; // max: 2, lr: 0x02156874
-            (*position)++; // range: 3..4, lr: 0x0216139c
-            (*position)++; // range: 6..8, lr: 0x021613b0
+            selection = {BattleEmulator::ATTACK_ENEMY, 0, slot};
+            return true;
+        case 1: // ナイトリッチ戦護衛 action 0x00E7
+            if (!Player::isPlayerAlive(players[0])) return false;
+            (*position)++; // max: 2, lr: 0x02156874
+            selection = {BattleEmulator::NIGHT_LICH_ESCORT_E7, 0, slot};
+            return true;
+        case 2:
+            if (!Player::isPlayerAlive(players[0])) return false;
+            (*position)++; // max: 2, lr: 0x02156874
             selection = {BattleEmulator::ATTACK_ENEMY, 0, slot};
             return true;
         case 3: // かぶと割り: DEF をさらに下げられる対象だけ
@@ -211,56 +213,63 @@ inline EnemySelection selectIronAction(int actor, int *position, Player players[
     return selection;
 }
 
-inline bool gerunikuHasMp(const Player &boss, int cost) {
+inline bool nightLichHasMp(const Player &boss, int cost) {
     return boss.mp == 255 || boss.mp >= cost;
 }
 
-inline bool resolveGerunikuSlot(int slot, int *position, Player players[4], EnemySelection &selection) {
+inline bool resolveNightLichSlot(int slot, int *position, Player players[4], EnemySelection &selection) {
     const Player &boss = players[2];
     switch (slot) {
-        case 0: // バギマ(弱), handler 3: 1人partyではマホカンタ中なら不可
-            if (!Player::isPlayerAlive(players[0]) || players[0].hasMagicMirror || !gerunikuHasMp(boss, 8)) return false;
-            selection = {BattleEmulator::GERUNIKKU_BAGIMA, 0, slot};
-            return true;
-        case 1: // メラミ, handler 2
-            if (!Player::isPlayerAlive(players[0]) || players[0].hasMagicMirror || !gerunikuHasMp(boss, 6)) return false;
+        case 0: // こうげき
+            if (!Player::isPlayerAlive(players[0])) return false;
             (*position)++; // max: 2, lr: 0x02156874
-            selection = {BattleEmulator::GERUNIKKU_MERAMI, 0, slot};
+            selection = {BattleEmulator::ATTACK_ENEMY, 0, slot};
             return true;
-        case 2: // ぶきみなひかり, handler 89
-            if (!Player::isPlayerAlive(players[0]) || players[0].magicResistanceLevel <= -2 || !gerunikuHasMp(boss, 6)) return false;
+        case 1: { // ザオラル
+            if (!nightLichHasMp(boss, 8)) return false;
+            int dead[2];
+            int count = 0;
+            if (!Player::isPlayerAlive(players[1])) dead[count++] = 1;
+            if (!Player::isPlayerAlive(players[3])) dead[count++] = 3;
+            if (count == 0) return false;
+            const int target = dead[lcg::getPercent(position, count)];
+            selection = {BattleEmulator::NIGHT_LICH_ZAORAL, target, slot};
+            return true;
+        }
+        case 2: // ためる
+            if (boss.TensionLevel >= 4) return false;
+            selection = {BattleEmulator::PSYCHE_UP, 2, slot};
+            return true;
+        case 3: // やいばくだき
+            if (!Player::isPlayerAlive(players[0]) || players[0].AtkBuffLevel <= -2) return false;
             (*position)++; // max: 2, lr: 0x02156874
-            selection = {BattleEmulator::EERIE_LIGHT, 0, slot};
+            (*position)++; // range: 3..4, lr: 0x0216139c
+            (*position)++; // range: 6..8, lr: 0x021613b0
+            selection = {BattleEmulator::NIGHT_LICH_BLADE_BREAKER, 0, slot};
             return true;
-        case 3: // マホカンタ, handler 47
-            if (boss.hasMagicMirror || !gerunikuHasMp(boss, 4)) return false;
-            selection = {BattleEmulator::GERUNIKKU_MAGIC_MIRROR, 2, slot};
+        case 4: // こごえるふぶき
+            if (!Player::isPlayerAlive(players[0])) return false;
+            selection = {BattleEmulator::FREEZING_BLIZZARD, 0, slot};
             return true;
-        case 4: // メダパニ, handler 152
-            if (!Player::isPlayerAlive(players[0]) || players[0].confused || players[0].hasMagicMirror || !gerunikuHasMp(boss, 5)) return false;
-            (*position)++; // max: 1, lr: 0x021ee074
-            selection = {BattleEmulator::GERUNIKKU_MEDAPANI, 0, slot};
-            return true;
-        case 5: // バギマ(強), handler 3
-            if (!Player::isPlayerAlive(players[0]) || players[0].hasMagicMirror || !gerunikuHasMp(boss, 8)) return false;
-            selection = {BattleEmulator::GERUNIKKU_BAGIMA_STRONG, 0, slot};
+        case 5: // かいしんのいちげき
+            if (!Player::isPlayerAlive(players[0])) return false;
+            (*position)++; // max: 2, lr: 0x02156874
+            (*position)++; // range: 3..4, lr: 0x0216139c
+            (*position)++; // range: 6..8, lr: 0x021613b0
+            selection = {BattleEmulator::CRITICAL_ATTACK, 0, slot};
             return true;
         default:
             return false;
     }
 }
 
-inline EnemySelection selectGerunikuAction(int *position, Player players[4], uint8_t &usedSlots) {
+inline EnemySelection selectNightLichAction(int *position, Player players[4]) {
     const int originalSlot = selectScheme1Slot(position);
     EnemySelection selection{BattleEmulator::ATTACK_ENEMY, 0, -1};
     for (int i = 0; i < 6; ++i) {
         const int slot = kFallbackOrder[originalSlot][i];
-        const uint8_t bit = static_cast<uint8_t>(1U << slot);
-        if ((usedSlots & bit) != 0) {
-            continue;
-        }
-        if (resolveGerunikuSlot(slot, position, players, selection)) {
-            usedSlots = static_cast<uint8_t>(usedSlots | bit);
+        if (resolveNightLichSlot(slot, position, players, selection)) {
+            selection.originalSlot = originalSlot;
             return selection;
         }
     }
@@ -653,6 +662,12 @@ std::string BattleEmulator::getActionName(int actionId) {
             return "Medapani";
         case GERUNIKKU_BAGIMA_STRONG:
             return "Bagima (strong)";
+        case NIGHT_LICH_ZAORAL:
+            return "Zaoral";
+        case NIGHT_LICH_BLADE_BREAKER:
+            return "Blade Breaker";
+        case NIGHT_LICH_ESCORT_E7:
+            return "Night Lich Escort Action";
         case ZAKI:
             return "Zaki";
         case ZARAKI:
@@ -838,7 +853,6 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             }
             (*position)++; // max: 2, lr: 0x02160d64
         }
-        uint8_t gerunikuUsedSlots = 0;
 #endif
 
         int32_t actionTable = -1;
@@ -976,6 +990,10 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 case ATTACK_ENEMY:
                 case HELM_SPLITTER:
                 case DOUBLE_EDGED_SLASH:
+                case NIGHT_LICH_BLADE_BREAKER:
+                case NIGHT_LICH_ESCORT_E7:
+                case FREEZING_BLIZZARD:
+                case CRITICAL_ATTACK:
                 case GERUNIKKU_MERAMI:
                 case GERUNIKKU_BAGIMA:
                 case GERUNIKKU_BAGIMA_STRONG:
@@ -1319,7 +1337,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 case 2:
                     {
 #if defined(gerunikku)
-                        for (int bossActionIndex = 0; bossActionIndex < 2; ++bossActionIndex) {
+                        for (int bossActionIndex = 0; bossActionIndex < 1; ++bossActionIndex) {
                             if (!Player::isPlayerAlive(players[2]) || !Player::isPlayerAlive(players[0])) break;
                             traceBoundary("start FUN_02158dfc");
                             if (EnemyLosesActionToCharm(position)) {
@@ -1337,7 +1355,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                                 traceBoundary("end FUN_021594bc");
                                 continue;
                             }
-                            const EnemySelection selection = selectGerunikuAction(position, players, gerunikuUsedSlots);
+                            const EnemySelection selection = selectNightLichAction(position, players);
                             (*position)++; // max: 100, lr: 0x02159b10
                             traceBoundary("end FUN_02158dfc");
                             traceBoundary("start FUN_021ebd9c_ct");
@@ -1946,6 +1964,18 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position)++; //ニセ回避 0x02157f58
             FUN_0207564c(position, players[attacker].atk, players[attacker].def);
             players[attacker].TensionLevel++;
+            baseDamage = 0;
+            resetCombo(NowState);
+            break;
+        case NIGHT_LICH_ZAORAL:
+            players[attacker].mp -= 8;
+            (*position) += 2;
+            (*position)++; // 共通クリティカル判定
+            (*position)++; // 共通回避判定
+            FUN_0207564c(position, players[attacker].atk, players[attacker].def);
+            if (lcg::getPercent(position, 2) != 0) {
+                players[defender].hp = std::max(1, players[defender].maxHp / 2);
+            }
             baseDamage = 0;
             resetCombo(NowState);
             break;
@@ -2690,7 +2720,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             resetCombo(NowState);
             break;
         case BattleEmulator::DEFENCE:
-            (*position) += 2;
+            (*position) += 4;
             (*position)++; //関係ない
             (*position)++; //会心
             (*position)++; //回避
@@ -3048,6 +3078,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
         case ATTACK_ENEMY_A6:
         case BattleEmulator::HELM_SPLITTER:
         case BattleEmulator::DOUBLE_EDGED_SLASH:
+        case BattleEmulator::NIGHT_LICH_BLADE_BREAKER:
+        case BattleEmulator::NIGHT_LICH_ESCORT_E7:
             (*position) += 2;
             (*position)++; // アクロバットスターとか
 
@@ -3140,7 +3172,6 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
                 baseDamage = static_cast<int>((tmp));
 
-
                 if (baseDamage != 0 && (Id & 0xffff) == BattleEmulator::HELM_SPLITTER) {
                     // 実ROM順序: final damage -> 防御低下判定 -> 被ダメージ状態解除 -> 共通後処理。
                     // attack record +0x32 == -1. この主人公buildでは combat+0x50 == 50。
@@ -3150,6 +3181,18 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                         players[defender].BuffTurns = 7; // runtime +0x6f=6 と既存turn表現の対応。
                         RecalculateBuff(players, defender);
                     }
+                }
+
+                if (baseDamage != 0 && (Id & 0xffff) == BattleEmulator::NIGHT_LICH_BLADE_BREAKER) {
+                    if (lcg::getPercent(position, 100) < 50 && players[defender].AtkBuffLevel > -2) {
+                        --players[defender].AtkBuffLevel;
+                        players[defender].AtkBuffTurn = 7;
+                        RecalculateBuff(players, defender);
+                    }
+                }
+
+                if ((Id & 0xffff) == BattleEmulator::NIGHT_LICH_ESCORT_E7) {
+                    (*position)++; // action 0x00E7 additional status roll
                 }
 
 

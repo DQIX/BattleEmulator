@@ -60,12 +60,12 @@ set(SOURCES
         GerunikkuSearch.h
 )
 
-add_executable(gerunikku ${SOURCES})
-target_compile_definitions(gerunikku PRIVATE gerunikku=1)
+add_executable(naitoritti ${SOURCES})
+target_compile_definitions(naitoritti PRIVATE gerunikku=1 naitoritti=1)
 
 
-add_executable(gerunikku_gouketu_opt ${SOURCES})
-target_compile_definitions(gerunikku_gouketu_opt PRIVATE gerunikku=1 OPTIMIZE_MODE=1)  # `#define MULTITHREADING` を適用
+add_executable(naitoritti_gouketu_opt ${SOURCES})
+target_compile_definitions(naitoritti_gouketu_opt PRIVATE gerunikku=1 naitoritti=1 OPTIMIZE_MODE=1)  # `#define MULTITHREADING` を適用
 
 add_executable(erugi1_hayate ${SOURCES})
 target_compile_definitions(erugi1_hayate PRIVATE hayate=1)
@@ -73,7 +73,7 @@ target_compile_definitions(erugi1_hayate PRIVATE hayate=1)
 add_executable(erugi1_gilyumei ${SOURCES})
 target_compile_definitions(erugi1_gilyumei PRIVATE gilyumei=1)
 
-foreach(target gerunikku gerunikku_gouketu_opt erugi1_hayate erugi1_gilyumei)
+foreach(target naitoritti naitoritti_gouketu_opt erugi1_hayate erugi1_gilyumei)
     target_link_libraries(${target} PRIVATE Threads::Threads)
 endforeach()
 
@@ -93,7 +93,7 @@ if(MINGW)
 elseif(MSVC)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi /O2")
     set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
-    target_compile_options(gerunikku PRIVATE /utf-8)
+    target_compile_options(naitoritti PRIVATE /utf-8)
 endif()
 
 # MinGWの最適化フラグに応じたマクロ設定
