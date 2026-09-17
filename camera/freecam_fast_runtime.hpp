@@ -1580,8 +1580,74 @@ inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
     const int actionIndex,
     const TriggerDecision& triggerDecision
 ) noexcept {
-    (void)actionIndex;
     auto& state = ThreadContext();
+
+    // overlay_d_25:021DC1D4 has a dedicated actionIndex==0 path. It runs
+    // 02049B10 for every presentation participant before later actions are
+    // set up. 02049B10 chooses aux -> goal -> start, except that the current
+    // action target is passed param_2=1 and therefore keeps its existing
+    // start node. The current actor then restores its pre-call aux and, when
+    // both old aux and old goal were valid, restores start=old goal without
+    // moving the presentation transform again. This is generic turn/action
+    // lifecycle behavior, not an action-ID or encounter-specific rule.
+    if (actionIndex == 0 && state.hasPreviousAction && state.previousActionIndex == 0) {
+        const std::uint16_t targetId = state.previousAction.targetId;
+        const std::size_t currentActorIndex = FindPresentationActorIndex(actorId);
+        if (currentActorIndex >= state.presentationActorCount) return false;
+
+        const std::uint8_t currentOldAux = state.presentationActors[currentActorIndex].auxiliaryNode;
+        const std::uint8_t currentOldGoal = state.presentationActors[currentActorIndex].goalNode;
+
+        for (std::size_t index = 0; index < state.presentationActorCount; ++index) {
+            auto& participant = state.presentationActors[index];
+            const bool isCurrentTarget = participant.actorId == targetId;
+
+            std::uint8_t newStart = participant.startNode;
+            if (!isCurrentTarget) {
+                if (participant.auxiliaryNode != detail::kInvalidPresentationNode) {
+                    newStart = participant.auxiliaryNode;
+                } else if (participant.goalNode != detail::kInvalidPresentationNode) {
+                    newStart = participant.goalNode;
+                }
+            }
+
+            if (newStart != detail::kInvalidPresentationNode) {
+                if (newStart >= detail::kPresentationNodePositions.size()) return false;
+                const auto position = detail::kPresentationNodePositions[newStart];
+                if (!position.valid) return false;
+                participant.startNode = newStart;
+                participant.worldX = position.x;
+                participant.worldZ = position.z;
+                // 02049B10 copies the presentation transform to the battle
+                // actor only when the pre-call presentation flags contain
+                // either bit 0x01 or 0x20.
+                if ((participant.presentationFlags & UINT32_C(0x21)) != 0) {
+                    participant.battleWorldKnown = true;
+                    participant.battleWorldX = position.x;
+                    participant.battleWorldZ = position.z;
+                }
+            }
+
+            participant.goalNode = detail::kInvalidPresentationNode;
+            if (!isCurrentTarget) {
+                participant.auxiliaryNode = detail::kInvalidPresentationNode;
+            }
+            // 02049AB0 clears the in-flight route state and flags 0x10/0x40.
+            participant.presentationFlags &= ~UINT32_C(0x50);
+            state.nearestNodeCache[index] = {};
+        }
+
+        auto& currentActor = state.presentationActors[currentActorIndex];
+        currentActor.auxiliaryNode = currentOldAux;
+        if (currentOldAux != detail::kInvalidPresentationNode
+            && currentOldGoal != detail::kInvalidPresentationNode) {
+            currentActor.startNode = currentOldGoal;
+        }
+
+        state.presentationGoalSetupActive = false;
+        InvalidateCurrentRoutes(state);
+        return true;
+    }
 
     // Live ROM seed 0x04A678 proves that the action-BACT selector path
     // (021DC5D4) explicitly starts routes for non-acting presentation

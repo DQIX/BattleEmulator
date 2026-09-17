@@ -509,6 +509,22 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                         .targetAuxiliaryNode = targetAuxiliaryNode,
                     });
                     hasRuntimeDecision = true;
+                } else if (after == BattleEmulator::NIGHT_LICH_ESCORT_E7) {
+                    using DynamicAction = FreeCamera<
+                        dq9::freecam::actions::Dq9ActionId<BattleEmulator::NIGHT_LICH_ESCORT_E7>(),
+                        BattleEmulator::NIGHT_LICH_ESCORT_E7>;
+                    const std::size_t targetSlot = FindPresentationActorIndex(runtimeTargetId);
+                    const auto& presentationState = ThreadContext();
+                    const std::uint8_t targetAuxiliaryNode = targetSlot < presentationState.presentationActorCount
+                        ? presentationState.presentationActors[targetSlot].auxiliaryNode
+                        : std::uint8_t{0xff};
+                    runtimeDecision = Decide<DynamicAction>({
+                        .actorId = runtimeActorId,
+                        .targetId = runtimeTargetId,
+                        .turnActionIndex = static_cast<std::uint16_t>(presentationState.presentationActionRecordIndex + 1),
+                        .targetAuxiliaryNode = targetAuxiliaryNode,
+                    });
+                    hasRuntimeDecision = true;
                 }
             }
         }
@@ -692,7 +708,9 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
         }
         if (hasRuntimeDecision) {
             if (runtimeDecision.callFreeCamera) {
-                AssertCameraMapping(after);
+                if (after != BattleEmulator::NIGHT_LICH_ESCORT_E7) {
+                    AssertCameraMapping(after);
+                }
                 onFreeCameraMove(position, after, runtimeDecision.param5 ? 1 : 0,
                                  NowState, traceBoundaries);
             }
@@ -722,6 +740,12 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                 actionMetadata->dq9ActionId,
                 trackingCameraDecision.source
             );
+            if (after == BattleEmulator::NIGHT_LICH_ESCORT_E7) {
+                // Live ROM: DQ9 0x00E7 executes opcode 0x4F mode2 here even
+                // though that path is absent from the static action BACT table.
+                const bool reset = ResetAllPresentationActorsForCameraPlacement();
+                assert(reset && "DQ9 0x00E7 mode2 presentation reset failed");
+            }
         }
         if (after != BattleEmulator::ATTACK_ALLY) {//味方の攻撃→上空だとフリーカメラが特異点の挙動する
             preemptive = false;

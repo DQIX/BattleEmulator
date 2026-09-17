@@ -73,13 +73,21 @@ bool InitializeCameraBattle() noexcept {
             .worldX = -5320, .worldY = 0, .worldZ = -9216,
             .presentationFlags = 0x00000000, .occupancyExpansionDepth = 0, .movementEnabled = true,
             .membershipKind = CameraMembershipKind::monster,
+#if defined(naitoritti)
+            .membershipKeyA = 0x0125, .battleMonsterId = 0x0125,
+#else
             .membershipKeyA = 0x00c1, .battleMonsterId = 0x0118,
+#endif
             .battleWorldKnown = true, .battleWorldX = -9009, .battleWorldY = 204, .battleWorldZ = -10240,
         },
         {
             .actor = BattleActorRef{BattleActorSide::enemy, 1},
             .worldX = 10641, .worldY = 0, .worldZ = -18432,
+#if defined(naitoritti)
+            .presentationFlags = 0x00000000, .occupancyExpansionDepth = 0, .movementEnabled = true,
+#else
             .presentationFlags = 0x00000080, .occupancyExpansionDepth = 0, .movementEnabled = true,
+#endif
             .membershipKind = CameraMembershipKind::monster,
             .membershipKeyA = 0x00c3, .battleMonsterId = 0x0119,
             .battleWorldKnown = true, .battleWorldX = 0, .battleWorldY = 204, .battleWorldZ = -10240,
@@ -89,7 +97,11 @@ bool InitializeCameraBattle() noexcept {
             .worldX = 26604, .worldY = 0, .worldZ = -9216,
             .presentationFlags = 0x00000000, .occupancyExpansionDepth = 0, .movementEnabled = true,
             .membershipKind = CameraMembershipKind::monster,
+#if defined(naitoritti)
+            .membershipKeyA = 0x0125, .battleMonsterId = 0x0125,
+#else
             .membershipKeyA = 0x00c1, .battleMonsterId = 0x0118,
+#endif
             .battleWorldKnown = true, .battleWorldX = 9009, .battleWorldY = 204, .battleWorldZ = -10240,
         },
     };
@@ -104,12 +116,21 @@ struct EnemySelection {
 };
 
 constexpr int kIronActions[6] = {
+#if defined(naitoritti)
     BattleEmulator::ATTACK_ENEMY,
+    BattleEmulator::MULTITHRUST,
     BattleEmulator::NIGHT_LICH_ESCORT_E7,
     BattleEmulator::ATTACK_ENEMY,
-    BattleEmulator::HELM_SPLITTER,
+    BattleEmulator::ATTACK_ENEMY,
+    BattleEmulator::ATTACK_ENEMY,
+#else
+    BattleEmulator::ATTACK_ENEMY,
+    BattleEmulator::NIGHT_LICH_ESCORT_E7,
+    BattleEmulator::NIGHT_LICH_ESCORT_E7,
+    BattleEmulator::ATTACK_ENEMY,
     BattleEmulator::KABUFF,
     BattleEmulator::DOUBLE_EDGED_SLASH,
+#endif
 };
 
 constexpr int kNightLichActions[6] = {
@@ -143,6 +164,42 @@ inline int selectScheme1Slot(int *position) {
 
 inline bool resolveIronSlot(int actor, int slot, int *position, Player players[4], bool guardAlreadyPlanned,
                             EnemySelection &selection) {
+#if defined(naitoritti)
+    (void)guardAlreadyPlanned;
+    switch (slot) {
+        case 0:
+        case 3:
+        case 5:
+            if (!Player::isPlayerAlive(players[0])) return false;
+            (*position)++; // target handler, max:2, lr:0x02156874
+            selection = {BattleEmulator::ATTACK_ENEMY, 0, slot};
+            return true;
+        case 1: // DQ9 0x0049 さみだれづき
+            if (!Player::isPlayerAlive(players[0])) return false;
+            if (players[actor].mp != 255 && players[actor].mp < 4) return false;
+            {
+                const int targetCount = lcg::intRangeRand(position, 3, 4); // lr:0x0216139c
+                (*position)++; // RandIntRange(6,8), lr:0x021613b0
+                (*position) += targetCount; // target selection, max:1, lr:0x02156398
+            }
+            selection = {BattleEmulator::MULTITHRUST, 0, slot};
+            return true;
+        case 2: // DQ9 0x00E7 どく攻撃
+            if (!Player::isPlayerAlive(players[0])) return false;
+            (*position)++; // target handler, max:2, lr:0x02156874
+            selection = {BattleEmulator::NIGHT_LICH_ESCORT_E7, 0, slot};
+            return true;
+        case 4: // DQ9 AI slot 4: action 0x0001, with the observed planning-side prelude.
+            if (!Player::isPlayerAlive(players[0])) return false;
+            (*position)++; // target handler, max:2, lr:0x02156874
+            (*position)++; // RandIntRange(3,4), lr:0x0216139c
+            (*position)++; // RandIntRange(6,8), lr:0x021613b0
+            selection = {BattleEmulator::ATTACK_ENEMY, 0, slot};
+            return true;
+        default:
+            return false;
+    }
+#else
     switch (slot) {
         case 0: // ナイトリッチ戦護衛の通常攻撃
             if (!Player::isPlayerAlive(players[0])) return false;
@@ -154,15 +211,15 @@ inline bool resolveIronSlot(int actor, int slot, int *position, Player players[4
             (*position)++; // max: 2, lr: 0x02156874
             selection = {BattleEmulator::NIGHT_LICH_ESCORT_E7, 0, slot};
             return true;
-        case 2:
+        case 2: // ナイトリッチ戦護衛 action 0x00E7
+            if (!Player::isPlayerAlive(players[0])) return false;
+            (*position)++; // max: 2, lr: 0x02156874
+            selection = {BattleEmulator::NIGHT_LICH_ESCORT_E7, 0, slot};
+            return true;
+        case 3: // ナイトリッチ戦護衛の通常攻撃
             if (!Player::isPlayerAlive(players[0])) return false;
             (*position)++; // max: 2, lr: 0x02156874
             selection = {BattleEmulator::ATTACK_ENEMY, 0, slot};
-            return true;
-        case 3: // かぶと割り: DEF をさらに下げられる対象だけ
-            if (!Player::isPlayerAlive(players[0]) || players[0].BuffLevel <= -2) return false;
-            (*position)++; // max: 2, lr: 0x02156874
-            selection = {BattleEmulator::HELM_SPLITTER, 0, slot};
             return true;
         case 4: { // スクルト: handler 20, valid encounter group から1つ選ぶ
             // Judgment 1 only starts enforcing this MP class after the runtime
@@ -193,6 +250,7 @@ inline bool resolveIronSlot(int actor, int slot, int *position, Player players[4
         default:
             return false;
     }
+#endif
 }
 
 inline EnemySelection selectIronAction(int actor, int *position, Player players[4], bool guardAlreadyPlanned) {
@@ -243,8 +301,6 @@ inline bool resolveNightLichSlot(int slot, int *position, Player players[4], Ene
         case 3: // やいばくだき
             if (!Player::isPlayerAlive(players[0]) || players[0].AtkBuffLevel <= -2) return false;
             (*position)++; // max: 2, lr: 0x02156874
-            (*position)++; // range: 3..4, lr: 0x0216139c
-            (*position)++; // range: 6..8, lr: 0x021613b0
             selection = {BattleEmulator::NIGHT_LICH_BLADE_BREAKER, 0, slot};
             return true;
         case 4: // こごえるふぶき
@@ -284,8 +340,13 @@ inline EnemySelection selectNightLichAction(int *position, Player players[4]) {
 
 namespace {
 [[nodiscard]] constexpr double HeroSpearLightningMultiplier(const Player players[4], const int attacker,
-                                                            const int defender) noexcept {
-#if defined(gerunikku)
+                                                             const int defender) noexcept {
+#if defined(naitoritti)
+    (void)players;
+    (void)attacker;
+    (void)defender;
+    return 1.0;
+#elif defined(gerunikku)
     if (attacker != 0) return 1.0;
     // The Lightning modifier belongs to いなずまのやり, not to the hero.
     // Bare hands must therefore use the normal 1.0 multiplier.
@@ -313,9 +374,8 @@ namespace {
 
 [[nodiscard]] constexpr int TargetDeathResistancePercent(const int defender) noexcept {
 #if defined(gerunikku)
-    // てっこうまじん: Death 050 / ゲルニック将軍: Death 000.
-    if (defender == 1 || defender == 3) return 50;
-    if (defender == 2) return 0;
+    // ナイトリッチ戦の3体はDeath 000。ザキ／ザラキは成功しない。
+    (void)defender;
 #else
     (void)defender;
 #endif
@@ -1831,7 +1891,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 players[defender].hp = 0;
             } else {
                 baseDamage = 0;
-                (*position)++; // max:100, lr: 0x021edaf4
+                (*position)++; // max:100, lr:0x021edaf4
             }
             resetCombo(NowState);
             break;
@@ -1856,7 +1916,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 players[defender].hp = 0;
             } else {
                 baseDamage = 0;
-                (*position)++; // max:100, lr: 0x021edaf4
+                (*position)++; // max:100, lr:0x021edaf4
             }
             resetCombo(NowState);
             break;
@@ -2165,15 +2225,19 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             break;
         case MULTITHRUST:
             players[attacker].mp -= 4;
-            attackCount = lcg::intRangeRand(position, 3, 4);
-            (*position)++;
+            attackCount = lcg::intRangeRand(position, 3, 4); // lr:0x0216139c
+            (*position)++; // RandIntRange(6,8), lr:0x021613b0
             {
                 int aliveTargets[3]{};
                 int aliveTargetCount = 0;
-                for (int enemy = 1; enemy <= 3; ++enemy) {
-                    if (Player::isPlayerAlive(players[enemy])) {
-                        aliveTargets[aliveTargetCount++] = enemy;
+                if (attacker == 0) {
+                    for (int enemy = 1; enemy <= 3; ++enemy) {
+                        if (Player::isPlayerAlive(players[enemy])) {
+                            aliveTargets[aliveTargetCount++] = enemy;
+                        }
                     }
+                } else if (Player::isPlayerAlive(players[0])) {
+                    aliveTargets[aliveTargetCount++] = 0;
                 }
                 if (aliveTargetCount == 0) {
                     resetCombo(NowState);
@@ -2186,6 +2250,77 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     // the first damage calculation. The RandInt max is the
                     // number of living enemies on the opposing side.
                     hitTargets[hit] = aliveTargets[lcg::getPercent(position, aliveTargetCount)];
+                }
+                if (attacker != 0) {
+                    // Enemy 0x0049 uses the ordinary enemy-physical pipeline
+                    // independently for every hit. Live ROM first chooses all
+                    // hit targets, then executes each hit in this order:
+                    // ec6f8 -> crit -> evade -> shield -> 57f58 -> damage ->
+                    // optional zero-damage RandInt(2) -> 58ac4 -> e54fc -> 7a8.
+                    for (int i = 0; i < attackCount; ++i) {
+                        const int hitDefender = hitTargets[i];
+                        bool hitEvaded = false;
+                        bool hitBlocked = false;
+
+                        (*position)++; // max:100, lr:0x021ec6f8
+                        (*position)++; // max:0x2710, lr:0x02158584; enemy 0x0049 threshold is 0
+                        if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
+                            hitEvaded = lcg::getPercent(position, 100) < 2; // lr:0x021587b0
+                            if (!hitEvaded) {
+                                hitBlocked = lcg::getPercent(position, 100) < shieldGuardP; // lr:0x021586fc
+                            }
+                        }
+                        (*position)++; // max:100, lr:0x02157f58
+
+                        baseDamage = FUN_0207564c(position, players[attacker].atk, players[hitDefender].def);
+                        tmp = floor(baseDamage * 0.5);
+                        if (players[attacker].TensionLevel != 0) {
+                            tmp *= Enemy_TensionTable[players[attacker].TensionLevel - 1];
+                            tmp += players[attacker].TensionLevel * TensionLevel;
+                        }
+                        if (players[hitDefender].TensionLevel == 4) {
+                            tmp *= 0.5;
+                        }
+                        if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
+                            tmp *= players[hitDefender].defence;
+                        }
+                        baseDamage = static_cast<int>(tmp);
+
+                        if (hitEvaded || hitBlocked) {
+                            if (!players[0].paralysis && !players[0].sleeping
+                                && !players[0].specialCharge && !players[0].inactive) {
+                                (*position)++; // lr:0x021ed7a8
+                            }
+                            baseDamage = 0;
+                        } else {
+                            if (baseDamage == 0) {
+                                baseDamage = lcg::getPercent(position, 2); // lr:0x021e81a0
+                            }
+                            if (baseDamage != 0) {
+                                if (hitDefender == 0 && players[hitDefender].confused) {
+                                    if (lcg::getPercent(position, 100) < 50) { // lr:0x02158ac4
+                                        players[hitDefender].confused = false;
+                                        players[hitDefender].confusionTurns = -1;
+                                    }
+                                } else {
+                                    (*position)++; // lr:0x02158ac4
+                                }
+                                (*position)++; // lr:0x021e54fc
+                                if (players[hitDefender].sleeping) {
+                                    players[hitDefender].sleeping = false;
+                                    players[hitDefender].sleepingTurn = -1;
+                                }
+                            }
+                            process7A8(position, baseDamage, players, hitDefender);
+                        }
+
+                        preHP[hitDefender] = std::max(0, preHP[hitDefender] - baseDamage);
+                        totalDamage += baseDamage;
+                        if (preHP[hitDefender] <= 0) break;
+                    }
+                    players[attacker].TensionLevel = 0;
+                    resetCombo(NowState);
+                    return totalDamage;
                 }
             hasKaisinn = false;
             for (int i = 0; i < attackCount; ++i) {

@@ -82,6 +82,8 @@ inline constexpr auto kFreeCameraActions = [] {
     actions[BattleEmulator::VITAL_POINT_THRUST] = Bind<BattleEmulator::VITAL_POINT_THRUST>();
     actions[BattleEmulator::HELM_SPLITTER] = Bind<BattleEmulator::HELM_SPLITTER>();
     actions[BattleEmulator::DOUBLE_EDGED_SLASH] = Bind<BattleEmulator::DOUBLE_EDGED_SLASH>();
+    actions[BattleEmulator::NIGHT_LICH_BLADE_BREAKER] = Bind<BattleEmulator::NIGHT_LICH_BLADE_BREAKER>();
+
     actions[BattleEmulator::ZAKI] = Bind<BattleEmulator::ZAKI>();
     actions[BattleEmulator::ZARAKI] = Bind<BattleEmulator::ZARAKI>();
     actions[BattleEmulator::MEDICINAL_HERBS] = Bind<BattleEmulator::MEDICINAL_HERBS>();
