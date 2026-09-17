@@ -3336,7 +3336,10 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
 
                 if (baseDamage != 0 && (Id & 0xffff) == BattleEmulator::NIGHT_LICH_BLADE_BREAKER) {
-                    if (lcg::getPercent(position, 100) < 50 && players[defender].AtkBuffLevel > -2) {
+                    // ROM overlay_d_24::021e3754 compares RandInt(100) against the
+                    // target's attack-down resistance byte.  The fixed hero used by
+                    // this battle has resistance 100, so every 0..99 roll succeeds.
+                    if (lcg::getPercent(position, 100) < 100 && players[defender].AtkBuffLevel > -2) {
                         --players[defender].AtkBuffLevel;
                         players[defender].AtkBuffTurn = 7;
                         RecalculateBuff(players, defender);
