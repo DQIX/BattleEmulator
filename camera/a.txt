@@ -2711,3 +2711,92 @@ HeroはTurn 4 C1 setup時点でやはりC++だけ battleWorld=node57 です。ac
 
 DQ9 73 の4F metadataは mode0（mask=1）でした。ROMではこの後処理が走ればbattleWorldはbaseへ戻るはずで、実際ROMは (0,10240)。C++で戻っていないので、次は「73がaction_bactとして実行されたか」のsource判定が欠けている線を確認します。
 
+あります。貼ってくれた差分を今の a.txt 実測と照らすと、全部を同じ確度で「正しい修正」と扱うのは危ないです。特に下半分の CompleteActionPresentation() 拡張は、ROMで確認した局所挙動を一般化しすぎている可能性があります。まず各hunkを「ROMで直接裏取り済み / 条件が怪しい」に分解して、怪しい変更だけ現worldlineで無効化して差が消えるか見ます。
+
+差分の中で一番怪しいのは、下段の「通常攻撃なら非actor routeを長さ問わず完走扱い」に広げた部分です。a.txt には後で「ROMは全participantを無条件に進めない。current actor route countが0なら進めない」と明記されています。ただし今のTurn4の最初の差はC1通常攻撃“setup前”なので、このhunkが直接犯人かは別です。まずこの差分の2 revisionをそのまま実行比較できるか、BattleEmulator 自体がnested Gitか確認します。
+
+あります。しかも今、差分そのものより強い構造バグが見えました。DQ9 73 の actor membership packed 値は「membershipは存在するが tracking RNG は0」で、TrackingCameraFor() が返す actor_membership は tracking用の出所 にすぎません。一方このactionは freecam binding自体がなく hasRuntimeDecision=false なのに、ROMではSP-BACTの0x4F mode0を実行しています。つまり trackingCameraDecision.source を「SP-BACTを実行したか」の判定に流用しているのが明確におかしいです。差分下段とは別に、ここがTurn4の直接原因候補です。
+
+現在HEADは実際に 33a121cd... で、貼ってくれた差分の「右側」そのものです。なので「差分を疑う」はかなり有効です。ただ、現時点の証拠では少し分かれます。Turn4 action0までは右側コードでROMと完全一致しているので、差分全体を戻すのは違います。問題が露出するのはその直後のDQ9 73です。そこでC++ stateをROMの73直前/直後と並べて、差分hunkが作った誤stateなのか、既存0x4Fゲートの取りこぼしかを切ります。
+
+ここまでで、貼ってくれた差分の右側が「間違っている」のか、「正しい差分が古い0x4Fバグを露出させた」のか、かなり切れました。現在C++はDQ9 73 mode0直前で Hero start=57 / battleWorld=(-10641,18432) / base=(0,10240)。ROMはこの直後に実際 0x4F mode0 を通るので baseへ戻ります。つまり今の1st mismatchは差分hunkそのものより、0x4F実行判定が73を落としていることです。ただし73だけ直すハックは入れず、155の「静的0x4Fはあるがliveでは実行しない」反例と共存する一般条件を取ります。
+
+差分側の「普通攻撃route完走」も後で回帰対象にしますが、今の直接差を一般化する材料が取れそうです。73と155はいずれもfreecam binding未登録なので、hasRuntimeDecision では区別できません。次にROM生成済みmembership cellを直接比較し、「actor resource側がselectorを持っている155」と「action BACT側も実行される73」の静的差がどのfieldに出ているかを取ります。
+
+貼ってくれた差分から「怪しい一般化」は見つかっていますが、今の73/155を分ける条件はまだ別です。ここを雑に !hasRuntimeDecision へすると155を壊します。生成済みmetadataの73と155を横並びにして、action BACTの実行有無を判別できる既存fieldがないか確認します。
+
+73/155 の静的 action metadata（HasBact、selectorProjection、0x4F mask）は同じ形なので、action tableだけでは区別できません。つまりこのバグをmetadataの1bit追加なしで直すなら、実際にSP-BACT caller 021DCF8C を通ったかをruntime stateとして持つ必要があります。既存probe/既存runtimeにその情報がもうあるか検索します。
+
+差分hunkを戻す前に、既存のSP-BACT解析資産を読みます。freecam_trigger_probe_mcp.js と handoff は、そもそも 021DCF8C が何を条件に action BACT を選ぶかを掘った資料です。ここに73を一般則で直す条件が既にあるなら、それを使うのが最小です。
+
+既存handoffにも「raw actionだけではSP-BACT caller選択は再現できず、operation-specific caller/resource resultが必要」と明記されています。なので hasSpBact だけで73を直すのも155を壊します。ただし73は freecam-action-trigger-table.csv 上は明確な free_camera_candidate なのに、BattleEmulator common34 が freecam bindingへ未登録です。つまり差分ではなく mapper側の欠落で runtimeDecision/source が作られていない可能性も高いです。common34の意味と73 mappingを確認します。
+
+ここ、差分説とmapper欠落説がつながりました。MULTITHRUST=34 → DQ9 73 は一般mapperにはあるのに freecam mapperには未登録です。ただし、単純にBindを足すだけではまだ危険です。ROMの73 selectorが 021DCF8C（SP-BACT）由来なのか、direct membership 021DC8C8 由来なのかを既存 freecam_trigger_probe_mcp.js で直接取ります。ここがSP-BACTなら、現在の TrackingCameraFor() sourceを0x4Fゲートへ流す設計自体が壊れていると確定します。
+
+SP-BACT probe付き再演はTurn1入力済みで、アニメーション待ちだけ非同期です。重複入力はしません。その間にprobeが 021DCF8C をどう記録するか確認して、Turn4で必要な1イベントだけ抜けるようにしておきます。
+
+Turn2〜4はまとめて送信済みで、UI待ちだけ非同期化されています。重複操作はしません。その間に 021DCF8C の「SP-BACTを選ぶ条件」をC++側で既に持っていないか、freecam_state.hpp の fallback/resource state を確認します。
+
+もっと根に戻ると、73の TrackingCameraFor() がactor_membershipを返すこと自体が怪しいです。ROMでは73が 021DCF8C のSP-BACT callerを通るなら、actor+0x13Cのdirect membershipに73は無いはずです。つまり差分より、generated actor-membership metadataがSP-BACT由来のmembershipまで混ぜている可能性があります。生成器を確認します。
+
+決定的です。73のselector callerは 0x021DC8C8 = direct membership でした。それなのに同じactionで 0x4F mode0 は実行されています。つまり過去の「0x4Fは TriggerSource::action_bact のときだけ」という一般化そのものが誤りです。155の反例は正しいままなので、selector sourceとSP-BACT実行有無は独立にモデルすべきです。次に同じ73で 021DCF8C 自体が別途走っているか raw event を見ます。
+
+差分説はかなりあり得ますが、現時点では「右側全部が悪い」ではありません。右側のままでTurn4 action0はROMと完全一致しています。今切るべきなのは、その直後のDQ9 73だけです。73はselector自体はdirect-membership経路なのに、別途0x4F mode0を実行しているので、TriggerSourceを0x4F実行有無に流用した設計が破綻しています。まず0x4F callbackの上位呼出し元をROM側で確定します。
+
+ROMの0x4F実行は selector とは別のBACT interpreter (021E9C0C) で処理されているところまで分離できました。73は direct-membership selectorでも後段interpreterが0x4Fを踏みます。次は73と反例155の operation type / BACT interpreter起動条件 を比較します。ここが一般条件なら、貼ってくれた差分を戻す必要なく0x4Fゲートだけ正せます。
+
+73と155の固定action metadataで大きな差が1つ出ました。73は operation_type=1、155は operation_type=22。静的BACT内容は似ていても、戦闘actionの実行ハンドラが別です。021E9C0C BACT interpreterをどのoperation系が起動するかをcall graphで確認します。ここが一般条件なら、diffではなく0x4F runtime gateの設計ミスとして閉じられます。
+
+状態機械も読めました。0x4F callbackを回す 021E9C0C は controller stateE28==3 のときだけ 021DCE88 から呼ばれ、SP-BACT selector caller 021DCF8C は別の stateE28==4 です。つまり selector sourceではなく「そのactionが後段state3 BACT interpreterへ入るか」が本来のゲートです。73がstate3へ入り、155が入らないことを既存実測条件で直接比較します。
+
+一般条件までかなり見えました。021DC70C は direct membership が見つかると、その actor-resource側のpresentation tree をそのままselector/後段state3へ渡します。つまり73で実行された0x4Fは、静的 sp073.bact のmaskを使うべきとは限らず、実際に選ばれた actor-membership group 内の0x4Fです。155の反例もこれなら説明できます。現在 MembershipCell は selector/tracking しか保持しておらず、0x4F maskを捨てています。ここをROM抽出データで確認します。
+
+build_freecam_membership_metadata.mjs 自体に「指定action IDの actor profile / matching groupだけJSON出力する」診断機能が既にあります。これを73/155で使えば、巨大JSONを手で漁らず、どのactor-resource groupが実際にmembershipを提供しているか固定できます。生成物は同じ入力から同じbinaryを再生成する既存処理です。
+
+既存分離では mjs_script の署名rootにROM本体だけ含まれていませんでした。Gateway全体では tunnelworkspace が許可済みなので、迂回コピーはせず、ROM固定metadata診断専用の分離を tunnelworkspace 直下で作ります。ソース編集は引き続き元の battlearrow_multiturn_0917b だけで行います。
+
+actor-resourceの実体も特定できました。今回C0は profile347 z040c.mon の action73 groupを使っています。155のdirect membershipは別monster resource群で、groupの長さも内容も全く別です。次にこの各group内の0x4F有無を抽出器へ1フィールド追加して確認します。これはそのまま本修正に使えるROM固定metadataになるので、診断だけの使い捨てにはしません。
+
+原因はほぼ構造まで閉じました。現在の8-byte MembershipCell は selectorProjection/count/trackingCount で全64bitを使い切っており、実際に選ばれた actor-resource group の 0x4F mode mask を保持していません。そのため後段0x4Fを静的action側mask＋selector sourceで推測していました。これは73/155の両実測を同時には表現できません。ROM抽出器・membership binary・runtime cellに4F maskを追加する形で直します。
+
+実装します。変更は「action ID例外」ではなく、ROMから既に抽出している first matching actor/fallback membership group に 0x4F mode mask を追加し、後段は実際に選ばれたsourceのmaskを使う形です。静的action BACTはsource=action_bact時だけ使い、actor membershipならそのactor-resource groupのmaskを使います。これなら73と155を別々の実体として扱えます。
+
+metadata schema側の変更は入りました。次にruntimeの決定をつなぎます。TrackingCameraDecision に「実際に選択されたmembership/action/fallback sourceの0x4F mask」を持たせ、ApplyBactOpcode4fPostTrackingEffects は source名ではなくそのmaskだけを実行します。これで73のdirect membershipでも、そのresource group内にmode0があれば実行できます。
+
+これからROM固定データを再生成します。順序は extract_freecam_memberships.mjs → build_freecam_membership_metadata.mjs → C++ constexpr header generatorです。まずextract後に73/profile347と155各profileのmaskを診断出力で確認し、期待どおり73=mode0、155=0ならそのままビルドへ進めます。
+
+ROM固定データで狙い通り確認できました。今回のC0/profile347 z040c.mon の action73 group は 0x4F mask=0x01。一方、155を直接membershipで持つ全4 profileは mask=0x00 です。これで73/155反例をaction ID特例なしで分離できます。runtime変更の根拠は閉じました。次にconstexpr headerを再生成してビルドします。
+
+生成まで完了しました。membership metadata v4は約7.6MB、constexpr headerも再生成済みです。これからJS構文検査とCLion検査を通し、同じ4ターンを再実走します。判定点はまずTurn4 DQ973後のHero battleWorldがbaseへ戻り、次C1攻撃setupでROMの C0 goal56 / C2 goal67 に戻るかです。
+
+IDE検査は重くて非同期化したので待ちツールでは追いません。生成スクリプト自体は正常終了しています。実ビルド兼reproを直接走らせ、コンパイルエラーがあればその場で直します。
+
+ビルドは通りましたが、4ターン最終positionは339のままです。0x4F自体はRNGを消費しないので、これだけでは判定できません。次のC1通常攻撃setupを直接止めて、修正後の物理worldとfuture goalsを見る必要があります。ROM期待は Hero battleWorld (0,10240)、C0 goal56、C2 goal67です。
+
+新maskは実行時にmode0 branchへ到達しています。frame全展開が重かったので、待ちツールは使わず必要値だけ読む形に切ります。ここがTurn4/DQ973なら、そのままstepしてrestore後のHero worldを確認します。
+
+mode0実行後のHeroは期待どおり battleWorld=(0,204,10240) に戻りました。これはROMと一致です。次のC1通常攻撃setupで止めて、これまで間違っていたC0/C2 future goalが直ったか確認します。
+
+修正後の次C1通常攻撃setupはROM期待と一致しました。Hero 57/57 かつ battleWorldはbase、C0 55→56、C1 7→40 aux49、C2 59→67。貼ってくれた差分が直接壊していたのではなく、差分後に露出した0x4F sourceモデルの欠落がこのTurn4差の原因でした。次はCtable位置まで確認します。
+
+差分説の検証はかなり進みました。結論として、この4ターン差については「右側の差分を丸ごと戻す」のではなく、右側コードが前提にしていた membership sourceごとのBACT内容をmetadataが落としていたのが直接原因でした。73のactor-resource groupはmode0あり、155のactor-resource groupはmode0なしまでROM固定データで分離でき、Turn4の次setupもROM値へ戻っています。ここからschema変更の取りこぼしと回帰だけ潰します。
+
+schema v4の取りこぼしを1つ見つけました。通常Mainはconstexpr headerだけを見るので既に動きましたが、freecam_validation が使う freecam_metadata.hpp のファイルloaderはまだ FCMM version1 / 8-byte cell前提です。このままだとvalidationだけ壊れます。ここも同じ12-byte disk cellに更新してから検証します。
+
+schema v4はBattleEmulator本体だけでなく、BattleArrow直下の旧/検証用runtimeにも同じmetadataを読ませています。ここを放置すると「本体は直ったがvalidation資産が旧8-byte layoutのまま」という事故になります。どの検証targetがどちらをincludeしているか確認して、実際に使う経路だけ同期します。
+
+validation loaderもv4対応へ更新しました。今のschema変更は「本体だけが新形式を知る」状態にはしていません。次に現在CMakeで実際に使う freecam_edge_validation を走らせ、その後、既知4ターンと6ターン乱数監査を通します。
+
+4ターン本命は閉じました。既知6ターン監査も回していますが、0x3F7C19 の古いメモは開始positionを文章に残しておらず、current=0では過去の境界値と一致しませんでした。これは新バグと決めず、位置規約を1つずらしたcurrent=1も比較して、元監査の開始条件を復元します。
+
+6ターン旧監査 0x3F7C19 は、メモに開始positionが残っておらず current=0/1 どちらも過去境界値を再現しないので、新修正の回帰判定には使えません。そこを無理に「壊れた」とは扱いません。4ターン本命はROM live#338 ↔ C++ next#339で閉じています。今はschema v4を導入したことで旧検証runtimeが読めなくならないよう整合を取った後、同じfresh ROMで5・6ターンへ延長します。
+
+4ターン修正が成立したので、そのまま同じROM stateをTurn5/6へ延長します。余計なtrigger probeはここで停止し、指定5本だけに戻します。Turn5は ためる(62)、Turn6は けものづき→ナイトリッチ(69:2) にして、ROMのCtable/HPとC++の同prefixを比較します。
+
+Turn5入力前に DeSmuME が nativeFault pause を残しており、コマンド自体はまだ送られていません。これは戦闘不一致ではなく、停止したprobeのexec hook由来の残留break状態です。state/seedはTurn4終了のままなので、break状態だけ確認して通常resumeできるなら解除します。
+
+Turn5へ進めようとしたところ、停止済みprobeの低レベルexec trapがブラウザ側に残っていて、breakpoint一覧は空なのに同じPCで即pauseする状態です。これはROM/C++差ではありません。4ターンの証拠は回収済みなので、この汚れたlaneを引きずらず、同じ naitoritti.dst を指定5本だけのfresh laneで再作成して6ターン監査へ進みます。
+
+fresh 6ターンROM再演はTurn1入力済みで、長い戦闘待ちが非同期化しただけです。重複送信せず、その間に修正済みC++の同じ6ターンprefixを先に通し、Turn5/6の期待位置・HPを固定します。
+
+Turn2〜4は送信済みで、まとめたUI待ちが非同期化されています。重複入力はしません。その間に変更範囲を監査します。特にユーザーが疑ったdiffとは別の本修正が、手書きruntime・metadata生成器・生成物だけに閉じていて、探索本体へ触れていないことを確認します。
