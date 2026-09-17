@@ -2481,3 +2481,118 @@ AI probeで補正が1つ入りました。1体目C2は weighted slot 3、2体目
 4ターンC++は戦闘本体の整合がかなり戻りました。Turn 2/3/4の開始位置は 99 / 177 / 249、最終 next=339。元のメモの275/278は、AI欠落修正前の別状態だったので廃棄します。ROMも 71→ナイトリッチ / 161(ためる) / spell24→A / spell24→B を同じseedで通し、各ターンのcheckpointを取り直します。
 
 戦闘側は3ターン目までC++内部で一貫していて、カメラ開始前の境界も崩れていません。ROM 4ターン実走はUI待ちが長いので走らせたまま、並行して 021E05F0 / 021E08BC / 021E2904 のデコンパイルを取り直し、row+4が「読む値」なのか「stack再利用のzero/nonzero条件」なのかをコードと突き合わせます。
+
+続けます。前段で確定した「護衛AIのslot 0/3で各2 RNG不足」は既に最小修正済みで、1ターン目はROMと同期しました。ここからは同じ分離を確認し、4ターン再現のROM実測と 021E05F0 / 021E08BC / 021E2904 のデコンパイルを突き合わせ、row+4起点の最初のカメラ不一致だけを追います。
+
+前回の作業分離 battlearrow_multiturn_0917b は競合なしで継続可能、DeSmuME lane は naitoritti_camera_0917d が生存しています。Ghidraも dq9_new2.nds が明示的に開いているので、ROM実測と逆アセンブルの対象はずれていません。
+
+いまのソースには、前回以降のROM自然観測を反映した痕跡がすでにあります。特に「ターン先頭row+4は TTTT」「通常攻撃とザキはscratch像を上書きしない」という実測ベースの処理が入っています。古い TTFF コメントだけが残っているため、コメントではなく生の row4NaturalResults と camera.bin の関数本体で再確認します。
+
+ROM側でrow+4の正体はかなり固まりました。021E1958 がactor/class/pointerを書き直しても row+4 自体は以前のstack内容を残し、021E2904 が必要な行だけ明示的に 1 を書く構造です。つまり「ゴミ値を意味のある値として再現」ではなく、そのsetup時点の zero/nonzero と局所的な1書込みを一致させるのが正しいです。次は現ソースを再実行し、ROMの最初の3ターン自然観測とC++を直接比較します。
+
+現C++の1ターン目はrow+4自体はROMと同じになりました。Hero setupは row4=TTTT、直後の通常攻撃は TTTF です。goalもROMの Hero=41/C0=38/C1=23/C2=34 と一致しています。残って見える差はC++ traceの start 更新時点なので、row+4値そのものではなく「setup後にgoalをstartへcommitするタイミング」か、単なるtrace観測時点差かを先に判定します。
+
+TRACE main-camera の観測時点も確認できました。starts=左側 と goals/aux/row4 はsetup直後、->右側 だけがその後の CommitActionProgressRaw 等を経た値です。したがってROMの 021E08BC 終端と比べるべきなのは 左側start + goals + aux + row4 で、1ターン目action0はそこまで全項目一致しています。右側startの差は不具合ではありません。
+
+1ターン目はsetup単位でROMと完全一致しました。4 actionすべてで、startBefore / goal / aux / row4 が順番まで一致しています。つまりrow+4の扱いは少なくともTurn 1では直っており、次の検査点はTurn 2以降です。
+
+Turn 2で最初の実カメラ不一致を特定しました。action1（C0攻撃）まではROMと完全一致ですが、action2（C2攻撃）のsetupでROMは将来参加者C0の goal=58、C++は goal=56 です。さらにROMはaction2→action3の間にfuture参加者の goal を start へ反映しており、C++はそこも反映していません。まず goal 58/56 の生成元をROMのsetup probeとC++のfallback計算で比較します。
+
+コード上の差も絞れました。Turn 2 action1でC0には aux=58 が付いています。次のaction2でROMはそれをそのまま goal=58 に再利用しますが、C++は「58はoccupancy上使えない」と判定してfallbackへ落ち goal=56 を選んでいます。CLionでその瞬間の occupancy[58] と判定値を直接取ります。
+
+最初の条件付きbreakpointはその経路では止まりませんでした。aux=58 はaction1 setup時の値で、action完了処理の後には既に変わっている可能性があるため、仮説を修正します。次はfallback chooserそのものを C0 && startNode=48 で止め、ROMと食い違う 56 を選ぶ直前のoccupancyを取ります。
+
+CLion実測でC++側の原因が具体化しました。Turn 2 action2のC0は start=48、conflictInvalidated=true、row+4非zero、そして occupancy[58]=0xFF なのでaux再利用不能→fallbackに落ちています。ROMが58を選ぶなら、差はrow+4そのものではなく、その直前に組み直したoccupancyで58を0xFFにしているかどうかです。ROM側の同setupでoccupancy 58を直接取ります。
+
+いま取れたsetup probeは別の後段setup（C0 start=58→goal57）なので、Turn 2 action2の証拠には使いません。C++では48の6近傍が全部0xFFになっていることだけは確定しました。probeの選択/クリア機能を確認し、開始stateからTurn 2までだけ再演して該当setupを採り直します。
+
+ROM側はprobeにイベントクリア機能があるので、古いsetupを混ぜずに採り直せます。naitoritti.dst を同じlaneへ再ロードし、setup/row4/AI観測をリセットして seed 0x2D6A91 をfresh #1へ戻し、Turn 1→Turn 2だけを実UIで再演します。
+
+fresh state復帰後の最初の fight だけUI操作が失敗しました。seedや観測stateはまだ未消費なので証拠は汚れていません。操作を分けて現在UIを再確認し、fight submenuだけ再試行します。
+
+Turn 1は正しい ナイトリッチ(C1) 対象で完了しました。非同期化は単に長いUI解決で、結果は成功済みです。ここからTurn 2の ためる(DQ9 161) を入れ、直後のC2攻撃setupだけprobeで抜きます。
+
+fresh ROMでTurn 1終了時は live#83、C++の次位置84と一致し、Turn 2 ためる も完了しました。これで古いcaptureではなく、今回の正確な 70:2 → 62 のTurn 2 action2 setupを取り出せます。
+
+Turn 2 action2の最初の差はもうかなり狭いです。ROMはC0のaux=58を再利用してgoal=58、C++は同じ地点でoccupancy[58]=0xFFのためfallbackして56。次はROMのoccupancy再構築関数そのものとC++ BuildPresentationOccupancy の「既存0xFFを引き継ぐか」を突き合わせ、ここが一致しなければその一点だけ直します。
+
+021E1920 はoccupancy生成ではなく「12-byte rosterからactor IDの行を探すだけ」でした。ここは候補から外します。ROM setupを見るとC0 aux58再利用の直前にも build-occupancy は呼ばれていますが、probe名が少し紛らわしい可能性があるので、C++ BuildPresentationOccupancy の根拠コメント/対応アドレスとROM側の実関数を正確に辿ります。
+
+ROMの 021E1A1C が取れました。重要なのは「全部fresh」ではなく、81セルを走査して 0xFF だけ残し、それ以外を0へ戻してから actor footprint を再構築することです。つまりC++が既存occupancyを丸ごとベースとして再利用しているなら、それはROMより強く状態を残しています。C++実装を読んで、この差が58の0xFFを作っているのか確認します。
+
+C++のoccupancy再構築本体は、ROM 021E1A1C と同じく「0xFFだけ保存、それ以外0クリア→現在のgoal/startとauxを塗り直す」になっていました。ここ自体は正しいです。なのにC0 aux58が再構築後も0xFFになるなら、58を0xFFにした処理とC0 auxを消した処理の順序がROMと違うはずです。InvalidatePresentationConflicts がactorのauxへ何をするかを詰めます。
+
+決定的な差が取れました。C++はTurn 2 action2でC0をprevious participantとして処理する時点で、aux58が既に255へ消され、conflictInvalidated=true になっています。ROM同地点ではC0は aux=58 のままで、その58をgoalへ再利用しています。つまり「occupancy判定の違い」より一段前、C++がC0のaux58を誤って無効化しているのが最初の誤状態です。どのinvalidate呼び出しが58を消したかを特定します。
+
+C++側の誤状態は InvalidatePresentationConflicts でしか作られません。なので次は推測を捨てて、C0(aux58) が実際に conflictInvalidated=true / aux=255 にされるその行で止めます。node / excludedActor / excludedTarget / call stack を取れば、誤ったinvalidateの発生元が一発で確定します。
+
+最初の誤書込み地点まで止められています。C++はTurn 2 action2のC2→Hero処理中に、PresentationNeighbors(conflictPivot) が [57,58,47,49,39,40] となりC0のaux58を消しています。いま conflictPivot とHeroのbattle-world座標を直接読み、同じsetupのROM nearest-node / invalidate-conflict と突き合わせます。
+
+原因はほぼ確定です。ROMの同setupは FUN_021E1E50 でHeroの現在のbattle actor +0x44/+0x4Cからnearest nodeを取り、[49,50,40,42,31,32]（node41の近傍）だけをinvalidateしています。C++はHeroを battleWorld=(0,10240) と見てnode48を選び、aux58まで巻き込んでいます。一方、その瞬間のHeroの現在座標はC++自身でも world=(10641,0) です。座標ソースの使い分けが逆になっていないか、node変換と更新箇所を確認します。
+
+座標→nodeも確定しました。(10641,0) → 41、(0,10240) → 48。ROMのinvalidate近傍は41、C++は48なので、差はまさに座標ソースです。probeの position がROM battle actor +0x44/+0x4Cを読んでいることを確認してから、AssignPresentationGoal のconflict pivotだけを現在座標へ直す最小パッチを入れます。
+
+構造体コメント上も battleWorldX/Z が本来 actor+0x44/+0x4C の正本です。なので AssignPresentationGoal だけ worldX/Z に逃がすのはやめます。いまの本当の不具合は、ROMではTurn 2でHeroのactor transformがnode41座標 (10641,0) なのに、C++のbattleWorldだけbase (0,10240) に残っていることです。どのライフサイクルで同期し損ねたかを1段前へ追います。
+
+さらに一段前が確定しました。ROMでもTurn 2 action1開始時はHero actor transformがbase (0,10240) でnode48近傍をinvalidateしています。action1完了後からaction2開始までの間だけ Hero actor transformが (10641,0) に変わり、node41へ切り替わります。つまり座標初期値ではなく、C++の「通常攻撃完了時の非行動参加者/targetのbattle-world同期」が抜けています。該当完了処理を読んで、ROMのどのコピーに対応するかを確定します。
+
+了解。確定した事実はその場でコードへ入れます。いま確定しているのは「Turn 2 action1 の通常攻撃完了後、ROMは攻撃対象Heroの actor+0x44/+0x4C を presentation 現在位置(node41)へ同期するが、C++はbase座標のまま」という一点です。これを最小修正して即再実行します。
+
+パッチ文字列の一致だけ外れました。処理自体は止めません。対象末尾を短く取り直して、同じ場所へ小さい差分で入れます。
+
+修正は入りました。通常攻撃完了時に、対象のbattle actor X/Zだけをpresentation現在位置へ同期する最小差分です。これから同じ --trace-main-sequence 0x2D6A91 1 70:2 62 を再実行し、Turn 2 action2で conflictPivot=41、C0 goal=58 まで戻るか確認します。
+
+修正は効きました。Turn 2 action2はROMと一致し、C0の誤invalidateが消えて goal=58 に戻りました。次の最初の差もすでに見えています。ROMはaction2終了時にfuture participant C1も start 34→16 へ進めますが、C++は34のままです。ここもROM実測済みなので、次はその完了規則をコードへ即反映します。
+
+Turn 2 action2の長いfuture routeも反映でき、action3開始時 41,58,16,50 までROM側のset-startと一致しました。次はaction3のgoal/auxをfresh ROMから取り、現在C++の goals=41,57,24,59 / aux C1=33 と照合します。
+
+action3 setupもROMと完全一致しました。starts=41,58,16,50 / goals=41,57,24,59 / aux C1=33 まで一致です。ここまで判明した2点はコード反映済みなので、次は同じ修正のまま元の4ターン列 70:2 → 62 → 71:1 → 71:3 まで伸ばして、最初の新しい不一致へ進みます。
+
+4ターン実行自体は成功し、戦闘RNGも position 339 まで通っています。ただ出力がUI上限で後半traceだけ切れました。コードは既に2箇所反映済みなので、後半は出力頼みではなくTurn 3/4のsetupで直接止め、ROMとC++の最初の不一致を拾います。
+
+71 はこのビルドでは共通action ZAKI（DQ9 0x0018）です。まず3ターン列だけに縮めてTurn 3のcamera traceを全部出し、ROM側も同じザキ対象で進めます。
+
+Turn 3のROM実演も ザキ(DQ9 24) → ゾンビナイトA(C0) で完了しました。ここからTurn 3 action0〜3をC++ traceと順番に照合します。
+
+Turn 3 action0（ザキ）はROMと一致です。開始 22,38,14,40、setup後 goals=21,38,15,41 / aux Hero=30、action0特殊完了後の最終start 21,38,15,41 まで合っています。action1以降を続けます。
+
+Turn 3で次の最初の不一致が出ました。action0は一致していますが、action1（C0通常攻撃）のfuture fallbackだけROMと逆方向です。ROMは C1 15→14、C2 41→42、C++は C1 15→16、C2 41→40。current actorのaux39までは一致しているので、fallback候補の選択順/occupancyを切り分けて、その場で直します。
+
+近傍列挙順 02170F58 とC++ PresentationNeighbors() は node15/node41とも一致しています。したがって逆方向化は列挙順ではなくoccupancyの差です。Turn 3 action1のC1 fallback直前でC++ occupancyを止め、ROM側も同じ地点の81-byte mapを観測できるよう既存setup probeへ読み取りだけ追加します。
+
+今止まったのはTurn 1の同型fallbackでした。Turn 3 action1は直前に [39,40,29,31,21,22] をinvalidateするので、occupancy[21]==0xFF を条件へ足して該当地点だけに絞ります。
+
+条件式で occupancy[...] をGDBが一部フレームで評価できず、Turn 1で余計に止まりました。occupancy自体の問題ではないので、ROMでTurn 3まで残っているC1の cachedTargetId=193 を条件に使ってTurn 3 action1だけへ絞り直します。
+
+C++側のTurn 3 action1 C1 fallback直前mapは取れました。次はROMの同じ 021E2664 entryで r1 の81-byte occupancyをそのまま保存するだけの読み取り追加を既存probeへ入れます。これで14/16の分岐原因を値単位で比較できます。
+
+ROM probeへのoccupancy保存は実装済みです。これを同じ persistent script 名で更新し、naitoritti.dst から3ターンを同条件で再演します。
+
+続行します。いまC++側はTurn 3 action1のC1 fallback直前で止めたままです。ROM側も同じ地点の81-byte occupancyを取れるようprobe更新済みなので、fresh 3ターンを完走してmap差をそのままコードへ反映します。
+
+Turn 2 fresh ROMも完了しました。ここまでのseed進行は前回と同じなので、Turn 3ザキへ進めて、更新したprobeからC1 fallbackの81-byte mapを回収します。
+
+ROM/C++ occupancyを突き合わせると、C1の14/16逆転理由は1セルまで絞れました。ROMはnode23が空き、C++だけnode23が0xFFです。021E2664 は最初のsecond-ringで23が空いていれば14、塞がれていれば次のringの16へtie-breakが移るため、fallback実装自体ではなく前アクションから残した0xFF node23が誤りです。発生元を直します。
+
+Turn-endでは既にbase-world restoreを実装しているので、node23の原因を「C0のbattleWorldが残った」と決め打ちしません。次はTurn 3 action0の実際のC++ InvalidatePresentationConflicts をその場で止め、ROMの [39,40,29,31,21,22] と配列を直接比較します。
+
+Turn 3 action0のC++ invalidate配列はROMと完全一致しました：[39,40,29,31,21,22]。なのでnode23の誤0xFFはaction0ではありません。次のC0通常攻撃のinvalidateも同じ方法で捕まえ、どこで23が混入するかを追います。
+
+原因は確定しました。Turn 3 action1でC++自身がROMと違うinvalidateを出しています。
+
+ROM: [39,40,29,31,21,22] = pivot 30
+C++: [30,31,21,23,12,13] = pivot 22
+これがnode23を0xFFにしてC1を16へ押しています。fallbackではなく、直前のHero battle-world/nearest-nodeを直します。
+
+C++側の誤pivotの中身も確定です。Turn 3 action1直前のHeroは
+start=21, aux=30, world=(-5320,-9216), battleWorld=(0,-18432) で、021E1E50相当がbattleWorldから22を選んでいます。ROMは同地点でactor+0x44/+0x4Cが (-5320,-9216) なのでpivot30です。つまりTurn 3 action0完了時にHeroのbattle actor transformだけ同期し損ねているのが原因です。既存actionIndex0完了処理の現在actor分岐へ最小修正を入れます。
+
+(-5320,-9216) はC++のnode変換でも30です。したがってaction0完了処理で、current actorのpresentation transformは既にROMと同じnode30座標なのにbattleWorldへコピーしていません。ここだけ即修正します（X/Zのみ。Yは今回のnearest-node原因ではないため別証拠なしに広げません）。
+
+修正後、Turn 3 action1はROMと完全一致しました。C1 15→14、C2 41→42 が戻り、誤0xFF node23も消えています。続けてTurn 3 action2（ためる）とaction3（C2通常攻撃）をROM captureと突き合わせます。
+
+Turn 3はaction2/action3までROMと一致しました。ROMはaction3で starts=30,39,14,42 / goals=30,38,7,32 / aux C2=41、修正後C++も同じです。ここから元の4手目 71:3（ザキ→ゾンビナイトB）をROMでfresh継続し、Turn 4へ進みます。
+
+Turn 4 ROM action0も捕捉できました。ターン末recenter後の開始は Hero=48, C0=56, C1=25, C2=59、ザキ→C2で setup は goals=48,55,7,59 / aux Hero=57 です。C++ 4ターン列を同じ修正状態で再実行して比較します。
+
+4ターン実行は正常終了し、戦闘RNGはposition 339まで通りましたが、CLionの返却上限でTurn 4 camera行だけ切れています。ログファイルを迂回読みに行かず、C++をTurn 4 action0 setupで直接止めてROM 48,56,25,59 → goals 48,55,7,59 / aux57 と比較します。

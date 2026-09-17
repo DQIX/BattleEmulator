@@ -1656,6 +1656,15 @@ inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
         if (currentOldAux != detail::kInvalidPresentationNode
             && currentOldGoal != detail::kInvalidPresentationNode) {
             currentActor.startNode = currentOldGoal;
+            // Fresh ROM seed 0x2D6A91, turn 3 action 0: once 021DC1D4 has
+            // selected the current actor's aux transform and then restored
+            // start=oldGoal, actor+0x44/+0x4C already matches that transform.
+            // Hero is (-5320,-9216) here (nearest node 30); keeping the old
+            // physical X/Z incorrectly selects node 22 in the next setup.
+            currentActor.battleWorldKnown = true;
+            currentActor.battleWorldX = currentActor.worldX;
+            currentActor.battleWorldZ = currentActor.worldZ;
+            state.nearestNodeCache[currentActorIndex] = {};
         }
 
         state.presentationGoalSetupActive = false;
@@ -1679,11 +1688,11 @@ inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
     const auto* currentActorRoute = FindCurrentRoute(actorId);
     const bool currentActorHasRoute =
         currentActorRoute != nullptr && currentActorRoute->count != 0;
-    const bool ordinaryAttackCompletesNonActorOneHopRoutes =
+    const bool ordinaryAttackCompletesNonActorRoutes =
         state.hasPreviousAction && state.previousAction.dq9ActionId == UINT16_C(1);
     const bool completesNonActorOneHopRoutes =
         (triggerDecision.source == TriggerSource::action_bact && currentActorHasRoute)
-        || ordinaryAttackCompletesNonActorOneHopRoutes;
+        || ordinaryAttackCompletesNonActorRoutes;
     if (triggerDecision.callFreeCamera
         && completesNonActorOneHopRoutes
         && state.currentRoutes.valid) {
@@ -1691,14 +1700,15 @@ inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
             const auto& route = state.currentRoutes.actors[routeIndex];
             if (route.actorId == actorId
                 || route.actorId == detail::kInvalidPresentationActor
-                || route.count != 2) {
+                || route.count < 2
+                || (!ordinaryAttackCompletesNonActorRoutes && route.count != 2)) {
                 continue;
             }
             const std::size_t participantIndex = FindPresentationActorIndex(route.actorId);
             if (participantIndex >= state.presentationActorCount) return false;
             auto& participant = state.presentationActors[participantIndex];
             if (!participant.movementEnabled || route.nodes[0] != participant.startNode) continue;
-            const std::uint8_t node = route.nodes[1];
+            const std::uint8_t node = route.nodes[route.count - 1];
             if (node >= detail::kPresentationNodePositions.size()) return false;
             const auto position = detail::kPresentationNodePositions[node];
             if (!position.valid) return false;
@@ -1725,6 +1735,23 @@ inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
     // without committing those goals to start nodes when the action completes.
     // Only the executing actor's completed route belongs to this lifecycle;
     // coordinated future-participant goals remain provisional for the next setup.
+    // Fresh ROM seed 0x2D6A91, turn 2 action 1 (ordinary C0 attack) proves
+    // that action completion copies the current target presentation X/Z to
+    // battle actor +0x44/+0x4C before action 2 setup. Hero therefore changes
+    // from base battle world (0,10240) to presentation node 41 (10641,0), while
+    // the presentation start itself remains 41. Keep Y untouched here: the
+    // camera nearest-node consumer 021E1E50 reads only +0x44/+0x4C.
+    if (ordinaryAttackCompletesNonActorRoutes) {
+        const std::size_t targetIndex = FindPresentationActorIndex(state.previousAction.targetId);
+        if (targetIndex < state.presentationActorCount) {
+            auto& target = state.presentationActors[targetIndex];
+            target.battleWorldKnown = true;
+            target.battleWorldX = target.worldX;
+            target.battleWorldZ = target.worldZ;
+            state.nearestNodeCache[targetIndex] = {};
+        }
+    }
+
     return CommitCurrentRouteEnd(actorId);
 }
 
