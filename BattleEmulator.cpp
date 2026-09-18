@@ -184,7 +184,13 @@ inline bool resolveIronSlot(int actor, int slot, int *position, Player players[4
             return true;
         case 1: // DQ9 0x0049 さみだれづき
             if (!Player::isPlayerAlive(players[0])) return false;
-            if (players[actor].mp != 255 && players[actor].mp < 4) return false;
+            // This encounter's stenchurions use judgment 1. 0x0049 belongs
+            // to the attack-record class whose judgment-1 gate is combat+0x3c
+            // bit 0x20, so MP shortage is ignored until that runtime bit is set.
+            if ((players[actor].aiResourceGateMask & 0x20) != 0 &&
+                players[actor].mp != 255 && players[actor].mp < 4) {
+                return false;
+            }
             {
                 const int targetCount = lcg::intRangeRand(position, 3, 4); // lr:0x0216139c
                 (*position)++; // RandIntRange(6,8), lr:0x021613b0
@@ -308,6 +314,9 @@ inline bool resolveNightLichSlot(int slot, int *position, Player players[4], Ene
             return true;
         case 3: // やいばくだき
             if (!Player::isPlayerAlive(players[0]) || players[0].AtkBuffLevel <= -2) return false;
+            // Night Lich is judgment 2, which always applies the action MP
+            // gate. DQ9 0x0096 has cost 4.
+            if (!nightLichHasMp(boss, 4)) return false;
             (*position)++; // max: 2, lr: 0x02156874
             selection = {BattleEmulator::NIGHT_LICH_BLADE_BREAKER, 0, slot};
             return true;
