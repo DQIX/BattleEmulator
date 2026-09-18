@@ -4,6 +4,7 @@ project(newDirectory)
 set(CMAKE_CXX_STANDARD 17)
 
 option(multithreading "Enable multithreading" OFF)
+option(debug3 "Run the existing DEBUG3 SearchRequest entry" OFF)
 
 if(MSVC)
     # ポリシーの設定
@@ -46,6 +47,8 @@ set(SOURCES
         BattleResult.h
         ActionOptimizer.cpp
         ActionOptimizer.h
+        GadonnkoSearch.cpp
+        GadonnkoSearch.h
         Genome.h
         ActionBanManager.h
         HeapQueue.h
@@ -71,6 +74,7 @@ set(SOURCES
 add_executable(ebe_lv21_v2 ${SOURCES})
 add_executable(ebe_lv21_v2_opt ${SOURCES})
 target_compile_definitions(ebe_lv21_v2 PRIVATE MULTITHREADING=1 erusionn_lv21=1)  # `#define MULTITHREADING` を適用
+target_compile_definitions(ebe_lv21_v2 PRIVATE $<$<BOOL:${debug3}>:DEBUG3=1>)
 target_compile_definitions(ebe_lv21_v2_opt PRIVATE OPTIMIZE_MODE=1 erusionn_lv21=1)  # `#define MULTITHREADING` を適用
 
 string(TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)

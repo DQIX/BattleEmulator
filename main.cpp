@@ -11,6 +11,7 @@
 #include "BattleEmulator.h"
 #include "debug.h"
 #include "ActionOptimizer.h"
+#include "GadonnkoSearch.h"
 #include "EnhancedCostCalculator.h"
 #include "InputBuilder.h"
 
@@ -84,6 +85,8 @@ namespace {
 	std::stringstream performanceLogger = std::stringstream();
 	// `InputBuilder` インスタンス作成
 	InputBuilder builder;
+	int searchBudgetMs = GadonnkoSearch::DefaultBudgetMs;
+	int searchVariant = GadonnkoSearch::DefaultVariant;
 
 	constexpr Player BasePlayers[2] = {
 		// プレイヤー1
@@ -659,132 +662,44 @@ namespace {
 	}
 
 	bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aActions[350], std::stringstream &ss) {
-		int32_t gene[350] = {0};
-		auto turns = 0;
-		for (int i = 0; i < 349; ++i) {
-			gene[i] = aActions[i];
-			if (aActions[i] == -1) {
-				gene[i] = -1;
-				break;
-			}
-			turns++;
-		}
-
-		lcg::init(seed);
-
-#if !defined(OPTIMIZE_MODE)
-
-		// --- TableA で探索 ---
-		EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableA);
-		Genome genomeA = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 10000, gene, 0);
-
-		// --- TableB で探索 ---
-		EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableB);
-		Genome genomeB = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 10000, gene, 0);
-
-		// // --- TableC で探索 ---
-		// EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableC);
-		// Genome genomeC = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
-		//
-		// // --- TableC で探索 ---
-		// EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableD);
-		// Genome genomeD = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
-		//
-		// // --- TableC で探索 ---
-		// EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableF);
-		// Genome genomeF = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
-		//
-		// // --- TableC で探索 ---
-		// EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableG);
-		// Genome genomeG = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
-
-
-		BattleResult resultA, resultB, resultC, resultD, resultF, resultG;
-
-		auto runMain = [&](const Genome &g, BattleResult &res) -> RunResult {
-			Player players[2] = {copiedPlayers2[0], copiedPlayers2[1]};
-			int position = 1;
-			uint64_t nowState = 0;
-			BattleEmulator::Main(&position, 100, g.actions, players, &res, seed, nullptr, nullptr, -1, &nowState);
-			bool win = players[1].hp <= 0;
-			return {win, players[1].hp, res.turn, res.position};
-		};
-
-		auto rrA = runMain(genomeA, resultA);
-		auto rrB = runMain(genomeB, resultB);
-		// auto rrC = runMain(genomeC, resultC);
-		// auto rrD = runMain(genomeD, resultD);
-		// auto rrF = runMain(genomeF, resultF);
-		// auto rrG = runMain(genomeG, resultG);
-
-		if (!rrA.win && !rrB.win) {
+		const auto started = std::chrono::steady_clock::now();
+		int turns = 0;
+		while (turns < 350 && aActions[turns] != -1) ++turns;
+		if (turns == 350) {
+			ss << "[GadonnkoSearch] Missing -1 prefix terminator\n";
 			return false;
 		}
-
-		// 勝利したもの同士でターン数→敵残HP（メモ化済み）で比較
-		// 負けたものは無条件で除外
-		auto isBetter = [](const RunResult &a, const RunResult &b) -> bool {
-			if (a.turn != b.turn) return a.turn < b.turn;
-			return a.position < b.position; // 同ターンなら行動数が少ない方
-		};
-
-		const Genome *chosenGenome = nullptr;
-		const BattleResult *chosenResult = nullptr;
-		const RunResult *chosenRR = nullptr;
-
-		auto tryUpdate = [&](const RunResult &rr, const Genome &g, const BattleResult &r) {
-			if (!rr.win) return; // 負けは無価値
-			if (chosenRR == nullptr || isBetter(rr, *chosenRR)) {
-				chosenGenome = &g;
-				chosenResult = &r;
-				chosenRR = &rr;
-			}
-		};
-
-		//A（ケース1）: ためる・すてみ → Multithrust のテンション蓄積戦法
-		//B（ケース3）: メラゾーマ反射しながら長期消耗戦
-		//C（ケース2）: 最短ルートでメラゾーマ反射 → 最速決着
-		tryUpdate(rrA, genomeA, resultA);
-		tryUpdate(rrB, genomeB, resultB);
-		// tryUpdate(rrC, genomeC, resultC);
-		// tryUpdate(rrD, genomeD, resultD);
-		// tryUpdate(rrF, genomeF, resultF);
-		// tryUpdate(rrG, genomeG, resultG);
-
-		ss << dumpTable(*chosenResult, chosenGenome->actions, foundTurn) << std::endl;
-
-		ss << "0x" << std::hex << seed << std::dec << ": ";
-
-		for (auto i = 0; i < 100; ++i) {
-			if (chosenGenome->actions[i] == 0 || chosenGenome->actions[i] == -1) {
-				break;
-			}
-			ss << chosenGenome->actions[i] << ", ";
+		auto result = GadonnkoSearch::Run(copiedPlayers2, seed, aActions, turns,
+		                                searchBudgetMs, searchVariant);
+		if (!result.inputValid || !result.victory || !result.replayVerified) {
+			ss << "[GadonnkoSearch] No verified victory; " << result.error
+			   << " prefix=" << turns << " elapsed_ms=" << result.elapsedMs << '\n';
+			return false;
 		}
-		ss << std::endl;
-
-		// --- 各テーブルの結果をログ出力 ---
-		auto printRunResult = [&](const char *label, const RunResult &rr) {
-			ss << "[" << label << "] ";
-			if (rr.win) {
-				ss << "Win  turn=" << (rr.turn + 1) << " position=" << rr.position;
-			} else {
-				ss << "Lose";
-			}
-			ss << std::endl;
-		};
-		printRunResult("TableA", rrA);
-		printRunResult("TableB", rrB);
-		// printRunResult("TableC", rrC);
-		// printRunResult("TableD", rrD);
-		// printRunResult("TableF", rrF);
-		// printRunResult("TableG", rrG);
-
-
-#endif
-
-		//探索成功
-		return true;
+		// The admitted result already contains a fresh full-world replay, not a
+		// heuristic node or the log of a different candidate.
+		ss << dumpTable(result.replay, result.actions.data(), foundTurn) << '\n';
+		ss << "0x" << std::hex << seed << std::dec << ": ";
+		for (int i = 0; i < result.length; ++i) ss << result.actions[i] << ", ";
+		ss << '\n';
+		const double elapsed = std::chrono::duration<double, std::milli>(
+			std::chrono::steady_clock::now() - started).count();
+		ss << "[GadonnkoSearch] Win enemy_hp=" << result.finalState.players[1].hp
+		   << " position=" << result.finalState.resultPosition
+		   << " equipment_changes=" << result.finalState.equipmentChanges
+		   << " suffix_equipment_changes=" << result.finalState.equipmentChanges - result.root.equipmentChanges
+		   << " turn=" << result.length << " prefix=" << turns
+		   << " replay=verified elapsed_ms=" << elapsed
+		   << " first_ms=" << result.firstVictoryMs << " best_ms=" << result.bestVictoryMs
+		   << " variant=" << GadonnkoSearch::VariantName(searchVariant) << '\n';
+		ss << "[GadonnkoSearch] expanded=" << result.expanded
+		   << " duplicates=" << result.duplicates << " hash_collisions=" << result.hashCollisions
+		   << " rejected_replay=" << result.rejectedReplay
+		   << " unsafe_flee_skipped=" << result.unsafeFleeSkipped
+		   << " equipment_branches=" << result.equipmentBranches
+		   << " zero_change_position=" << result.zeroChangePosition
+		   << " completed_width=" << result.completedWidth << '\n';
+		return result.finalState.players[1].hp == 0;
 	}
 
 	/**
@@ -1036,7 +951,6 @@ namespace {
 #include <emscripten/emscripten.h>
 #endif
 namespace {
-	std::vector<ResultStructure> wasmResults;
 	std::string wasmLastDump;
 	std::string wasmLastError;
 	uint64_t wasmLastTurnProcessed = 0;
@@ -1097,7 +1011,7 @@ namespace {
 		return true;
 	}
 
-	std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed, const ResultStructure &result,
+	std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed,
 	                            int numThreads, bool dropbug) {
 		lcg::init(seed, true);
 
@@ -1171,7 +1085,7 @@ EMSCRIPTEN_KEEPALIVE int wasm_get_found_seeds() {
 
 EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed, int numThreads, int dropbug) {
 	BattleEmulator::ResetTurnProcessed();
-	wasmLastDump = buildDumpOutput(BasePlayers, seed, wasmResults[static_cast<size_t>(resultIndex)], numThreads,
+	wasmLastDump = buildDumpOutput(BasePlayers, seed, numThreads,
 	                               dropbug != 0);
 	wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
 	return wasmLastDump.c_str();
@@ -1289,12 +1203,47 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 	uint64_t seed = 0x0ac040ac;
 
 	int actions[350] = {
-		BattleEmulator::PSYCHE_UP_ALLY,
-		BattleEmulator::PSYCHE_UP_ALLY,
+		65598,65566,65569,
 		-1,
 	};
+	// Direct diagnostics for the SAME SearchRequest; not a separate search or
+	// a test suite. With no arguments the existing DEBUG3 input is unchanged.
+	try {
+		for (int i = 1; i < argc; ++i) {
+			const std::string option = argv[i];
+			if (i + 1 >= argc) throw std::invalid_argument("Missing option value");
+			const std::string value = argv[++i];
+			size_t used = 0;
+			if (option == "--prefix") {
+				std::fill(std::begin(actions), std::end(actions), -1);
+				std::stringstream input(value);
+				std::string token;
+				int count = 0;
+				while (std::getline(input, token, ',')) {
+					const int action = std::stoi(token, &used, 0);
+					if (used != token.size() || action <= 0 || count >= 349)
+						throw std::invalid_argument("Invalid prefix (use an empty string for none)");
+					actions[count++] = action;
+				}
+			} else if (option == "--seed") {
+				seed = std::stoull(value, &used, 0);
+				if (used != value.size() || !seed) throw std::invalid_argument("Invalid seed");
+			} else if (option == "--budget-ms") {
+				searchBudgetMs = std::stoi(value, &used);
+				if (used != value.size() || searchBudgetMs < 0)
+					throw std::invalid_argument("Invalid budget");
+			} else if (option == "--variant") {
+				searchVariant = std::stoi(value, &used);
+				if (used != value.size() || searchVariant < 0 || searchVariant >= GadonnkoSearch::VariantCount())
+					throw std::invalid_argument("Invalid variant");
+			} else throw std::invalid_argument("Unknown DEBUG3 option: " + option);
+		}
+	} catch (const std::exception &e) {
+		std::cerr << e.what() << '\n';
+		return 1;
+	}
 	std::stringstream ss2;
-	SearchRequest(BasePlayers, seed, actions, ss2);
+	const bool searchSucceeded = SearchRequest(BasePlayers, seed, actions, ss2);
 	std::cout << ss2.str() << std::endl;
 
 
@@ -1306,7 +1255,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 	std::cout << performanceLogger.rdbuf() << std::endl;
 
-	return 0;
+	return searchSucceeded ? 0 : 1;
 #endif
 	if (argc < 5) {
 		help(argv[0]);
