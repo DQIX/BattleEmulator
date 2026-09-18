@@ -49,7 +49,7 @@ struct ErugiosuResult {
 
 class ErugiosuSearch {
 public:
-    static constexpr int DefaultBudgetMs = 2000;
+    static constexpr int DefaultBudgetMs = 1500;
     static constexpr int DefaultVariant = 0;
     // Fixed prefix is copied verbatim. Zero-change means keeping its END state.
     static ErugiosuResult Run(const Player initial[2], uint64_t seed,

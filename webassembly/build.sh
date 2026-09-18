@@ -3,7 +3,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT_DIR="${OUTPUT_DIR:-${ROOT}/public}"
-BRANCH_NAME="${BRANCH_NAME:-local}"
+BRANCH_NAME="${BRANCH_NAME:-erugiosu_new_arugo}"
+cd "${ROOT}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -42,7 +43,7 @@ erugiosu_gouketu: -DGOUKETU=1 -DERUGIOSU_SEARCH_BUILD=1
 
 # 未定義ブランチ用フォールバック
 DEFAULT_VARIANTS="
-default:
+default: -DGOUKETU=1 -DERUGIOSU_SEARCH_BUILD=1
 "
 
 SRC_FILES=(
@@ -62,6 +63,8 @@ EMCC_FLAGS=(
   -std=c++20
   -O3
   -sALLOW_MEMORY_GROWTH=1
+  # SearchRequest, exact replay and Main hold sizeable BattleResult objects.
+  -sSTACK_SIZE=2097152
   -sENVIRONMENT=worker,web
   -sWASM_BIGINT=1
   -sNO_EXIT_RUNTIME=1

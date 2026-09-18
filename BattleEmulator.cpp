@@ -24,11 +24,6 @@ constexpr int Ally_Level = 50;
 constexpr double Ally_TensionTable[4] = {1.5, 2.5, 4.0, 6.0};
 constexpr int Ally_TensionLevel = 1 + static_cast<int>(Ally_Level / 10.0);
 constexpr int shieldGuardP = 9; //盾ガード率 9%
-#if defined(GOUKETU)
-constexpr int GouketuEquippedATK = 324;
-constexpr int GouketuBareHandsATK = 179;
-constexpr int GouketuGanannATK = 249;
-#endif
 
 
 
@@ -466,6 +461,11 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 CURE_PARALYSIS || actionTable == PARALYSIS) {
                 actionTable = ATTACK_ALLY;
             }
+            // The ROM cannot select flee while asleep or paralysed. Normalize
+            // at command selection as well as at execution (status may change).
+            if (actionTable == FLEE_ALLY && (players[0].paralysis || players[0].sleeping)) {
+                actionTable = ATTACK_ALLY;
+            }
             //genePosition++;
             if (actionTable == HEAL && players[0].mp <= 0) {
                 if (players[0].SpecialMedicineCount >= 1) {
@@ -591,6 +591,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 }
             } else {
                 int32_t action = actionTable & 0xffff;
+                if (action == FLEE_ALLY && (players[0].paralysis || players[0].sleeping)) {
+                    action = ATTACK_ALLY;
+                }
                 auto skipTurn = false;
                 if (action == SLEEPING && !player0_has_initiative && !players[0].sleeping) {
                     skipTurn = true;

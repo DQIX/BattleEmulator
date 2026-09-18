@@ -53,10 +53,15 @@ uint64_t fingerprint(const ErugiosuState &s) {
 }
 
 int turnOf(const ErugiosuState &s) { return int((s.nowState >> 12) & 0xfffff); }
-int equipmentBit(const Player &p) { return p.defaultATK == 179 ? B::ACTION_BARE_HANDS : 0; }
+int equipmentBit(const Player &p) {
+    if (p.defaultATK == B::GouketuBareHandsATK) return B::ACTION_BARE_HANDS;
+    if (p.defaultATK == B::GouketuGanannATK) return B::ACTION_GANANN;
+    return 0;
+}
 
 bool encoding(int a) {
-    return a > 0 && (a & ~(B::ACTION_ID_MASK | B::ACTION_BARE_HANDS)) == 0;
+    return a > 0 && (a & ~(B::ACTION_ID_MASK | B::ACTION_WEAPON_MASK)) == 0 &&
+        (a & B::ACTION_WEAPON_MASK) != B::ACTION_WEAPON_MASK;
 }
 bool historicalAction(int a) {
     if (!encoding(a)) return false;
@@ -95,7 +100,7 @@ constexpr Config Configs[] = {
     {"attack-preview",    .75, 100, 180, .40, .025, 60, .50, 4, 1}
 };
 constexpr const char *VariantNames[] = {
-    "hybrid-zero-plus-equipment",        // Default: lanes within ONE budget.
+    "hybrid-zero-two-three-weapons",     // Default: lanes within ONE budget.
     "A-zero-change-portfolio",
     "B-equipment-balanced",
     "C-reflection-tension-zero-change",
@@ -104,7 +109,8 @@ constexpr const char *VariantNames[] = {
     "F-full-action-multi-value-portfolio",
     "burst-equipment",
     "defensive-reflection-equipment",
-    "exact-attack-preview-equipment"
+    "exact-attack-preview-equipment",
+    "two-weapon-legal-reference"         // Same portfolio, without ganann branches.
 };
 
 double value(const ErugiosuState &s, const Config &c, bool equipment) {
@@ -115,13 +121,15 @@ double value(const ErugiosuState &s, const Config &c, bool equipment) {
     // A future equipped finisher is available in the equipment lane. This is
     // only an estimate: no stat or RNG cursor is ever modified to realize it.
     double attack = p.atk;
-    if (equipment) attack = std::max(attack, 324 * atkBuff[std::clamp(p.AtkBuffLevel + 2, 0, 4)]);
-    const double base = std::max(0.0, (attack - e.def * .5) * .25);
+    if (equipment) attack = std::max(attack, B::GouketuEquippedATK * atkBuff[std::clamp(p.AtkBuffLevel + 2, 0, 4)]);
+    const bool multithrust = equipment || p.defaultATK == B::GouketuEquippedATK;
+    const double base = std::max(0.0, (attack - e.def * .5) * (multithrust ? .25 : .5));
     const int level = std::clamp(p.TensionLevel, 0, 4);
-    const double ordinary = base * 3.5 * 1.25 * .98;
-    const double burst = (base * tension[level] + level * 6) * 3.5 * 1.25 * .98;
+    const double hits = multithrust ? 3.5 : 1.;
+    const double ordinary = base * hits * 1.25 * .98;
+    const double burst = (base * tension[level] + level * 6) * hits * 1.25 * .98;
     double credit = std::max(0.0, std::min(double(e.hp), burst) - std::min(double(e.hp), ordinary));
-    if (p.mp < 4) credit *= .45;
+    if (multithrust && p.mp < 4) credit *= .45;
     double v = -double(e.hp) + credit * c.tension;
     v += p.hp * c.hp;
     const double danger = std::max(0.0, std::min(110.0, p.maxHp * .36) - p.hp);
@@ -145,7 +153,7 @@ double value(const ErugiosuState &s, const Config &c, bool equipment) {
     return v;
 }
 
-struct Link { uint32_t parent; int32_t action; }; // Must retain bit 16.
+struct Link { uint32_t parent; int32_t action; }; // Retain both weapon bits.
 struct Node {
     ErugiosuState state{};
     uint64_t hash = 0;
@@ -172,6 +180,7 @@ struct Context {
     BattleResult transitionLog{}, verificationLog{};
     int bestPosition = INT32_MAX;
     int bestChanges = INT32_MAX;
+    bool includeGanann = true;
 
     double elapsed() const { return std::chrono::duration<double, std::milli>(Clock::now() - start).count(); }
     bool expired() const { return Clock::now() >= passDeadline; }
@@ -282,13 +291,13 @@ bool beam(Context &ctx, const Config &cfg, size_t width, bool equipment,
     std::vector<uint32_t> order, chosen, group;
     std::vector<uint8_t> selected;
     StateSet seen;
-    const size_t branching = std::size(Actions) * (equipment ? 2 : 1);
+    const size_t branching = std::size(Actions) * (equipment ? 3 : 1);
     current.reserve(width); next.reserve(width); candidates.reserve(width * branching);
     links.reserve(width * size_t(std::max(1, ctx.maxTurns - ctx.result.prefixLength)));
     Node root; root.state = ctx.result.root;
     for (int action : anchor) {
         if (ctx.expired() || !ErugiosuSearch::Legal(root.state.players[0], action) ||
-            (!equipment && (action & B::ACTION_BARE_HANDS) != equipmentBit(root.state.players[0])) ||
+            (!equipment && (action & B::ACTION_WEAPON_MASK) != equipmentBit(root.state.players[0])) ||
             !ctx.step(root.state, action)) return false;
         links.push_back({root.path, action}); root.path = uint32_t(links.size() - 1);
     }
@@ -305,9 +314,12 @@ bool beam(Context &ctx, const Config &cfg, size_t width, bool equipment,
             for (int action : Actions) {
                 if (disabled && action != B::ATTACK_ALLY) continue;
                 const int keepBit = equipmentBit(p);
-                const int choices = equipment && !disabled ? 2 : 1;
+                constexpr int weapons[] = {0, B::ACTION_BARE_HANDS, B::ACTION_GANANN};
+                const int choices = equipment && !disabled ? 4 : 1;
                 for (int choice = 0; choice < choices; ++choice) {
-                    const int encoded = action | (keepBit ^ (choice ? B::ACTION_BARE_HANDS : 0));
+                    const int weapon = choice == 0 ? keepBit : weapons[choice - 1];
+                    if (choice && (weapon == keepBit || (!ctx.includeGanann && weapon == B::ACTION_GANANN))) continue;
+                    const int encoded = action | weapon;
                     if (!ErugiosuSearch::Legal(p, encoded)) continue;
                     if ((ctx.result.expanded & 127) == 0 && ctx.expired()) return false;
                     Node n; n.state = parent.state; n.path = parent.path; n.action = encoded;
@@ -383,6 +395,7 @@ void repair(Context &ctx, const Config &cfg, size_t width, bool equipment, int t
     const std::vector<int32_t> anchor(ctx.bestSuffix.begin(), ctx.bestSuffix.begin() + cut);
     beam(ctx, cfg, width, equipment, anchor);
 }
+
 } // namespace
 
 bool ErugiosuSearch::SamePlayer(const Player &a, const Player &b) { return fields(a) == fields(b); }
@@ -398,14 +411,19 @@ bool ErugiosuSearch::Legal(const Player &p, int action) {
     if (!encoding(action)) return false;
     const int id = action & B::ACTION_ID_MASK;
     if (p.paralysis || p.sleeping)
-        return id == B::ATTACK_ALLY && (action & B::ACTION_BARE_HANDS) == equipmentBit(p);
+        return id == B::ATTACK_ALLY && (action & B::ACTION_WEAPON_MASK) == equipmentBit(p);
+    // Main applies a legal weapon change before the turn. A return to the
+    // equipped spear may use MULTITHRUST immediately; bare hands/ganann may not.
+    const int weapon = action & B::ACTION_WEAPON_MASK;
+    const int defaultATK = weapon == B::ACTION_BARE_HANDS ? B::GouketuBareHandsATK :
+        weapon == B::ACTION_GANANN ? B::GouketuGanannATK : B::GouketuEquippedATK;
     switch (id) {
         case B::ATTACK_ALLY: case B::DEFENCE: case B::DOUBLE_UP:
         case B::PSYCHE_UP_ALLY: case B::FLEE_ALLY: return true;
         case B::HEAL: return p.mp >= 2;
         case B::BUFF: case B::DEFENDING_CHAMPION: return p.mp >= 3;
-        case B::MIDHEAL: case B::MAGIC_MIRROR:
-        case B::MULTITHRUST: case B::INSULATE: return p.mp >= 4;
+        case B::MULTITHRUST: return p.mp >= 4 && defaultATK == B::GouketuEquippedATK;
+        case B::MIDHEAL: case B::MAGIC_MIRROR: case B::INSULATE: return p.mp >= 4;
         case B::MORE_HEAL: return p.mp >= 8;
         case B::FULLHEAL: return p.mp >= 24;
         case B::MEDICINAL_HERBS: case B::SPECIAL_MEDICINE: return p.SpecialMedicineCount > 0;
@@ -480,7 +498,8 @@ ErugiosuResult ErugiosuSearch::Run(const Player initial[2], uint64_t seed,
             } else if (ctx.result.root.players[0].hp > 0 && budgetMs > 0) {
                 if (variant < 0 || variant >= VariantCount()) variant = DefaultVariant;
                 const bool zeroOnly = variant == 1 || variant == 3;
-                const bool portfolio = variant == 0 || variant == 1 || variant == 6;
+                ctx.includeGanann = variant != 10;
+                const bool portfolio = variant == 0 || variant == 1 || variant == 6 || variant == 10;
                 auto pass = [&](int config, size_t width, bool equip, int tail = 0) {
                     const auto now = Clock::now();
                     if (now >= ctx.deadline) return;
@@ -503,6 +522,9 @@ ErugiosuResult ErugiosuSearch::Run(const Player initial[2], uint64_t seed,
                     else if (variant == 2) cfg = 4;
                     if (variant == 6 && round % 3 == 0) cfg = 4;
                     const bool equip = !zeroOnly && (round % 4 != 2);
+                    // Narrow and full weapon portfolios share the same deadline
+                    // and exact incumbent. The third weapon need not dilute every pass.
+                    ctx.includeGanann = variant != 10 && (variant != 0 || round % 2 == 0);
                     pass(cfg, width, equip);
                     if (portfolio && ctx.result.victory && round % 2 == 1)
                         pass(cfg, std::min<size_t>(width, 1024), !zeroOnly, 3 + round % 7);

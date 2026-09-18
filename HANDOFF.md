@@ -1,4 +1,10 @@
-# 引き継ぎ
+# 2026-09-18 ガナン対応後の引き継ぎ
+今回の対象は`BattleEmulator(20260918-032011).zip`の通常GOUKETU経路で、目的は敵HP0を満たしたうえでexact BattleResult.position、固定prefix後の実装備変更回数の順に最小化すること。採用探索はErugiosuSearchのvariant0、既定予算1500ms。装備固定・2装備・ガナンを含む3装備の探索を同じ期限と最良候補の下で配分する。3装備を全passへ単純拡張した案は同positionで装備変更が増える入力があったため、後続passを2装備と3装備で交互に実行する構成へ調整した。
+武器の攻撃力324／179／249は元worldの値を変えずBattleEmulator.hで共有し、ACTION_GANANNの入力、維持、切替、固定prefix、再生へ接続済み。MULTITHRUSTは合法な装備変更後のdefaultATKがGouketuEquippedATKと等しい場合だけ生成する。素手・ガナン中は生成しないが、同ターンに通常装備へ戻せる状態なら使用可能。麻痺・眠り中は装備維持＋攻撃だけを探索する。Mainに残っていたFLEEの状態異常処理スキップは、選択時と行動時のATTACK正規化で修正した。他のworld値、敵AI、ダメージ式、RNG処理は変更していない。
+最終比較12入力は全件勝利、全列再生・逐次再生・探索後の独立した再実行が一致し、prefixも維持した。ガナンへの新規切替を生成しない比較版に対しposition改善3件、同値9件、悪化0件。同positionでは装備回数も悪化なし。平均position32.167から31.667、採用版wall1480.043～1485.597ms。0x35f647ではガナンを使ってposition34から31へ改善し、変更6回を採用した。0x248218はposition33のまま変更4回を2回へ戻した。通常DEBUG3、直接SearchRequest、および既存Wasm公開関数をネイティブにコンパイルした呼出し経路は実行済み。
+実Wasmのビルド・実行だけは未確認。Emscriptenがなく取得も失敗したため、公開関数のネイティブ実行をWasm実行と取り違えないこと。build.shの対象branch／fallback／root基準／2MiB stack設定は反映済みで、GOUKETU WebAssemblyからも同じSearchRequest既定値へ接続する。検証のために新しい本番ラッパーやexportは追加していない。詳しい採用理由、再現コマンド、範囲はGANANN_REPORT.md、実行ログはoptimization/results/finalにある。今回の変更にcommit・pushは行っておらず、ローカルMCPはprefix一覧確認だけでユーザー側のファイルを変更していない。
+以下は元ZIPの過去の引き継ぎであり、旧ZIP名・旧hash・旧報告の実測値を今回の結果として扱わないこと。
+# 過去の引き継ぎ
 Latest checkpoint ZIP: /mnt/data/erugiosu_checkpoint_02.zip
 Final ZIP: /mnt/data/erugiosu_search_final.zip
 ## 目的と対象

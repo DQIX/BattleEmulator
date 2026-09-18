@@ -106,6 +106,12 @@ public:
     static constexpr int ACTION_BARE_HANDS = 1 << 16;
     static constexpr int ACTION_EQUIPMENT_CHANGED = 1 << 17;
     static constexpr int ACTION_GANANN = 1 << 18;
+    static constexpr int ACTION_WEAPON_MASK = ACTION_BARE_HANDS | ACTION_GANANN;
+
+    // Shared with the search: these are the existing GOUKETU world values.
+    static constexpr int GouketuEquippedATK = 324;
+    static constexpr int GouketuBareHandsATK = 179;
+    static constexpr int GouketuGanannATK = 249;
 
 
     static bool

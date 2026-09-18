@@ -1,3 +1,5 @@
+# 過去の報告：ガナン対応前
+本ZIPの最新状態・採用パラメーター・実測値・未確認範囲は`GANANN_REPORT.md`を参照すること。以下は添付ZIPに含まれていた旧報告を履歴として保存したもので、今回の実測を表すものではない。
 # エルギオス2 装備変更対応探索 実装・実測報告
 ## 実装
 対象は添付`erugiosu_new_arugo`の`GOUKETU=1`経路。新しい`ErugiosuSearch.cpp/.h`を追加し、既存シグネチャを維持した`SearchRequest`から呼び出す。通常の`newDirectory_gouketu`が新探索を使用する。旧A*、OPTIMIZE_MODE、SUPER向けの既存処理は削除していない。

@@ -1018,7 +1018,7 @@ int main(int argc, char **argv){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x04a1ff18;
+	uint64_t time1 = 0x0431ff19;
 
 	auto counter = 0;
 	int actions[350] = {0};
@@ -1030,7 +1030,7 @@ int main(int argc, char **argv){
 	SearchRequest(copiedPlayers, time1, actions, false, ss);
 	ss << std::endl;
 
-	if(false){
+	if(true){
 		SearchRequest(copiedPlayers, time1+1, actions, false, ss);
 		ss << std::endl;
 
