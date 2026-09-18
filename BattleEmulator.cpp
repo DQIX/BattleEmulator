@@ -170,6 +170,8 @@ inline bool resolveIronSlot(int actor, int slot, int *position, Player players[4
         case 5:
             if (!Player::isPlayerAlive(players[0])) return false;
             (*position)++; // target handler, max:2, lr:0x02156874
+            (*position)++; // RandIntRange(3,4), lr:0x0216139c
+            (*position)++; // RandIntRange(6,8), lr:0x021613b0
             selection = {BattleEmulator::ATTACK_ENEMY, 0, slot};
             return true;
         case 0: // DQ9 0x0001: observed planning-side prelude before the normal attack.
@@ -3232,6 +3234,9 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
         case BattleEmulator::DOUBLE_EDGED_SLASH:
         case BattleEmulator::NIGHT_LICH_BLADE_BREAKER:
         case BattleEmulator::NIGHT_LICH_ESCORT_E7:
+            if ((Id & 0xffff) == BattleEmulator::NIGHT_LICH_BLADE_BREAKER && players[attacker].mp != 255) {
+                players[attacker].mp = std::max(0, players[attacker].mp - 4);
+            }
             (*position) += 2;
             (*position)++; // アクロバットスターとか
 
