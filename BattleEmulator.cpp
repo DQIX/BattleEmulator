@@ -2252,13 +2252,17 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             resetCombo(NowState);
             break;
         case MULTITHRUST:
-            if (attacker != 0 && players[attacker].mp != 255 && players[attacker].mp < 4) {
-                players[attacker].aiResourceGateMask |= 0x20;
-                baseDamage = 0;
-                resetCombo(NowState);
-                break;
+            if (players[attacker].mp != 255) {
+                if (attacker != 0 && players[attacker].mp < 4) {
+                    // Judgment-1 enemies can still execute this class while
+                    // combat+0x3c bit 0x20 is clear. The ROM leaves MP at zero,
+                    // executes the action normally, then future selections are
+                    // gated by this bit.
+                    players[attacker].aiResourceGateMask |= 0x20;
+                } else {
+                    players[attacker].mp -= 4;
+                }
             }
-            players[attacker].mp -= 4;
             attackCount = lcg::intRangeRand(position, 3, 4); // lr:0x0216139c
             (*position)++; // RandIntRange(6,8), lr:0x021613b0
             {
