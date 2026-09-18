@@ -30,6 +30,9 @@ thread_local bool player0_has_initiative = false;
 thread_local bool TiggerSkyAttack = false;
 
 namespace {
+    constexpr int kNaitorittiEquippedATK = 306;
+    constexpr int kNaitorittiBareHandsATK = 161;
+
     void AppendLastActionPresentationChildSlot1(const std::uint16_t dq9ActionId) noexcept {
         if (actionsPosition <= 0 || actionsPosition > 8) return;
         const std::size_t index = static_cast<std::size_t>(actionsPosition - 1);
@@ -44,8 +47,6 @@ namespace {
 namespace {
     constexpr std::uint16_t kHeroBodyItemId = UINT16_C(0x3382);
     constexpr std::uint16_t kHeroPrimaryWeaponItemId = UINT16_C(0x5021);
-    constexpr int kGerunikkuEquippedATK = 306;
-    constexpr int kGerunikkuBareHandsATK = 175;
 
     void InitializeBattleActorRefs() noexcept {
         using dq9::freecam::fast::BattleActorRef;
@@ -371,7 +372,7 @@ namespace {
         if (attacker != 0) return 1.0;
         // The Lightning modifier belongs to いなずまのやり, not to the hero.
         // Bare hands must therefore use the normal 1.0 multiplier.
-        if (players[attacker].defaultATK != kGerunikkuEquippedATK) return 1.0;
+        if (players[attacker].defaultATK != kNaitorittiEquippedATK) return 1.0;
         if (defender == 2) return 1.25; // ゲルニック将軍: Lightning 125
         if (defender == 1 || defender == 3) return 0.5; // てっこうまじん: Lightning 050
 #else
@@ -801,17 +802,16 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         if (genePosition != -1) {
             genePosition = counterJ - 1;
         }
-#if defined(gerunikku)
         bool equipmentChangedThisTurn = false;
-        bool bareHandsThisTurn = false;
+        bool bareHandsThisTurn = players[0].defaultATK == kNaitorittiBareHandsATK;
         const int packedHeroCommand = heroActionOverride > 0
                                           ? heroActionOverride
                                           : (genePosition != -1 && Gene != nullptr ? Gene[genePosition] : -1);
         if (packedHeroCommand != 0 && packedHeroCommand != -1) {
             bareHandsThisTurn = HeroBareHands(packedHeroCommand);
             const int requestedDefaultATK = bareHandsThisTurn
-                                                ? kGerunikkuBareHandsATK
-                                                : kGerunikkuEquippedATK;
+                                                ? kNaitorittiBareHandsATK
+                                                : kNaitorittiEquippedATK;
             // Equipment changes are rejected while paralyzed or confused.
             if (!players[0].paralysis && !players[0].confused
                 && players[0].defaultATK != requestedDefaultATK) {
@@ -820,7 +820,6 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 equipmentChangedThisTurn = true;
             }
         }
-#endif
         TiggerSkyAttack = false;
         //現在ターンを保存
         (*NowState) &= ~0xFFFFF000;
@@ -1057,11 +1056,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                               players[0].specialChargeTurn, players[0].mp, defenseFlag);
             if (result != nullptr) {
                 const int pos = result->position - 1;
-#if defined(gerunikku)
                 if (!isEnemy && equipmentChangedThisTurn) {
                     result->equipmentChange[pos] = bareHandsThisTurn ? 2 : 1;
                 }
-#endif
 #if defined(gerunikku)
                 result->enemyHpA[pos] = enemyHpA;
                 result->enemyHpB[pos] = enemyHpB;

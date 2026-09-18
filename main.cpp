@@ -87,9 +87,7 @@ void printHeader(std::stringstream& ss);
 // ヘッダーを出力する関数
 void printHeader(std::stringstream& ss){
 	ss << std::left << std::setw(6) << "turn"
-#if defined(gerunikku)
 		<< std::setw(8) << "equip"
-#endif
 		<< std::setw(18) << "aAct"
 		<< std::setw(8) << "target"
 		<< std::setw(18) << "eAct1"
@@ -185,9 +183,7 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 				if(turn > PastTurns){
 					ss6
 						<< std::left << std::setw(6) << (currentTurn + 1)
-#if defined(gerunikku)
 						<< std::setw(8) << equipmentChange
-#endif
 						<< std::setw(18) << aAction;
 					appendHeroTargetColumn(currentTurn);
 					ss6
@@ -263,10 +259,8 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 #endif
 			amp2 = std::to_string(amp);
 			aAction = BattleEmulator::getActionName(action);
-#if defined(gerunikku)
 			if(result.equipmentChange[i] == 1) equipmentChange = "on";
 			else if(result.equipmentChange[i] == 2) equipmentChange = "sude";
-#endif
 			aDamage = damage;
 			if(ATKTurn >= 0){
 				ATKTurn1 = std::to_string(ATKTurn);
@@ -306,9 +300,7 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 	if(currentTurn != -1){
 		ss6
 			<< std::left << std::setw(6) << (currentTurn + 1)
-#if defined(gerunikku)
-<< std::setw(8) << equipmentChange
-#endif
+			<< std::setw(8) << equipmentChange
 			<< std::setw(18) << aAction;
 		appendHeroTargetColumn(currentTurn);
 		ss6
