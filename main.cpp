@@ -200,10 +200,8 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 				if(turn > PastTurns){
 					ss6
 						<< std::left << std::setw(6) << (currentTurn + 1)
-#if defined(GOUKETU)
 						<< std::setw(8) << equipmentChange
-#endif
-						<< std::setw(18) << aAction
+						<< std::setw(18) << sp
 
 						<< std::setw(18) << eAction[0]
 						<< std::setw(18) << eAction[1]
@@ -297,10 +295,8 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 	if(currentTurn != -1){
 		ss6
 			<< std::left << std::setw(6) << (currentTurn + 1)
-#if defined(GOUKETU)
 			<< std::setw(8) << equipmentChange
-#endif
-			<< std::setw(18) << aAction
+			<< std::setw(18) << sp
 			<< std::setw(18) << eAction[0]
 			<< std::setw(18) << eAction[1]
 			<< std::setw(6) << aDamage
