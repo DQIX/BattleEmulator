@@ -27,6 +27,9 @@ constexpr double Ally_TensionTable[4] = {1.5, 2.5, 4.0, 6.0};
 constexpr int shieldGuardP = 9; //盾ガード率 9%
 constexpr int kaisinnP = 500;
 constexpr int WooshSlashKaisinnP = 100;
+constexpr int EquippedATK = 310;
+constexpr int BareHandsATK = 165;
+constexpr int GanannATK = 235;
 
 #elif defined(gilyumei1)
 
@@ -35,6 +38,8 @@ constexpr double Ally_TensionTable[4] = {1.5, 2.5, 4.0, 6.0};
 constexpr int shieldGuardP = 9; //盾ガード率 9%
 constexpr int kaisinnP = 500;
 constexpr int WooshSlashKaisinnP = 100;
+constexpr int EquippedATK = 320;
+constexpr int BareHandsATK = 175;
 
 #endif
 
@@ -252,6 +257,33 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         if (genePosition != -1) {
             genePosition = counterJ - 1;
         }
+#if defined(RUBII) || defined(gilyumei1)
+        bool equipmentChangedThisTurn = false;
+        bool bareHandsThisTurn = false;
+        bool ganannThisTurn = false;
+        bool equipmentRequestAvailable = true;
+        const bool inactiveAtTurnStart = players[0].inactive;
+        if (genePosition != -1 && Gene[genePosition] != 0 && Gene[genePosition] != -1) {
+            bareHandsThisTurn = (Gene[genePosition] & ACTION_BARE_HANDS) != 0;
+#if defined(RUBII)
+            ganannThisTurn = (Gene[genePosition] & ACTION_GANANN) != 0;
+#else
+            equipmentRequestAvailable = (Gene[genePosition] & ACTION_GANANN) == 0;
+#endif
+            int requestedDefaultATK = bareHandsThisTurn ? BareHandsATK : EquippedATK;
+#if defined(RUBII)
+            if (ganannThisTurn) {
+                requestedDefaultATK = GanannATK;
+            }
+#endif
+            if (equipmentRequestAvailable && !players[0].paralysis && !players[0].sleeping && !inactiveAtTurnStart &&
+                players[0].defaultATK != requestedDefaultATK) {
+                players[0].defaultATK = requestedDefaultATK;
+                RecalculateBuff(players);
+                equipmentChangedThisTurn = true;
+            }
+        }
+#endif
         TiggerSkyAttack = false;
         //現在ターンを保存
         (*NowState) &= ~0xFFFFF000;
@@ -308,6 +340,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         }
         if (genePosition != -1 && Gene[genePosition] != 0 && Gene[genePosition] != -1) {
             actionTable = Gene[genePosition];
+#if defined(RUBII) || defined(gilyumei1)
+            actionTable &= ACTION_ID_MASK;
+#endif
             if (actionTable == TURN_SKIPPED || actionTable == SLEEPING || actionTable == CURE_SLEEPING || actionTable ==
                 CURE_PARALYSIS || actionTable == PARALYSIS) {
                 actionTable = ATTACK_ALLY;
@@ -577,7 +612,15 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         } else if (players[0].hasMagicMirror) {
                             mmt1 = 0;
                         }
-                        BattleResult::add(result, action, basedamage, false, atk1,
+                        int resultAction = action;
+#if defined(RUBII) || defined(gilyumei1)
+                        if (equipmentChangedThisTurn) {
+                            resultAction |= ACTION_EQUIPMENT_CHANGED;
+                            if (bareHandsThisTurn) resultAction |= ACTION_BARE_HANDS;
+                            if (ganannThisTurn) resultAction |= ACTION_GANANN;
+                        }
+#endif
+                        BattleResult::add(result, resultAction, basedamage, false, atk1,
                                           def1, mmt1, counterJ - 1,
                                           player0_has_initiative, ehp, ahp,
                                           tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag);
@@ -670,7 +713,15 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         } else if (players[0].hasMagicMirror) {
                             mmt1 = 0;
                         }
-                        BattleResult::add(result, action, 0, false, atk1,
+                        int resultAction = action;
+#if defined(RUBII) || defined(gilyumei1)
+                        if (equipmentChangedThisTurn) {
+                            resultAction |= ACTION_EQUIPMENT_CHANGED;
+                            if (bareHandsThisTurn) resultAction |= ACTION_BARE_HANDS;
+                            if (ganannThisTurn) resultAction |= ACTION_GANANN;
+                        }
+#endif
+                        BattleResult::add(result, resultAction, 0, false, atk1,
                                           def1, mmt1, counterJ - 1,
                                           player0_has_initiative, ehp, ahp,
                                           tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag);

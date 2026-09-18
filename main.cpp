@@ -111,6 +111,7 @@ void printHeader(std::stringstream& ss);
 void printHeader(std::stringstream& ss){
 	ss << std::left << std::setw(6) << "turn"
 		<< std::setw(18) << "sp"
+		<< std::setw(8) << "equip"
 		<< std::setw(18) << "aAct"
 		<< std::setw(18) << "eAct1"
 		<< std::setw(18) << "eAct2"
@@ -129,7 +130,7 @@ void printHeader(std::stringstream& ss){
 		//<< std::setw(6) << "MMT"
 		//<< std::setw(6) << "Tab"
 		<< std::setw(6) << "Sct" << "\n";
-	ss << std::string(140, '-') << "\n"; // 区切り線を出力
+	ss << std::string(160, '-') << "\n"; // 区切り線を出力
 }
 
 std::string dumpTable(const BattleResult& result,const int32_t gene[350], int PastTurns);
@@ -140,12 +141,13 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 	int currentTurn = -1;
 	int eDamage[2] = {-1, -1}, aDamage = -1;
 	bool initiative_tmp = false;
-	std::string eAction[2], aAction, sp, tmpState, ATKTurn1, DEFTurn1, magicMirrorTurn1, specialChargeTurn1, amp1, ahp2,
+	std::string eAction[2], aAction, equipmentChange, sp, tmpState, ATKTurn1, DEFTurn1, magicMirrorTurn1, specialChargeTurn1, amp1, ahp2,
 	            ehp2, amp2;
 	auto counter = 0;
 	// データのループ
 	for(int i = 0; i < result.position; ++i){
 		auto action = result.actions[i];
+		auto actionId = action & BattleEmulator::ACTION_ID_MASK;
 		auto damage = result.damages[i];
 		auto ATKTurn = result.AtkBuffTurns[i];
 		auto DEFTurn = result.BuffTurnss[i];
@@ -178,6 +180,7 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 					ss6
 						<< std::left << std::setw(6) << (currentTurn + 1)
 						<< std::setw(18) << sp
+						<< std::setw(8) << equipmentChange
 						<< std::setw(18) << aAction
 						<< std::setw(18) << eAction[0]
 						<< std::setw(18) << eAction[1]
@@ -203,6 +206,7 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 			eAction[0] = "";
 			eAction[1] = "";
 			aAction = "";
+			equipmentChange = "";
 			eDamage[0] = 0;
 			eDamage[1] = 0;
 			aDamage = 0;
@@ -217,7 +221,7 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 
 		// 敵か味方の行動を適切な変数に格納
 		if(isEnemy){
-			eAction[counter] = BattleEmulator::getActionName(action);
+			eAction[counter] = BattleEmulator::getActionName(actionId);
 			eDamage[counter] = damage;
 			counter++;
 			ahp2 = std::to_string(ahp1);
@@ -225,7 +229,16 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 		else{
 			ehp2 = std::to_string(ehp1);
 			amp2 = std::to_string(amp);
-			aAction = BattleEmulator::getActionName(action);
+			aAction = BattleEmulator::getActionName(actionId);
+#if defined(RUBII) || defined(gilyumei1)
+			if((action & BattleEmulator::ACTION_EQUIPMENT_CHANGED) != 0){
+				if((action & BattleEmulator::ACTION_GANANN) != 0){
+					equipmentChange = "ganann";
+				}else{
+					equipmentChange = (action & BattleEmulator::ACTION_BARE_HANDS) != 0 ? "sude" : "on";
+				}
+			}
+#endif
 			aDamage = damage;
 			if(ATKTurn >= 0){
 				ATKTurn1 = std::to_string(ATKTurn);
@@ -246,14 +259,14 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 			sp = specialAction;
 
 			if(eAction[0] != "magic Burst" && eAction[1] != "magic Burst"){
-				if(!initiative && action == BattleEmulator::TURN_SKIPPED || action == BattleEmulator::PARALYSIS ||
-					action == BattleEmulator::SLEEPING){
+				if(!initiative && actionId == BattleEmulator::TURN_SKIPPED || actionId == BattleEmulator::PARALYSIS ||
+					actionId == BattleEmulator::SLEEPING){
 					sp = "---------------";
 				}
-				if((action == BattleEmulator::CURE_SLEEPING || action == BattleEmulator::CURE_PARALYSIS)){
+				if((actionId == BattleEmulator::CURE_SLEEPING || actionId == BattleEmulator::CURE_PARALYSIS)){
 					sp = "---------------";
 				}
-				if((action == BattleEmulator::INACTIVE_ALLY) && !defenseFlag){
+				if((actionId == BattleEmulator::INACTIVE_ALLY) && !defenseFlag){
 					sp = "---------------";
 				}
 			}
@@ -265,6 +278,7 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 		ss6
 			<< std::left << std::setw(6) << (currentTurn + 1)
 			<< std::setw(18) << sp
+			<< std::setw(8) << equipmentChange
 			<< std::setw(18) << aAction
 			<< std::setw(18) << eAction[0]
 			<< std::setw(18) << eAction[1]

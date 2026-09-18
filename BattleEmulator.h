@@ -99,6 +99,14 @@ public:
     static constexpr int PSYCHE_UP_ALLY = 62;
     static constexpr int INSULATE = 63;//バーハ
 
+    // Upper action bits encode the requested weapon state: neither request bit
+    // means equipped, bit 16 means bare hands, and bit 18 means ganann (RUBII only).
+    // Bit 17 is used only in BattleResult output to mark a state that actually changed.
+    static constexpr int ACTION_ID_MASK = 0xffff;
+    static constexpr int ACTION_BARE_HANDS = 1 << 16;
+    static constexpr int ACTION_EQUIPMENT_CHANGED = 1 << 17;
+    static constexpr int ACTION_GANANN = 1 << 18;
+
 
 	static const int FLAME_SLASH = 64; //火炎斬り
 	static const int KACRACKLE_SLASH = 65;// マヒャド斬り
