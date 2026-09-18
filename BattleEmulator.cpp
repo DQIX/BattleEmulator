@@ -2252,6 +2252,12 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             resetCombo(NowState);
             break;
         case MULTITHRUST:
+            if (attacker != 0 && players[attacker].mp != 255 && players[attacker].mp < 4) {
+                players[attacker].aiResourceGateMask |= 0x20;
+                baseDamage = 0;
+                resetCombo(NowState);
+                break;
+            }
             players[attacker].mp -= 4;
             attackCount = lcg::intRangeRand(position, 3, 4); // lr:0x0216139c
             (*position)++; // RandIntRange(6,8), lr:0x021613b0
@@ -2980,13 +2986,15 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             break;
         case BattleEmulator::KABUFF: {
             const bool insufficientMp = players[attacker].mp != 255 && players[attacker].mp < 6;
-            const int kabuffDefender = insufficientMp ? attacker : defender;
             if (insufficientMp) {
                 // Execution-time MP shortage raises the judgment-1 availability
                 // bit used by future isCanActionTaken calls for this resource class.
                 players[attacker].aiResourceGateMask |= 0x08;
+                baseDamage = 0;
+                resetCombo(NowState);
+                break;
             }
-            if (!insufficientMp && players[attacker].mp != 255) {
+            if (players[attacker].mp != 255) {
                 players[attacker].mp -= 6;
             }
             (*position) += 2;
@@ -2994,7 +3002,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position)++; // 会心判定
             (*position)++; // 回避
 
-            baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[kabuffDefender].def);
+            baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[defender].def);
             if (baseDamage == 0) {
                 baseDamage = lcg::getPercent(position, 2); //0x021e81a0
             }
@@ -3002,7 +3010,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 (*position)++; //不明 0x021e54fc
             }
 
-            if (!insufficientMp && Player::isPlayerAlive(players[defender]) && players[defender].BuffLevel < 2) {
+            if (Player::isPlayerAlive(players[defender]) && players[defender].BuffLevel < 2) {
                 players[defender].BuffLevel++;
                 players[defender].BuffTurns = 7;
                 RecalculateBuff(players, defender);
