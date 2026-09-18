@@ -2342,6 +2342,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                             tmp *= Enemy_TensionTable[players[attacker].TensionLevel - 1];
                             tmp += players[attacker].TensionLevel * TensionLevel;
                         }
+                        const bool useZeroDamageFallback = static_cast<int>(tmp) == 0;
                         if (players[hitDefender].TensionLevel == 4) {
                             tmp *= 0.5;
                         }
@@ -2357,7 +2358,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                             }
                             baseDamage = 0;
                         } else {
-                            if (baseDamage == 0) {
+                            if (useZeroDamageFallback) {
                                 baseDamage = lcg::getPercent(position, 2); // lr:0x021e81a0
                             }
                             if (baseDamage != 0) {
@@ -3378,7 +3379,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 }
 
                 tmp *= HeroSpearLightningMultiplier(players, attacker, defender);
-                if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
+                if (!defenseFlag && !players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
                     tmp *= players[defender].defence;
                 }
                 baseDamage = static_cast<int>((tmp));
@@ -3405,7 +3406,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     }
                 }
 
-                if ((Id & 0xffff) == BattleEmulator::NIGHT_LICH_ESCORT_E7) {
+                if (baseDamage != 0 && (Id & 0xffff) == BattleEmulator::NIGHT_LICH_ESCORT_E7) {
                     (*position)++; // action 0x00E7 additional status roll
                 }
 
