@@ -255,7 +255,11 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 			aAction = BattleEmulator::getActionName(actionId);
 #if defined(GOUKETU)
 			if((action & BattleEmulator::ACTION_EQUIPMENT_CHANGED) != 0){
-				equipmentChange = (action & BattleEmulator::ACTION_BARE_HANDS) != 0 ? "sude" : "on";
+				if((action & BattleEmulator::ACTION_GANANN) != 0){
+					equipmentChange = "ganann";
+				}else{
+					equipmentChange = (action & BattleEmulator::ACTION_BARE_HANDS) != 0 ? "sude" : "on";
+				}
 			}
 #endif
 			aDamage = damage;

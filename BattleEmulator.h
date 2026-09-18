@@ -99,12 +99,13 @@ public:
     static constexpr int PSYCHE_UP_ALLY = 62;
     static constexpr int INSULATE = 63;//バーハ
 
-    // Upper action bits are free in this emulator. For GOUKETU, bit 16 carries
-    // the requested weapon state: 0 = equipped, 1 = bare hands. Bit 17 is only
-    // used in BattleResult output to mark a weapon state that actually changed.
+    // Upper action bits are free in this emulator. For GOUKETU, bit 16 requests
+    // bare hands and bit 18 requests ganann; neither bit means equipped.
+    // Bit 17 is only used in BattleResult output to mark a weapon state that actually changed.
     static constexpr int ACTION_ID_MASK = 0xffff;
     static constexpr int ACTION_BARE_HANDS = 1 << 16;
     static constexpr int ACTION_EQUIPMENT_CHANGED = 1 << 17;
+    static constexpr int ACTION_GANANN = 1 << 18;
 
 
     static bool

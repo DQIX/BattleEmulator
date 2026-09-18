@@ -27,6 +27,7 @@ constexpr int shieldGuardP = 9; //盾ガード率 9%
 #if defined(GOUKETU)
 constexpr int GouketuEquippedATK = 324;
 constexpr int GouketuBareHandsATK = 179;
+constexpr int GouketuGanannATK = 249;
 #endif
 
 
@@ -217,9 +218,14 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 #if defined(GOUKETU)
         bool equipmentChangedThisTurn = false;
         bool bareHandsThisTurn = false;
+        bool ganannThisTurn = false;
         if (genePosition != -1 && Gene[genePosition] != 0 && Gene[genePosition] != -1) {
             bareHandsThisTurn = (Gene[genePosition] & ACTION_BARE_HANDS) != 0;
-            const int requestedDefaultATK = bareHandsThisTurn ? GouketuBareHandsATK : GouketuEquippedATK;
+            ganannThisTurn = (Gene[genePosition] & ACTION_GANANN) != 0;
+            int requestedDefaultATK = bareHandsThisTurn ? GouketuBareHandsATK : GouketuEquippedATK;
+            if (ganannThisTurn) {
+                requestedDefaultATK = GouketuGanannATK;
+            }
             if (!players[0].paralysis && !players[0].sleeping &&
                 players[0].defaultATK != requestedDefaultATK) {
                 players[0].defaultATK = requestedDefaultATK;
@@ -658,6 +664,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         if (equipmentChangedThisTurn) {
                             resultAction |= ACTION_EQUIPMENT_CHANGED;
                             if (bareHandsThisTurn) resultAction |= ACTION_BARE_HANDS;
+                            if (ganannThisTurn) resultAction |= ACTION_GANANN;
                         }
 #endif
                         BattleResult::add(result, resultAction, basedamage, false, atk1,
@@ -758,6 +765,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         if (equipmentChangedThisTurn) {
                             resultAction |= ACTION_EQUIPMENT_CHANGED;
                             if (bareHandsThisTurn) resultAction |= ACTION_BARE_HANDS;
+                            if (ganannThisTurn) resultAction |= ACTION_GANANN;
                         }
 #endif
                         BattleResult::add(result, resultAction, 0, false, atk1,
