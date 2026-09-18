@@ -76,6 +76,7 @@ inline constexpr auto kActions = [] {
     actions[BattleEmulator::MIDHEAL] = Describe<31>();
     actions[BattleEmulator::MORE_HEAL] = Describe<32>();
     actions[BattleEmulator::FULLHEAL] = Describe<33>();
+    actions[BattleEmulator::DEFENDING_CHAMPION] = Describe<135>();
     actions[BattleEmulator::MEDICINAL_HERBS] = Describe<255>();
     // スカラ. Live 021E08BC action records and the ROM actdata row both
     // identify BattleEmulator::BUFF as DQ9 action 41. Keep it in the general
