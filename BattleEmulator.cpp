@@ -61,6 +61,15 @@ constexpr int DragonSlashKaisinnP = kaisinnP / 2;
 constexpr int multithrust3KaisinnP = DragonSlashKaisinnP / 3;
 constexpr int multithrust4KaisinnP = DragonSlashKaisinnP / 4;
 
+int BattleEmulator::equipmentAttack(int requestBits) {
+    if (requestBits == 0) return EquippedATK;
+    if (requestBits == ACTION_BARE_HANDS) return BareHandsATK;
+#if defined(RUBII)
+    if (requestBits == ACTION_GANANN) return GanannATK;
+#endif
+    return -1;
+}
+
 thread_local int threadTurnProcessed = 0;
 int startTurn = 0;
 

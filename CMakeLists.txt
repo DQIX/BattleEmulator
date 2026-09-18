@@ -45,6 +45,8 @@ set(SOURCES
         Equipment.h
         ActionOptimizer.cpp
         ActionOptimizer.h
+        GilyumeiSearch.cpp
+        GilyumeiSearch.h
         Genome.h
         EnhancedCostCalculator.h
         EnhancedCostCalculator.cpp
@@ -67,6 +69,23 @@ target_compile_definitions(gilyumei2_rubii_opt PRIVATE gilyumei1=1 OPTIMIZE_MODE
 add_executable(gilyumei1 ${SOURCES})
 target_compile_definitions(gilyumei1 PRIVATE gilyumei1=1)
 
+# Optional existing DEBUG3 entry, with exactly the production search defaults.
+option(BATTLE_DEBUG3 "Run the existing SearchRequest DEBUG3 examples" OFF)
+if(BATTLE_DEBUG3)
+    target_compile_definitions(gilyumei1 PRIVATE DEBUG3=1)
+    target_compile_definitions(gilyumei2_rubii PRIVATE DEBUG3=1)
+endif()
+
+option(BATTLE_SEARCH_BENCHMARK "Build the optional stdin search measurement driver" OFF)
+if(BATTLE_SEARCH_BENCHMARK)
+    set(BENCHMARK_SOURCES ${SOURCES})
+    list(REMOVE_ITEM BENCHMARK_SOURCES main.cpp)
+    add_executable(gilyumei1_benchmark benchmark/search_benchmark.cpp ${BENCHMARK_SOURCES})
+    target_compile_definitions(gilyumei1_benchmark PRIVATE gilyumei1=1)
+    add_executable(gilyumei2_rubii_benchmark benchmark/search_benchmark.cpp ${BENCHMARK_SOURCES})
+    target_compile_definitions(gilyumei2_rubii_benchmark PRIVATE RUBII=1)
+endif()
+
 
 string(TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)
 string(TIMESTAMP BUILD_TIME "%H:%M:%S" UTC)
@@ -79,7 +98,9 @@ if(MINGW)
 elseif(MSVC)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi /O2")
     set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
-    target_compile_options(newDirectory PRIVATE /utf-8)
+    target_compile_options(gilyumei1 PRIVATE /utf-8)
+    target_compile_options(gilyumei2_rubii PRIVATE /utf-8)
+    target_compile_options(gilyumei2_rubii_opt PRIVATE /utf-8)
 endif()
 
 # MinGWの最適化フラグに応じたマクロ設定

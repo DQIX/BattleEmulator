@@ -121,6 +121,10 @@ public:
 
     static std::string getActionName(int actionId);
 
+    // Read-only equipment metadata, shared with candidate generation.
+    // Returns -1 for a request unavailable in this compiled world.
+    static int equipmentAttack(int requestBits);
+
     static int roundCustom(double value);
 
 	static void ResetTurnProcessed();

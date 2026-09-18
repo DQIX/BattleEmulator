@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT_DIR="${OUTPUT_DIR:-${ROOT}/public}"
-BRANCH_NAME="${BRANCH_NAME:-local}"
+BRANCH_NAME="${BRANCH_NAME:-gilyumei2_new_arugo}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -21,6 +21,10 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# Resolve output before changing into ROOT for compilation.
+mkdir -p "${OUTPUT_DIR}"
+OUTPUT_DIR="$(cd "${OUTPUT_DIR}" && pwd)"
 
 # ------------------------------------------------------------
 # ブランチごとのビルド variant 定義
@@ -42,7 +46,8 @@ gilyumei2_v6: -DRUBII=1
 
 # 未定義ブランチ用フォールバック
 DEFAULT_VARIANTS="
-default:
+gilyumei1_v6: -Dgilyumei1=1
+gilyumei2_v6: -DRUBII=1
 "
 
 SRC_FILES=(
@@ -52,6 +57,7 @@ SRC_FILES=(
   camera.cpp
   debug.cpp
   ActionOptimizer.cpp
+  GilyumeiSearch.cpp
   EnhancedCostCalculator.cpp
   EnhancedHashCalculator.cpp
   EnhancedHeapQueue.cpp
@@ -61,6 +67,7 @@ EMCC_FLAGS=(
   -std=c++20
   -O3
   -sALLOW_MEMORY_GROWTH=1
+  -sSTACK_SIZE=2097152
   -sENVIRONMENT=worker,web
   -sWASM_BIGINT=1
   -sNO_EXIT_RUNTIME=1
@@ -97,13 +104,13 @@ while read -r line; do
 
   echo "==> Building ${BRANCH_NAME} / ${variant}"
 
-  emcc "${SRC_FILES[@]}" \
+  (cd "${ROOT}" && emcc "${SRC_FILES[@]}" \
     ${defines} \
     "${EMCC_FLAGS[@]}" \
-    -o "${out_dir}/emulator.js"
+    -o "${out_dir}/emulator.js")
 
   manifest_entries+=(
-    "{\"id\":\"${variant}\",\"label\":\"${variant}\",\"branch\":\"${BRANCH_NAME}\",\"module\":\"branches/${BRANCH_NAME}/${variant}/emulator.js\",\"defaultThreads\":4}"
+    "{\"id\":\"${variant}\",\"label\":\"${variant}\",\"branch\":\"${BRANCH_NAME}\",\"module\":\"branches/${BRANCH_NAME}/${variant}/emulator.js\",\"defaultThreads\":1}"
   )
 done <<< "${variants}"
 

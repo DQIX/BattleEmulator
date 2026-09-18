@@ -10,6 +10,7 @@
 #include "BattleEmulator.h"
 #include "debug.h"
 #include "ActionOptimizer.h"
+#include "GilyumeiSearch.h"
 #include "EnhancedCostCalculator.h"
 
 #ifdef DEBUG
@@ -341,132 +342,48 @@ void showHeader(){
 //int main(int argc, char *argv[]) {
 
 bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream &ss){
-	int32_t gene[350] = {0};
-	auto turns = 0;
-	for(int i = 0; i < 349; ++i){
-		gene[i] = aActions[i];
-		if(aActions[i] == -1){
-			gene[i] = -1;
-			break;
-		}
-		turns++;
-	}
-
-	lcg::init(seed);
-
-#if !defined(OPTIMIZE_MODE)
-
-    // --- TableA で探索 ---
-    EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableA);
-	Genome genomeA = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 6000, gene, 0);
-
-    // --- TableB で探索 ---
-    EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableB);
-    Genome genomeB = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 6000, gene, 0);
-
-    // --- TableC で探索 ---
-    EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableC);
-    Genome genomeC = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 6000, gene, 0);
-
-	// --- TableC で探索 ---
-	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableD);
-	Genome genomeD = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 6000, gene, 0);
-
-	// --- TableC で探索 ---
-	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableF);
-	Genome genomeF = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 6000, gene, 0);
-
-	// --- TableC で探索 ---
-	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableG);
-	Genome genomeG = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 6000, gene, 0);
-
-
-    BattleResult resultA, resultB, resultC, resultD, resultF, resultG;
-
-	auto runMain = [&](const Genome& g, BattleResult& res) -> RunResult {
-		Player players[2] = {copiedPlayers2[0], copiedPlayers2[1]};
-		int position = 1;
-		uint64_t nowState = 0;
-		BattleEmulator::Main(&position, 100, g.actions, players, &res, seed, nullptr, nullptr, -1, &nowState);
-		bool win = players[1].hp <= 0;
-		return { win, players[1].hp, res.turn, res.position };
-	};
-
-    auto rrA = runMain(genomeA, resultA);
-    auto rrB = runMain(genomeB, resultB);
-    auto rrC = runMain(genomeC, resultC);
-    auto rrD = runMain(genomeD, resultD);
-    auto rrF = runMain(genomeF, resultF);
-    auto rrG = runMain(genomeG, resultG);
-
-    if (!rrA.win && !rrB.win && !rrC.win && !rrD.win) {
+    (void)dropbug; // Existing API; never selects a different solver.
+    if (!aActions) return false;
+    int length = 0;
+    while (length < 350 && aActions[length] != -1 && aActions[length] != 0) ++length;
+    if (length == 350) {
+        ss << "[GilyumeiSearch] Invalid unterminated prefix\n";
         return false;
     }
-
-    // 勝利したもの同士でターン数→敵残HP（メモ化済み）で比較
-    // 負けたものは無条件で除外
-	auto isBetter = [](const RunResult& a, const RunResult& b) -> bool {
-		if (a.turn != b.turn) return a.turn < b.turn;
-		return a.position < b.position;  // 同ターンなら行動数が少ない方
+    const auto result = GilyumeiSearch::Run(copiedPlayers2, seed, aActions, length);
+    if (result.victory && result.replayVerified) {
+        ss << dumpTable(result.replay, result.actions.data(), startturn) << '\n';
+        ss << "0x" << std::hex << seed << std::dec << ": ";
+        for (int i = 0; i < result.length; ++i) ss << result.actions[i] << ", ";
+        ss << '\n';
+    }
+    ss << "[GilyumeiSearch] " << (result.victory ? "Win" : "No verified victory")
+       << " input=" << (result.inputValid ? "valid" : "invalid")
+       << " prefix=" << length
+       << " root_hp=" << result.root.players[0].hp
+       << " root_enemyHP=" << result.root.players[1].hp
+       << " budget_ms=" << GilyumeiSearch::ProductionBudgetMs
+       << " variant=" << GilyumeiSearch::ProductionVariant;
+    if (result.victory) {
+        ss << " enemyHP=" << result.finalState.players[1].hp
+           << " turn=" << (result.replay.turn + 1)
+           << " position=" << result.replay.position
+           << " equipment_changes=" << result.finalState.equipmentChanges
+           << " suffix_changes=" << result.finalState.equipmentChanges - result.root.equipmentChanges
+           << " exact=" << result.replayVerified;
+    }
+    ss << " elapsed_ms=" << result.elapsedMs << " first_ms=" << result.firstVictoryMs
+       << " expanded=" << result.expanded << " duplicates=" << result.duplicates
+       << " rejected_replay=" << result.rejectedReplay << '\n';
+    const auto lane = [&](const char *label, const GilyumeiLaneResult &r) {
+        ss << '[' << label << "] ";
+        if (r.victory) ss << "position=" << r.position << " equipment_changes=" << r.equipmentChanges;
+        else ss << "No verified victory";
+        ss << '\n';
     };
-
-    const Genome* chosenGenome = nullptr;
-    const BattleResult* chosenResult = nullptr;
-    const RunResult* chosenRR = nullptr;
-
-    auto tryUpdate = [&](const RunResult& rr, const Genome& g, const BattleResult& r) {
-        if (!rr.win) return;  // 負けは無価値
-        if (chosenRR == nullptr || isBetter(rr, *chosenRR)) {
-            chosenGenome = &g;
-            chosenResult = &r;
-            chosenRR = &rr;
-        }
-    };
-
-	//A（ケース1）: ためる・すてみ → Multithrust のテンション蓄積戦法
-	//B（ケース3）: メラゾーマ反射しながら長期消耗戦
-	//C（ケース2）: 最短ルートでメラゾーマ反射 → 最速決着
-    tryUpdate(rrA, genomeA, resultA);
-    tryUpdate(rrB, genomeB, resultB);
-    tryUpdate(rrC, genomeC, resultC);
-    tryUpdate(rrD, genomeD, resultD);
-    tryUpdate(rrF, genomeF, resultF);
-    tryUpdate(rrG, genomeG, resultG);
-
-    ss << dumpTable(*chosenResult, chosenGenome->actions, startturn) << std::endl;
-
-    ss << "0x" << std::hex << seed << std::dec << ": ";
-
-	for (auto i = 0; i < 100; ++i) {
-		if (chosenGenome->actions[i] == 0 || chosenGenome->actions[i] == -1) {
-			break;
-		}
-		ss << chosenGenome->actions[i] << ", ";
-	}
-	ss << std::endl;
-
-	// --- 各テーブルの結果をログ出力 ---
-	auto printRunResult = [&](const char* label, const RunResult& rr) {
-		ss << "[" << label << "] ";
-		if (rr.win) {
-			ss << "Win  turn=" << (rr.turn + 1) << " position=" << rr.position;
-		} else {
-			ss << "Lose";
-		}
-		ss << std::endl;
-	};
-	printRunResult("TableA", rrA);
-	printRunResult("TableB", rrB);
-	printRunResult("TableC", rrC);
-	printRunResult("TableD", rrD);
-	printRunResult("TableF", rrF);
-	printRunResult("TableG", rrG);
-
-
-#endif
-
-	//探索成功
-	return true;
+    lane("unchanged-suffix", result.unchanged);
+    lane("equipment-aware", result.equipment);
+    return result.victory && result.replayVerified;
 }
 
 // ブルートフォースリクエスト関数
@@ -781,7 +698,7 @@ namespace {
         BattleEmulator::ResetTurnProcessed();
 
     	std::stringstream ss;
-    	if(!SearchRequest(copiedPlayers, seed, aActions5, true, ss)){
+		if(!SearchRequest(copiedPlayers, seed, aActions5, dropbug, ss)){
     		ss << std::endl;
     		ss << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
     		ss << "      **YOU WILL NOW LOSE!**       " << std::endl;
@@ -865,7 +782,34 @@ EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed
 }
 #endif
 
-int main(){
+int main(int argc, char **argv){
+	// Direct native access to the SAME production SearchRequest as DEBUG3/WASM.
+	if (argc >= 3 && std::string(argv[1]) == "--search") {
+		try {
+			size_t consumed = 0;
+			const std::string seedText = argv[2];
+			const uint64_t seed = std::stoull(seedText, &consumed, 0);
+			if (consumed != seedText.size()) throw std::invalid_argument("invalid seed");
+			int prefix[350]; std::fill_n(prefix, 350, -1);
+			int length = 0;
+			for (int arg = 3; arg < argc; ++arg) {
+				std::string text = argv[arg];
+				std::replace(text.begin(), text.end(), ',', ' ');
+				std::istringstream input(text); std::string token;
+				while (input >> token) {
+					if (length >= 349) throw std::invalid_argument("prefix too long");
+					size_t used = 0; const int action = std::stoi(token, &used, 0);
+					if (used != token.size() || action <= 0) throw std::invalid_argument("invalid action");
+					prefix[length++] = action;
+				}
+			}
+			std::stringstream output;
+			const bool won = SearchRequest(copiedPlayers, seed, prefix, false, output);
+			std::cout << output.str(); return won ? 0 : 1;
+		} catch (const std::exception &e) {
+			std::cerr << e.what() << '\n'; return 2;
+		}
+	}
 	showHeader();
 
 	//https://zenn.dev/reputeless/books/standard-cpp-for-competitive-programming/viewer/library-ios-iomanip#3.1-c-%E8%A8%80%E8%AA%9E%E3%81%AE%E5%85%A5%E5%87%BA%E5%8A%9B%E3%82%B9%E3%83%88%E3%83%AA%E3%83%BC%E3%83%A0%E3%81%A8%E3%81%AE%E5%90%8C%E6%9C%9F%E3%82%92%E7%84%A1%E5%8A%B9%E3%81%AB%E3%81%99%E3%82%8B
@@ -960,7 +904,7 @@ int main(){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x04a1ff382;
+	uint64_t time1 = 0x04a10f382;
 
 	auto counter = 0;
 	int actions[350] = {0};
