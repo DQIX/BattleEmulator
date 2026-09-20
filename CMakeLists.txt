@@ -4,6 +4,10 @@ project(newDirectory)
 set(CMAKE_CXX_STANDARD 17)
 
 option(multithreading "Enable multithreading" OFF)
+option(DEBUG3 "Run the existing SearchRequest diagnostic entry point" OFF)
+if (DEBUG3)
+    add_compile_definitions(DEBUG3)
+endif ()
 
 if (MSVC)
     # ポリシーの設定
@@ -73,7 +77,7 @@ add_definitions(-DBUILD_DATE="${BUILD_DATE}" -DBUILD_TIME="${BUILD_TIME}")
 if (MINGW)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections") #-fno-inline-small-functions
-    set(CMAKE_EXE_LINKER_FLAGS "-static -Wl,--gc-sections")
+    set(CMAKE_EXE_LINKER_FLAGS "-Wl,--gc-sections")
 elseif (MSVC)
 #    set_property(TARGET nbe_lv17_sp22_tamahane_atk125_def93_v2 PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 #    set_property(TARGET nbe_lv17_sp22_hagane_atk108_def93_v2 PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
