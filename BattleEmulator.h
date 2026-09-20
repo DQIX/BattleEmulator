@@ -115,6 +115,12 @@ public:
     static constexpr int WAR_CRY = 84; //雄叫び
     static constexpr int CLAW_SLASH = 85; //爪できりさく
 
+    static constexpr int ACTION_ID_MASK = 0xffff;
+    static constexpr int ACTION_BARE_HANDS = 1 << 16;
+    static constexpr int ACTION_EQUIPMENT_CHANGED = 1 << 17;
+    static constexpr int ANONN_EQUIPPED_ATK = 205;
+    static constexpr int ANONN_BARE_HANDS_ATK = 70;
+
 
     static void ResetTurnProcessed();
 
