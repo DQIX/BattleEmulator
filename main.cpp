@@ -5,12 +5,12 @@
 #include <iomanip>
 #include <sstream>
 #include <fstream>
+#include <algorithm>
 
 #include "lcg.h"
 #include "BattleEmulator.h"
 #include "debug.h"
 #include "ActionOptimizer.h"
-#include "ZilyadamaSearch.h"
 #include "InputBuilder.h"
 
 #if defined(OPTIMIZE_MODE)
@@ -504,7 +504,7 @@ namespace {
         std::cout << "ver: "<< version << ", atk: "<< BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
         std::cout << "0x" << std::hex << seed << std::endl << std::dec << "actions: ";
 
-        for (auto i = 0; i < 100; ++i) {
+        for (auto i = 0; i < 350; ++i) {
             if (genome.actions[i] == 0 || genome.actions[i] == -1) {
                 break;
             }
@@ -528,56 +528,67 @@ namespace {
                 "Performance: " << std::fixed << std::setprecision(2) << performance << " mann turns/s" << std::endl;
     }
 
-    std::string formatSearchResult(const Player initial[2], uint64_t seed,
-                                   ZilyadamaSearchResult &search, const char *algorithm) {
-        std::stringstream ss;
-        if (!search.victory || !search.replayVerified || search.finalState.players[1].hp != 0) {
-            ss << "SearchRequest failed: no exact victory within the search budget.\n";
-        } else {
-#if defined(MINGW_BUILD)
-            ss << search.prefixLength << "\n";
-            ss << dumpTable(search.replay, search.actions.data(), 0) << "\n";
-#else
-            ss << dumpTable(search.replay, search.actions.data(), search.prefixLength) << "\n";
-#endif
-            ss << "ver: " << version << ", atk: " << initial[0].atk << ", def: " << initial[0].def
-               << ", seed: 0x" << std::hex << seed << std::dec << "\nactions: ";
-            for (int i = 0; i < search.length; ++i) ss << search.actions[i] << ", ";
-            ss << "\n";
-        }
-        ss << "SearchResult: algorithm=" << algorithm
-           << " victory=" << int(search.victory && search.replayVerified)
-           << " enemyHP=" << search.finalState.players[1].hp
-           << " heroHP=" << search.finalState.players[0].hp
-           << " position=" << search.finalState.resultPosition
-           << " rng=" << search.finalState.rngPosition
-           << " turns=" << ((search.finalState.nowState >> 12) & 0xfffff)
-           << " prefix=" << search.prefixLength << "\n";
-        ss << "SearchStats: elapsedMs=" << std::fixed << std::setprecision(3) << search.elapsedMs
-           << " firstVictoryMs=" << search.firstVictoryMs
-           << " transitions=" << search.transitions << " duplicates=" << search.duplicates
-           << " rejectedReplay=" << search.rejectedReplay
-           << " unsafeFleeSkipped=" << search.unsafeFleeSkipped
-           << " completedWidth=" << search.completedWidth
-           << " deadline=" << int(search.deadlineReached) << "\n";
-        return ss.str();
-    }
-
-    // The native request, DEBUG3 and the existing WASM export share both the
-    // search and the exact-replay formatter. No old-search fallback exists.
-    std::string productionSearchOutput(const Player initial[2], uint64_t seed,
-                                        const int aActions[350], int numThreads, bool &victory) {
-        (void)numThreads; // lcg's cache is shared; this search is deliberately serial.
-        BattleEmulator::ResetTurnProcessed();
-        auto search = ZilyadamaSearch::Run(initial, seed, aActions);
-        victory = search.victory && search.replayVerified && search.finalState.players[1].hp == 0;
-        return formatSearchResult(initial, seed, search, ZilyadamaSearch::VariantName(search.variant));
-    }
-
     bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads) {
-        bool victory = false;
-        std::cout << productionSearchOutput(copiedPlayers, seed, aActions, numThreads, victory);
-        return victory;
+#if defined(DEBUG)
+
+        auto t0 = std::chrono::high_resolution_clock::now();
+        BattleEmulator::ResetTurnProcessed();
+#endif
+
+        int32_t gene[350] = {0};
+        auto turns = 0;
+        for (int i = 0; i < 350; ++i) {
+            gene[i] = aActions[i];
+            if (aActions[i] == -1) {
+                gene[i] = -1;
+                break;
+            }
+            turns++;
+        }
+
+        auto genome =
+                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 20000, gene, numThreads);
+
+        BattleResult result1;
+        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
+        if (!genome.Initialized || genome.EnemyPlayer.hp != 0) {
+            std::cout << "SearchRequest failed: no exact victory within the search budget.\n";
+            return false;
+        }
+
+        int position = 1;
+        uint64_t nowState = 0;
+
+        lcg::init(seed, true);
+        BattleEmulator::Main(&position, genome.processed, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
+                             &nowState);
+        if (players[1].hp != 0 || result1.position != genome.fitness
+            || position != genome.position || nowState != genome.state) {
+            std::cout << "SearchRequest failed: exact replay mismatch.\n";
+            return false;
+        }
+        for (int i = 0; i < turns; ++i) {
+            if (genome.actions[i] != aActions[i]) return false;
+        }
+#if defined(DEBUG)
+        auto t3 = std::chrono::high_resolution_clock::now();
+        auto elapsed_time1 =
+                std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
+        PerformanceDebug("Searcher", BattleEmulator::getTurnProcessed(), static_cast<double>(elapsed_time1), 0);
+        std::cout << "victory=1 enemy_hp=" << players[1].hp
+                  << " exact_position=" << result1.position << " turns=" << genome.processed
+                  << " prefix=" << turns << " prefix_preserved=1 replay_verified=1 elapsed_ms="
+                  << double(elapsed_time1) / 1000.0 << '\n';
+#endif
+
+#if defined(MINGW_BUILD)
+        std::cout << turns << std::endl;
+        dumpTableMain(result1, genome, seed, 0);
+#else
+        dumpTableMain(result1, genome, seed, turns);
+#endif
+
+        return true;
     }
 
     void BruteForceMainLoop(const Player copiedPlayers[2], uint64_t start, uint64_t end, int turns, int gene[350],
@@ -760,69 +771,6 @@ namespace {
 }
 
 int main(int argc, char *argv[]) {
-    // Direct production invocation; no seed identification or built-in answer.
-    // Benchmark modes are explicit and are never reached by SearchRequest.
-    if (argc >= 2 && (std::string(argv[1]) == "--search" ||
-                      std::string(argv[1]) == "--search-benchmark" ||
-                      std::string(argv[1]) == "--legacy-benchmark")) {
-        try {
-            if (argc < 3) throw std::invalid_argument("missing seed");
-            size_t used = 0;
-            const uint64_t seed = std::stoull(argv[2], &used, 0);
-            if (used != std::strlen(argv[2])) throw std::invalid_argument("invalid seed");
-            std::array<int32_t, 350> prefix;
-            prefix.fill(-1);
-            int count = 0;
-            if (argc >= 4 && std::string(argv[3]) != "-") {
-                std::stringstream input(argv[3]);
-                std::string token;
-                while (std::getline(input, token, ',')) {
-                    if (count >= 349) throw std::invalid_argument("prefix exceeds action capacity");
-                    const int action = std::stoi(token, &used, 0);
-                    if (used != token.size() || action <= 0)
-                        throw std::invalid_argument("invalid prefix action");
-                    prefix[count++] = action;
-                }
-            }
-            if (std::string(argv[1]) == "--search") {
-                if (argc > 4) throw std::invalid_argument("--search accepts only seed and fixed prefix");
-                return SearchRequest(BasePlayers, seed, prefix.data(), THREAD_COUNT) ? 0 : 2;
-            }
-            if (std::string(argv[1]) == "--search-benchmark") {
-                ZilyadamaSearchOptions options;
-                if (argc >= 5) options.variant = std::stoi(argv[4]);
-                if (argc >= 6) options.budgetMs = std::stoi(argv[5]);
-                if (argc >= 7) options.maxWidth = std::stoi(argv[6]);
-                auto search = ZilyadamaSearch::Run(BasePlayers, seed, prefix.data(), options);
-                std::cout << formatSearchResult(BasePlayers, seed, search,
-                                                ZilyadamaSearch::VariantName(search.variant));
-                return search.victory ? 0 : 2;
-            }
-            const auto start = std::chrono::steady_clock::now();
-            const int generations = argc >= 5 ? std::stoi(argv[4]) : 20000;
-            auto genome = ActionOptimizer::RunAlgorithm(BasePlayers, seed, count, generations,
-                                                         prefix.data(), THREAD_COUNT);
-            ZilyadamaSearchResult search;
-            search.actions.fill(-1);
-            search.prefixLength = count;
-            while (search.length < 349 && genome.actions[search.length] > 0) {
-                search.actions[search.length] = genome.actions[search.length];
-                ++search.length;
-            }
-            ZilyadamaSearch::Replay(BasePlayers, seed, search.actions.data(), search.length,
-                                    search.finalState, search.replay);
-            search.victory = search.replayVerified = search.finalState.players[1].hp == 0;
-            search.elapsedMs = std::chrono::duration<double, std::milli>(
-                std::chrono::steady_clock::now() - start).count();
-            std::cout << formatSearchResult(BasePlayers, seed, search, "legacy-comparison-only");
-            return search.victory ? 0 : 2;
-        } catch (const std::exception &e) {
-            std::cerr << e.what() << "\nUsage: --search SEED [PREFIX_CSV|-]\n"
-                      << "       --search-benchmark SEED PREFIX_CSV|- [VARIANT [MS [WIDTH]]]\n"
-                      << "       --legacy-benchmark SEED PREFIX_CSV|- [GENERATIONS]\n";
-            return 1;
-        }
-    }
     if (argc == 2 && isMatchStrWithTrim(argv[1], "h")) {
         showHeader();
         return 0;
@@ -959,14 +907,27 @@ int main(int argc, char *argv[]) {
 
 #if defined(DEBUG3)
 
-    uint64_t seed = 0x81a66015;
+    uint64_t seed = 0x81a66014;
 
     int actions[350] = {BattleEmulator::ATTACK_ALLY, -1,};
-    const bool victory = SearchRequest(BasePlayers, seed, actions, THREAD_COUNT);
+    // Optional single benchmark input: DEBUG3 executable seed action ...
+    // No arguments retain the existing seed and one-action fixed prefix.
+    if (argc > 1) {
+        try {
+            seed = std::stoull(argv[1], nullptr, 0);
+            if (seed == 0 || argc - 2 > 350) throw std::invalid_argument("seed/prefix");
+            std::fill(std::begin(actions), std::end(actions), -1);
+            for (int i = 2; i < argc; ++i) actions[i - 2] = std::stoi(argv[i]);
+        } catch (const std::exception&) {
+            std::cerr << "Usage: executable [nonzero-seed [fixed-action ...]]\n";
+            return 1;
+        }
+    }
+    const bool success = SearchRequest(BasePlayers, seed, actions, THREAD_COUNT);
 
     std::cout << performanceLogger.rdbuf() << std::endl;
 
-    return victory ? 0 : 2;
+    return success ? 0 : 1;
 #endif
 
     if (argc < 5) {
@@ -1101,14 +1062,55 @@ namespace {
 
     std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed, const ResultStructure &result,
                                 int numThreads, bool dropbug) {
-        (void)dropbug;
-        if (result.AactionsCounter < 0 || result.AactionsCounter >= 350)
-            return "SearchRequest failed: prefix exceeds action capacity.\n";
-        int32_t gene[350] = {0};
-        std::copy(result.Aactions, result.Aactions + result.AactionsCounter, gene);
-        gene[result.AactionsCounter] = -1;
-        bool victory = false;
-        return productionSearchOutput(copiedPlayers, seed, gene, numThreads, victory);
+        const auto searchStarted = std::chrono::steady_clock::now();
+        if (result.AactionsCounter < 0 || result.AactionsCounter > 350)
+            return "SearchRequest failed: prefix exceeds action capacity.";
+        int32_t gene[350];
+        std::fill(std::begin(gene), std::end(gene), -1);
+        const int turns = result.AactionsCounter;
+        std::copy_n(result.Aactions, turns, gene);
+
+        auto genome =
+                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 20000, gene, 0);
+
+        if (!genome.Initialized || genome.EnemyPlayer.hp != 0) {
+            return "SearchRequest failed: no exact victory within the search budget.";
+        }
+
+        BattleResult result1;
+        result1 = BattleResult();
+        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
+
+        int position = 1;
+        uint64_t nowState = 0;
+
+        lcg::init(seed, true);
+        BattleEmulator::Main(&position, genome.processed, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
+                             &nowState);
+        if (players[1].hp != 0 || result1.position != genome.fitness
+            || position != genome.position || nowState != genome.state)
+            return "SearchRequest failed: exact replay mismatch.";
+        for (int i = 0; i < turns; ++i) {
+            if (genome.actions[i] != gene[i]) return "SearchRequest failed: fixed prefix mismatch.";
+        }
+
+        std::stringstream ss;
+        ss << "victory=1 enemy_hp=0 exact_position=" << result1.position
+           << " turns=" << genome.processed << " prefix=" << turns
+           << " prefix_preserved=1 replay_verified=1 elapsed_ms="
+           << std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - searchStarted).count()
+           << "\n";
+        ss << dumpTable(result1, genome.actions, turns) << "\n";
+        ss << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
+        ss << "0x" << std::hex << seed << std::dec << "\n" << "actions: ";
+        for (auto i = 0; i < 350; ++i) {
+            if (genome.actions[i] == 0 || genome.actions[i] == -1) {
+                break;
+            }
+            ss << genome.actions[i] << ", ";
+        }
+        ss << "\n";
+        return ss.str();
     }
 }
 

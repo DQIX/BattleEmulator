@@ -46,8 +46,6 @@ set(SOURCES
         BattleResult.h
         ActionOptimizer.cpp
         ActionOptimizer.h
-        ZilyadamaSearch.cpp
-        ZilyadamaSearch.h
         Genome.h
         ActionBanManager.h
         InputBuilder.cpp
@@ -63,11 +61,6 @@ set(SOURCES
         SimpleParameterOptimizer.h
 )
 
-# Exact requested profiles; the actual BasePlayers values remain authoritative.
-add_executable(zilyadama_v6_tamahane ${SOURCES})
-target_compile_definitions(zilyadama_v6_tamahane PRIVATE MULTITHREADING=1 lv16_sp22_tamahagane_atk123_def86=1)
-add_executable(zilyadama_v6_hagane ${SOURCES})
-target_compile_definitions(zilyadama_v6_hagane PRIVATE MULTITHREADING=1 lv16_sp22_hagane_atk106=1)
 
 # シングルスレッド版（multithreading = OFF）
 add_executable(zbe_multi_lv19_tahamane_atk130 ${SOURCES})
