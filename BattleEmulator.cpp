@@ -404,6 +404,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             genePosition = counterJ - 1;
         }
         bool equipmentChangedThisTurn = false;
+        const bool carriedRest = players[0].isStunned || players[0].sleeping || players[0].paralysis;
         bool bareHandsThisTurn = players[0].defaultATK == ANONN_BARE_HANDS_ATK;
         if (genePosition != -1 && Gene[genePosition] != 0 && Gene[genePosition] != -1) {
             const bool requestedBareHands = (Gene[genePosition] & ACTION_BARE_HANDS) != 0;
@@ -435,7 +436,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
 #ifdef DEBUG2
         std::cout << "c: " << counterJ << ", " << (*position) << std::endl;
-        if ((*position) == 191) {
+        if ((*position) == 37) {
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -482,6 +483,12 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 actionTable = ATTACK_ALLY;
             }
         } else {
+            actionTable = ATTACK_ALLY;
+        }
+
+        // FLEE cannot be selected with a rest carried from the previous turn.
+        // Run the normal status processing instead of the pre-action skip.
+        if (actionTable == FLEE_ALLY && carriedRest) {
             actionTable = ATTACK_ALLY;
         }
 
@@ -972,7 +979,13 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position)++; //関係ない
             (*position)++; //会心
             (*position)++; //回避
-            FUN_0207564c(position, players[attacker].defaultATK, players[attacker].def);
+            baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[attacker].def);
+            if (baseDamage == 0) {
+                baseDamage = lcg::getPercent(position, 1);//1a0
+            }
+            if (baseDamage != 0) {
+                (*position)++;//0x021e54fc
+            }
             players[attacker].TensionLevel = 0;
             baseDamage = 0;
             break;

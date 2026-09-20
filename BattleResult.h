@@ -14,6 +14,8 @@
  */
 class BattleResult{
 public:
+    // 349 commands plus the -1 sentinel; at most two records per turn in anonn.
+    static constexpr int Capacity = 700;
     // 各メンバの内容を 0 にリセットする clear 関数
     void clear(){
         position = 0;
@@ -47,20 +49,20 @@ public:
 
     int position = 0;
     int turn = 0;
-    int actions[400] = {};
-    int damages[400] = {};
-    int isEnemy[400] = {};
-    int BuffTurnss[400] = {};
-    int PoisonTurns[400] = {};
-    int SpeedTurn[400] = {};
-    int turns[400] = {};
-    bool initiative[400] = {};
-    int ehp[400] = {};
-    int ahp[400] = {};
-    int scTurn[400] = {};
-    int amp[400] = {};
-    uint64_t state[400] = {};
-    bool defenseFlag[400] = {};
+    int actions[Capacity] = {};
+    int damages[Capacity] = {};
+    int isEnemy[Capacity] = {};
+    int BuffTurnss[Capacity] = {};
+    int PoisonTurns[Capacity] = {};
+    int SpeedTurn[Capacity] = {};
+    int turns[Capacity] = {};
+    bool initiative[Capacity] = {};
+    int ehp[Capacity] = {};
+    int ahp[Capacity] = {};
+    int scTurn[Capacity] = {};
+    int amp[Capacity] = {};
+    uint64_t state[Capacity] = {};
+    bool defenseFlag[Capacity] = {};
 };
 
 #endif //NEWDIRECTORY_BATTLERESULT_H

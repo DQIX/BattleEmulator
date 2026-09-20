@@ -51,6 +51,7 @@ SRC_FILES=(
   camera.cpp
   debug.cpp
   ActionOptimizer.cpp
+  AnonnSearch.cpp
   EnhancedCostCalculator.cpp
   EnhancedHashCalculator.cpp
   EnhancedHeapQueue.cpp
@@ -61,6 +62,8 @@ EMCC_FLAGS=(
   -std=c++20
   -O3
   -sALLOW_MEMORY_GROWTH=1
+  # Recorded replays and the bounded DFS share the ordinary C++ stack.
+  -sSTACK_SIZE=8388608
   -sENVIRONMENT=worker,web
   -sWASM_BIGINT=1
   -sNO_EXIT_RUNTIME=1

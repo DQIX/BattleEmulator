@@ -11,6 +11,7 @@
 #include "BattleEmulator.h"
 #include "debug.h"
 #include "ActionOptimizer.h"
+#include "AnonnSearch.h"
 #include "InputBuilder.h"
 
 #ifdef DEBUG
@@ -65,6 +66,7 @@ namespace {
 
     int foundTurn = 0;
     int foundTurnOffset = 0;
+    int searchBudgetMs = 1500;
 
     const char *version = "v11.0.0_vA_v2";
 
@@ -503,7 +505,7 @@ namespace {
                 ", seed: ";
         std::cout << "0x" << std::hex << seed << std::dec << std::endl << "actions: ";
 
-        for (auto i = 0; i < 100; ++i) {
+        for (auto i = 0; i < 350; ++i) {
             if (genome.actions[i] == 0 || genome.actions[i] == -1) {
                 break;
             }
@@ -535,7 +537,7 @@ namespace {
 
         int32_t gene[350] = {0};
         auto turns = 0;
-        for (int i = 0; i < 349; ++i) {
+        for (int i = 0; i < 350; ++i) {
             gene[i] = aActions[i];
             if (aActions[i] == -1) {
                 gene[i] = -1;
@@ -551,7 +553,7 @@ namespace {
         ActionOptimizer::RunAlgorithmAsync(copiedPlayers, seed, turns, 1500, gene, numThreads, Dropbug);
 #elif defined(erusionn_lv21)
         auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 1500, gene, numThreads);
+                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, searchBudgetMs, gene, numThreads);
 #endif
 
 #ifdef DEBUG
@@ -561,7 +563,18 @@ namespace {
         PerformanceDebug("Searcher multi", BattleEmulator::getTurnProcessed(), static_cast<double>(elapsed_time1), 0);
 #endif
 
-        if (genome.turn >= 100) {
+        const auto& searchStats = AnonnSearch::LastStatistics();
+        std::cout << "search variant=" << searchStats.variant
+                  << " input_valid=" << searchStats.inputValid
+                  << " prefix=" << searchStats.prefixLength
+                  << " enemy_hp=" << genome.EnemyPlayer.hp
+                  << " victory=" << searchStats.victory
+                  << " exact_position=" << searchStats.exactPosition
+                  << " equipment_changes=" << searchStats.equipmentChanges
+                  << " elapsed_ms=" << searchStats.elapsedMs
+                  << " expanded=" << searchStats.expanded
+                  << " replay_rejected=" << searchStats.replayRejected << '\n';
+        if (!searchStats.victory || !genome.Initialized || genome.EnemyPlayer.hp != 0) {
             return false;
         }
 
@@ -569,14 +582,15 @@ namespace {
         result1 = BattleResult();
         Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
 
-        auto *position = new int(1);
-        auto *nowState = new uint64_t(0);
+        int position = 1;
+        uint64_t nowState = 0;
+        lcg::init(seed, true);
 
-        BattleEmulator::Main(position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
-                             nowState);
+        BattleEmulator::Main(&position, genome.processed, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
+                             &nowState);
 
-        delete position;
-        delete nowState;
+        if (players[1].hp != 0 || result1.position != searchStats.exactPosition) return false;
+        foundTurn = turns;
 
         std::cout << "foundTurn: " << foundTurn << ", " << turns << std::endl;
 #ifdef MINGW_BUILD
@@ -908,7 +922,9 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 
     //AI Warning: This is code related to debug2
-    uint64_t time1 = 0x10001;
+    //ver: v11.0.0_vA_v2, atk: 205, def: 144, seed: 0xc421b39
+    //actions: 30, 36, 65598, 65598, 65569, 62, 62, 34,
+    uint64_t time1 = 0xc421b39;
 
     int dummy[100];
     lcg::init(time1, false);
@@ -944,29 +960,30 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
     //0x22e2dbaf:
 
     //AI Warning: This is code related to debug2
-    // int32_t gene1[350] = {
-    //     30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
-    //     BattleEmulator::ATTACK_ALLY};
+    //actions: 30, 36, 65598, 33, 62, 65598, 65598, 34,
+    int32_t gene1[350] = {
+        30, 36, 65598, 33, 62, 65598, 65598, 34,
+        BattleEmulator::ATTACK_ALLY};
     //gene1[19-1] = BattleEmulator::DEFENCE;
     int counter = 0;
-    int32_t gene1[350] = {0};
-    gene1[counter++] = BattleEmulator::MULTITHRUST;
-    gene1[counter++] = BattleEmulator::BUFF;
-    gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
-    gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-    gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-    gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-    gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-    gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
-    gene1[counter++] = BattleEmulator::BUFF;
-    gene1[counter++] = BattleEmulator::BUFF;
-    gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
-    gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-    gene1[counter++] = BattleEmulator::DEFENCE;
-    gene1[counter++] = BattleEmulator::DEFENCE;
-    gene1[counter++] = BattleEmulator::DEFENCE;
-    gene1[counter++] = BattleEmulator::DEFENCE;
-    gene1[counter++] = BattleEmulator::DEFENCE;
+    // int32_t gene1[350] = {0};
+    // gene1[counter++] = BattleEmulator::MULTITHRUST;
+    // gene1[counter++] = BattleEmulator::BUFF;
+    // gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
+    // gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+    // gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+    // gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+    // gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+    // gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
+    // gene1[counter++] = BattleEmulator::BUFF;
+    // gene1[counter++] = BattleEmulator::BUFF;
+    // gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
+    // gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+    // gene1[counter++] = BattleEmulator::DEFENCE;
+    // gene1[counter++] = BattleEmulator::DEFENCE;
+    // gene1[counter++] = BattleEmulator::DEFENCE;
+    // gene1[counter++] = BattleEmulator::DEFENCE;
+    // gene1[counter++] = BattleEmulator::DEFENCE;
     // gene1[counter++] = BattleEmulator::DEFENCE;
     // gene1[counter++] = BattleEmulator::DEFENCE;
     // gene1[counter++] = BattleEmulator::DEFENCE;
@@ -1000,17 +1017,17 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 0x0c421b38;
+    uint64_t seed = 0x0a525b08;
 
     int actions[350] = {
         BattleEmulator::BUFF,
         -1,
     };
-    SearchRequest(BasePlayers, seed, actions, THREAD_COUNT, true);
+    const bool victory = SearchRequest(BasePlayers, seed, actions, THREAD_COUNT, true);
 
     std::cout << performanceLogger.rdbuf() << std::endl;
 
-    return 0;
+    return victory ? 0 : 2;
 #endif
     if (argc < 5) {
         help(argv[0]);
@@ -1159,10 +1176,12 @@ namespace {
         }
 
         auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 8000, gene, 0);
+                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 1500, gene, 0);
 
-        if (genome.turn >= 100) {
-            return "SearchRequest failed: turn limit reached.";
+        const auto& stats = AnonnSearch::LastStatistics();
+        if (!stats.victory || !genome.Initialized || genome.EnemyPlayer.hp != 0) {
+            return stats.inputValid ? "SearchRequest: no verified victory within budget."
+                                    : "SearchRequest: invalid or unsafe fixed prefix.";
         }
 
         BattleResult result1;
@@ -1170,15 +1189,21 @@ namespace {
 
         int position = 1;
         uint64_t nowState = 0;
+        lcg::init(seed, true);
 
-        BattleEmulator::Main(&position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
+        BattleEmulator::Main(&position, genome.processed, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
                              &nowState);
+        if (players[1].hp != 0 || result1.position != stats.exactPosition) {
+            return "SearchRequest: exact replay mismatch.";
+        }
 
         std::stringstream ss;
-        ss << dumpTable(result1, genome.actions, foundTurn) << "\n";
+        ss << "enemy_hp=" << players[1].hp << " exact_position=" << result1.position
+           << " equipment_changes=" << stats.equipmentChanges << " elapsed_ms=" << stats.elapsedMs << '\n';
+        ss << dumpTable(result1, genome.actions, turns) << "\n";
         ss << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
         ss << "0x" << std::hex << seed << std::dec << "\n" << "actions: ";
-        for (auto i = 0; i < 100; ++i) {
+        for (auto i = 0; i < 350; ++i) {
             if (genome.actions[i] == 0 || genome.actions[i] == -1) {
                 break;
             }
