@@ -115,7 +115,7 @@ public:
     static constexpr int MAGIC_BARRIER = 83; //マジックバリア
     static constexpr int KABUFF = 84; //スクルト
     static constexpr int STAMP = 85; //ふみつけ
-    static constexpr int STOMP = 86; //じひびき
+    static constexpr int EARTHQUAKE = 86; //じひびき
 
 
     static void ResetTurnProcessed();

@@ -273,8 +273,8 @@ const char *BattleEmulator::getActionName(int actionId) {
             return "Kabuff";
         case STAMP:
             return "Stamp";
-        case STOMP:
-            return "Stomp";
+        case EARTHQUAKE:
+            return "earthquake";
         case ZAMMLE:
             return "Zammlle";
         case INACTIVE_ENEMY:
@@ -474,7 +474,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 (*position) += 2;
             } else if (enemyAction[counter] == STAMP || enemyAction[counter] == KABUFF) {
                 (*position)++;
-            } else if (enemyAction[counter] == STOMP) {
+            } else if (enemyAction[counter] == EARTHQUAKE) {
                 (*position) += 2;
             }
             if (counter == 0) {
@@ -1446,17 +1446,24 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             baseDamage = 0;
             resetCombo(NowState);
             break;
-        case BattleEmulator::STOMP:
+        case BattleEmulator::EARTHQUAKE:
             (*position) += 2;
             (*position)++; //0x02158584
             (*position)++; //0x021ec6f8
             (*position)++; //0x02157f58
             baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
             {
-                const double variance = lcg::floatRand(position, 0.9, 1.1);
-                TRACE(std::cout << "TRACE stomp-base=" << baseDamage << " variance=" << variance << '\n');
-                tmp = static_cast<double>(baseDamage) * 0.8 * variance;
+                tmp = lcg::floatRand(position, 0.9, 1.1) * 17.5;
+                baseDamage = static_cast<int>(tmp);
             }
+
+            tmp = static_cast<double>(baseDamage);
+            if (players[attacker].TensionLevel != 0) {
+                //TODO ダメージが正しいか調べる 特殊県産式の引数も調べる https://dragonquest9.com/?%E3%83%80%E3%83%A1%E3%83%BC%E3%82%B8%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6#tension
+                tmp *= Enemy_TensionTable[players[attacker].TensionLevel - 1];
+                tmp += (players[attacker].TensionLevel * TensionLevel);
+            }
+
             tmp = Equipments::applyDamageReduction(tmp, Attribute::Earth);
             if (!players[0].paralysis && !players[0].sleeping) {
                 tmp *= players[defender].defence;
@@ -1908,7 +1915,7 @@ constexpr std::array<int, 6> ids = {
     BattleEmulator::PSYCHE_UP,
     BattleEmulator::MAGIC_BARRIER,
     BattleEmulator::KABUFF,
-    BattleEmulator::STOMP
+    BattleEmulator::EARTHQUAKE
 };
 
 static_assert(sum(ratios) == TABLE_MAX, "Ratio sum must be 256");
@@ -1918,7 +1925,7 @@ constexpr auto actionTable = makeProbabilityTable(ratios, ids);
 
 int BattleEmulator::ProcessEnemyRandomAction44(int *position) {
     //0x0208aca8
-    int rnd = lcg::getPercent(position, 0x100);
+    int rnd = static_cast<int>(static_cast<uint32_t>(lcg::getTop32(position)) >> 24);
     TRACE(std::cout << "TRACE enemy-selector rnd=" << rnd << " position=" << *position << '\n');
     return actionTable[rnd];
 }
