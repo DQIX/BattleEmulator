@@ -408,7 +408,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         if (genePosition != -1 && Gene[genePosition] != 0 && Gene[genePosition] != -1) {
             const bool requestedBareHands = (Gene[genePosition] & ACTION_BARE_HANDS) != 0;
             const int requestedDefaultATK = requestedBareHands ? ANONN_BARE_HANDS_ATK : ANONN_EQUIPPED_ATK;
-            if (!players[0].paralysis && !players[0].sleeping &&
+            if (!players[0].paralysis && !players[0].sleeping && !players[0].isStunned &&
                 players[0].defaultATK != requestedDefaultATK) {
                 players[0].defaultATK = requestedDefaultATK;
                 RecalculateBuff(players);
