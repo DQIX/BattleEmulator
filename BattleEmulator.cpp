@@ -426,7 +426,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
 #ifdef DEBUG2
         std::cout << "c: " << counterJ << ", " << (*position) << std::endl;
-        if ((*position) == 116) {
+        if ((*position) == 195) {
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -448,26 +448,61 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         } else {
             player0_has_initiative = false;
         }
-
         auto counter = 0;
         int enemyAction[2] = {0, 0};
         int preAction = 0;
+
         while (counter != 2) {
-            enemyAction[counter] = ProcessEnemyRandomAction44(position);
+        enemyAction[counter] = ProcessEnemyRandomAction44(position);
+
+        {
+            auto kabuff = false;
+            auto barrier = false;
+            auto stamp = false;
 
             if (enemyAction[counter] == KABUFF && players[1].BuffLevel >= 2) {
-                enemyAction[counter] = ATTACK_ENEMY;
+                enemyAction[counter] = MAGIC_BARRIER;
+                kabuff = true;
             }
             if (enemyAction[counter] == MAGIC_BARRIER && players[1].BarrierLevel >= 2) {
-                enemyAction[counter] = ATTACK_ENEMY;
+                enemyAction[counter] = PSYCHE_UP;
+                barrier = true;
             }
             if (enemyAction[counter] == PSYCHE_UP && players[1].TensionLevel >= 4) {
-                enemyAction[counter] = ATTACK_ENEMY;
+                enemyAction[counter] = STAMP;
+                stamp = true;
             }
 
             if (preAction != 0 && counter == 1 && enemyAction[0] == enemyAction[1]) {
-                enemyAction[1] = ATTACK_ENEMY;
+                if (enemyAction[counter] == ATTACK_ENEMY) {
+                    enemyAction[counter] = STAMP;
+                } else if (enemyAction[counter] == STAMP) {
+                    enemyAction[counter] = ATTACK_ENEMY;
+                } else if (enemyAction[counter] == PSYCHE_UP) {
+                    enemyAction[counter] = STAMP;
+                } else if (enemyAction[counter] == MAGIC_BARRIER) {
+                    enemyAction[counter] = PSYCHE_UP;
+                } else if (enemyAction[counter] == KABUFF) {
+                    enemyAction[counter] = MAGIC_BARRIER;
+                } else if (enemyAction[counter] == EARTHQUAKE) {
+                    enemyAction[counter] = KABUFF;
+                }
+
+                // ずらした先が使えなければ、いつものルールでさらに上へ流すだけ。
+                if (enemyAction[counter] == KABUFF && players[1].BuffLevel >= 2) {
+                    enemyAction[counter] = MAGIC_BARRIER;
+                    kabuff = true;
+                }
+                if (enemyAction[counter] == MAGIC_BARRIER && players[1].BarrierLevel >= 2) {
+                    enemyAction[counter] = PSYCHE_UP;
+                    barrier = true;
+                }
+                if (enemyAction[counter] == PSYCHE_UP && players[1].TensionLevel >= 4) {
+                    enemyAction[counter] = STAMP;
+                    stamp = true;
+                }
             }
+        }
 
             if (enemyAction[counter] == ATTACK_ENEMY) {
                 (*position)++;
@@ -839,7 +874,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
 #ifdef DEBUG2
         //DEBUG_COUT2((*position));
-        if ((*position) == 395) {
+        if ((*position) == 195) {
             //std::cout << "!!" << std::endl;
         }
 #endif
@@ -963,7 +998,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position)++; //0x02158584
             (*position)++; //0x021ec6f8
             (*position)++; //0x02157f58
-            baseDamage = FUN_0207564c(position, players[attacker].atk, players[attacker].def);
+            baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[attacker].def);
             if (baseDamage == 0) {
                 baseDamage = lcg::getPercent(position, 2);//0x021e81a0
             }
