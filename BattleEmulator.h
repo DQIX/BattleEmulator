@@ -117,6 +117,12 @@ public:
     static constexpr int WHIRLWIND = 85; //突風
     static constexpr int DAZZLE = 86; //マヌーサ
 
+    static constexpr int ACTION_ID_MASK = 0xffff;
+    static constexpr int ACTION_BARE_HANDS = 1 << 16;
+    static constexpr int ACTION_EQUIPMENT_CHANGED = 1 << 17;
+    static constexpr int SILYARUMANA_EQUIPPED_ATK = 207;
+    static constexpr int SILYARUMANA_BARE_HANDS_ATK = 72;
+
 
     static void ResetTurnProcessed();
 
