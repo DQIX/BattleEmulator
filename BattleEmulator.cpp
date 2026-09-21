@@ -426,7 +426,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
 
 #ifdef DEBUG2
         std::cout << "c: " << counterJ << ", " << (*position) << std::endl;
-        if ((*position) == 50) {
+        if ((*position) == 116) {
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -963,8 +963,13 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position)++; //0x02158584
             (*position)++; //0x021ec6f8
             (*position)++; //0x02157f58
-            FUN_0207564c(position, players[attacker].atk, players[attacker].def);
-            (*position)++; //0x021e54fc
+            baseDamage = FUN_0207564c(position, players[attacker].atk, players[attacker].def);
+            if (baseDamage == 0) {
+                baseDamage = lcg::getPercent(position, 2);//0x021e81a0
+            }
+            if (baseDamage != 0) {
+                (*position)++; //0x021e54fc
+            }
             players[attacker].BarrierTurns = 6;
             players[attacker].BarrierLevel++;
             baseDamage = 0;
@@ -1255,7 +1260,10 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position)++; //不明
             (*position)++; //会心
             (*position)++; //ニセ回避 0x02157f58
-            FUN_0207564c(position, players[attacker].defaultATK, players[attacker].def);
+            baseDamage = FUN_0207564c(position, players[attacker].defaultATK, players[attacker].def);
+            if (baseDamage == 0) {
+                baseDamage = lcg::getPercent(position, 2);//0x021e81a0
+            }
             if (players[attacker].TensionLevel < 3 || (players[attacker].TensionLevel == 3 && lcg::getPercent(position, 2) == 0)) {
                 //0x02087fb4 テンション
                 players[attacker].TensionLevel++;
@@ -1462,6 +1470,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 //TODO ダメージが正しいか調べる 特殊県産式の引数も調べる https://dragonquest9.com/?%E3%83%80%E3%83%A1%E3%83%BC%E3%82%B8%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6#tension
                 tmp *= Enemy_TensionTable[players[attacker].TensionLevel - 1];
                 tmp += (players[attacker].TensionLevel * TensionLevel);
+                players[attacker].TensionLevel = 0;
             }
 
             tmp = Equipments::applyDamageReduction(tmp, Attribute::Earth);
@@ -1497,6 +1506,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             (*position)++; //回避
 
             baseDamage = FUN_0207564c(position, players[attacker].atk, players[defender].def);
+
             if (tate || kaihi) {
                 baseDamage = 0;
             } else {
@@ -1513,9 +1523,8 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                     //TODO ダメージが正しいか調べる 特殊県産式の引数も調べる https://dragonquest9.com/?%E3%83%80%E3%83%A1%E3%83%BC%E3%82%B8%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6#tension
                     tmp *= Enemy_TensionTable[players[attacker].TensionLevel - 1];
                     tmp += (players[attacker].TensionLevel * TensionLevel);
+                    players[attacker].TensionLevel = 0;
                 }
-
-
 
                 baseDamage = static_cast<int>(floor(tmp));
 
