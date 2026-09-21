@@ -12,6 +12,7 @@
 #include "BattleEmulator.h"
 #include "debug.h"
 #include "ActionOptimizer.h"
+#include "IsinobanninnSearch.h"
 #include "InputBuilder.h"
 
 #ifdef DEBUG
@@ -50,7 +51,7 @@ namespace{
     void help(const char* program_name);
 
     bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads,
-                       bool Dropbug);
+                       bool Dropbug, int searchVariant = 4, int budgetMs = 1500);
 
     uint64_t BruteForceRequest(const Player copiedPlayers[2], int hours, int minutes, int seconds, int turns,
                                int aActions[350], int damages[350]);
@@ -288,7 +289,7 @@ namespace{
         }
 
         // 最後のターンのデータを出力
-        if(currentTurn != -1){
+        if(currentTurn >= PastTurns){
             ss6
                 << std::left << std::setw(6) << (currentTurn + 1)
                 << std::setw(18) << sp
@@ -507,8 +508,8 @@ namespace{
             ", seed: ";
         std::cout << "0x" << std::hex << seed << std::dec << std::endl << "actions: ";
 
-        for(auto i = 0; i < 100; ++i){
-            if(genome.actions[i] == 0 || genome.actions[i] == -1){
+        for(auto i = 0; i < 350; ++i){
+            if(genome.actions[i] == -1){
                 break;
             }
             std::cout << genome.actions[i] << ", ";
@@ -532,7 +533,7 @@ namespace{
     }
 
     bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads,
-                       bool Dropbug){
+                       bool Dropbug, int searchVariant, int budgetMs){
 #ifdef DEBUG
         auto t0 = std::chrono::high_resolution_clock::now();
         BattleEmulator::ResetTurnProcessed();
@@ -540,17 +541,17 @@ namespace{
 
         int32_t gene[350] = {0};
         auto turns = 0;
-        for(int i = 0; i < 349; ++i){
+        for(int i = 0; i < 350; ++i){
             gene[i] = aActions[i];
             if(aActions[i] == -1){
                 gene[i] = -1;
-                gene[i + 1] = -1;
                 break;
             }
             turns++;
         }
 #if defined(isinobannninn)
-        auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
+        auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0,
+                                                     searchVariant, budgetMs);
 #endif
 
 #ifdef DEBUG
@@ -560,23 +561,42 @@ namespace{
         PerformanceDebug("Searcher multi", BattleEmulator::getTurnProcessed(), static_cast<double>(elapsed_time1), 0);
 #endif
 
-        if(genome.turn >= 100){
+        const auto stats = IsinobanninnSearch::GetStatistics();
+        std::cout << "SEARCH variant=" << IsinobanninnSearch::VariantName(searchVariant)
+                  << " victory=" << stats.victory << " input_valid=" << stats.inputValid
+                  << " enemy_hp=" << genome.EnemyPlayer.hp
+                  << " prefix=" << stats.prefixLength << " result_position=" << stats.battlePosition
+                  << " equipment_changes=" << stats.equipmentChanges << " turns=" << stats.turns
+                  << " rng_position=" << stats.rngPosition << " elapsed_ms=" << stats.elapsedMs
+                  << " transitions=" << stats.transitions << " replays=" << stats.replays
+                  << " replay_mismatches=" << stats.replayMismatches << '\n';
+        if(!stats.victory || genome.EnemyPlayer.hp != 0){
             return false;
         }
 
         BattleResult result1;
         Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
 
-        auto* position = new int(1);
-        auto* nowState = new uint64_t(0);
-
-        BattleEmulator::Main(position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
-                             nowState);
-
-        delete position;
-        delete nowState;
-
+        int position = 1;
+        uint64_t nowState = 0;
+        int completed = 0, records = 0, changes = 0;
+        std::stringstream earlierBatches;
+        lcg::init(seed, true);
+        while (completed < genome.processed && players[0].hp > 0 && players[1].hp > 0) {
+            result1.clear();
+            BattleEmulator::Main(&position, std::min(133, genome.processed - completed),
+                                genome.actions, players, &result1, seed, nullptr, nullptr, -1, &nowState);
+            completed = static_cast<int>((nowState >> 12) & 0xfffff);
+            records += result1.position;
+            for (int i = 0; i < result1.position; ++i)
+                if (!result1.isEnemy[i] && (result1.actions[i] & BattleEmulator::ACTION_EQUIPMENT_CHANGED)) ++changes;
+            if (completed < genome.processed) earlierBatches << dumpTable(result1, genome.actions, turns);
+        }
+        if (players[1].hp != 0 || records != stats.battlePosition || changes != stats.equipmentChanges
+            || position != genome.position || nowState != genome.state) return false;
+        foundTurn = turns;
         std::cout << "foundTurn: " << foundTurn << ", " << turns << std::endl;
+        std::cout << earlierBatches.str();
 #ifdef MINGW_BUILD
         dumpTableMain(result1, genome, seed, foundTurn);
 #else
@@ -922,6 +942,26 @@ int main(int argc, char* argv[]){
         return 0;
     }
 
+    if (argc >= 5 && std::string(argv[1]) == "--search-benchmark") {
+        try {
+            const uint64_t seed = std::stoull(argv[2], nullptr, 0);
+            const int variant = std::stoi(argv[3]);
+            const int budget = std::stoi(argv[4]);
+            if (argc - 5 > 349 || variant < 0 || variant > 4 || budget < 1)
+                throw std::invalid_argument("invalid search benchmark arguments");
+            int actions[350] = {};
+            for (int i = 5; i < argc; ++i) actions[i - 5] = std::stoi(argv[i], nullptr, 0);
+            actions[argc - 5] = -1;
+            const bool victory = SearchRequest(BasePlayers, seed, actions, THREAD_COUNT, true,
+                                                variant, budget);
+            std::cout << performanceLogger.rdbuf();
+            return victory ? 0 : 2;
+        } catch (const std::exception& e) {
+            std::cerr << e.what() << '\n';
+            return 1;
+        }
+    }
+
 #if defined(OPTIMIZE_MODE)
     int actions1[350] = {};
     auto counter = 0;
@@ -1044,7 +1084,7 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 0x0c5a8c4b+3;
+    uint64_t seed = 0x0c5a8c87;
 
     int actions[350] = {
         BattleEmulator::BUFF,
@@ -1207,8 +1247,8 @@ namespace {
         auto genome =
                 ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 8000, gene, 0);
 
-        if (genome.turn >= 100) {
-            return "SearchRequest failed: turn limit reached.";
+        if (!IsinobanninnSearch::GetStatistics().victory || genome.EnemyPlayer.hp != 0) {
+            return "SearchRequest failed: no exact victory within the search budget.";
         }
 
         BattleResult result1;
@@ -1217,15 +1257,27 @@ namespace {
         int position = 1;
         uint64_t nowState = 0;
 
-        BattleEmulator::Main(&position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
-                             &nowState);
-
         std::stringstream ss;
-        ss << dumpTable(result1, genome.actions, foundTurn) << "\n";
+        int completed = 0, records = 0, changes = 0;
+        lcg::init(seed, true);
+        while (completed < genome.processed && players[0].hp > 0 && players[1].hp > 0) {
+            result1.clear();
+            BattleEmulator::Main(&position, std::min(133, genome.processed - completed),
+                                genome.actions, players, &result1, seed, nullptr, nullptr, -1, &nowState);
+            completed = static_cast<int>((nowState >> 12) & 0xfffff);
+            records += result1.position;
+            for (int i = 0; i < result1.position; ++i)
+                if (!result1.isEnemy[i] && (result1.actions[i] & BattleEmulator::ACTION_EQUIPMENT_CHANGED)) ++changes;
+            ss << dumpTable(result1, genome.actions, turns) << "\n";
+        }
+        const auto& stats = IsinobanninnSearch::GetStatistics();
+        if (players[1].hp != 0 || records != stats.battlePosition || changes != stats.equipmentChanges
+            || position != genome.position || nowState != genome.state)
+            return "SearchRequest failed: exact replay mismatch.";
         ss << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
         ss << "0x" << std::hex << seed << std::dec << "\n" << "actions: ";
-        for (auto i = 0; i < 100; ++i) {
-            if (genome.actions[i] == 0 || genome.actions[i] == -1) {
+        for (auto i = 0; i < 350; ++i) {
+            if (genome.actions[i] == -1) {
                 break;
             }
             ss << genome.actions[i] << ", ";

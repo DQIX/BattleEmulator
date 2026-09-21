@@ -46,6 +46,8 @@ set(SOURCES
         BattleResult.h
         ActionOptimizer.cpp
         ActionOptimizer.h
+        IsinobanninnSearch.cpp
+        IsinobanninnSearch.h
         Genome.h
         ActionBanManager.h
         HeapQueue.h
