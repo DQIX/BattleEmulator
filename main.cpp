@@ -86,7 +86,7 @@ namespace{
     constexpr Player BasePlayers[2] = {
         // プレイヤー1
         {
-            139, 139.0, 209, 209, 148, 148, 111, 111, 128, 85,
+            139, 139.0, BattleEmulator::ISINOBANNNINN_EQUIPPED_ATK, BattleEmulator::ISINOBANNNINN_EQUIPPED_ATK, 148, 148, 111, 111, 128, 85,
             85, false, false, 0, false, 0, -1,
             // specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
             6, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
@@ -113,6 +113,7 @@ namespace{
     void printHeader(std::stringstream& ss){
         ss << std::left << std::setw(6) << "turn"
             << std::setw(18) << "sp"
+            << std::setw(8) << "equip"
             << std::setw(18) << "aAct"
             << std::setw(18) << "eAct1"
             << std::setw(18) << "eAct2"
@@ -130,9 +131,9 @@ namespace{
 #endif
             << "\n";
 #if defined(MINGW_BUILD)
-        ss << std::string(135, '-') << "\n"; // 区切り線を出力
+        ss << std::string(143, '-') << "\n"; // 区切り線を出力
 #else
-        ss << std::string(117, '-') << "\n"; // 区切り線を出力
+        ss << std::string(125, '-') << "\n"; // 区切り線を出力
 #endif
     }
 
@@ -153,13 +154,14 @@ namespace{
         int currentTurn = -1;
         int eDamage[2] = {-1, -1}, aDamage = -1;
         bool initiative_tmp, def_f = false;
-        std::string eAction[2], aAction, sp, tmpState, DEFTurn1, specialChargeTurn1,
+        std::string eAction[2], aAction, equipmentChange, sp, tmpState, DEFTurn1, specialChargeTurn1,
                     ahp2,
                     ehp2, amp2, poisonTurn1, SpeedTurn1, tmp_state;
         auto counter = 0;
         // データのループ
         for(int i = 0; i < result.position; ++i){
             auto action = result.actions[i];
+            auto actionId = action & BattleEmulator::ACTION_ID_MASK;
             auto damage = result.damages[i];
             auto DEFTurn = result.BuffTurnss[i];
             auto turn = result.turns[i];
@@ -192,6 +194,7 @@ namespace{
                         ss6
                             << std::left << std::setw(6) << (currentTurn + 1)
                             << std::setw(18) << sp
+                            << std::setw(8) << equipmentChange
                             << std::setw(18) << aAction
                             << std::setw(18) << eAction[0]
                             << std::setw(18) << eAction[1]
@@ -216,6 +219,7 @@ namespace{
                 eAction[0] = "";
                 eAction[1] = "";
                 aAction = "";
+                equipmentChange = "";
                 eDamage[0] = 0;
                 eDamage[1] = 0;
                 aDamage = 0;
@@ -231,7 +235,7 @@ namespace{
 
             // 敵か味方の行動を適切な変数に格納
             if(isEnemy){
-                eAction[counter] = BattleEmulator::getActionName(action);
+                eAction[counter] = BattleEmulator::getActionName(actionId);
                 eDamage[counter] = damage;
                 counter++;
                 ahp2 = std::to_string(ahp1);
@@ -239,7 +243,11 @@ namespace{
             else{
                 ehp2 = std::to_string(ehp1);
                 amp2 = std::to_string(amp);
-                aAction = BattleEmulator::getActionName(action);
+                aAction = BattleEmulator::getActionName(actionId);
+                if((action & BattleEmulator::ACTION_EQUIPMENT_CHANGED) != 0){
+                    equipmentChange =
+                        (action & BattleEmulator::ACTION_BARE_HANDS) != 0 ? "sude" : "on";
+                }
                 aDamage = damage;
                 if(DEFTurn >= 0){
                     DEFTurn1 = std::to_string(DEFTurn);
@@ -265,14 +273,14 @@ namespace{
                 }
 
                 if(eAction[0] != "magic Burst" && eAction[1] != "magic Burst"){
-                    if(!initiative && (action == BattleEmulator::TURN_SKIPPED || action == BattleEmulator::PARALYSIS ||
-                        action == BattleEmulator::SLEEPING)){
+                    if(!initiative && (actionId == BattleEmulator::TURN_SKIPPED || actionId == BattleEmulator::PARALYSIS ||
+                        actionId == BattleEmulator::SLEEPING)){
                         sp = "---------------";
                     }
-                    if((action == BattleEmulator::CURE_SLEEPING || action == BattleEmulator::CURE_PARALYSIS)){
+                    if((actionId == BattleEmulator::CURE_SLEEPING || actionId == BattleEmulator::CURE_PARALYSIS)){
                         sp = "---------------";
                     }
-                    if(!initiative && defenseFlag && action != BattleEmulator::DEFENCE){
+                    if(!initiative && defenseFlag && actionId != BattleEmulator::DEFENCE){
                         sp = "Defense !Sleep";
                     }
                 }
@@ -284,6 +292,7 @@ namespace{
             ss6
                 << std::left << std::setw(6) << (currentTurn + 1)
                 << std::setw(18) << sp
+                << std::setw(8) << equipmentChange
                 << std::setw(18) << aAction
                 << std::setw(18) << eAction[0]
                 << std::setw(18) << eAction[1]
@@ -946,7 +955,7 @@ actions: 30, 25, 30, 62, 62, 50, 62, 62, 33, 30, 34,
 
 
     //AI Warning: This is code related to debug2
-    uint64_t time1 = 0x1af41c64b;
+    uint64_t time1 = 0x1a361c66c;
 
     int dummy[100];
     lcg::init(time1, false);
@@ -982,15 +991,20 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
     //0x22e2dbaf:
 
     //AI Warning: This is code related to debug2
-    int32_t gene1[350] = {
-        30, 30, 62, 50, 62, 62, 33, 62, 27, 34, 34,
-        BattleEmulator::ATTACK_ALLY
-    };
+    // int32_t gene1[350] = {
+    //     30, 30, 62, 50, 62, 62, 33, 62, 27, 34, 34,
+    //     BattleEmulator::ATTACK_ALLY
+    // };
     //gene1[19-1] = BattleEmulator::DEFENCE;
     int counter = 0;
-    // int32_t gene1[350] = {0};
-    //  gene1[counter++] = BattleEmulator::BUFF;
-    //  gene1[counter++] = BattleEmulator::BUFF;
+    int32_t gene1[350] = {0};
+    gene1[counter++] = BattleEmulator::BUFF;
+    gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+    gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+    gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+    gene1[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
+    gene1[counter++] = BattleEmulator::DOUBLE_UP;
+    gene1[counter++] = BattleEmulator::MULTITHRUST;
     //  gene1[counter++] = BattleEmulator::SPECIAL_MEDICINE;
     //  gene1[counter++] = BattleEmulator::ATTACK_ALLY;
     //  gene1[counter++] = BattleEmulator::ATTACK_ALLY;

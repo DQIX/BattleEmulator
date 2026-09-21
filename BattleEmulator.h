@@ -117,6 +117,12 @@ public:
     static constexpr int STAMP = 85; //ふみつけ
     static constexpr int EARTHQUAKE = 86; //じひびき
 
+    static constexpr int ACTION_ID_MASK = 0xffff;
+    static constexpr int ACTION_BARE_HANDS = 1 << 16;
+    static constexpr int ACTION_EQUIPMENT_CHANGED = 1 << 17;
+    static constexpr int ISINOBANNNINN_EQUIPPED_ATK = 209;
+    static constexpr int ISINOBANNNINN_BARE_HANDS_ATK = 74;
+
 
     static void ResetTurnProcessed();
 

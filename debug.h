@@ -55,7 +55,7 @@ namespace trace {
 
 //THIS DEBUG CODE!
 #ifndef NDEBUG
-#define DEBUG3 1
+//#define DEBUG3 1
 #endif
 
 #ifdef DEBUG3
