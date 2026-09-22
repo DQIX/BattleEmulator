@@ -54,6 +54,7 @@ SRC_FILES=(
   EnhancedCostCalculator.cpp
   EnhancedHashCalculator.cpp
   EnhancedHeapQueue.cpp
+  ActionSearchOptimized.cpp
 )
 
 EMCC_FLAGS=(
