@@ -1257,6 +1257,7 @@ function setAutoTimerAnchorSeconds(totalSeconds, perfNow) {
     setAutoTimerResetConfirmVisible(false);
     setAutoTimerStatusText(getAutoTimerStatusReadyText());
     scheduleAutoTimerTick();
+    window.dispatchEvent(new Event("battle-auto-timer-change"));
 }
 
 function setAutoTimerAnchor(parsed, perfNow) {
@@ -1266,6 +1267,18 @@ function setAutoTimerAnchor(parsed, perfNow) {
 function startManualAutoTimer(perfNow = performance.now()) {
     setAutoTimerAnchorSeconds(normalizeOffsetSeconds(state.offsetSeconds), perfNow);
 }
+
+window.battleAutoTimer = Object.freeze({
+    isRunning: () => state.autoTimerAnchor !== null,
+    startFromCapture(captureTime) {
+        if (state.autoTimerAnchor || !Number.isFinite(captureTime)
+            || captureTime < 0 || captureTime > performance.now()) {
+            return false;
+        }
+        startManualAutoTimer(captureTime);
+        return true;
+    }
+});
 
 function clearAutoTimerAnchor() {
     state.autoTimerAnchor = null;
@@ -1278,6 +1291,7 @@ function clearAutoTimerAnchor() {
     stopAutoTimerTicker();
     updateAutoTimerPreview();
     setAutoTimerStatusText(getAutoTimerStatusIdleText());
+    window.dispatchEvent(new Event("battle-auto-timer-change"));
 }
 
 function extractActionSuffix(text) {

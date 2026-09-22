@@ -2514,6 +2514,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     function updateDetachButton() {
+        window.whiteScreenTimer?.sync();
         if (!ui.detachButton) {
             return;
         }
@@ -4477,6 +4478,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             return;
         }
         state.gpuRecoveryInProgress = true;
+        window.whiteScreenTimer?.sync();
         state.loopToken += 1;
         try {
             await ensureVisionAssetPackLoaded();
@@ -4502,6 +4504,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             setStatus("visionStatusError");
         } finally {
             state.gpuRecoveryInProgress = false;
+            updateDetachButton();
         }
     }
 
@@ -4628,9 +4631,19 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 state.lastFrameAt = now;
                 try {
                     drawProcessingFrame(ui.video);
+                    if (window.whiteScreenTimer?.shouldSuspendRecognition()) {
+                        drawOverlay({}, {});
+                        updateFps(now);
+                        queueLoop(runFrame);
+                        return;
+                    }
                     updateNumberWhiteDebug(now);
                     const matches = await state.matcher.match(processingCanvas, state.templatesBySlot);
                     if (token !== state.loopToken || state.detached) {
+                        return;
+                    }
+                    if (window.whiteScreenTimer?.shouldSuspendRecognition()) {
+                        queueLoop(runFrame);
                         return;
                     }
                     state.lastMatches = matches;
@@ -4833,6 +4846,11 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     async function init() {;
         state.activeMode = null;
         state.lastModeHitAt = Date.now();
+        window.whiteScreenTimer?.attach({
+            video: ui.video,
+            isActive: () => Boolean(state.stream && state.matcher && !state.detached && !state.gpuRecoveryInProgress),
+            getRect: () => computeSourceRect(ui.video)
+        });
         window.setVisionTurnActionCounts = setVisionTurnActionCounts;
         window.setVisionTurnActionCountsForMode = (oddOrDefinition, even, ally = 1) =>
             setVisionTurnActionCounts(oddOrDefinition, even, ally, {persistReset: true});

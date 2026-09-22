@@ -433,6 +433,35 @@ body::before {
   min-height: 0;
 }
 
+.panel-white-start {
+  grid-column: 1 / -1;
+  min-height: 0;
+}
+
+.panel-white-start .panel-header {
+  flex-wrap: wrap;
+}
+
+.white-start-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 32px;
+}
+
+.panel-white-start .toggle input:focus-visible + .toggle-ui {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+#whiteStartStatus {
+  min-width: 12em;
+  text-align: center;
+}
+
+#whiteStartDetail {
+  min-height: 3em;
+}
+
 .panel-header {
   display: flex;
   align-items: baseline;

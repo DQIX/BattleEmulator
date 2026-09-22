@@ -640,6 +640,33 @@
             </div>
         </section>
 
+
+        <section id="whiteStartPanel" class="panel panel-white-start" style="--delay: 0ms" aria-labelledby="whiteStartTitle">
+            <div class="panel-header">
+                <h2 id="whiteStartTitle" data-white-start-text="title">白画面でタイマーを自動開始</h2>
+                <span id="whiteStartStatus" class="chip" role="status">接続待ち</span>
+            </div>
+            <div class="hint" data-white-start-text="description">映像認識パネルでカメラを接続してください。タイマー停止中に認識枠全体が完全に白くなると、そのフレームを撮影した時刻からタイマーを開始します。</div>
+            <div class="white-start-controls">
+                <label class="field">
+                    <span data-white-start-text="enabled">白画面で自動開始</span>
+                    <span class="toggle">
+                        <input id="whiteStartEnabled" type="checkbox" checked aria-describedby="whiteStartHelp"/>
+                        <span class="toggle-ui" aria-hidden="true"></span>
+                    </span>
+                </label>
+                <label class="field">
+                    <span data-white-start-text="debug">停止中も通常の映像認識を使う（デバッグ）</span>
+                    <span class="toggle">
+                        <input id="whiteStartDebug" type="checkbox" aria-describedby="whiteStartHelp"/>
+                        <span class="toggle-ui" aria-hidden="true"></span>
+                    </span>
+                </label>
+            </div>
+            <div id="whiteStartDetail" class="meta-line">映像認識パネルでカメラを接続し、映像認識を有効にしてください。</div>
+            <div id="whiteStartHelp" class="hint" data-white-start-text="help">開始後は通常の映像認識に切り替わります。自動開始をOFF、またはデバッグをONにすると、停止中も通常認識を使います。設定はこのブラウザに保存されます。</div>
+        </section>
+
         <section class="panel panel-vision-history" style="--delay: 260ms">
             <div class="panel-header">
                 <div class="memo-title">
@@ -1196,6 +1223,7 @@
 </div>
 
 <script src="app.js" defer></script>
+<script src="white-screen-timer.js" defer></script>
 <script src="vision.js" defer></script>
 </body>
 </html>
