@@ -10,6 +10,7 @@
 #include "BattleEmulator.h"
 #include "debug.h"
 #include "ActionOptimizer.h"
+#include "ReokonnSearch.h"
 #include "InputBuilder.h"
 
 #if defined(DEBUG)
@@ -51,7 +52,7 @@ namespace {
 
     void help(const char *program_name);
 
-    void SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads);
+    void SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], std::stringstream &ss);
 
     uint64_t BruteForceRequest(const Player copiedPlayers[2], int hours, int minutes, int seconds, int turns,
                                int aActions[350], int damages[350]);
@@ -347,7 +348,9 @@ namespace {
                 auto seed = BruteForceRequest(BasePlayers, hours, minutes, seconds, result.AactionsCounter, aActions,
                                               damages);
                 if (foundSeeds == 1) {
-                    SearchRequest(BasePlayers, seed, aActions, THREAD_COUNT);
+                    std::stringstream ss;
+                    SearchRequest(BasePlayers, seed, aActions, ss);
+                    std::cout << ss.str() << std::endl;
                 }
             }
         } catch (const std::runtime_error &e) {
@@ -357,19 +360,34 @@ namespace {
         return 0;
     }
 
-    void dumpTableMain(BattleResult &result1, Genome &genome, uint64_t seed, int turns) {
-        std::cout << dumpTable(result1, genome.actions, turns) << std::endl;
+    void dumpTableMain(BattleResult &result1, Genome &genome, uint64_t seed, int turns, std::stringstream &ss) {
+        ss << dumpTable(result1, genome.actions, turns) << std::endl;
 
-        std::cout << "ver: "<< version << ", atk: "<< BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
-        std::cout << "0x" << std::hex << seed << std::dec << ", actions: ";
+        ss << "ver: "<< version << ", atk: "<< BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
+        ss << "0x" << std::hex << seed << std::dec << ", actions: ";
 
         for (auto i = 0; i < 100; ++i) {
             if (genome.actions[i] == 0 || genome.actions[i] == -1) {
                 break;
             }
-            std::cout << genome.actions[i] << ", ";
+            ss << genome.actions[i] << ", ";
         }
-        std::cout << std::endl;
+        ss << std::endl;
+    }
+
+    void writeSearchSummary(std::ostream &out, const ReokonnResult &search) {
+        out << "search: " << (search.victory ? "victory" : "no victory found")
+            << ", variant: " << ReokonnSearch::DefaultVariant
+            << ", BattleResult.position: " << search.finalState.resultPosition
+            << ", prefix: " << search.prefixLength
+            << ", suffix: " << search.length - search.prefixLength
+            << ", enemyHP: " << search.finalState.players[1].hp
+            << ", allyHP: " << search.finalState.players[0].hp
+            << ", rngPosition: " << search.finalState.rngPosition
+            << ", nowState: 0x" << std::hex << search.finalState.nowState << std::dec
+            << ", replay: " << search.replayVerified
+            << ", first_ms: " << search.firstVictoryMs
+            << ", elapsed_ms: " << search.elapsedMs << '\n';
     }
 
     void PerformanceDebug(const char *name, int turnProcessed, double elapsed_time1, uint64_t seeds) {
@@ -389,48 +407,38 @@ namespace {
 
 #if defined(MULTITHREADING)
 
-    void SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads) {
+    void SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], std::stringstream &ss) {
 #if defined(DEBUG)
 
         auto t0 = std::chrono::high_resolution_clock::now();
         BattleEmulator::ResetTurnProcessed();
 #endif
 
-        int32_t gene[350] = {0};
+        int32_t gene[350];
+        std::fill_n(gene, 350, -1);
         auto turns = 0;
         for (int i = 0; i < 349; ++i) {
+            if (aActions[i] == -1 || aActions[i] == 0) break;
             gene[i] = aActions[i];
-            if (aActions[i] == -1) {
-                gene[i] = -1;
-                break;
-            }
             turns++;
         }
 
-        auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 2000, gene, numThreads);
+        auto search = ReokonnSearch::Run(copiedPlayers, seed, gene, turns);
+        if (!search.inputValid) {
+            ss << "SearchRequest failed: invalid search input." << std::endl;
+            return;
+        }
+        Genome genome{};
+        std::copy(search.actions.begin(), search.actions.end(), genome.actions);
 
         auto turnProcessed = BattleEmulator::getTurnProcessed();
 
-        BattleResult result1;
-        result1 = BattleResult();
-        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
-
-        auto *position = new int(1);
-        auto *nowState = new uint64_t(0);
-
-        BattleEmulator::Main(position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
-                             nowState);
-
-        delete position;
-        delete nowState;
-
 #if defined(MINGW_BUILD)
-        std::cout << turns << std::endl;
-        dumpTableMain(result1, genome, seed, 0);
+        dumpTableMain(search.replay, genome, seed, 0, ss);
 #else
-        dumpTableMain(result1, genome, seed, turns);
+        dumpTableMain(search.replay, genome, seed, turns);
 #endif
+        writeSearchSummary(ss, search);
 
 #if defined(DEBUG)
 
@@ -657,7 +665,7 @@ int main(int argc, char *argv[]) {
 
     //ver: v8.0.1, atk: 51, def: 61, seed: 0x6cc478c, actions: 25, 59, 59, 61, 61, 62, 59, 62, 59, 61, 27, 61, 62, 25, 62, 25, 59, 62, 59, 27, 62, 59, 62, 25, 25, 59, 62, 61, 26, 56, 61,
     //ver: v8.0.1, atk: 61, def: 61, seed: 0x693bdce9, actions: 27, 25, 25, 26, 25, 26, 25, 25, 56, 59, 25, 25, 53, 53,
-    uint64_t time1 = 0x03005d91;
+    uint64_t time1 = 0x03005d95;;
 
     int dummy[100];
     lcg::init(time1, false);
@@ -761,10 +769,12 @@ int main(int argc, char *argv[]) {
 
 #if defined(DEBUG3)
 
-    uint64_t seed = 0x03005d91;
+    uint64_t seed = 0x03005d95;;
 
     int actions[350] = {BattleEmulator::ATTACK_ALLY, -1,};
-    SearchRequest(BasePlayers, seed, actions, THREAD_COUNT);
+    std::stringstream ss;
+    SearchRequest(BasePlayers, seed, actions, ss);
+    std::cout << ss.str() << std::endl;
 
     std::cout << performanceLogger.rdbuf() << std::endl;
 
@@ -910,36 +920,21 @@ namespace {
             gene[349] = -1;
         }
 
-        auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 8000, gene, 0);
-
-        if (genome.turn >= 100) {
-            return "SearchRequest failed: turn limit reached.";
-        }
-
-        BattleResult result1;
-        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
-
-        auto *position = new int(1);
-        auto *nowState = new uint64_t(0);
-
-        BattleEmulator::Main(position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
-                             nowState);
-
-        delete position;
-        delete nowState;
+        auto search = ReokonnSearch::Run(copiedPlayers, seed, gene, turns);
+        if (!search.inputValid) return "SearchRequest failed: invalid search input.";
 
         std::stringstream ss;
-        ss << dumpTable(result1, genome.actions, foundTurn) << "\n";
+        ss << dumpTable(search.replay, search.actions.data(), foundTurn) << "\n";
         ss << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
         ss << "0x" << std::hex << seed << std::dec << "\n" << "actions: ";
         for (auto i = 0; i < 100; ++i) {
-            if (genome.actions[i] == 0 || genome.actions[i] == -1) {
+            if (search.actions[i] == 0 || search.actions[i] == -1) {
                 break;
             }
-            ss << genome.actions[i] << ", ";
+            ss << search.actions[i] << ", ";
         }
         ss << "\n";
+        writeSearchSummary(ss, search);
         return ss.str();
     }
 }

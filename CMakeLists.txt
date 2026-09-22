@@ -46,6 +46,8 @@ set(SOURCES
         BattleResult.h
         ActionOptimizer.cpp
         ActionOptimizer.h
+        ReokonnSearch.cpp
+        ReokonnSearch.h
         Genome.h
         HeapQueue.h
         InputBuilder.cpp
