@@ -4559,6 +4559,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     async function connectCamera() {
         ui.connectButton.disabled = true;
         try {
+            const whiteDebugOnly = new URLSearchParams(location.search).has("whiteDebug");
             const deviceId = ui.cameraSelect.value;
             const constraints = {
                 audio: false,
@@ -4577,6 +4578,11 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             ui.video.srcObject = stream;
             await ui.video.play();
             await populateCameras();
+            if (whiteDebugOnly) {
+                setStatus("visionStatusWatching");
+                window.whiteScreenTimer?.sync(true);
+                return;
+            }
             await ensureVisionAssetPackLoaded();
             if (!state.matcher) {
                 state.matcher = await createMatcher({
@@ -4848,7 +4854,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         state.lastModeHitAt = Date.now();
         window.whiteScreenTimer?.attach({
             video: ui.video,
-            isActive: () => Boolean(state.stream && state.matcher && !state.detached && !state.gpuRecoveryInProgress),
+            isActive: () => Boolean(state.stream
+                && (state.matcher || new URLSearchParams(location.search).has("whiteDebug"))
+                && !state.detached && !state.gpuRecoveryInProgress),
             getRect: () => computeSourceRect(ui.video)
         });
         window.setVisionTurnActionCounts = setVisionTurnActionCounts;
@@ -4870,6 +4878,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 setStatus("visionStatusIdle");
             }
             await populateCameras();
+            if (new URLSearchParams(location.search).has("whiteDebug")) {
+                await connectCamera();
+            }
         } catch (error) {
             console.error("initial camera list load failed:", error);
             setStatus("visionStatusIdle");

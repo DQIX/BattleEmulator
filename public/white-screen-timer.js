@@ -97,9 +97,19 @@ struct Params {
 }
 
 @group(0) @binding(0) var frame: texture_external;
-@group(0) @binding(1) var<storage, read_write> nonWhite: atomic<u32>;
+struct Stats {
+    below96: atomic<u32>,
+    below112: atomic<u32>,
+    below120: atomic<u32>,
+    spread12: atomic<u32>,
+}
+
+@group(0) @binding(1) var<storage, read_write> stats: Stats;
 @group(0) @binding(2) var<uniform> params: Params;
-var<workgroup> tileNonWhite: atomic<u32>;
+var<workgroup> tileBelow96: atomic<u32>;
+var<workgroup> tileBelow112: atomic<u32>;
+var<workgroup> tileBelow120: atomic<u32>;
+var<workgroup> tileSpread12: atomic<u32>;
 
 // The camera feed has passed through a lossy encoder. The supplied white-frame
 // sample contains neutral RGB values as low as 122, so byte-exact 255 is not a
@@ -110,20 +120,29 @@ const WHITE_MAX_CHANNEL_SPREAD: f32 = 0.047058824; // 12 / 255
 @compute @workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) pixel: vec3<u32>,
         @builtin(local_invocation_index) localIndex: u32) {
-    if (localIndex == 0u) { atomicStore(&tileNonWhite, 0u); }
+    if (localIndex == 0u) {
+        atomicStore(&tileBelow96, 0u);
+        atomicStore(&tileBelow112, 0u);
+        atomicStore(&tileBelow120, 0u);
+        atomicStore(&tileSpread12, 0u);
+    }
     workgroupBarrier();
     if (pixel.x < params.size.x && pixel.y < params.size.y) {
         let sourcePixel = params.origin + pixel.xy;
         let rgba = textureLoad(frame, vec2<i32>(i32(sourcePixel.x), i32(sourcePixel.y)));
         let low = min(rgba.r, min(rgba.g, rgba.b));
         let high = max(rgba.r, max(rgba.g, rgba.b));
-        if (low < WHITE_MIN_CHANNEL || high - low > WHITE_MAX_CHANNEL_SPREAD) {
-            atomicStore(&tileNonWhite, 1u);
-        }
+        if (low < (96.0 / 255.0)) { atomicAdd(&tileBelow96, 1u); }
+        if (low < (112.0 / 255.0)) { atomicAdd(&tileBelow112, 1u); }
+        if (low < WHITE_MIN_CHANNEL) { atomicAdd(&tileBelow120, 1u); }
+        if (high - low > WHITE_MAX_CHANNEL_SPREAD) { atomicAdd(&tileSpread12, 1u); }
     }
     workgroupBarrier();
-    if (localIndex == 0u && atomicLoad(&tileNonWhite) != 0u) {
-        atomicStore(&nonWhite, 1u);
+    if (localIndex == 0u) {
+        atomicAdd(&stats.below96, atomicLoad(&tileBelow96));
+        atomicAdd(&stats.below112, atomicLoad(&tileBelow112));
+        atomicAdd(&stats.below120, atomicLoad(&tileBelow120));
+        atomicAdd(&stats.spread12, atomicLoad(&tileSpread12));
     }
 }`});
                 const pipeline = await device.createComputePipelineAsync({
@@ -131,11 +150,11 @@ fn main(@builtin(global_invocation_id) pixel: vec3<u32>,
                 });
                 if (lost) throw new Error("White detector GPU lost during initialization");
                 const output = device.createBuffer({
-                    size: 4,
+                    size: 16,
                     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST
                 });
                 const readback = device.createBuffer({
-                    size: 4,
+                    size: 16,
                     usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
                 });
                 const params = device.createBuffer({
@@ -199,10 +218,17 @@ fn main(@builtin(global_invocation_id) pixel: vec3<u32>,
                 pass.setBindGroup(0, bindGroup);
                 pass.dispatchWorkgroups(Math.ceil(width / 16), Math.ceil(height / 16));
                 pass.end();
-                encoder.copyBufferToBuffer(this.output, 0, readback, 0, 4);
+                encoder.copyBufferToBuffer(this.output, 0, readback, 0, 16);
                 device.queue.submit([encoder.finish()]);
                 await readback.mapAsync(GPUMapMode.READ);
-                return new Uint32Array(readback.getMappedRange())[0] === 0;
+                const values = new Uint32Array(readback.getMappedRange());
+                return {
+                    white: values[2] === 0 && values[3] === 0,
+                    below96: values[0],
+                    below112: values[1],
+                    below120: values[2],
+                    spread12: values[3]
+                };
             } finally {
                 if (readback?.mapState === "mapped") readback.unmap();
             }
@@ -343,15 +369,18 @@ fn main(@builtin(global_invocation_id) pixel: vec3<u32>,
         const capturedStream = stream;
         const capturedTrack = track;
         busy = true;
-        const acceptResult = (white) => {
+        const acceptResult = (result) => {
             if (token !== generation || capturedStream !== video.srcObject || !active || !wantsDetection()) return;
             if (video.paused || capturedTrack.readyState !== "live" || capturedTrack.muted
                 || capturedStream.getVideoTracks()[0] !== capturedTrack) return;
-            if (white) timer.startFromCapture(captureTime);
+            if (new URLSearchParams(location.search).has("whiteDebug")) {
+                document.title = `WDBG ${rect.sourceCropWidth}x${rect.sourceCropHeight} `
+                    + `b96=${result.below96} b112=${result.below112} b120=${result.below120} s12=${result.spread12}`;
+            }
+            if (result.white) timer.startFromCapture(captureTime);
         };
         // detect() imports and submits the callback's video frame before its first await.
         detector.detect(video, rect).then(acceptResult).catch((error) => {
-            acceptResult(false);
             if (token === generation) {
                 frameStatus = "error";
                 render();
