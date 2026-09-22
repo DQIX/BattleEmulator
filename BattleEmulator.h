@@ -116,6 +116,12 @@ public:
     static constexpr int WICKED_WEB = 85; //猛毒弾
     static constexpr int WIND_SICKLES = 86; //猛毒弾
 
+    static constexpr int ACTION_ID_MASK = 0xffff;
+    static constexpr int ACTION_BARE_HANDS = 1 << 16;
+    static constexpr int ACTION_EQUIPMENT_CHANGED = 1 << 17;
+    static constexpr int ZUO_EQUIPPED_ATK = 175;
+    static constexpr int ZUO_BARE_HANDS_ATK = 68;
+
 
     static void ResetTurnProcessed();
 

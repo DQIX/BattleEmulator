@@ -405,6 +405,19 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         if (genePosition != -1) {
             genePosition = counterJ - 1;
         }
+        bool equipmentChangedThisTurn = false;
+        bool bareHandsThisTurn = players[0].defaultATK == ZUO_BARE_HANDS_ATK;
+        if (genePosition != -1 && Gene[genePosition] != 0 && Gene[genePosition] != -1) {
+            const bool requestedBareHands = (Gene[genePosition] & ACTION_BARE_HANDS) != 0;
+            const int requestedDefaultATK = requestedBareHands ? ZUO_BARE_HANDS_ATK : ZUO_EQUIPPED_ATK;
+            if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive &&
+                players[0].defaultATK != requestedDefaultATK) {
+                players[0].defaultATK = requestedDefaultATK;
+                RecalculateBuff(players);
+                equipmentChangedThisTurn = true;
+                bareHandsThisTurn = requestedBareHands;
+            }
+        }
         players[0].rage = false;
         //現在ターンを保存
         (*NowState) &= ~0xFFFFF000;
@@ -453,7 +466,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             //throw std::invalid_argument("GenePosition is invalid");
         }
         if (genePosition != -1 && Gene[genePosition] != 0 && Gene[genePosition] != -1) {
-            actionTable = Gene[genePosition];
+            actionTable = Gene[genePosition] & ACTION_ID_MASK;
             if (actionTable == TURN_SKIPPED || actionTable == SLEEPING || actionTable == CURE_SLEEPING || actionTable ==
                 CURE_PARALYSIS || actionTable == PARALYSIS) {
                 actionTable = ATTACK_ALLY;
@@ -635,7 +648,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                     //--------end_FUN_021594bc-------
                 }
             } else {
-                int32_t action = actionTable & 0xffff;
+                int32_t action = actionTable & ACTION_ID_MASK;
                 auto skipTurn = false;
                 if (action == SLEEPING && !player0_has_initiative && !players[0].sleeping) {
                     skipTurn = true;
@@ -702,7 +715,12 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             agl = -1;
                         }
 
-                        BattleResult::add(result, action, basedamage, false,
+                        int resultAction = action;
+                        if (equipmentChangedThisTurn) {
+                            resultAction |= ACTION_EQUIPMENT_CHANGED;
+                            if (bareHandsThisTurn) resultAction |= ACTION_BARE_HANDS;
+                        }
+                        BattleResult::add(result, resultAction, basedamage, false,
                                           def1, poi, agl, counterJ - 1,
                                           player0_has_initiative, ehp, ahp,
                                           tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag, isInactiveFlag);
@@ -859,7 +877,12 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             agl = -1;
                         }
 
-                        BattleResult::add(result, action, 0, false,
+                        int resultAction = action;
+                        if (equipmentChangedThisTurn) {
+                            resultAction |= ACTION_EQUIPMENT_CHANGED;
+                            if (bareHandsThisTurn) resultAction |= ACTION_BARE_HANDS;
+                        }
+                        BattleResult::add(result, resultAction, 0, false,
                                           def1, poi, agl, counterJ - 1,
                                           player0_has_initiative, ehp, ahp,
                                           tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag, isInactiveFlag);
