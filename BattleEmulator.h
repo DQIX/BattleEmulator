@@ -111,6 +111,12 @@ public:
 	static constexpr int KABUFF = 173;//スクルト
 	static constexpr int MAGIC_BARRIER = 174; //マジックバリア
 
+    static constexpr int ACTION_ID_MASK = 0xffff;
+    static constexpr int ACTION_BARE_HANDS = 1 << 16;
+    static constexpr int ACTION_EQUIPMENT_CHANGED = 1 << 17;
+    static constexpr int GANASADAI2_EQUIPPED_ATK = 320;
+    static constexpr int GANASADAI2_BARE_HANDS_ATK = 175;
+
     static bool
     Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
          BattleResult* result, uint64_t seed, const int eActions[350], const int damages[350], int mode, uint64_t *NowState);
