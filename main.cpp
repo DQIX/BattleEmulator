@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <sstream>
 #include <fstream>
+#include <algorithm>
 
 #include "lcg.h"
 #include "BattleEmulator.h"
@@ -503,7 +504,7 @@ namespace {
         std::cout << "ver: "<< version << ", atk: "<< BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
         std::cout << "0x" << std::hex << seed << std::endl << std::dec << "actions: ";
 
-        for (auto i = 0; i < 100; ++i) {
+        for (auto i = 0; i < 350; ++i) {
             if (genome.actions[i] == 0 || genome.actions[i] == -1) {
                 break;
             }
@@ -548,27 +549,37 @@ namespace {
         auto genome =
                 ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 20000, gene, numThreads);
 
-        auto turnProcessed = BattleEmulator::getTurnProcessed();
-
         BattleResult result1;
         Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
-
-#if defined(DEBUG)
-        auto t3 = std::chrono::high_resolution_clock::now();
-        auto elapsed_time1 =
-                std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
-        PerformanceDebug("Searcher multi", turnProcessed, static_cast<double>(elapsed_time1), 0);
-#endif
-
-        if (genome.turn >= 100) {
+        if (!genome.Initialized || genome.EnemyPlayer.hp != 0) {
+            std::cout << "SearchRequest failed: no exact victory within the search budget.\n";
             return false;
         }
 
         int position = 1;
         uint64_t nowState = 0;
 
-        BattleEmulator::Main(&position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
+        lcg::init(seed, true);
+        BattleEmulator::Main(&position, genome.processed, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
                              &nowState);
+        if (players[1].hp != 0 || result1.position != genome.fitness
+            || position != genome.position || nowState != genome.state) {
+            std::cout << "SearchRequest failed: exact replay mismatch.\n";
+            return false;
+        }
+        for (int i = 0; i < turns; ++i) {
+            if (genome.actions[i] != aActions[i]) return false;
+        }
+#if defined(DEBUG)
+        auto t3 = std::chrono::high_resolution_clock::now();
+        auto elapsed_time1 =
+                std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
+        PerformanceDebug("Searcher", BattleEmulator::getTurnProcessed(), static_cast<double>(elapsed_time1), 0);
+        std::cout << "victory=1 enemy_hp=" << players[1].hp
+                  << " exact_position=" << result1.position << " turns=" << genome.processed
+                  << " prefix=" << turns << " prefix_preserved=1 replay_verified=1 elapsed_ms="
+                  << double(elapsed_time1) / 1000.0 << '\n';
+#endif
 
 #if defined(MINGW_BUILD)
         std::cout << turns << std::endl;
@@ -899,11 +910,24 @@ int main(int argc, char *argv[]) {
     uint64_t seed = 0x81a66014;
 
     int actions[350] = {BattleEmulator::ATTACK_ALLY, -1,};
-    SearchRequest(BasePlayers, seed, actions, THREAD_COUNT);
+    // Optional single benchmark input: DEBUG3 executable seed action ...
+    // No arguments retain the existing seed and one-action fixed prefix.
+    if (argc > 1) {
+        try {
+            seed = std::stoull(argv[1], nullptr, 0);
+            if (seed == 0 || argc - 2 > 350) throw std::invalid_argument("seed/prefix");
+            std::fill(std::begin(actions), std::end(actions), -1);
+            for (int i = 2; i < argc; ++i) actions[i - 2] = std::stoi(argv[i]);
+        } catch (const std::exception&) {
+            std::cerr << "Usage: executable [nonzero-seed [fixed-action ...]]\n";
+            return 1;
+        }
+    }
+    const bool success = SearchRequest(BasePlayers, seed, actions, THREAD_COUNT);
 
     std::cout << performanceLogger.rdbuf() << std::endl;
 
-    return 0;
+    return success ? 0 : 1;
 #endif
 
     if (argc < 5) {
@@ -1038,26 +1062,19 @@ namespace {
 
     std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed, const ResultStructure &result,
                                 int numThreads, bool dropbug) {
-        int32_t gene[350] = {0};
-        int turns = 0;
-        for (int i = 0; i < 349; ++i) {
-            if (i < result.AactionsCounter) {
-                gene[i] = result.Aactions[i];
-                turns++;
-                continue;
-            }
-            gene[i] = -1;
-            break;
-        }
-        if (result.AactionsCounter >= 349) {
-            gene[349] = -1;
-        }
+        const auto searchStarted = std::chrono::steady_clock::now();
+        if (result.AactionsCounter < 0 || result.AactionsCounter > 350)
+            return "SearchRequest failed: prefix exceeds action capacity.";
+        int32_t gene[350];
+        std::fill(std::begin(gene), std::end(gene), -1);
+        const int turns = result.AactionsCounter;
+        std::copy_n(result.Aactions, turns, gene);
 
         auto genome =
                 ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 20000, gene, 0);
 
-        if (genome.turn >= 100) {
-            return "SearchRequest failed: turn limit reached.";
+        if (!genome.Initialized || genome.EnemyPlayer.hp != 0) {
+            return "SearchRequest failed: no exact victory within the search budget.";
         }
 
         BattleResult result1;
@@ -1067,14 +1084,26 @@ namespace {
         int position = 1;
         uint64_t nowState = 0;
 
-        BattleEmulator::Main(&position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
+        lcg::init(seed, true);
+        BattleEmulator::Main(&position, genome.processed, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
                              &nowState);
+        if (players[1].hp != 0 || result1.position != genome.fitness
+            || position != genome.position || nowState != genome.state)
+            return "SearchRequest failed: exact replay mismatch.";
+        for (int i = 0; i < turns; ++i) {
+            if (genome.actions[i] != gene[i]) return "SearchRequest failed: fixed prefix mismatch.";
+        }
 
         std::stringstream ss;
-        ss << dumpTable(result1, genome.actions, foundTurn) << "\n";
+        ss << "victory=1 enemy_hp=0 exact_position=" << result1.position
+           << " turns=" << genome.processed << " prefix=" << turns
+           << " prefix_preserved=1 replay_verified=1 elapsed_ms="
+           << std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - searchStarted).count()
+           << "\n";
+        ss << dumpTable(result1, genome.actions, turns) << "\n";
         ss << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
         ss << "0x" << std::hex << seed << std::dec << "\n" << "actions: ";
-        for (auto i = 0; i < 100; ++i) {
+        for (auto i = 0; i < 350; ++i) {
             if (genome.actions[i] == 0 || genome.actions[i] == -1) {
                 break;
             }
