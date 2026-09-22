@@ -60,6 +60,7 @@ SRC_FILES=(
   EnhancedHashCalculator.cpp
   EnhancedHeapQueue.cpp
   InputBuilder.cpp
+  BilyoumaSearch.cpp
 )
 
 EMCC_FLAGS=(
