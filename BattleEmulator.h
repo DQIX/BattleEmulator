@@ -113,6 +113,12 @@ public:
     static constexpr int ZAMMLE = 81; //ドルクマ
     static constexpr int CRACKLE_ENEMY = 82; //ヒャダルコ
 
+    static constexpr int ACTION_ID_MASK = 0xffff;
+    static constexpr int ACTION_BARE_HANDS = 1 << 16;
+    static constexpr int ACTION_EQUIPMENT_CHANGED = 1 << 17;
+    static constexpr int ERUSIONN_EQUIPPED_ATK = 211;
+    static constexpr int ERUSIONN_BARE_HANDS_ATK = 76;
+
 
     static void ResetTurnProcessed();
 
