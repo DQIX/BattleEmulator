@@ -50,6 +50,7 @@ SRC_FILES=(
   BattleEmulator.cpp
   camera.cpp
   debug.cpp
+  ErusionnSearch.cpp
   ActionOptimizer.cpp
   EnhancedCostCalculator.cpp
   EnhancedHashCalculator.cpp

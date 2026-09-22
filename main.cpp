@@ -11,6 +11,7 @@
 #include "BattleEmulator.h"
 #include "debug.h"
 #include "ActionOptimizer.h"
+#include "ErusionnSearch.h"
 #include "InputBuilder.h"
 
 #ifdef DEBUG
@@ -80,6 +81,7 @@ namespace{
 #endif
     // `InputBuilder` インスタンス作成
     InputBuilder builder;
+    ErusionnSearchOptions searchOptions;
 
 #if defined(erusionn_lv21)
     constexpr Player BasePlayers[2] = {
@@ -506,7 +508,7 @@ namespace{
             ", seed: ";
         std::cout << "0x" << std::hex << seed << std::dec << std::endl << "actions: ";
 
-        for(auto i = 0; i < 100; ++i){
+        for(auto i = 0; i < 350; ++i){
             if(genome.actions[i] == 0 || genome.actions[i] == -1){
                 break;
             }
@@ -537,50 +539,24 @@ namespace{
         BattleEmulator::ResetTurnProcessed();
 #endif
 
-        int32_t gene[350] = {0};
-        auto turns = 0;
-        for(int i = 0; i < 349; ++i){
-            gene[i] = aActions[i];
-            if(aActions[i] == -1){
-                gene[i] = -1;
-                gene[i + 1] = -1;
-                break;
-            }
-            turns++;
-        }
-#if defined(erusionn_lv21)
-        auto genome = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
-#endif
-
+        (void)numThreads; (void)Dropbug;
+        auto searched = ErusionnSearch::Run(copiedPlayers, seed, aActions, searchOptions);
 #ifdef DEBUG
         auto t3 = std::chrono::high_resolution_clock::now();
-        auto elapsed_time1 =
-            std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
+        auto elapsed_time1 = std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
         PerformanceDebug("Searcher multi", BattleEmulator::getTurnProcessed(), static_cast<double>(elapsed_time1), 0);
 #endif
-
-        if(genome.turn >= 100){
+        std::cout << "Search: variant=" << ErusionnSearch::VariantName(searched.variant)
+                  << " victory=" << searched.victory << " prefix=" << searched.prefixLength
+                  << " turns=" << searched.length << " enemy_hp=" << searched.genome.EnemyPlayer.hp << " position=" << searched.replay.position
+                  << " equipment_changes=" << searched.equipmentChanges
+                  << " elapsed_ms=" << searched.elapsedMs << " replay=" << searched.replayVerified
+                  << " expanded=" << searched.expanded << " rejected=" << searched.rejectedReplay << '\n';
+        if (!searched.victory || !searched.replayVerified || searched.genome.EnemyPlayer.hp != 0) {
+            std::cout << searched.error << '\n';
             return false;
         }
-
-        BattleResult result1;
-        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
-
-        auto* position = new int(1);
-        auto* nowState = new uint64_t(0);
-
-        BattleEmulator::Main(position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
-                             nowState);
-
-        delete position;
-        delete nowState;
-
-        std::cout << "foundTurn: " << foundTurn << ", " << turns << std::endl;
-#ifdef MINGW_BUILD
-        dumpTableMain(result1, genome, seed, foundTurn);
-#else
-        dumpTableMain(result1, genome, seed, foundTurn);
-#endif
+        dumpTableMain(searched.replay, searched.genome, seed, foundTurn);
 
         return true;
     }
@@ -962,7 +938,7 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 0x0c5a8c4b+3;
+    uint64_t seed = 0x0c5a8f19;
 
     int actions[350] = {
         BattleEmulator::BUFF,
@@ -1122,32 +1098,28 @@ namespace {
             gene[349] = -1;
         }
 
-        auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 8000, gene, 0);
-
-        if (genome.turn >= 100) {
-            return "SearchRequest failed: turn limit reached.";
-        }
-
-        BattleResult result1;
-        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
-
-        int position = 1;
-        uint64_t nowState = 0;
-
-        BattleEmulator::Main(&position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
-                             &nowState);
+        (void)numThreads; (void)dropbug;
+        auto searched = ErusionnSearch::Run(copiedPlayers, seed, gene);
+        if (!searched.victory || !searched.replayVerified || searched.genome.EnemyPlayer.hp != 0)
+            return "SearchRequest failed: " + searched.error;
+        auto &genome = searched.genome;
+        auto &result1 = searched.replay;
 
         std::stringstream ss;
         ss << dumpTable(result1, genome.actions, foundTurn) << "\n";
         ss << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
         ss << "0x" << std::hex << seed << std::dec << "\n" << "actions: ";
-        for (auto i = 0; i < 100; ++i) {
+        for (auto i = 0; i < 350; ++i) {
             if (genome.actions[i] == 0 || genome.actions[i] == -1) {
                 break;
             }
             ss << genome.actions[i] << ", ";
         }
+        ss << "\nSearch: variant=" << ErusionnSearch::VariantName(searched.variant)
+           << " victory=" << searched.victory << " prefix=" << searched.prefixLength
+           << " turns=" << searched.length << " enemy_hp=" << genome.EnemyPlayer.hp
+           << " position=" << result1.position << " equipment_changes=" << searched.equipmentChanges
+           << " elapsed_ms=" << searched.elapsedMs << " replay=" << searched.replayVerified;
         ss << "\n";
         return ss.str();
     }
