@@ -11,6 +11,7 @@
 #include "BattleEmulator.h"
 #include "debug.h"
 #include "ActionOptimizer.h"
+#include "SilyarumanaSearch.h"
 #include "EnhancedCostCalculator.h"
 #include "InputBuilder.h"
 
@@ -50,12 +51,12 @@ namespace{
     void help(const char* program_name);
 
     bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads,
-                       bool Dropbug);
+                       bool Dropbug, int searchVariant = 0, int budgetMs = 1500);
 
     uint64_t BruteForceRequest(const Player copiedPlayers[2], int hours, int minutes, int seconds, int turns,
                                int aActions[350], int damages[350]);
 
-    void dumpTableMain(BattleResult& result1, Genome& genome, uint64_t seed, int turns);
+    void dumpTableMain(const BattleResult& result1, const Genome& genome, uint64_t seed, int turns);
 
     void printHeader(std::stringstream& ss);
 
@@ -488,12 +489,10 @@ namespace{
                 auto seed = BruteForceRequest(BasePlayers, hours, minutes, seconds, result.AactionsCounter, aActions,
                                               damages);
                 if(foundSeeds == 1){
-                    auto test = SearchRequest(BasePlayers, seed, aActions, THREAD_COUNT, true);
-                    if(!test){
-                        std::cout << "The first search request failed." << std::endl;
-                        if(!SearchRequest(BasePlayers, seed, aActions, THREAD_COUNT, false)){
-                            std::cout << "The second search request failed" << std::endl;
-                        }
+                    // The selected search already owns the complete 1500 ms
+                    // budget. Do not repeat it with the obsolete Dropbug mode.
+                    if(!SearchRequest(BasePlayers, seed, aActions, THREAD_COUNT, true)){
+                        std::cout << "Search request failed." << std::endl;
                     }
                 }
             }
@@ -521,7 +520,7 @@ namespace{
             ", seed: ";
         std::cout << "0x" << std::hex << seed << std::dec << std::endl << "actions: ";
 
-        for(auto i = 0; i < 100; ++i){
+        for(auto i = 0; i < 350; ++i){
             if(genome.actions[i] == 0 || genome.actions[i] == -1){
                 break;
             }
@@ -546,84 +545,21 @@ namespace{
     }
 
 bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads,
-                       bool Dropbug){
-#ifdef DEBUG
-        auto t0 = std::chrono::high_resolution_clock::now();
+                       bool Dropbug, int searchVariant, int budgetMs){
+        (void)numThreads; (void)Dropbug;
         BattleEmulator::ResetTurnProcessed();
-#endif
-
-        int32_t gene[350] = {0};
-        auto turns = 0;
-        for(int i = 0; i < 349; ++i){
-            gene[i] = aActions[i];
-            if(aActions[i] == -1){
-                gene[i] = -1;
-                break;
-            }
-            turns++;
-        }
-
-#if defined(erusionn_lv21)
-        Genome genomeA, genomeB;
-
-        // --- TableA で探索 ---
-        EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableA);
-        genomeA = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
-
-        // --- TableB で探索 ---
-        EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableB);
-        genomeB = ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
-#endif
-
-#ifdef DEBUG
-        auto t3 = std::chrono::high_resolution_clock::now();
-        auto elapsed_time1 =
-            std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
-        PerformanceDebug("Searcher multi", BattleEmulator::getTurnProcessed(), static_cast<double>(elapsed_time1), 0);
-#endif
-
-        // --- 両方ともBattleEmulator::Mainを実行してresultで比較 ---
-        BattleResult resultA, resultB;
-
-        auto runMain = [&](const Genome& g, BattleResult& res) -> bool {
-            Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
-            int position = 1;
-            uint64_t nowState = 0;
-            BattleEmulator::Main(&position, 100, g.actions, players, &res, seed, nullptr, nullptr, -1, &nowState);
-            return players[1].hp <= 0; // 敵HP直接確認
-        };
-
-        bool winA = runMain(genomeA, resultA);
-        bool winB = runMain(genomeB, resultB);
-
-        const Genome* chosenGenome = nullptr;
-        const BattleResult* chosenResult = nullptr;
-
-        if (!winA && !winB) {
-            return false;
-        } else if (winA && !winB) {
-            chosenGenome = &genomeA;
-            chosenResult = &resultA;
-        } else if (!winA && winB) {
-            chosenGenome = &genomeB;
-            chosenResult = &resultB;
-        } else {
-            // 両方勝利：ターン数が少ない方を採用、同じならehpの低い方
-            int lastEhpA = resultA.ehp[resultA.position - 1];
-            int lastEhpB = resultB.ehp[resultB.position - 1];
-            bool useA = (resultA.turn < resultB.turn) ||
-                        (resultA.turn == resultB.turn && lastEhpA <= lastEhpB);
-            chosenGenome  = useA ? &genomeA  : &genomeB;
-            chosenResult  = useA ? &resultA  : &resultB;
-        }
-
-        std::cout << "foundTurn: " << foundTurn << ", " << turns << std::endl;
-#ifdef MINGW_BUILD
-        dumpTableMain(*chosenResult, *chosenGenome, seed, foundTurn);
-#else
-        dumpTableMain(*chosenResult, *chosenGenome, seed, foundTurn);
-#endif
-
+        auto search = SilyarumanaSearch::Run(copiedPlayers, seed, aActions, budgetMs, searchVariant);
+        std::cout << "search: victory=" << search.victory << " input_valid=" << search.inputValid
+                  << " prefix=" << search.prefixLength << " prefix_hp=" << search.prefixHP
+                  << " prefix_mp=" << search.prefixMP << " prefix_dazzle=" << search.prefixDazzle
+                  << " prefix_stunned=" << search.prefixStunned
+                  << " enemy_hp=" << search.genome.EnemyPlayer.hp
+                  << " position=" << (search.victory ? search.replay.position : -1)
+                  << " equipment_changes=" << search.equipmentChanges
+                  << " elapsed_ms=" << search.elapsedMs << " variant=" << search.variant
+                  << " nodes=" << search.nodes << " replay_rejected=" << search.rejectedReplays << "\n";
+        if(!search.victory) return false;
+        dumpTableMain(search.replay, search.genome, seed, foundTurn);
         return true;
     }
 
@@ -1006,15 +942,16 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 0x1145;
+    uint64_t seed = 0x20011;
 
     int actions[350] = {
         BattleEmulator::BUFF,
         BattleEmulator::PSYCHE_UP_ALLY,
-        BattleEmulator::PSYCHE_UP_ALLY,
         -1,
     };
-    SearchRequest(BasePlayers, seed, actions, THREAD_COUNT, true);
+    int budgetMs = 1500;
+    const bool won = SearchRequest(BasePlayers, seed, actions, THREAD_COUNT, true, 0, budgetMs);
+    if(!won) return 2;
 
     std::cout << performanceLogger.rdbuf() << std::endl;
 
@@ -1152,42 +1089,23 @@ namespace {
 
     std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed, const ResultStructure &result,
                                 int numThreads, bool dropbug) {
-        int32_t gene[350] = {0};
-        int turns = 0;
-        for (int i = 0; i < 349; ++i) {
-            if (i < result.AactionsCounter) {
-                gene[i] = result.Aactions[i];
-                turns++;
-                continue;
-            }
-            gene[i] = -1;
-            break;
-        }
-        if (result.AactionsCounter >= 349) {
-            gene[349] = -1;
-        }
+        if (result.AactionsCounter < 0 || result.AactionsCounter >= 350)
+            return "SearchRequest failed: prefix exceeds action capacity.";
+        int gene[350];
+        std::fill(std::begin(gene), std::end(gene), -1);
+        std::copy_n(result.Aactions, result.AactionsCounter, gene);
 
-        auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 8000, gene, 0);
-
-        if (genome.turn >= 100) {
-            return "SearchRequest failed: turn limit reached.";
-        }
-
-        BattleResult result1;
-        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
-
-        int position = 1;
-        uint64_t nowState = 0;
-
-        BattleEmulator::Main(&position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
-                             &nowState);
+        (void)numThreads; (void)dropbug;
+        auto search = SilyarumanaSearch::Run(copiedPlayers, seed, gene, 0, 1500);
+        if(!search.victory) return "SearchRequest failed: no exact victory within budget.";
+        auto& genome = search.genome;
+        auto& result1 = search.replay;
 
         std::stringstream ss;
         ss << dumpTable(result1, genome.actions, foundTurn) << "\n";
         ss << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
         ss << "0x" << std::hex << seed << std::dec << "\n" << "actions: ";
-        for (auto i = 0; i < 100; ++i) {
+        for (auto i = 0; i < 350; ++i) {
             if (genome.actions[i] == 0 || genome.actions[i] == -1) {
                 break;
             }

@@ -1,0 +1,149 @@
+最終ソースの既存 DEBUG3 -> SearchRequest 経路による実測。
+Linux x86-64, g++ 14.2.0, -O3, -Derusionn_lv21=1 -DMULTITHREADING=1.
+WASMの実測ではありません。
+
+=== 元DEBUG3: seed=0x1145, prefix=30,62,62 ===
+search: victory=1 input_valid=1 prefix=3 prefix_hp=81 prefix_mp=74 prefix_dazzle=1 prefix_stunned=0 enemy_hp=0 position=22 equipment_changes=2 elapsed_ms=320.618 variant=0 nodes=862176 replay_rejected=0
+turn  sp                equip   aAct              eAct1             eAct2             aD    eD1   eD2   ahp   ehp   amp   ini   
+-----------------------------------------------------------------------------------------------------------------------------
+1     Buff                      Buff              Whirlwind         Dazzle            0     0     0     135   1562  -1    yes   
+2     Psyche up                 Psyche up         Magic Barrier     Attack            0     0     15    135   1562  79    yes   
+3     Psyche up                 Psyche up         Attack            Boom              0     14    25    120   1562  77          
+4     Psyche up                 Psyche up         Whirlwind         Magic Barrier     0     0     0     81    1562  74          
+5     Psyche up                 Psyche up         Whirlwind         Attack            0     0     7     81    1562  74    yes   
+6     !Double up        sude    !Double up        Attack            Boom              0     0     12    74    1562  73    yes   
+7     Multithrust       on      Multithrust       Boom              Whirlwind         1500  29    0     62    1562  73    yes   
+8     Multithrust               Multithrust                                           115   0     0     62    62    69    yes   
+
+ver: v8.0.6_vK_v2, atk: 207, def: 146, seed: 0x1145
+actions: 30, 62, 62, 62, 62, 65569, 34, 34, 
+
+=== 持ち越し休み: seed=0x1007, prefix=30,62,62 ===
+search: victory=1 input_valid=1 prefix=3 prefix_hp=36 prefix_mp=72 prefix_dazzle=0 prefix_stunned=1 enemy_hp=0 position=37 equipment_changes=2 elapsed_ms=1484.75 variant=0 nodes=1784576 replay_rejected=0
+turn  sp                equip   aAct              eAct1             eAct2             aD    eD1   eD2   ahp   ehp   amp   ini   
+-----------------------------------------------------------------------------------------------------------------------------
+1     Buff                      Buff              Inactive          Attack            0     0     33    135   1562  82          
+2     Psyche up                 Psyche up         Boom              Attack            0     23    15    102   1562  74    yes   
+3     Psyche up                 Psyche up         Boom              Whirlwind         0     28    0     64    1562  72    yes   
+4     ---------------           Inactive          Attack            Magic Barrier     0     15    0     36    1562  72    yes   
+5     ---------------           Inactive          Whirlwind         Magic Barrier     0     0     0     21    1562  70          
+6     Special Medicine          Special Medicine  Attack            Attack            111   0     13    21    1562  70          
+7     Multithrust               Multithrust       Attack            Dazzle            98    13    0     119   1562  68    yes   
+8     Psyche up                 Psyche up         Attack            Attack            0     0     15    106   1464  61          
+9     Psyche up                 Psyche up         Inactive          Attack            0     0     15    91    1464  59          
+10    Psyche up                 Psyche up         Attack            Whirlwind         0     32    0     76    1464  56    yes   
+11    Psyche up         sude    Psyche up         Magic Barrier     Attack            0     0     15    44    1464  52    yes   
+12    !Double up        on      !Double up        Magic Barrier     Attack            0     0     16    29    1464  50          
+13    Multithrust               Multithrust                                           1500  0     0     29    1464  48    yes   
+
+ver: v8.0.6_vK_v2, atk: 207, def: 146, seed: 0x1007
+actions: 30, 62, 62, 25, 34, 50, 34, 62, 62, 62, 65598, 33, 34, 
+
+=== MP不足+マヌーサ: seed=0x1145, prefix=65598,65561,36,65572,36,62,36,65572,30,30 ===
+search: victory=1 input_valid=1 prefix=10 prefix_hp=88 prefix_mp=3 prefix_dazzle=1 prefix_stunned=0 enemy_hp=0 position=52 equipment_changes=8 elapsed_ms=1488.26 variant=0 nodes=1922304 replay_rejected=0
+turn  sp                equip   aAct              eAct1             eAct2             aD    eD1   eD2   ahp   ehp   amp   ini   
+-----------------------------------------------------------------------------------------------------------------------------
+1     Psyche up         sude    Psyche up         Whirlwind         Dazzle            0     0     0     135   1562  -1    yes   
+2     ---------------           Inactive          Attack            Attack            0     35    38    135   1562  82    yes   
+3     Mid Heal(behoimi) on      Mid Heal(behoimi) Attack            Attack            96    34    38    62    1562  73    yes   
+4     Mid Heal(behoimi) sude    Mid Heal(behoimi) Attack            Attack            81    31    37    63    1562  61    yes   
+5     Mid Heal(behoimi) on      Mid Heal(behoimi) Attack            Inactive          97    32    0     67    1562  48    yes   
+6     Psyche up                 Psyche up         Magic Barrier     Attack            0     0     33    103   1562  39    yes   
+7     Mid Heal(behoimi)         Mid Heal(behoimi) Attack            Dazzle            145   33    0     70    1562  34    yes   
+8     Mid Heal(behoimi) sude    Mid Heal(behoimi) Magic Barrier     Attack            93    0     33    102   1562  25          
+9     Buff              on      Buff              Attack            Attack            0     15    18    135   1562  16    yes   
+10    Buff                      Buff              Attack            Attack            0     14    0     102   1562  8           
+11    Psyche up                 Psyche up         Magic Barrier     Attack            0     0     1     88    1562  3           
+12    Psyche up                 Psyche up         Magic Barrier     Attack            0     0     0     87    1562  2     yes   
+13    Psyche up                 Psyche up         Attack            Attack            0     0     0     87    1562  2     yes   
+14    Psyche up         sude    Psyche up         Attack            Whirlwind         0     1     0     87    1562  2           
+15    !Double up        on      !Double up        Whirlwind         Attack            0     0     7     86    1562  0     yes   
+16    Magic Water               Magic Water       Magic Barrier     Attack            0     0     7     79    1562  0           
+17    Multithrust               Multithrust       Magic Barrier     Boom              1464  0     14    72    1562  33          
+18    Multithrust               Multithrust                                           121   0     0     72    98    29    yes   
+
+ver: v8.0.6_vK_v2, atk: 207, def: 146, seed: 0x1145
+actions: 65598, 65561, 36, 65572, 36, 62, 36, 65572, 30, 30, 62, 62, 62, 65598, 33, 49, 34, 34, 
+
+=== 必殺使用可能+マヌーサ: seed=0x1145, prefix=65563,65561,65572,65586,36 ===
+search: victory=1 input_valid=1 prefix=5 prefix_hp=128 prefix_mp=49 prefix_dazzle=1 prefix_stunned=0 enemy_hp=0 position=40 equipment_changes=2 elapsed_ms=1484.65 variant=0 nodes=2123776 replay_rejected=0
+turn  sp                equip   aAct              eAct1             eAct2             aD    eD1   eD2   ahp   ehp   amp   ini   
+-----------------------------------------------------------------------------------------------------------------------------
+1     Defence           sude    Defence           Whirlwind         Dazzle            0     0     0     135   1562  -1    yes   
+2     ---------------           Inactive          Attack            Attack            0     35    38    135   1562  82    yes   
+3     Mid Heal(behoimi)         Mid Heal(behoimi) Attack            Attack            96    34    38    62    1562  73    yes   
+4     Special Medicine          Special Medicine  Attack            Attack            112   32    38    63    1562  61    yes   
+5     Mid Heal(behoimi) on      Mid Heal(behoimi) Boom              Magic Barrier     93    30    0     65    1562  53          
+6     Buff                      Buff              Magic Barrier     Attack            0     0     16    128   1562  49    yes   
+7     Psyche up                 Psyche up         Whirlwind         Boom              0     0     22    112   1562  43    yes   
+8     Psyche up                 Psyche up         Whirlwind         Boom              0     0     28    90    1562  43    yes   
+9     gospel song               gospel song       Boom              Attack            75    23    15    62    1562  43    yes   
+10    !Double up                !Double up        Whirlwind         Magic Barrier     0     0     0     97    1562  41    yes   
+11    Psyche up                 Psyche up         Magic Barrier     Boom              0     0     23    97    1562  41          
+12    Psyche up                 Psyche up         Boom              Attack            0     12    16    74    1562  41    yes   
+13    Multithrust               Multithrust       Boom              Attack            1440  11    16    46    1562  39          
+14    Multithrust               Multithrust                                           172   0     0     46    122   33    yes   
+
+ver: v8.0.6_vK_v2, atk: 207, def: 146, seed: 0x1145
+actions: 65563, 65561, 65572, 65586, 36, 30, 62, 62, 52, 33, 62, 62, 34, 34, 
+
+=== 別seed: seed=0x3145, prefix=30,62,62 ===
+search: victory=1 input_valid=1 prefix=3 prefix_hp=16 prefix_mp=64 prefix_dazzle=0 prefix_stunned=0 enemy_hp=0 position=25 equipment_changes=0 elapsed_ms=855.969 variant=0 nodes=1902224 replay_rejected=0
+turn  sp                equip   aAct              eAct1             eAct2             aD    eD1   eD2   ahp   ehp   amp   ini   
+-----------------------------------------------------------------------------------------------------------------------------
+1     Buff                      Buff              Attack            Attack            0     32    37    135   1562  82          
+2     Psyche up                 Psyche up         Boom              Attack            0     21    14    66    1562  69    yes   
+3     Psyche up                 Psyche up         Attack            Attack            0     0     15    31    1562  66    yes   
+4     Psyche up                 Psyche up         Magic Barrier     Attack            0     0     15    16    1562  64    yes   
+5     Special Medicine          Special Medicine  Boom              Attack            114   23    14    1     1562  61    yes   
+6     Psyche up                 Psyche up         Attack            Attack            0     14    19    78    1562  58          
+7     !Double up                !Double up        Whirlwind         Attack            0     0     16    45    1562  54    yes   
+8     Multithrust               Multithrust       Whirlwind         Magic Barrier     1416  0     0     29    1562  51    yes   
+9     Multithrust               Multithrust                                           172   0     0     29    146   47    yes   
+
+ver: v8.0.6_vK_v2, atk: 207, def: 146, seed: 0x3145
+actions: 30, 62, 62, 62, 50, 62, 33, 34, 34, 
+
+=== 別入力として明示的に空prefix: seed=0x1145, prefix="" ===
+search: victory=1 input_valid=1 prefix=0 prefix_hp=135 prefix_mp=82 prefix_dazzle=0 prefix_stunned=0 enemy_hp=0 position=22 equipment_changes=2 elapsed_ms=1492.36 variant=0 nodes=2063104 replay_rejected=0
+turn  sp                equip   aAct              eAct1             eAct2             aD    eD1   eD2   ahp   ehp   amp   ini   
+-----------------------------------------------------------------------------------------------------------------------------
+1     Buff                      Buff              Whirlwind         Dazzle            0     0     0     135   1562  -1    yes   
+2     Psyche up                 Psyche up         Magic Barrier     Attack            0     0     15    135   1562  79    yes   
+3     Psyche up                 Psyche up         Attack            Boom              0     14    25    120   1562  77          
+4     Psyche up                 Psyche up         Whirlwind         Magic Barrier     0     0     0     81    1562  74          
+5     Psyche up                 Psyche up         Whirlwind         Attack            0     0     7     81    1562  74    yes   
+6     !Double up        sude    !Double up        Attack            Boom              0     0     12    74    1562  73    yes   
+7     Multithrust       on      Multithrust       Boom              Whirlwind         1500  29    0     62    1562  73    yes   
+8     Multithrust               Multithrust                                           115   0     0     62    62    69    yes   
+
+ver: v8.0.6_vK_v2, atk: 207, def: 146, seed: 0x1145
+actions: 30, 62, 62, 62, 62, 65569, 34, 34, 
+
+=== 開発中の方式比較: seed=0x1007, prefix=30,62,62 ===
+開発時のvariant番号は最終CLI番号とは別です。
+混成beam
+search: victory=1 input_valid=1 prefix=3 prefix_hp=36 prefix_mp=72 prefix_dazzle=0 prefix_stunned=1 position=40 equipment_changes=2 elapsed_ms=1596.23 variant=0 nodes=1742700 replay_rejected=0
+テンションbeam（旧拡幅）
+search: victory=1 input_valid=1 prefix=3 prefix_hp=36 prefix_mp=72 prefix_dazzle=0 prefix_stunned=1 position=37 equipment_changes=2 elapsed_ms=1497.33 variant=1 nodes=2427130 replay_rejected=0
+ダメージ/残り手数beam
+search: victory=1 input_valid=1 prefix=3 prefix_hp=36 prefix_mp=72 prefix_dazzle=0 prefix_stunned=1 position=37 equipment_changes=2 elapsed_ms=1495.99 variant=2 nodes=2274816 replay_rejected=0
+状態別quota beam
+search: victory=1 input_valid=1 prefix=3 prefix_hp=36 prefix_mp=72 prefix_dazzle=0 prefix_stunned=1 position=40 equipment_changes=2 elapsed_ms=1500.34 variant=3 nodes=1770752 replay_rejected=0
+best-first / tension
+search: victory=1 input_valid=1 prefix=3 prefix_hp=36 prefix_mp=72 prefix_dazzle=0 prefix_stunned=1 position=40 equipment_changes=2 elapsed_ms=955.216 variant=4 nodes=1620735 replay_rejected=0
+best-first / damage
+search: victory=1 input_valid=1 prefix=3 prefix_hp=36 prefix_mp=72 prefix_dazzle=0 prefix_stunned=1 position=40 equipment_changes=2 elapsed_ms=964.372 variant=5 nodes=1466316 replay_rejected=0
+勝利列近傍修復
+search: victory=1 input_valid=1 prefix=3 prefix_hp=36 prefix_mp=72 prefix_dazzle=0 prefix_stunned=1 position=40 equipment_changes=2 elapsed_ms=1501.25 variant=6 nodes=3239936 replay_rejected=0
+拡幅256/2048/16384/65536
+search: victory=1 input_valid=1 prefix=3 prefix_hp=36 prefix_mp=72 prefix_dazzle=0 prefix_stunned=1 position=37 equipment_changes=2 elapsed_ms=1502.83 variant=7 nodes=2067968 replay_rejected=0
+拡幅128/1024/8192/32768
+search: victory=1 input_valid=1 prefix=3 prefix_hp=36 prefix_mp=72 prefix_dazzle=0 prefix_stunned=1 position=40 equipment_changes=2 elapsed_ms=1500.75 variant=8 nodes=1930752 replay_rejected=0
+拡幅512/4096/32768/65536
+search: victory=1 input_valid=1 prefix=3 prefix_hp=36 prefix_mp=72 prefix_dazzle=0 prefix_stunned=1 position=37 equipment_changes=2 elapsed_ms=1495.81 variant=9 nodes=2421248 replay_rejected=0
+
+=== WASMビルド試行 ===
+==> Building silyarumana_new_arugo / silyarumana_v6
+webassembly/build.sh: line 101: emcc: command not found
+exit_status=127

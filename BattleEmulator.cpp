@@ -525,6 +525,12 @@ bool BattleEmulator::Main(int* position, int RunCount, const int32_t Gene[350], 
         }
         if(genePosition != -1 && Gene[genePosition] != 0 && Gene[genePosition] != -1){
             actionTable = Gene[genePosition] & ACTION_ID_MASK;
+            // FLEE cannot be selected when rest is carried over into this turn.
+            // Do not let its pre-action skip bypass the normal recovery path.
+            if(actionTable == FLEE_ALLY &&
+               (stunCarriedIntoTurn || players[0].sleeping || players[0].paralysis)){
+                actionTable = ATTACK_ALLY;
+            }
             if(actionTable == TURN_SKIPPED || actionTable == SLEEPING || actionTable == CURE_SLEEPING || actionTable ==
                 CURE_PARALYSIS || actionTable == PARALYSIS){
                 actionTable = ATTACK_ALLY;
