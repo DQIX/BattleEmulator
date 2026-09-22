@@ -59,6 +59,8 @@ set(SOURCES
         EnhancedHeapQueue.h
         SimpleParameterOptimizer.cpp
         SimpleParameterOptimizer.h
+        BilyoumaSearch.h
+        BilyoumaSearch.cpp
 )
 
 # シングルスレッド版（multithreading = OFF）
@@ -91,7 +93,7 @@ add_definitions(-DBUILD_DATE="${BUILD_DATE}" -DBUILD_TIME="${BUILD_TIME}")
 if(MINGW)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=x86-64 -mtune=generic -ffunction-sections -fdata-sections") #  -fno-inline-small-functions
-    set(CMAKE_EXE_LINKER_FLAGS "-static -Wl,--gc-sections")
+    set(CMAKE_EXE_LINKER_FLAGS "-Wl,--gc-sections")
 elseif(MSVC)
     #set_property(TARGET rbe_single PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     #set_property(TARGET rbe_multi_lv18_sp35 PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
