@@ -105,6 +105,14 @@ public:
 	static constexpr int KAZAM = 153; //ドルモーア
 	static constexpr int WAVE_OF_PANIC = 154; //ステータス効果
 
+    static constexpr int ACTION_ID_MASK = 0xffff;
+    static constexpr int ACTION_BARE_HANDS = 1 << 16;
+    static constexpr int ACTION_GANNAN = 1 << 17;
+    static constexpr int ACTION_EQUIPMENT_CHANGED = 1 << 18;
+    static constexpr int BARUBOROSU_EQUIPPED_ATK = 324;
+    static constexpr int BARUBOROSU_BARE_HANDS_ATK = 179;
+    static constexpr int BARUBOROSU_GANNAN_ATK = 249;
+
     static bool
     Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
          BattleResult* result, uint64_t seed, const int eActions[350], const int damages[350], int mode, uint64_t *NowState);

@@ -374,8 +374,36 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 				//     continue;
 				// }
 
+				#if defined(GOUKETU)
+				const bool supportsEquipmentChange = true;
+				#else
+				const bool supportsEquipmentChange = false;
+				#endif
+				int currentEquipment = 0;
+				if(currentGenome.AllyPlayer.defaultATK == BattleEmulator::BARUBOROSU_BARE_HANDS_ATK){
+					currentEquipment = 1;
+				}else if(currentGenome.AllyPlayer.defaultATK == BattleEmulator::BARUBOROSU_GANNAN_ATK){
+					currentEquipment = 2;
+				}
+				const bool canChangeEquipment =
+					supportsEquipmentChange &&
+					!currentGenome.AllyPlayer.paralysis && !currentGenome.AllyPlayer.sleeping &&
+					!currentGenome.AllyPlayer.inactive;
+				const int equipmentVariants = canChangeEquipment ? 3 : 1;
+				for(int equipmentVariant = 0; equipmentVariant < equipmentVariants; ++equipmentVariant){
+					const int requestedEquipment =
+						canChangeEquipment ? (currentEquipment + equipmentVariant) % 3 : currentEquipment;
+					int encodedAction = entry.action;
+					if(supportsEquipmentChange){
+						if(requestedEquipment == 1){
+							encodedAction |= BattleEmulator::ACTION_BARE_HANDS;
+						}else if(requestedEquipment == 2){
+							encodedAction |= BattleEmulator::ACTION_GANNAN;
+						}
+					}
+
 				Genome newGenome = currentGenome;
-				newGenome.actions[currentGenome.turn - 1] = entry.action;
+				newGenome.actions[currentGenome.turn - 1] = encodedAction;
 				newGenome.Initialized = true;
 
 				// Copy for battle emulator execution
@@ -422,6 +450,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
 					// Add to open set
 					openSet.push(newNode);
+				}
 				}
 			}
 
