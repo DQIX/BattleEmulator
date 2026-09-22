@@ -113,6 +113,12 @@ public:
 	static constexpr int THIN_AIR = 171;
 	static constexpr int ATTACK_ENEMY_A6 = 172;
 
+    static constexpr int ACTION_ID_MASK = 0xffff;
+    static constexpr int ACTION_BARE_HANDS = 1 << 16;
+    static constexpr int ACTION_EQUIPMENT_CHANGED = 1 << 17;
+    static constexpr int GANASADAI1_EQUIPPED_ATK = 320;
+    static constexpr int GANASADAI1_BARE_HANDS_ATK = 175;
+
     static bool
     Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
          BattleResult* result, uint64_t seed, const int eActions[350], const int damages[350], int mode, uint64_t *NowState);

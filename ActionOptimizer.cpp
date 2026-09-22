@@ -370,8 +370,20 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 				//     continue;
 				// }
 
+				const bool currentlyBareHands =
+					currentGenome.AllyPlayer.defaultATK == BattleEmulator::GANASADAI1_BARE_HANDS_ATK;
+				const bool canChangeEquipment =
+					!currentGenome.AllyPlayer.paralysis && !currentGenome.AllyPlayer.sleeping &&
+					!currentGenome.AllyPlayer.inactive;
+				const int equipmentVariants = canChangeEquipment ? 2 : 1;
+				for(int equipmentVariant = 0; equipmentVariant < equipmentVariants; ++equipmentVariant){
+					const bool requestedBareHands =
+						equipmentVariant == 0 ? currentlyBareHands : !currentlyBareHands;
+					const int encodedAction =
+						entry.action | (requestedBareHands ? BattleEmulator::ACTION_BARE_HANDS : 0);
+
 				Genome newGenome = currentGenome;
-				newGenome.actions[currentGenome.turn - 1] = entry.action;
+				newGenome.actions[currentGenome.turn - 1] = encodedAction;
 				newGenome.Initialized = true;
 
 				// Copy for battle emulator execution
@@ -418,6 +430,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 
 					// Add to open set
 					openSet.push(newNode);
+				}
 				}
 			}
 
