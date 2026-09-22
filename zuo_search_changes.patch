@@ -1,0 +1,1341 @@
+--- a/ActionOptimizer.cpp
++++ b/ActionOptimizer.cpp
+@@ -1,423 +1,19 @@
+-//
+-// Flexible ActionOptimizer with Adaptive Constraint Management
+-// Solves deadlock issues with longer predefined action sequences
+-//
++#include "ActionOptimizer.h"
++#include "ZuoSearch.h"
+ 
+-#include "ActionOptimizer.h"
+-#include <random>
+-#include <unordered_set>
+-#include <memory>
++namespace { thread_local uint32_t nodesUsed = 0; }
+ 
+-#include "BattleEmulator.h"
+-#include "LinearIdPool.h"
+-#include "Genome.h"
+-#include "EnhancedHashCalculator.h"
+-#include "EnhancedCostCalculator.h"
+-#include "EnhancedHeapQueue.h"
+-#include "lcg.h"
++uint32_t ActionOptimizer::getNodesUsed() { return nodesUsed; }
+ 
+-struct ActionEntry {
+-    int action;
+-    bool (*condition)(const Genome&);
+-    // 実行後、効果があったか（事後）
+-    bool (*isEffective)(
+-        const Genome& before,
+-        const Genome& after
+-    );
+-};
+-
+-// 1要素の検証
+-constexpr bool isValid(const ActionEntry& e) {
+-    return e.condition != nullptr
+-        && e.isEffective != nullptr;
++// Keep the existing API for callers outside SearchRequest. The old generation
++// and seedOffset parameters are not separate time budgets or alternate worlds.
++Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed,
++        int turns, int maxGenerations, int actions[350], int seedOffset) {
++    (void)maxGenerations;
++    (void)seedOffset;
++    const auto result = ZuoSearch::Run(players, seed, actions, turns);
++    nodesUsed = static_cast<uint32_t>(result.expanded);
++    return result.toGenome();
+ }
+ 
+-// テーブル全体の検証
+-template <size_t N>
+-constexpr bool validateActionTable(const ActionEntry (&table)[N]) {
+-    for (size_t i = 0; i < N; ++i) {
+-        if (!isValid(table[i])) {
+-            return false;
+-        }
+-    }
+-    return true;
+-}
+-constexpr ActionEntry ACTION_TABLE[] = {
+-    { BattleEmulator::MIDHEAL,  [](const Genome& g) {
+-        return (g.AllyPlayer.hp / g.AllyPlayer.maxHp) < 0.7;
+-    },
+-     [](const Genome&, const Genome&) { return true; }
+-    },
+-    { BattleEmulator::SPECIAL_ANTIDOTE, [](const Genome& g) {
+-        return g.AllyPlayer.PoisonEnable == true && g.AllyPlayer.SpecialAntidoteCount > 0;
+-    },
+-     [](const Genome&, const Genome&) { return true; }
+-    },
+-    { BattleEmulator::SPECIAL_MEDICINE,      [](const Genome& g) {
+-        return g.AllyPlayer.SpecialMedicineCount > 0;
+-    },
+-     [](const Genome&, const Genome&) { return true; }
+-    },
+-    { BattleEmulator::FLEE_ALLY,    [](const Genome&) { return true; },
+-        [](const Genome&, const Genome&) { return true; }
+-    },
+-{ BattleEmulator::DOUBLE_UP,
+-        [](const Genome& g) {
+-            return g.AllyPlayer.AtkBuffLevel == 0;
+-    },
+-    [](const Genome&, const Genome&) { return true; }
+-    },
+-    { BattleEmulator::PSYCHE_UP_ALLY,
+-        [](const Genome& g) {
+-            return g.EnemyPlayer.hp > 180 && g.AllyPlayer.TensionLevel <= 3;
+-
+-    },
+-        [](const Genome& before, const Genome& after) { return after.AllyPlayer.TensionLevel > before.AllyPlayer.TensionLevel;}
+-        // 事後: テンションが上がったか
+-
+-    },
+-    { BattleEmulator::BUFF,
+-        [](const Genome& g) { return g.AllyPlayer.mp >= 10 && g.AllyPlayer.BuffLevel <= 1; },
+-        [](const Genome&, const Genome&) { return true; }
+-    },
+-    { BattleEmulator::MULTITHRUST,
+-        [](const Genome& g) { return g.AllyPlayer.mp >= 10; },
+-        [](const Genome&, const Genome&) { return true; }
+-    },
+-    { BattleEmulator::DEFENCE,
+-        [](const Genome&) { return true; },
+-        [](const Genome&, const Genome&) { return true; }
+-    },
+-};
+-
+-// ★ ここが本体 ★
+-static_assert(
+-    validateActionTable(ACTION_TABLE),
+-    "ACTION_TABLE contains null function pointer"
+-);
+-
+-
+-thread_local static uint32_t Node_Used;
+-
+-uint32_t ActionOptimizer::getNodesUsed() {
+-    return Node_Used;
+-}
+-
+-// Flexible A* Algorithm Implementation
+-Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int turns, int maxGenerations,
+-                                     int actions[350], int seedOffset) {
+-    lcg::init(seed, true);
+-    Node_Used = 0;
+-    //std::mt19937 rng(seed + seedOffset);
+-
+-    // Cache enemy max HP (immutable value)
+-    const auto enemyMaxHp = static_cast<double>(players[1].maxHp);
+-    const auto playerMaxHp = static_cast<double>(players[0].maxHp);
+-    //const auto playerMaxMP = static_cast<double>(players[0].maxMp);
+-
+-    std::unique_ptr<int> position = std::make_unique<int>(1);
+-    std::unique_ptr<uint64_t> nowState = std::make_unique<uint64_t>(0);
+-
+-    LinearIdPool<Genome, 50000> Pool{};
+-
+-    // Enhanced A* priority queue and visited set
+-    EnhancedHeapQueue openSet{};
+-    std::unordered_set<uint64_t> closedSet;
+-
+-    Player CopedPlayers[2] = {players[0], players[1]};
+-    *position = 1;
+-    *nowState = 0;
+-
+-    // Execute one turn
+-    BattleEmulator::Main(position.get(), turns, actions, CopedPlayers,
+-                        nullptr, seed,
+-                         nullptr, nullptr, -2, nowState.get());
+-
+-    // Initialize starting node
+-    Genome initialGenome = {};
+-    initialGenome.EnemyPlayer = CopedPlayers[1];
+-    initialGenome.AllyPlayer = CopedPlayers[0];
+-    initialGenome.EActions[0] = -1;
+-    initialGenome.EActions[1] = -1;
+-    initialGenome.Aactions = -1;
+-    initialGenome.fitness = 0;
+-    initialGenome.turn = turns + 1;
+-    initialGenome.processed = 0;
+-    initialGenome.Initialized = false;
+-    initialGenome.processed = turns;
+-    initialGenome.Visited = 0;
+-    initialGenome.position = *position;
+-    initialGenome.state = *nowState;
+-
+-    // Set initial action array
+-    for (int i = 0; i < 350; ++i) {
+-        if (actions[i] == -1 || actions[i] == 0) {
+-            initialGenome.actions[i] = -1;
+-            break;
+-        } else {
+-            initialGenome.actions[i] = actions[i];
+-        }
+-    }
+-
+-    // Create initial node with enhanced cost calculation
+-    EnhancedAStarNode initialNode{};
+-    initialNode.gCost = 0;
+-    initialNode.hCost = EnhancedCostCalculator::calculateHCost(initialGenome, enemyMaxHp, playerMaxHp);
+-    initialNode.fCost = initialNode.gCost + initialNode.hCost;
+-    initialNode.stateHash = EnhancedHashCalculator::computeStateHash(initialGenome);
+-    initialNode.allyHP = initialGenome.AllyPlayer.hp;
+-    initialNode.enemyHP = initialGenome.EnemyPlayer.hp;
+-    initialNode.nodeId = Pool.alloc(initialGenome);
+-    openSet.push(initialNode);
+-
+-    Genome bestSolution = {};
+-    bestSolution.turn = INT32_MAX;
+-    bool solutionFound = false;
+-
+-    int counter = 0;
+-    double startT = turns + 40;
+-    double lastBestFCost = 1000000.0;
+-    auto percent = 0.0;
+-    auto percenttmp = 0.0;
+-
+-    Player CopedPlayers3[2];
+-
+-    auto lastimp = 0;
+-
+-    for (int i = 0; i < 2; ++i) {
+-        if (!solutionFound) {
+-            maxGenerations *= 2;
+-        }else {
+-            break;
+-        }
+-        while (!openSet.empty() && (maxGenerations == -1 || counter < maxGenerations)) {
+-            // Get node with minimum f-cost
+-            EnhancedAStarNode currentNode = openSet.top();
+-            openSet.pop();
+-
+-            auto preGCost = currentNode.gCost;
+-
+-
+-
+-            // if (counter % 1000000 == 0) {
+-            //     for (int i = 0; i < 350; ++i) {
+-            //         if (currentNode.genome.actions[i] == 0 || currentNode.genome.actions[i] == -1) {
+-            //             break;
+-            //         }
+-            //         std::cout << currentNode.genome.actions[i];
+-            //     }
+-            //     std::cout << std::endl;
+-            // }
+-            //       }
+-
+-            // Skip already explored states
+-            if (closedSet.count(currentNode.stateHash)) {
+-                continue;
+-            }
+-            closedSet.insert(currentNode.stateHash);
+-
+-            const Genome currentGenome = Pool.get(currentNode.nodeId);
+-
+-            //Progress reporting with constraint info
+-            // if (false && counter % 10 == 0) {
+-            //     percenttmp = counter / static_cast<double>(maxGenerations) * 100.0;
+-            //     if (percenttmp != percent) {
+-            //         std::cout << "[Node Info] " << percenttmp << "%"
+-            //                   << " | turn=" << currentGenome.turn
+-            //                   << " | hCost=" << currentNode.hCost
+-            //                   << " | gCost=" << currentNode.gCost
+-            //                   << " | enemyHP=" << currentGenome.EnemyPlayer.hp
+-            //                   << " | bestTurn=" << (solutionFound ? bestSolution.turn - 1: -1)
+-            //                   << std::endl;
+-            //         percent = percenttmp;
+-            //     }
+-            // }
+-
+-
+-            // Turn limit check
+-            if (currentGenome.turn > startT) {
+-                continue;
+-            }
+-            if (solutionFound && currentGenome.turn >= bestSolution.turn) {
+-                continue;
+-            }
+-
+-            // Victory condition check
+-            if (currentGenome.EnemyPlayer.hp <= 0) {
+-                if (!solutionFound || currentGenome.turn < bestSolution.turn) {
+-                    lastimp = counter;
+-                    bestSolution = currentGenome;
+-                    solutionFound = true;
+-                }
+-                continue;
+-            }
+-
+-            if (solutionFound && counter - lastimp > 2000) {
+-                Node_Used = Pool.getSize();
+-                return bestSolution;
+-            }
+-
+-            // Defeat condition check
+-            if (currentGenome.AllyPlayer.hp <= 0) {
+-                continue;
+-            }
+-
+-            // Skip if worse than existing solution
+-            if (solutionFound && currentGenome.turn >= bestSolution.turn) {
+-                continue;
+-            }
+-
+-            if(currentGenome.AllyPlayer.inactive){
+-               Genome newGenome = currentGenome;
+-                newGenome.actions[currentGenome.turn - 1] = BattleEmulator::ATTACK_ALLY;
+-                newGenome.Initialized = true;
+-
+-                // Copy for battle emulator execution
+-                CopedPlayers3[0] = currentGenome.AllyPlayer;
+-                CopedPlayers3[1] = currentGenome.EnemyPlayer;
+-                *position = currentGenome.position;
+-                *nowState = currentGenome.state;
+-
+-                // Execute one turn
+-                BattleEmulator::Main(position.get(), newGenome.turn - newGenome.processed, newGenome.actions, CopedPlayers3,
+-                                    nullptr, seed,
+-                                     nullptr, nullptr, -2, nowState.get());
+-
+-                if (CopedPlayers3[0].hp > 0) {
+-                    // Update genome with results
+-                    newGenome.position = *position;
+-                    newGenome.state = *nowState;
+-                    newGenome.turn = currentGenome.turn + 1;
+-                    newGenome.processed = currentGenome.turn;
+-                    newGenome.AllyPlayer = CopedPlayers3[0];
+-                    newGenome.EnemyPlayer = CopedPlayers3[1];
+-
+-                    // Calculate enhanced state hash
+-                    uint64_t newStateHash = EnhancedHashCalculator::computeStateHash(newGenome);
+-
+-                    // Skip already explored states
+-                    if (closedSet.count(newStateHash)) {
+-                        continue;
+-                    }
+-
+-                    // Create new node with enhanced cost calculation
+-                    EnhancedAStarNode newNode{};
+-                    newNode.gCost = EnhancedCostCalculator::calculateGCost(newGenome, BattleEmulator::ATTACK_ALLY, preGCost);
+-                    newNode.hCost = EnhancedCostCalculator::calculateHCost(newGenome, enemyMaxHp, playerMaxHp);
+-                    newNode.fCost = newNode.gCost + newNode.hCost;
+-                    newNode.stateHash = newStateHash;
+-                    newNode.allyHP = newGenome.AllyPlayer.hp;
+-                    newNode.enemyHP = newGenome.EnemyPlayer.hp;
+-                    newNode.nodeId = Pool.alloc(newGenome);
+-
+-                    // Add to open set
+-                    openSet.push(newNode);
+-                }
+-                continue;
+-            }
+-
+-
+-            // Execute each action and generate new nodes
+-            for (const auto& entry : ACTION_TABLE) {
+-                if (!entry.condition(currentGenome)) {
+-                    continue;
+-                }
+-                // // Skip low-priority actions if we have many candidates
+-                // if (actionCandidates.size() > 6 && candidate.priority < 0.5) {
+-                //     continue;
+-                // }
+-                // if (rng() % 100 >= 80) {
+-                //     continue;
+-                // }
+-
+-                const bool currentlyBareHands =
+-                        currentGenome.AllyPlayer.defaultATK == BattleEmulator::ZUO_BARE_HANDS_ATK;
+-                const bool canChangeEquipment =
+-                        !currentGenome.AllyPlayer.paralysis && !currentGenome.AllyPlayer.sleeping &&
+-                        !currentGenome.AllyPlayer.inactive;
+-                const int equipmentVariants = canChangeEquipment ? 2 : 1;
+-                for (int equipmentVariant = 0; equipmentVariant < equipmentVariants; ++equipmentVariant) {
+-                    const bool requestedBareHands =
+-                            equipmentVariant == 0 ? currentlyBareHands : !currentlyBareHands;
+-                    const int encodedAction =
+-                            entry.action | (requestedBareHands ? BattleEmulator::ACTION_BARE_HANDS : 0);
+-
+-                Genome newGenome = currentGenome;
+-                newGenome.actions[currentGenome.turn - 1] = encodedAction;
+-                newGenome.Initialized = true;
+-
+-                // Copy for battle emulator execution
+-                CopedPlayers3[0] = currentGenome.AllyPlayer;
+-                CopedPlayers3[1] = currentGenome.EnemyPlayer;
+-                *position = currentGenome.position;
+-                *nowState = currentGenome.state;
+-
+-                // Execute one turn
+-                BattleEmulator::Main(position.get(), newGenome.turn - newGenome.processed, newGenome.actions, CopedPlayers3,
+-                                    nullptr, seed,
+-                                     nullptr, nullptr, -2, nowState.get());
+-
+-                if (CopedPlayers3[0].hp > 0) {
+-                    // Update genome with results
+-                    newGenome.position = *position;
+-                    newGenome.state = *nowState;
+-                    newGenome.turn = currentGenome.turn + 1;
+-                    newGenome.processed = currentGenome.turn;
+-                    newGenome.AllyPlayer = CopedPlayers3[0];
+-                    newGenome.EnemyPlayer = CopedPlayers3[1];
+-
+-                    // Calculate enhanced state hash
+-                    uint64_t newStateHash = EnhancedHashCalculator::computeStateHash(newGenome);
+-
+-                    // Skip already explored states
+-                    if (closedSet.count(newStateHash)) {
+-                        continue;
+-                    }
+-
+-                    // Create new node with enhanced cost calculation
+-                    EnhancedAStarNode newNode{};
+-                    newNode.gCost = EnhancedCostCalculator::calculateGCost(newGenome, entry.action, preGCost);
+-                    newNode.hCost = EnhancedCostCalculator::calculateHCost(newGenome, enemyMaxHp, playerMaxHp);
+-                    newNode.fCost = newNode.gCost + newNode.hCost;
+-                    newNode.stateHash = newStateHash;
+-                    newNode.allyHP = newGenome.AllyPlayer.hp;
+-                    newNode.enemyHP = newGenome.EnemyPlayer.hp;
+-                    newNode.nodeId = Pool.alloc(newGenome);
+-
+-                    if (!entry.isEffective(currentGenome, newGenome)) {
+-                        continue;
+-                    }
+-
+-                    // Add to open set
+-                    openSet.push(newNode);
+-                }
+-                }
+-            }
+-
+-            counter++;
+-
+-            // Track best f-cost for progress monitoring
+-            if (currentNode.fCost < lastBestFCost) {
+-                lastBestFCost = currentNode.fCost;
+-            }
+-        }
+-    }
+-
+-    Node_Used = Pool.getSize();
+-
+-    if (solutionFound) {
+-        return bestSolution;
+-    }
+-
+-    // Return best available node if no solution found
+-    if (!openSet.empty()) {
+-        return Pool.get(openSet.top().nodeId);
+-    }
+-
+-    return initialGenome;
+-}
+-
+-void ActionOptimizer::updateCompromiseScore(Genome &genome) {
+-    // Enemy action penalty processing (unchanged)
+-}
+-
++void ActionOptimizer::updateCompromiseScore(Genome &) {}
+--- a/ActionOptimizer.h
++++ b/ActionOptimizer.h
+@@ -12,7 +12,7 @@
+ 
+ class ActionOptimizer {
+ public:
+-    // Main A* algorithm with fixes for f-cost stagnation
++    // Compatibility entry point for the final, exact-replayed ZuoSearch.
+     static Genome RunAlgorithm(const Player players[2], uint64_t seed, int turns, int maxGenerations,
+                                int actions[350], int seedOffset);
+ 
+--- a/BattleEmulator.cpp
++++ b/BattleEmulator.cpp
+@@ -475,6 +475,14 @@
+             actionTable = ATTACK_ALLY;
+         }
+ 
++
++        // A carried turn-start rest cannot select FLEE in the ROM. Only
++        // this existing pre-action-skip hazard is normalized; rest inflicted
++        // later in this turn retains the ordinary selectable FLEE behavior.
++        if (actionTable == FLEE_ALLY &&
++            (players[0].inactive || players[0].sleeping || players[0].paralysis)) {
++            actionTable = ATTACK_ALLY;
++        }
+ 
+         if (actionTable == DEFENCE) {
+             players[0].defence = 0.5;
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -46,6 +46,8 @@
+         debug.cpp
+         debug.h
+         BattleResult.h
++        ZuoSearch.cpp
++        ZuoSearch.h
+         ActionOptimizer.cpp
+         ActionOptimizer.h
+         Genome.h
+--- a/main.cpp
++++ b/main.cpp
+@@ -11,6 +11,7 @@
+ #include "BattleEmulator.h"
+ #include "debug.h"
+ #include "ActionOptimizer.h"
++#include "ZuoSearch.h"
+ #include "EnhancedHeapQueue.h"
+ #include "InputBuilder.h"
+ #if defined(OPTIMIZE_MODE)
+@@ -68,6 +69,8 @@
+ 
+     int foundTurn = 0;
+     int foundTurnOffset = 0;
++    int searchVariant = ZuoSearch::DefaultVariant;
++    int searchBudgetMs = ZuoSearch::DefaultBudgetMs;
+ 
+     const char *version = "v10.0.0_vB_v2";
+ 
+@@ -560,8 +563,8 @@
+                 ", seed: ";
+         std::cout << "0x" << std::hex << seed << std::dec << std::endl << "actions: ";
+ 
+-        for (auto i = 0; i < 100; ++i) {
+-            if (genome.actions[i] == 0 || genome.actions[i] == -1) {
++        for (auto i = 0; i < 350; ++i) {
++            if (genome.actions[i] == -1) {
+                 break;
+             }
+             std::cout << genome.actions[i] << ", ";
+@@ -584,61 +587,34 @@
+                 "Performance: " << std::fixed << std::setprecision(2) << performance << " mann turns/s" << std::endl;
+     }
+ 
++    void searchSummary(std::ostream &out, const ZuoSearchResult &r, int variant) {
++        out << "Search: variant=" << variant << " (" << ZuoSearch::VariantName(variant) << ")"
++            << " victory=" << r.victory << " input_valid=" << r.inputValid
++            << " prefix=" << r.prefixLength << " exact_replay=" << r.replayVerified
++            << " enemy_hp=" << r.finalState.players[1].hp
++            << " position=" << r.finalState.position << " equipment_changes=" << r.finalState.changes
++            << " turns=" << r.length << " elapsed_ms=" << r.elapsedMs
++            << " first_ms=" << r.firstVictoryMs << " best_ms=" << r.bestVictoryMs
++            << " expanded=" << r.expanded << " duplicates=" << r.duplicates
++            << " rejected_replay=" << r.rejectedReplay << " updates=" << r.updates << "\n";
++        if (!r.error.empty()) out << r.error << "\n";
++    }
++
+     bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads, bool Dropbug) {
+-#ifdef DEBUG
+-        auto t0 = std::chrono::high_resolution_clock::now();
++        (void)numThreads;
++        (void)Dropbug;
++        int turns = 0;
++        while (turns < 350 && aActions[turns] != -1) ++turns;
++        if (turns == 350) return false;
+         BattleEmulator::ResetTurnProcessed();
+-#endif
+-
+-        int32_t gene[350] = {0};
+-        auto turns = 0;
+-        for (int i = 0; i < 349; ++i) {
+-            gene[i] = aActions[i];
+-            if (aActions[i] == -1) {
+-                gene[i] = -1;
+-                gene[i + 1] = -1;
+-                break;
+-            }
+-            turns++;
+-        }
+-#if defined(z_lv20)
+-        auto genome =
+-        ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
+-#endif
+-
+-        auto turnProcessed = BattleEmulator::getTurnProcessed();
+-
+-#ifdef DEBUG
+-        auto t3 = std::chrono::high_resolution_clock::now();
+-        auto elapsed_time1 =
+-                std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
+-        PerformanceDebug("Searcher", turnProcessed, static_cast<double>(elapsed_time1), 0);
+-        logMemoryUsage(performanceLogger, ActionOptimizer::getNodesUsed(), sizeof(Genome), sizeof(EnhancedAStarNode));
+-#endif
+-
+-        if (genome.turn >= 100) {
+-            return false;
+-        }
+-
+-        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
+-
+-        auto *position = new int(1);
+-        auto *nowState = new uint64_t(0);
+-        BattleResult result;
+-
+-        BattleEmulator::Main(position, 100, genome.actions, players, &result, seed, nullptr, nullptr, -1,
+-                             nowState);
+-
+-        delete position;
+-        delete nowState;
+-
++        auto search = ZuoSearch::Run(copiedPlayers, seed, aActions, turns,
++                                           searchBudgetMs, searchVariant);
++        searchSummary(std::cout, search, searchVariant);
++        if (!search.victory || !search.replayVerified || search.finalState.players[1].hp != 0) return false;
++        auto genome = search.toGenome();
+         std::cout << "foundTurn: " << foundTurn << ", " << turns << std::endl;
+-#ifdef MINGW_BUILD
+-        dumpTableMain(result, genome, seed, foundTurn);
+-#else
+-        dumpTableMain(result, genome, seed, foundTurn);
+-#endif
+-
++        // The displayed log is the SAME fresh replay that admitted the winner.
++        dumpTableMain(search.replay, genome, seed, foundTurn);
+         return true;
+     }
+ 
+@@ -1076,11 +1052,43 @@
+ 
+ #ifdef DEBUG3
+     uint64_t seed = 0x0d58941f;
+-
+-    int actions[350] = {
+-        BattleEmulator::BUFF,
+-        -1,
+-    };
++    int actions[350] = {BattleEmulator::BUFF, -1};
++    // Optional benchmark controls on the existing DEBUG3 -> SearchRequest path.
++    // With no arguments, the original seed and fixed BUFF prefix are unchanged.
++    try {
++        for (int i = 1; i < argc; ++i) {
++            const std::string option = argv[i];
++            if (i + 1 >= argc) throw std::invalid_argument("Missing search option value");
++            const std::string value = argv[++i];
++            if (option == "--search-variant") {
++                searchVariant = std::stoi(value);
++                if (searchVariant < 0 || searchVariant >= ZuoSearch::VariantCount())
++                    throw std::invalid_argument("Unknown search variant");
++            } else if (option == "--search-budget-ms") {
++                searchBudgetMs = std::stoi(value);
++                if (searchBudgetMs < 0) throw std::invalid_argument("Negative search budget");
++            } else if (option == "--search-seed") {
++                seed = std::stoull(value, nullptr, 0);
++            } else if (option == "--search-prefix") {
++                std::fill(std::begin(actions), std::end(actions), -1);
++                std::stringstream input(value);
++                std::string token;
++                int length = 0;
++                while (std::getline(input, token, ',')) {
++                    if (length >= 349) throw std::invalid_argument("Prefix exceeds action buffer");
++                    const int action = std::stoi(token, nullptr, 0);
++                    if (action < 0) throw std::invalid_argument("Prefix contains a terminator");
++                    actions[length++] = action;
++                }
++            } else {
++                throw std::invalid_argument("Unknown search option: " + option);
++            }
++        }
++    } catch (const std::exception &e) {
++        std::cerr << e.what() << std::endl;
++        return 2;
++    }
++
+     SearchRequest(BasePlayers, seed, actions, THREAD_COUNT, true);
+ 
+     std::cout << performanceLogger.rdbuf() << std::endl;
+@@ -1219,44 +1227,28 @@
+ 
+     std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed, const ResultStructure &result,
+                                 int numThreads, bool dropbug) {
+-        int32_t gene[350] = {0};
+-        int turns = 0;
+-        for (int i = 0; i < 349; ++i) {
+-            if (i < result.AactionsCounter) {
+-                gene[i] = result.Aactions[i];
+-                turns++;
+-                continue;
+-            }
+-            gene[i] = -1;
+-            gene[i + 1] = -1;
+-            break;
+-        }
+-        if (result.AactionsCounter >= 349) {
+-            gene[349] = -1;
+-        }
+-
+-        auto genome =
+-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 8000, gene, 0);
+-
+-        if (genome.turn >= 100) {
+-            return "SearchRequest failed: turn limit reached.";
+-        }
+-
+-        BattleResult result1;
+-        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
+-
+-        int position = 1;
+-        uint64_t nowState = 0;
+-
+-        BattleEmulator::Main(&position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
+-                             &nowState);
+-
++        (void)numThreads;
++        (void)dropbug;
++        if (result.AactionsCounter < 0 || result.AactionsCounter >= 350)
++            return "SearchRequest failed: fixed prefix exceeds the action buffer.";
++        int32_t gene[350];
++        std::fill(std::begin(gene), std::end(gene), -1);
++        const int turns = result.AactionsCounter;
++        std::copy_n(result.Aactions, turns, gene);
++
++        auto search = ZuoSearch::Run(copiedPlayers, seed, gene, turns);
+         std::stringstream ss;
+-        ss << dumpTable(result1, genome.actions, foundTurn) << "\n";
++        searchSummary(ss, search, ZuoSearch::DefaultVariant);
++        if (!search.victory || !search.replayVerified || search.finalState.players[1].hp != 0) {
++            ss << "SearchRequest failed: no exact victory within the search budget.";
++            return ss.str();
++        }
++        auto genome = search.toGenome();
++        ss << dumpTable(search.replay, genome.actions, foundTurn) << "\n";
+         ss << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
+         ss << "0x" << std::hex << seed << std::dec << "\n" << "actions: ";
+-        for (auto i = 0; i < 100; ++i) {
+-            if (genome.actions[i] == 0 || genome.actions[i] == -1) {
++        for (auto i = 0; i < 350; ++i) {
++            if (genome.actions[i] == -1) {
+                 break;
+             }
+             ss << genome.actions[i] << ", ";
+--- a/webassembly/build.sh
++++ b/webassembly/build.sh
+@@ -50,6 +50,7 @@
+   BattleEmulator.cpp
+   camera.cpp
+   debug.cpp
++  ZuoSearch.cpp
+   ActionOptimizer.cpp
+   EnhancedCostCalculator.cpp
+   EnhancedHashCalculator.cpp
+@@ -61,6 +62,7 @@
+   -std=c++20
+   -O3
+   -sALLOW_MEMORY_GROWTH=1
++  -sSTACK_SIZE=1048576
+   -sENVIRONMENT=worker,web
+   -sWASM_BIGINT=1
+   -sNO_EXIT_RUNTIME=1
+--- /dev/null
++++ b/ZuoSearch.cpp
+@@ -0,0 +1,560 @@
++#include "ZuoSearch.h"
++#include "lcg.h"
++#include <algorithm>
++#include <chrono>
++#include <cmath>
++#include <numeric>
++#include <memory>
++#include <queue>
++#include <tuple>
++#include <vector>
++
++namespace {
++using B = BattleEmulator;
++using Clock = std::chrono::steady_clock;
++constexpr uint32_t NoPath = UINT32_MAX;
++// Existing ally menu, plus ordinary attack and the magic water in Player's
++// inventory. Enemy skills / unrelated weapon skills are not candidate actions.
++constexpr int Actions[] = {B::PSYCHE_UP_ALLY, B::DOUBLE_UP, B::MULTITHRUST,
++    B::BUFF, B::ATTACK_ALLY, B::SPECIAL_MEDICINE, B::MIDHEAL,
++    B::SPECIAL_ANTIDOTE, B::DEFENCE, B::FLEE_ALLY, B::MAGIC_WATER};
++// The unchanged RNG cache has 5000 entries. Leave room for a complete turn;
++// never wrap/modify the RNG or change the world to extend the search horizon.
++constexpr int RngLimit = 4750;
++
++int turnOf(const ZuoState &s) { return int((s.state >> 12) & 0xfffff); }
++int equipment(const Player &p) {
++    return p.defaultATK == B::ZUO_BARE_HANDS_ATK ? B::ACTION_BARE_HANDS : 0;
++}
++bool carriedRest(const Player &p) { return p.inactive || p.sleeping || p.paralysis; }
++int countChanges(const BattleResult &log) {
++    int n = 0;
++    for (int i = 0; i < log.position; ++i)
++        if (!log.isEnemy[i] && (log.actions[i] & B::ACTION_EQUIPMENT_CHANGED)) ++n;
++    return n;
++}
++// ALL semantic fields participate in equality. No struct-padding hashes and
++// no HP/buff-only state merging; timers, equipment and camera state matter.
++auto fields(const Player &p) {
++    return std::tie(p.hp, p.maxHp, p.atk, p.defaultATK, p.def, p.defaultDEF,
++        p.speed, p.defaultSpeed, p.HealPower, p.mp, p.maxMp, p.specialCharge,
++        p.dirtySpecialCharge, p.specialChargeTurn, p.paralysis,
++        p.paralysisLevel, p.paralysisTurns, p.SpecialMedicineCount, p.defence,
++        p.sleeping, p.sleepingTurn, p.BuffLevel, p.BuffTurns,
++        p.hasMagicMirror, p.MagicMirrorTurn, p.AtkBuffLevel, p.AtkBuffTurn,
++        p.TensionLevel, p.rage, p.SageElixirCount, p.ElfinElixirCount,
++        p.MagicWaterCount, p.speedTurn, p.speedLevel, p.PoisonTurn,
++        p.PoisonEnable, p.SpecialAntidoteCount, p.acrobaticStar,
++        p.acrobaticStarTurn, p.EerieTurn, p.EerieLevel, p.inactive, p.rageTurns);
++}
++bool sameFuture(const ZuoState &a, const ZuoState &b) {
++    return a.rng == b.rng && a.state == b.state &&
++        fields(a.players[0]) == fields(b.players[0]) &&
++        fields(a.players[1]) == fields(b.players[1]);
++}
++uint64_t mix(uint64_t x) {
++    x ^= x >> 30; x *= 0xbf58476d1ce4e5b9ULL;
++    x ^= x >> 27; x *= 0x94d049bb133111ebULL;
++    return x ^ (x >> 31);
++}
++uint64_t fingerprint(const ZuoState &s) {
++    const auto &p = s.players[0];
++    auto pair = [](int a, int b) { return (uint64_t(uint32_t(a)) << 32) | uint32_t(b); };
++    return mix(mix(s.state) ^ mix(s.rng) ^ mix(pair(p.hp, s.players[1].hp)) ^
++        mix(pair(p.defaultATK, p.atk)) ^ mix(pair(p.mp, p.def)) ^
++        mix(pair(p.TensionLevel, p.BuffTurns)) ^ mix(pair(p.AtkBuffTurn, p.EerieTurn)) ^
++        mix(pair(p.inactive, p.PoisonTurn)));
++}
++bool betterCost(const ZuoState &a, const ZuoState &b) {
++    return std::tie(a.position, a.changes) < std::tie(b.position, b.changes);
++}
++
++// Search-only ordering parameters. They neither alter nor approximate a
++// transition. Every edge is executed by the actual BattleEmulator::Main.
++struct Config {
++    const char *name;
++    double tension, attack, health, defence, danger, inactive, poison;
++    int quota;
++};
++constexpr Config Configs[] = {
++    {"balanced", .95, 105, .65, 38, .060, 110, 25, 3},
++    {"burst",    1.20, 110, .25, 20, .020, 140, 18, 3},
++    {"survival",  .80,  80, 1.4, 60, .100, 95, 45, 3},
++    {"damage",   .60,  65, .45, 28, .040, 80, 20, 0},
++    {"tactical", 1.05,  95, .75, 32, .040, 160, 25, 2}
++};
++constexpr const char *VariantNames[] = {
++    "hybrid-portfolio", "balanced-beam", "burst-beam", "survival-beam",
++    "damage-beam", "tactical-beam", "best-first", "zero-change-beam",
++    "wide-balanced", "wide-burst", "bounded-dfs"
++};
++
++double value(const ZuoState &s, const Config &c, bool changeEquipment) {
++    const auto &p = s.players[0];
++    const auto &e = s.players[1];
++    constexpr double tension[] = {1., 1.5, 2.5, 4., 6.};
++    constexpr double atkBuff[] = {.5, .75, 1., 1.25, 1.5};
++    const int tl = std::clamp(p.TensionLevel, 0, 4);
++    // An equipped future finisher is an estimate only, not a fabricated state.
++    const double attack = changeEquipment ? std::max(double(p.atk),
++        B::ZUO_EQUIPPED_ATK * atkBuff[std::clamp(p.AtkBuffLevel + 2, 0, 4)]) : p.atk;
++    const bool multi = p.mp >= 4 && (changeEquipment || !equipment(p));
++    const double hits = multi ? 3.5 : 1.;
++    const double base = std::max(0., attack * .5 - e.def * .25) * (multi ? .5 : 1.);
++    const double normal = hits * base;
++    const double burst = hits * (base * tension[tl] + tl * 3.);
++    const double credit = std::max(0., std::min(double(e.hp), burst) - std::min(double(e.hp), normal));
++    double v = -e.hp + c.tension * credit;
++    v += c.attack * std::max(0, p.AtkBuffLevel) * std::clamp(p.AtkBuffTurn + 1, 1, 4) / 4.;
++    v += c.defence * p.BuffLevel * std::clamp(p.BuffTurns + 1, 1, 4) / 4.;
++    v += p.hp * c.health;
++    const double danger = std::max(0., p.maxHp * .40 - p.hp);
++    v -= c.danger * danger * danger;
++    v += std::min(20, p.mp) * .6 + p.SpecialMedicineCount * 3. + p.SpecialAntidoteCount * 2.;
++    if (tl == 4) v += 95; // Existing SHT resistance/damage reduction.
++    if (p.inactive) v -= c.inactive;
++    if (p.sleeping || p.paralysis) v -= 160;
++    if (p.PoisonEnable) v -= c.poison;
++    return v;
++}
++
++struct Link { uint32_t parent; int32_t action; };
++struct Node {
++    ZuoState s{};
++    uint64_t hash = 0;
++    double score = 0;
++    uint32_t path = NoPath;
++    int32_t action = 0;
++};
++struct Context {
++    const Player *initial;
++    uint64_t seed;
++    Clock::time_point start, deadline, passDeadline;
++    ZuoSearchResult result{};
++    std::array<int32_t, 350> scratch{};
++    BattleResult one{}, verification{};
++    int bestPosition = 401, bestChanges = INT32_MAX;
++    double upperDamage[134][5][5]{};
++    void makeBound() {
++        constexpr double multipliers[] = {.5, .75, 1., 1.25, 1.5};
++        constexpr double tension[] = {1., 1.5, 2.5, 4., 6.};
++        const auto &p = initial[0];
++        const double baseAttack = std::max({double(B::ZUO_EQUIPPED_ATK),
++            double(B::ZUO_BARE_HANDS_ATK), double(p.defaultATK),
++            std::ceil(p.atk / multipliers[std::clamp(p.AtkBuffLevel + 2, 0, 4)])});
++        const double enemyDefence = initial[1].def;
++        double attackDamage[5][5], multiDamage[5][5];
++        for (int t = 0; t < 5; ++t) for (int b = 0; b < 5; ++b) {
++            // Deliberately optimistic: ignore misses, MP, enemy damage, rest,
++            // buff expiry, change restrictions and critical-hit probability.
++            // A negative attack buff may expire, so grant unbuffed ATK too.
++            const double attack = std::ceil(baseAttack * std::max(1., multipliers[b]));
++            const double centre = (attack - enemyDefence * .5) * .5;
++            const double upperBase = std::max({0., centre * 17. / 16. + 1., attack / 16.});
++            const double normal = upperBase * tension[t] + t * 3.;
++            attackDamage[t][b] = std::ceil(std::max(normal * 1.2, baseAttack * 1.05));
++            const double half = std::ceil(upperBase * .5);
++            multiDamage[t][b] = 4. * std::ceil(std::max((half * tension[t] + t * 3.) * 1.2, half * 2.));
++        }
++        for (int k = 1; k < 134; ++k) for (int t = 0; t < 5; ++t) for (int b = 0; b < 5; ++b) {
++            upperDamage[k][t][b] = std::max({
++                std::max(attackDamage[t][b], multiDamage[t][b]) + upperDamage[k-1][0][b],
++                upperDamage[k-1][std::min(4, t+1)][b],
++                upperDamage[k-1][t][std::min(4, b+2)], upperDamage[k-1][t][b]});
++        }
++    }
++    double elapsed() const { return std::chrono::duration<double, std::milli>(Clock::now() - start).count(); }
++    bool expired() const { return Clock::now() >= passDeadline; }
++    bool step(ZuoState &s, int action) {
++        const int turn = turnOf(s);
++        if (turn >= 349 || s.rng >= RngLimit || s.position >= 400) return false;
++        scratch[turn] = action;
++        one.clear();
++        B::Main(&s.rng, 1, scratch.data(), s.players, &one, seed, nullptr, nullptr, -1, &s.state);
++        s.position += one.position;
++        s.changes += countChanges(one);
++        ++result.expanded;
++        return s.position <= 400;
++    }
++    bool prunable(const ZuoState &s) const {
++        // In this actual world every nonterminal turn records two enemy
++        // actions and one ally action (including FLEE); a kill needs >=1 row.
++        // If changes already tie/exceed the incumbent, position must improve.
++        const int limit = bestPosition - int(s.changes >= bestChanges);
++        const int turns = std::min(133, (limit - s.position + 2) / 3);
++        if (limit <= s.position || turns <= 0) return true;
++        const auto &p = s.players[0];
++        return upperDamage[turns][std::clamp(p.TensionLevel, 0, 4)]
++                           [std::clamp(p.AtkBuffLevel + 2, 0, 4)] < s.players[1].hp;
++    }
++    void consider(const Node &n, const std::vector<Link> &links) {
++        if (n.s.players[1].hp != 0 || expired()) return;
++        if (n.s.position > bestPosition ||
++            (n.s.position == bestPosition && n.s.changes >= bestChanges)) return;
++        std::vector<int32_t> suffix{n.action};
++        for (auto p = n.path; p != NoPath; p = links[p].parent) suffix.push_back(links[p].action);
++        std::reverse(suffix.begin(), suffix.end());
++        const int length = result.prefixLength + int(suffix.size());
++        if (length >= 350) return;
++        auto actions = result.actions;
++        std::copy(suffix.begin(), suffix.end(), actions.begin() + result.prefixLength);
++        std::fill(actions.begin() + length, actions.end(), -1);
++        ZuoState exact;
++        if (!ZuoSearch::Replay(initial, seed, actions.data(), length, result.prefixLength, exact, verification) ||
++            !ZuoSearch::SameState(exact, n.s) || exact.players[1].hp != 0) {
++            ++result.rejectedReplay;
++            return;
++        }
++        if (Clock::now() >= deadline) return;
++        if (!result.victory) result.firstVictoryMs = elapsed();
++        result.victory = result.replayVerified = true;
++        result.actions = actions;
++        result.length = length;
++        result.finalState = exact;
++        result.replay = verification;
++        bestPosition = exact.position;
++        bestChanges = exact.changes;
++        result.bestVictoryMs = elapsed();
++        ++result.updates;
++    }
++};
++
++struct StateSet {
++    std::vector<uint32_t> slots;
++    size_t mask = 0;
++    void reset(size_t expected) {
++        size_t capacity = 8;
++        while (capacity < expected * 2) capacity *= 2;
++        slots.assign(capacity, NoPath);
++        mask = capacity - 1;
++    }
++    bool insert(const Node &n, std::vector<Node> &nodes, ZuoSearchResult &stats) {
++        size_t i = n.hash & mask;
++        while (slots[i] != NoPath) {
++            auto &o = nodes[slots[i]];
++            if (n.hash == o.hash && sameFuture(n.s, o.s)) {
++                ++stats.duplicates;
++                if (betterCost(n.s, o.s)) o = n;
++                return false;
++            }
++            i = (i + 1) & mask;
++        }
++        slots[i] = uint32_t(nodes.size());
++        return true;
++    }
++};
++
++// Only turn-boundary flags determine carried rest. An INACTIVE_ALLY row in the
++// preceding log is NOT a reason to collapse a currently selectable menu.
++template<class Visit>
++void successors(Context &ctx, const Node &parent, bool changeEquipment, Visit visit) {
++    const auto &p = parent.s.players[0];
++    const int keepBit = equipment(p);
++    if (carriedRest(p)) {
++        Node n = parent;
++        n.action = B::ATTACK_ALLY | keepBit;
++        if (ctx.step(n.s, n.action)) visit(n);
++        return;
++    }
++    for (int action : Actions) {
++        for (int choice = 0; choice < (changeEquipment ? 2 : 1); ++choice) {
++            if ((ctx.result.expanded & 63) == 0 && ctx.expired()) return;
++            const int weapon = choice ? keepBit ^ B::ACTION_BARE_HANDS : keepBit;
++            const int encoded = action | weapon;
++            if (!ZuoSearch::Legal(p, encoded)) continue;
++            Node n = parent;
++            n.action = encoded;
++            if (ctx.step(n.s, encoded)) visit(n);
++        }
++    }
++}
++
++int phase(const Node &n) {
++    const auto &p = n.s.players[0];
++    if (carriedRest(p)) return 10;
++    return std::clamp(p.TensionLevel, 0, 4) * 2 + int(p.AtkBuffLevel > 0);
++}
++
++bool beam(Context &ctx, const Config &cfg, size_t width, bool changeEquipment,
++          int anchorLength = 0) {
++    std::vector<Node> current, next, candidates;
++    std::vector<Link> links;
++    std::vector<uint32_t> order, chosen, group;
++    std::vector<uint8_t> selected;
++    StateSet seen;
++    constexpr size_t Branches = std::size(Actions) * 2;
++    current.reserve(width); next.reserve(width); candidates.reserve(width * Branches);
++    links.reserve(width * 32);
++    Node root; root.s = ctx.result.root;
++    // Repair reuses only a suffix discovered in THIS invocation; fixed prefix
++    // is not touched and no seed/prefix/answer is stored between invocations.
++    for (int i = 0; i < anchorLength; ++i) {
++        const int a = ctx.result.actions[ctx.result.prefixLength + i];
++        if (ctx.expired() || !ZuoSearch::Legal(root.s.players[0], a) || !ctx.step(root.s, a)) return false;
++        links.push_back({root.path, a}); root.path = uint32_t(links.size() - 1);
++    }
++    current.push_back(root);
++    bool truncated = false;
++    while (!current.empty()) {
++        if (ctx.expired()) return false;
++        candidates.clear(); seen.reset(current.size() * Branches);
++        for (const auto &parent : current) {
++            if (ctx.prunable(parent.s)) continue;
++            successors(ctx, parent, changeEquipment, [&](Node &n) {
++                if (n.s.players[1].hp == 0) { ctx.consider(n, links); return; }
++                if (n.s.players[0].hp <= 0 || ctx.prunable(n.s)) return;
++                n.hash = fingerprint(n.s);
++                n.score = value(n.s, cfg, changeEquipment);
++                if (seen.insert(n, candidates, ctx.result)) candidates.push_back(n);
++            });
++            if (ctx.expired()) return false;
++        }
++        const size_t keep = std::min(width, candidates.size());
++        if (!keep) break;
++        truncated |= keep < candidates.size();
++        if (ctx.expired()) return false;
++        order.resize(candidates.size()); std::iota(order.begin(), order.end(), 0);
++        const auto better = [&](uint32_t a, uint32_t b) {
++            const auto &x = candidates[a]; const auto &y = candidates[b];
++            if (x.score != y.score) return x.score > y.score;
++            if (x.s.position != y.s.position) return x.s.position < y.s.position;
++            if (x.s.changes != y.s.changes) return x.s.changes < y.s.changes;
++            return x.hash < y.hash;
++        };
++        chosen.clear(); selected.assign(candidates.size(), 0);
++        if (cfg.quota && keep < candidates.size()) {
++            const size_t quota = std::max<size_t>(1, keep / (11 * cfg.quota));
++            for (int ph = 0; ph < 11; ++ph) {
++                group.clear();
++                for (uint32_t i = 0; i < candidates.size(); ++i)
++                    if (phase(candidates[i]) == ph) group.push_back(i);
++                const size_t k = std::min(quota, group.size());
++                if (k < group.size()) std::nth_element(group.begin(), group.begin() + k, group.end(), better);
++                for (size_t j = 0; j < k && chosen.size() < keep; ++j) {
++                    chosen.push_back(group[j]); selected[group[j]] = 1;
++                }
++            }
++        }
++        if (keep < order.size()) {
++            std::nth_element(order.begin(), order.begin() + keep, order.end(), better);
++            order.resize(keep);
++        }
++        std::sort(order.begin(), order.end(), better);
++        for (auto i : order) if (!selected[i] && chosen.size() < keep) chosen.push_back(i);
++        if (ctx.expired()) return false;
++        next.clear();
++        for (auto i : chosen) {
++            Node n = candidates[i];
++            links.push_back({n.path, n.action}); n.path = uint32_t(links.size() - 1);
++            next.push_back(n);
++        }
++        current.swap(next);
++    }
++    return !truncated;
++}
++
++// Depth-first branch-and-bound is deliberately a different search structure.
++// The optimistic damage envelope only rejects impossible remaining horizons;
++// actual damage, victory and the two objective values still come from Main.
++bool depthFirst(Context &ctx, const Config &cfg, bool changeEquipment) {
++    std::vector<Link> links;
++    links.reserve(134);
++    auto visit = [&](auto &&self, const Node &parent) -> void {
++        if (ctx.expired() || ctx.prunable(parent.s)) return;
++        std::vector<Node> children;
++        children.reserve(std::size(Actions) * 2);
++        successors(ctx, parent, changeEquipment, [&](Node &n) {
++            if (n.s.players[1].hp == 0) { ctx.consider(n, links); return; }
++            if (n.s.players[0].hp <= 0 || ctx.prunable(n.s)) return;
++            n.score = value(n.s, cfg, changeEquipment);
++            children.push_back(n);
++        });
++        std::sort(children.begin(), children.end(), [](const Node &a, const Node &b) {
++            if (a.score != b.score) return a.score > b.score;
++            return betterCost(a.s, b.s);
++        });
++        for (auto &n : children) {
++            if (ctx.expired()) return;
++            links.push_back({n.path, n.action}); n.path = uint32_t(links.size()-1);
++            self(self, n);
++            links.pop_back();
++        }
++    };
++    Node root; root.s = ctx.result.root;
++    visit(visit, root);
++    return !ctx.expired();
++}
++
++// A distinct, global best-first alternative, compared against layered beams.
++// Heuristic ordering is not a proof/lower bound and is never used for victory.
++void bestFirst(Context &ctx, const Config &cfg, double weight) {
++    struct Entry {
++        double priority;
++        uint32_t id;
++        bool operator<(const Entry &b) const {
++            if (priority != b.priority) return priority > b.priority;
++            return id > b.id;
++        }
++    };
++    std::vector<Node> nodes;
++    std::vector<Link> links;
++    constexpr size_t MaxNodes = 240000;
++    nodes.reserve(MaxNodes); links.reserve(MaxNodes);
++    StateSet seen; seen.reset(MaxNodes);
++    std::priority_queue<Entry> open;
++    Node root; root.s = ctx.result.root; root.hash = fingerprint(root.s);
++    seen.insert(root, nodes, ctx.result); nodes.push_back(root); open.push({0., 0});
++    while (!open.empty() && nodes.size() + 32 < MaxNodes && !ctx.expired()) {
++        const Node parent = nodes[open.top().id]; open.pop();
++        if (ctx.prunable(parent.s)) continue;
++        successors(ctx, parent, true, [&](Node &n) {
++            if (n.s.players[1].hp == 0) { ctx.consider(n, links); return; }
++            if (n.s.players[0].hp <= 0 || ctx.prunable(n.s)) return;
++            n.hash = fingerprint(n.s);
++            n.score = n.s.position * weight - value(n.s, cfg, true) / 100. + n.s.changes * .015;
++            size_t slot = n.hash & seen.mask;
++            while (seen.slots[slot] != NoPath) {
++                const auto &old = nodes[seen.slots[slot]];
++                if (n.hash == old.hash && sameFuture(n.s, old.s)) {
++                    ++ctx.result.duplicates;
++                    if (!betterCost(n.s, old.s)) return;
++                    break; // Reopen a cheaper identical state with a NEW path.
++                }
++                slot = (slot + 1) & seen.mask;
++            }
++            seen.slots[slot] = uint32_t(nodes.size());
++            links.push_back({n.path, n.action}); n.path = uint32_t(links.size() - 1);
++            open.push({n.score, uint32_t(nodes.size())}); nodes.push_back(n);
++        });
++    }
++}
++} // namespace
++
++Genome ZuoSearchResult::toGenome() const {
++    Genome g{};
++    g.AllyPlayer = finalState.players[0]; g.EnemyPlayer = finalState.players[1];
++    g.state = finalState.state; g.position = finalState.rng;
++    g.turn = victory ? turnOf(finalState) + 1 : 100;
++    g.processed = turnOf(finalState); g.Initialized = victory;
++    std::copy(actions.begin(), actions.end(), g.actions);
++    return g;
++}
++
++bool ZuoSearch::Legal(const Player &p, int action) {
++    if (action <= 0 || (action & ~(B::ACTION_ID_MASK | B::ACTION_BARE_HANDS))) return false;
++    const int id = action & B::ACTION_ID_MASK;
++    if (carriedRest(p))
++        return id == B::ATTACK_ALLY && (action & B::ACTION_BARE_HANDS) == equipment(p);
++    switch (id) {
++        case B::ATTACK_ALLY: case B::DEFENCE: case B::DOUBLE_UP:
++        case B::PSYCHE_UP_ALLY: case B::FLEE_ALLY: return true;
++        case B::BUFF: return p.mp >= 3;
++        case B::MIDHEAL: return p.mp >= 4;
++        case B::MULTITHRUST: return p.mp >= 4 && !(action & B::ACTION_BARE_HANDS);
++        case B::SPECIAL_MEDICINE: return p.SpecialMedicineCount > 0;
++        case B::SPECIAL_ANTIDOTE: return p.SpecialAntidoteCount > 0;
++        case B::MAGIC_WATER: return p.MagicWaterCount > 0;
++        default: return false;
++    }
++}
++bool ZuoSearch::SameState(const ZuoState &a, const ZuoState &b) {
++    return sameFuture(a, b) && a.position == b.position && a.changes == b.changes;
++}
++
++bool ZuoSearch::Replay(const Player initial[2], uint64_t seed,
++        const int32_t actions[350], int length, int prefixLength, ZuoState &state, BattleResult &log) {
++    if (!initial || !actions || length < 0 || length >= 350 || prefixLength < 0 || prefixLength > length) return false;
++    ZuoState sequential;
++    sequential.players[0] = initial[0]; sequential.players[1] = initial[1];
++    BattleResult one;
++    lcg::init(seed, true);
++    for (int i = 0; i < length && sequential.players[0].hp > 0 && sequential.players[1].hp > 0; ++i) {
++        if (actions[i] == -1 || sequential.rng >= RngLimit || sequential.position >= 400) return false;
++        if (i >= prefixLength && !Legal(sequential.players[0], actions[i])) return false;
++        one.clear();
++        B::Main(&sequential.rng, 1, actions, sequential.players, &one, seed, nullptr, nullptr, -1, &sequential.state);
++        sequential.position += one.position; sequential.changes += countChanges(one);
++        if (sequential.position > 400) return false;
++    }
++    state = ZuoState{}; state.players[0] = initial[0]; state.players[1] = initial[1];
++    log.clear(); lcg::init(seed, true);
++    if (length && state.players[0].hp > 0 && state.players[1].hp > 0)
++        B::Main(&state.rng, length, actions, state.players, &log, seed, nullptr, nullptr, -1, &state.state);
++    state.position = log.position; state.changes = countChanges(log);
++    return SameState(state, sequential);
++}
++int ZuoSearch::VariantCount() { return int(std::size(VariantNames)); }
++const char *ZuoSearch::VariantName(int v) {
++    return VariantNames[v >= 0 && v < VariantCount() ? v : DefaultVariant];
++}
++
++ZuoSearchResult ZuoSearch::Run(const Player initial[2], uint64_t seed,
++        const int32_t prefix[350], int prefixLength, int budgetMs, int variant) {
++    const auto start = Clock::now();
++    const auto budget = std::chrono::milliseconds(std::max(0, budgetMs));
++    const auto reserve = std::min(std::chrono::milliseconds(20), budget / 20);
++    // Large replay buffers live on the heap, including in a browser worker.
++    std::unique_ptr<Context> context(new Context{initial, seed, start,
++        start + budget - reserve, start + budget - reserve});
++    Context &ctx = *context;
++    ctx.result.actions.fill(-1); ctx.scratch.fill(-1);
++    if (!initial || !prefix || prefixLength < 0 || prefixLength >= 350) {
++        ctx.result.error = "Invalid initial state or fixed prefix length";
++    } else {
++        ctx.result.prefixLength = ctx.result.length = prefixLength;
++        std::copy_n(prefix, prefixLength, ctx.result.actions.begin());
++        if (!Replay(initial, seed, ctx.result.actions.data(), prefixLength, prefixLength, ctx.result.root, ctx.result.replay)) {
++            ctx.result.error = "Fixed prefix cannot be replayed within the unchanged emulator buffers";
++        } else {
++            ctx.result.inputValid = true; ctx.result.finalState = ctx.result.root;
++            ctx.makeBound();
++            if (ctx.result.root.players[1].hp == 0) {
++                ctx.result.victory = ctx.result.replayVerified = true;
++                ctx.result.firstVictoryMs = ctx.result.bestVictoryMs = ctx.elapsed();
++            } else if (ctx.result.root.players[0].hp > 0 && budgetMs > 0) {
++                variant = variant >= 0 && variant < VariantCount() ? variant : DefaultVariant;
++                auto pass = [&](int cfg, size_t width, bool equip, int anchor = 0, int ms = 220) {
++                    const auto now = Clock::now();
++                    if (now >= ctx.deadline) return;
++                    ctx.passDeadline = std::min(ctx.deadline, now + std::chrono::milliseconds(ms));
++                    beam(ctx, Configs[cfg], width, equip, anchor);
++                };
++                // Small passes provide an incumbent early; remaining time widens
++                // and changes the ranking rather than returning the first win.
++                const bool zeroOnly = variant == 7;
++                const int cfg = variant >= 1 && variant <= 5 ? variant - 1 : (variant == 9 ? 1 : 0);
++                pass(cfg, 48, false);
++                if (!zeroOnly) pass(variant == 0 ? 1 : cfg, 64, true);
++                bool complete = false;
++                if (variant == 0) {
++                    pass(1, 256, true);
++                    ctx.passDeadline = std::min(ctx.deadline, Clock::now() + std::chrono::milliseconds(250));
++                    complete = depthFirst(ctx, Configs[0], true);
++                }
++                for (int round = 0; !complete && Clock::now() < ctx.deadline; ++round) {
++                    const size_t width = std::min<size_t>(4096, size_t(128) << std::min(round / 2, 5));
++                    if (variant == 10) {
++                        ctx.passDeadline = ctx.deadline;
++                        if (depthFirst(ctx, Configs[round % 3], true)) break;
++                    } else if (variant == 6) {
++                        ctx.passDeadline = ctx.deadline;
++                        bestFirst(ctx, Configs[round % 3], .5 + .15 * (round % 3));
++                    } else if (variant == 0) {
++                        pass(round % 3, width, round % 4 != 2);
++                        if (ctx.result.victory && round % 2 == 1) {
++                            const int tail = 3 + round % 5;
++                            const int anchor = std::max(0, ctx.result.length - ctx.result.prefixLength - tail);
++                            pass((round + 1) % 3, std::min<size_t>(width, 1024), true, anchor, 140);
++                            ctx.passDeadline = std::min(ctx.deadline, Clock::now() + std::chrono::milliseconds(250));
++                            complete = depthFirst(ctx, Configs[round % 3], true);
++                        }
++                    } else {
++                        pass(cfg, variant >= 8 ? std::min<size_t>(8192, width * 4) : width, !zeroOnly, 0, 400);
++                    }
++                }
++            }
++        }
++    }
++    ctx.result.elapsedMs = ctx.elapsed();
++    return ctx.result;
++}
+--- /dev/null
++++ b/ZuoSearch.h
+@@ -0,0 +1,48 @@
++#pragma once
++
++#include <array>
++#include <cstdint>
++#include <string>
++#include "BattleEmulator.h"
++#include "Genome.h"
++
++struct ZuoState {
++    Player players[2]{};
++    uint64_t state = 0;
++    int rng = 1;
++    int position = 0; // BattleResult entries, NOT the RNG cursor.
++    int changes = 0;  // ACTION_EQUIPMENT_CHANGED entries in actual replay.
++};
++
++struct ZuoSearchResult {
++    bool inputValid = false;
++    bool victory = false;
++    bool replayVerified = false;
++    std::string error;
++    std::array<int32_t, 350> actions{};
++    int prefixLength = 0;
++    int length = 0;
++    ZuoState root{}, finalState{};
++    BattleResult replay{};
++    uint64_t expanded = 0, duplicates = 0, rejectedReplay = 0;
++    int updates = 0;
++    double firstVictoryMs = -1, bestVictoryMs = -1, elapsedMs = 0;
++    Genome toGenome() const;
++};
++
++class ZuoSearch {
++public:
++    static constexpr int DefaultBudgetMs = 1500;
++    static constexpr int DefaultVariant = 0;
++    static ZuoSearchResult Run(const Player initial[2], uint64_t seed,
++        const int32_t prefix[350], int prefixLength,
++        int budgetMs = DefaultBudgetMs, int variant = DefaultVariant);
++    static int VariantCount();
++    static const char *VariantName(int variant);
++    static bool Legal(const Player &player, int action);
++    static bool SameState(const ZuoState &, const ZuoState &);
++    // Prefix is historical input, never rewritten. Legality applies to suffix.
++    static bool Replay(const Player initial[2], uint64_t seed,
++        const int32_t actions[350], int length, int prefixLength,
++        ZuoState &finalState, BattleResult &log);
++};

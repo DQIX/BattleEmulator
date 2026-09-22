@@ -11,6 +11,7 @@
 #include "BattleEmulator.h"
 #include "debug.h"
 #include "ActionOptimizer.h"
+#include "ZuoSearch.h"
 #include "EnhancedHeapQueue.h"
 #include "InputBuilder.h"
 #if defined(OPTIMIZE_MODE)
@@ -68,6 +69,8 @@ namespace {
 
     int foundTurn = 0;
     int foundTurnOffset = 0;
+    int searchVariant = ZuoSearch::DefaultVariant;
+    int searchBudgetMs = ZuoSearch::DefaultBudgetMs;
 
     const char *version = "v10.0.0_vB_v2";
 
@@ -560,8 +563,8 @@ namespace {
                 ", seed: ";
         std::cout << "0x" << std::hex << seed << std::dec << std::endl << "actions: ";
 
-        for (auto i = 0; i < 100; ++i) {
-            if (genome.actions[i] == 0 || genome.actions[i] == -1) {
+        for (auto i = 0; i < 350; ++i) {
+            if (genome.actions[i] == -1) {
                 break;
             }
             std::cout << genome.actions[i] << ", ";
@@ -584,59 +587,45 @@ namespace {
                 "Performance: " << std::fixed << std::setprecision(2) << performance << " mann turns/s" << std::endl;
     }
 
+    void searchSummary(std::ostream &out, const ZuoSearchResult &r, int variant) {
+        out << "Search: variant=" << variant << " (" << ZuoSearch::VariantName(variant) << ")"
+            << " victory=" << r.victory << " input_valid=" << r.inputValid
+            << " prefix=" << r.prefixLength << " exact_replay=" << r.replayVerified
+            << " enemy_hp=" << r.finalState.players[1].hp
+            << " position=" << r.finalState.position << " equipment_changes=" << r.finalState.changes
+            << " turns=" << r.length << " elapsed_ms=" << r.elapsedMs
+            << " first_ms=" << r.firstVictoryMs << " best_ms=" << r.bestVictoryMs
+            << " expanded=" << r.expanded << " duplicates=" << r.duplicates
+            << " rejected_replay=" << r.rejectedReplay << " updates=" << r.updates << "\n";
+        if (!r.error.empty()) out << r.error << "\n";
+    }
+
     bool SearchRequest(const Player copiedPlayers[2], uint64_t seed, const int aActions[350], int numThreads, bool Dropbug) {
 #ifdef DEBUG
         auto t0 = std::chrono::high_resolution_clock::now();
         BattleEmulator::ResetTurnProcessed();
 #endif
-
-        int32_t gene[350] = {0};
-        auto turns = 0;
-        for (int i = 0; i < 349; ++i) {
-            gene[i] = aActions[i];
-            if (aActions[i] == -1) {
-                gene[i] = -1;
-                gene[i + 1] = -1;
-                break;
-            }
-            turns++;
-        }
-#if defined(z_lv20)
-        auto genome =
-        ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 5000, gene, 0);
-#endif
+        (void)numThreads;
+        (void)Dropbug;
+        int turns = 0;
+        while (turns < 350 && aActions[turns] != -1) ++turns;
+        if (turns == 350) return false;
+        BattleEmulator::ResetTurnProcessed();
+        auto search = ZuoSearch::Run(copiedPlayers, seed, aActions, turns,
+                                           searchBudgetMs, searchVariant);
+        searchSummary(std::cout, search, searchVariant);
+        if (!search.victory || !search.replayVerified || search.finalState.players[1].hp != 0) return false;
+        auto genome = search.toGenome();
+        std::cout << "foundTurn: " << foundTurn << ", " << turns << std::endl;
+        // The displayed log is the SAME fresh replay that admitted the winner.
+        dumpTableMain(search.replay, genome, seed, foundTurn);
 
         auto turnProcessed = BattleEmulator::getTurnProcessed();
-
 #ifdef DEBUG
         auto t3 = std::chrono::high_resolution_clock::now();
         auto elapsed_time1 =
                 std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
         PerformanceDebug("Searcher", turnProcessed, static_cast<double>(elapsed_time1), 0);
-        logMemoryUsage(performanceLogger, ActionOptimizer::getNodesUsed(), sizeof(Genome), sizeof(EnhancedAStarNode));
-#endif
-
-        if (genome.turn >= 100) {
-            return false;
-        }
-
-        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
-
-        auto *position = new int(1);
-        auto *nowState = new uint64_t(0);
-        BattleResult result;
-
-        BattleEmulator::Main(position, 100, genome.actions, players, &result, seed, nullptr, nullptr, -1,
-                             nowState);
-
-        delete position;
-        delete nowState;
-
-        std::cout << "foundTurn: " << foundTurn << ", " << turns << std::endl;
-#ifdef MINGW_BUILD
-        dumpTableMain(result, genome, seed, foundTurn);
-#else
-        dumpTableMain(result, genome, seed, foundTurn);
 #endif
 
         return true;
@@ -1075,12 +1064,9 @@ actions: 30, 30, 50, 62, 53, 62, 62, 62, 33, 34,
 #endif
 
 #ifdef DEBUG3
-    uint64_t seed = 0x0d58941f;
+    uint64_t seed = 0x0d81936;
+    int actions[350] = {BattleEmulator::BUFF, -1};
 
-    int actions[350] = {
-        BattleEmulator::BUFF,
-        -1,
-    };
     SearchRequest(BasePlayers, seed, actions, THREAD_COUNT, true);
 
     std::cout << performanceLogger.rdbuf() << std::endl;
@@ -1219,44 +1205,28 @@ namespace {
 
     std::string buildDumpOutput(const Player copiedPlayers[2], uint64_t seed, const ResultStructure &result,
                                 int numThreads, bool dropbug) {
-        int32_t gene[350] = {0};
-        int turns = 0;
-        for (int i = 0; i < 349; ++i) {
-            if (i < result.AactionsCounter) {
-                gene[i] = result.Aactions[i];
-                turns++;
-                continue;
-            }
-            gene[i] = -1;
-            gene[i + 1] = -1;
-            break;
-        }
-        if (result.AactionsCounter >= 349) {
-            gene[349] = -1;
-        }
+        (void)numThreads;
+        (void)dropbug;
+        if (result.AactionsCounter < 0 || result.AactionsCounter >= 350)
+            return "SearchRequest failed: fixed prefix exceeds the action buffer.";
+        int32_t gene[350];
+        std::fill(std::begin(gene), std::end(gene), -1);
+        const int turns = result.AactionsCounter;
+        std::copy_n(result.Aactions, turns, gene);
 
-        auto genome =
-                ActionOptimizer::RunAlgorithm(copiedPlayers, seed, turns, 8000, gene, 0);
-
-        if (genome.turn >= 100) {
-            return "SearchRequest failed: turn limit reached.";
-        }
-
-        BattleResult result1;
-        Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
-
-        int position = 1;
-        uint64_t nowState = 0;
-
-        BattleEmulator::Main(&position, 100, genome.actions, players, &result1, seed, nullptr, nullptr, -1,
-                             &nowState);
-
+        auto search = ZuoSearch::Run(copiedPlayers, seed, gene, turns);
         std::stringstream ss;
-        ss << dumpTable(result1, genome.actions, foundTurn) << "\n";
+        searchSummary(ss, search, ZuoSearch::DefaultVariant);
+        if (!search.victory || !search.replayVerified || search.finalState.players[1].hp != 0) {
+            ss << "SearchRequest failed: no exact victory within the search budget.";
+            return ss.str();
+        }
+        auto genome = search.toGenome();
+        ss << dumpTable(search.replay, genome.actions, foundTurn) << "\n";
         ss << "ver: " << version << ", atk: " << BasePlayers[0].atk << ", def: " << BasePlayers[0].def << ", seed: ";
         ss << "0x" << std::hex << seed << std::dec << "\n" << "actions: ";
-        for (auto i = 0; i < 100; ++i) {
-            if (genome.actions[i] == 0 || genome.actions[i] == -1) {
+        for (auto i = 0; i < 350; ++i) {
+            if (genome.actions[i] == -1) {
                 break;
             }
             ss << genome.actions[i] << ", ";

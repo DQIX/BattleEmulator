@@ -476,6 +476,14 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         }
 
 
+        // A carried turn-start rest cannot select FLEE in the ROM. Only
+        // this existing pre-action-skip hazard is normalized; rest inflicted
+        // later in this turn retains the ordinary selectable FLEE behavior.
+        if (actionTable == FLEE_ALLY &&
+            (players[0].inactive || players[0].sleeping || players[0].paralysis)) {
+            actionTable = ATTACK_ALLY;
+        }
+
         if (actionTable == DEFENCE) {
             players[0].defence = 0.5;
             defenseFlag = true;

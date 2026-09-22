@@ -46,6 +46,8 @@ set(SOURCES
         debug.cpp
         debug.h
         BattleResult.h
+        ZuoSearch.cpp
+        ZuoSearch.h
         ActionOptimizer.cpp
         ActionOptimizer.h
         Genome.h

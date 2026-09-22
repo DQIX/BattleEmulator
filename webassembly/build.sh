@@ -50,6 +50,7 @@ SRC_FILES=(
   BattleEmulator.cpp
   camera.cpp
   debug.cpp
+  ZuoSearch.cpp
   ActionOptimizer.cpp
   EnhancedCostCalculator.cpp
   EnhancedHashCalculator.cpp
@@ -61,6 +62,7 @@ EMCC_FLAGS=(
   -std=c++20
   -O3
   -sALLOW_MEMORY_GROWTH=1
+  -sSTACK_SIZE=1048576
   -sENVIRONMENT=worker,web
   -sWASM_BIGINT=1
   -sNO_EXIT_RUNTIME=1

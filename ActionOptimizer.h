@@ -12,7 +12,7 @@
 
 class ActionOptimizer {
 public:
-    // Main A* algorithm with fixes for f-cost stagnation
+    // Compatibility entry point for the final, exact-replayed ZuoSearch.
     static Genome RunAlgorithm(const Player players[2], uint64_t seed, int turns, int maxGenerations,
                                int actions[350], int seedOffset);
 
