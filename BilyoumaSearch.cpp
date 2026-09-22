@@ -84,7 +84,7 @@ int64_t value(const BilyoumaState &s, const Config &cfg) {
     const int attack = std::max(1, p.defaultATK);
     int64_t v = -int64_t(s.players[1].hp) * 100;
     v += int64_t(p.hp) * cfg.hp + std::max(0, p.mp) * 18;
-    v += p.SpecialMedicineCount * cfg.items;
+    v += int64_t(p.SpecialMedicineCount) * cfg.items;
     v += p.SpecialAntidoteCount * cfg.items / 2;
     v += p.BuffLevel * 220 + p.speedLevel * 90 + p.AtkBuffLevel * 250;
     if (p.specialCharge && p.specialChargeTurn != 0 && !p.dirtySpecialCharge)
