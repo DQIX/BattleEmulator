@@ -24,7 +24,7 @@
             debugMode: ["デバッグ中", "タイマー停止中も通常の映像認識を使います。白画面は検知しません。"],
             running: ["タイマー動作中", "白画面の検知を停止し、通常の映像認識を使っています。"],
             waiting: ["映像待ち", "カメラから新しい映像が届くと、白画面の検知を再開します。"],
-            watching: ["動作中", "認識枠全体の白画面を30fpsで確認しています。白くなったら自動でタイマーを開始します。"],
+            watching: ["動作中", "認識枠全体の白画面をWebGPUで最大30fps確認しています。白くなったら自動でタイマーを開始します。"],
             timestamp: ["撮影時刻を取得できません", "この映像では実際の撮影時刻を取得できないため、自動開始できません。タイマー開始ボタンを使ってください。"],
             unsupported: ["フレーム取得に未対応", "このブラウザでは撮影時刻付きの映像を取得できません。タイマー開始ボタンを使ってください。"],
             size: ["認識枠を確認してください", "映像が認識枠より小さいため、枠全体を確認できません。カメラの出力サイズを確認してください。"],
@@ -41,7 +41,7 @@
             debugMode: ["Debug", "Normal recognition runs while the timer is stopped. White detection is disabled."],
             running: ["Timer running", "White detection is stopped and normal recognition is in use."],
             waiting: ["Waiting for video", "White detection resumes when new camera frames arrive."],
-            watching: ["Active", "Checking the entire recognition frame for white at 30fps. A white frame starts the timer automatically."],
+            watching: ["Active", "Checking the entire recognition frame for white with WebGPU at up to 30fps. A white frame starts the timer automatically."],
             timestamp: ["Capture time unavailable", "This feed does not provide the actual capture time, so auto-start is unavailable. Use Start Timer."],
             unsupported: ["Frame capture unsupported", "This browser cannot provide video frames with capture times. Use Start Timer."],
             size: ["Check recognition area", "The video is smaller than the recognition area. Check the camera output size."],
@@ -49,42 +49,75 @@
         }
     };
 
-    // Separate device, textures and canvas: never borrow or mutate the vision matcher's resources.
+    // Separate device and buffers: never borrow or mutate the vision matcher's resources.
     class WhiteFrameDetector {
         constructor() {
-            this.canvas = document.createElement("canvas");
-            this.context = this.canvas.getContext("2d", {willReadFrequently: true});
             this.device = null;
-            this.attempted = false;
+            this.pipeline = null;
+            this.output = null;
+            this.readback = null;
+            this.params = null;
+            this.preparePromise = null;
+            this.unavailable = false;
         }
 
         async prepare() {
-            if (this.attempted) return;
-            this.attempted = true;
-            if (!navigator.gpu) return;
-            let device;
+            if (this.device) return true;
+            if (this.unavailable) return false;
+            if (this.preparePromise) return this.preparePromise;
+            this.preparePromise = this.initialize().finally(() => {
+                this.preparePromise = null;
+            });
+            return this.preparePromise;
+        }
+
+        async initialize() {
+            if (!navigator.gpu) {
+                this.unavailable = true;
+                return false;
+            }
+            let device = null;
             try {
                 const adapter = await navigator.gpu.requestAdapter();
-                if (!adapter) return;
+                if (!adapter) {
+                    this.unavailable = true;
+                    return false;
+                }
                 device = await adapter.requestDevice();
                 let lost = false;
-                device.lost.then(() => {
+                device.lost.then((info) => {
                     lost = true;
-                    if (this.device === device) this.useCpu();
+                    if (this.device === device) this.releaseGpu();
+                    console.warn("White detector WebGPU device lost:", info);
                 });
                 const module = device.createShaderModule({code: `
-@group(0) @binding(0) var frame: texture_2d<f32>;
+struct Params {
+    origin: vec2<u32>,
+    size: vec2<u32>,
+}
+
+@group(0) @binding(0) var frame: texture_external;
 @group(0) @binding(1) var<storage, read_write> nonWhite: atomic<u32>;
+@group(0) @binding(2) var<uniform> params: Params;
 var<workgroup> tileNonWhite: atomic<u32>;
+
+// The camera feed has passed through a lossy encoder. The supplied white-frame
+// sample contains neutral RGB values as low as 122, so byte-exact 255 is not a
+// valid definition of white here.
+const WHITE_MIN_CHANNEL: f32 = 0.47058824; // 120 / 255
+const WHITE_MAX_CHANNEL_SPREAD: f32 = 0.047058824; // 12 / 255
 
 @compute @workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) pixel: vec3<u32>,
         @builtin(local_invocation_index) localIndex: u32) {
     if (localIndex == 0u) { atomicStore(&tileNonWhite, 0u); }
     workgroupBarrier();
-    let size = textureDimensions(frame);
-    if (pixel.x < size.x && pixel.y < size.y) {
-        if (any(textureLoad(frame, vec2<i32>(pixel.xy), 0) != vec4<f32>(1.0))) {
+    if (pixel.x < params.size.x && pixel.y < params.size.y) {
+        let sourcePixel = params.origin + pixel.xy;
+        let rgba = textureLoad(frame, vec2<i32>(i32(sourcePixel.x), i32(sourcePixel.y)));
+        let low = min(rgba.r, min(rgba.g, rgba.b));
+        let high = max(rgba.r, max(rgba.g, rgba.b));
+        if (low < WHITE_MIN_CHANNEL || high - low > WHITE_MAX_CHANNEL_SPREAD) {
             atomicStore(&tileNonWhite, 1u);
         }
     }
@@ -97,87 +130,80 @@ fn main(@builtin(global_invocation_id) pixel: vec3<u32>,
                     layout: "auto", compute: {module, entryPoint: "main"}
                 });
                 if (lost) throw new Error("White detector GPU lost during initialization");
+                const output = device.createBuffer({
+                    size: 4,
+                    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST
+                });
+                const readback = device.createBuffer({
+                    size: 4,
+                    usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+                });
+                const params = device.createBuffer({
+                    size: 16,
+                    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+                });
                 this.pipeline = pipeline;
+                this.output = output;
+                this.readback = readback;
+                this.params = params;
                 this.device = device;
+                return true;
             } catch (error) {
                 device?.destroy();
-                console.warn("White detector uses CPU:", error);
+                console.warn("White detector WebGPU initialization failed:", error);
+                return false;
             }
         }
 
-        useCpu() {
+        releaseGpu() {
             const device = this.device;
             this.device = null;
-            this.texture = null;
+            this.pipeline = null;
+            this.output?.destroy();
+            this.readback?.destroy();
+            this.params?.destroy();
             this.output = null;
             this.readback = null;
+            this.params = null;
             device?.destroy();
         }
 
-        async detect(video, rect, forceCpu = false) {
+        async detect(video, rect) {
             const width = rect.sourceCropWidth;
             const height = rect.sourceCropHeight;
-            const device = forceCpu ? null : this.device;
+            const device = this.device;
             if (!device) {
-                if (this.canvas.width !== width || this.canvas.height !== height) {
-                    this.canvas.width = width;
-                    this.canvas.height = height;
-                }
-                const context = this.context;
-                context.clearRect(0, 0, width, height);
-                context.imageSmoothingEnabled = false;
-                // Snapshot synchronously in the frame callback, before any await.
-                context.drawImage(video, rect.sourceX, rect.sourceY, width, height, 0, 0, width, height);
-                const {data} = context.getImageData(0, 0, width, height);
-                for (let i = 0; i < data.length; i += 4) {
-                    if (data[i] !== 255 || data[i + 1] !== 255 || data[i + 2] !== 255 || data[i + 3] !== 255) {
-                        return false;
-                    }
-                }
-                return true;
+                throw new Error("White detector WebGPU is not ready");
             }
-
-            device.pushErrorScope("validation");
-            let scopePopped = false;
-            let readback;
+            const readback = this.readback;
             try {
-                if (!this.texture || this.texture.width !== width || this.texture.height !== height) {
-                    this.texture?.destroy();
-                    this.output?.destroy();
-                    this.readback?.destroy();
-                    this.texture = device.createTexture({
-                        size: [width, height], format: "rgba8unorm",
-                        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
-                    });
-                    this.output = device.createBuffer({size: 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST});
-                    this.readback = device.createBuffer({size: 4, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ});
-                    this.bindGroup = device.createBindGroup({
-                        layout: this.pipeline.getBindGroupLayout(0),
-                        entries: [{binding: 0, resource: this.texture.createView()}, {binding: 1, resource: {buffer: this.output}}]
-                    });
-                }
-                readback = this.readback;
-                // Copy the callback's frame immediately; a later video frame must not inherit its captureTime.
-                device.queue.copyExternalImageToTexture(
-                    {source: video, origin: [rect.sourceX, rect.sourceY]},
-                    {texture: this.texture, colorSpace: "srgb"}, [width, height]
-                );
+                // Import and submit in this requestVideoFrameCallback task. This keeps the
+                // captureTime tied to exactly the video frame sampled by the GPU without a
+                // full-frame CPU readback or an intermediate rgba8 texture copy.
+                const externalTexture = device.importExternalTexture({source: video, colorSpace: "srgb"});
+                device.queue.writeBuffer(this.params, 0, new Uint32Array([
+                    rect.sourceX, rect.sourceY, width, height
+                ]));
+                const bindGroup = device.createBindGroup({
+                    layout: this.pipeline.getBindGroupLayout(0),
+                    entries: [
+                        {binding: 0, resource: externalTexture},
+                        {binding: 1, resource: {buffer: this.output}},
+                        {binding: 2, resource: {buffer: this.params}}
+                    ]
+                });
                 const encoder = device.createCommandEncoder();
                 encoder.clearBuffer(this.output);
                 const pass = encoder.beginComputePass();
                 pass.setPipeline(this.pipeline);
-                pass.setBindGroup(0, this.bindGroup);
+                pass.setBindGroup(0, bindGroup);
                 pass.dispatchWorkgroups(Math.ceil(width / 16), Math.ceil(height / 16));
                 pass.end();
                 encoder.copyBufferToBuffer(this.output, 0, readback, 0, 4);
                 device.queue.submit([encoder.finish()]);
-                const validation = device.popErrorScope();
-                scopePopped = true;
-                const [, error] = await Promise.all([readback.mapAsync(GPUMapMode.READ), validation]);
-                if (error) throw new Error(error.message);
+                await readback.mapAsync(GPUMapMode.READ);
                 return new Uint32Array(readback.getMappedRange())[0] === 0;
             } finally {
-                if (!scopePopped) await device.popErrorScope();
                 if (readback?.mapState === "mapped") readback.unmap();
             }
         }
@@ -192,7 +218,6 @@ fn main(@builtin(global_invocation_id) pixel: vec3<u32>,
     let frameHandle = null;
     let generation = 0;
     let busy = false;
-    let pendingFrames = [];
     let clockOrigin = null;
     let lastBucket = -1;
     let lastFrameTime = null;
@@ -258,7 +283,6 @@ fn main(@builtin(global_invocation_id) pixel: vec3<u32>,
             && !video.paused && video.readyState >= 2 && typeof video.requestVideoFrameCallback === "function");
         if (invalidate || changed || active !== nextActive) {
             generation += 1;
-            pendingFrames = [];
             if (frameHandle !== null) video.cancelVideoFrameCallback(frameHandle);
             frameHandle = null;
             active = nextActive;
@@ -268,7 +292,12 @@ fn main(@builtin(global_invocation_id) pixel: vec3<u32>,
             frameStatus = "watching";
         }
         if (active && frameHandle === null) {
-            void detector.prepare();
+            void detector.prepare().then((ready) => {
+                if (!ready && active && wantsDetection()) {
+                    frameStatus = "error";
+                    render();
+                }
+            });
             frameHandle = video.requestVideoFrameCallback(onFrame);
         }
         render();
@@ -306,37 +335,30 @@ fn main(@builtin(global_invocation_id) pixel: vec3<u32>,
         }
         frameStatus = "watching";
         render();
+        // WebGPU readback is intentionally single-flight. If the GPU takes longer
+        // than one 30fps sampling interval, skip this frame instead of queueing work
+        // indefinitely or falling back to getImageData() on the CPU.
+        if (busy || !detector.device) return;
         const token = generation;
         const capturedStream = stream;
         const capturedTrack = track;
-        const result = {captureTime, done: false, white: false};
-        pendingFrames.push(result);
-        // Keep sampling when GPU readback takes longer than a frame. CPU results wait their turn.
-        const forceCpu = busy;
-        if (!forceCpu) busy = true;
+        busy = true;
         const acceptResult = (white) => {
             if (token !== generation || capturedStream !== video.srcObject || !active || !wantsDetection()) return;
             if (video.paused || capturedTrack.readyState !== "live" || capturedTrack.muted
                 || capturedStream.getVideoTracks()[0] !== capturedTrack) return;
-            result.white = white;
-            result.done = true;
-            while (pendingFrames[0]?.done) {
-                const first = pendingFrames.shift();
-                if (first.white && timer.startFromCapture(first.captureTime)) break;
-            }
+            if (white) timer.startFromCapture(captureTime);
         };
-        // detect() copies synchronously before its first await. Only the result is asynchronous.
-        detector.detect(video, rect, forceCpu).then(acceptResult).catch((error) => {
-            const hadGpu = !forceCpu && Boolean(detector.device);
-            if (hadGpu) detector.useCpu();
+        // detect() imports and submits the callback's video frame before its first await.
+        detector.detect(video, rect).then(acceptResult).catch((error) => {
             acceptResult(false);
             if (token === generation) {
-                frameStatus = hadGpu ? "watching" : "error";
+                frameStatus = "error";
                 render();
             }
             console.warn("White frame inspection failed:", error);
         }).finally(() => {
-            if (!forceCpu) busy = false;
+            busy = false;
         });
     }
 
@@ -371,7 +393,7 @@ fn main(@builtin(global_invocation_id) pixel: vec3<u32>,
     window.addEventListener("pagehide", () => {
         pageActive = false;
         sync(true);
-        detector.useCpu();
+        detector.releaseGpu();
     });
     window.addEventListener("pageshow", () => {
         pageActive = true;
