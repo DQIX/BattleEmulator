@@ -24,6 +24,10 @@ public:
     static void updateCompromiseScore(Genome &genome);
 
     static uint32_t getNodesUsed();
+
+    // Kept only for direct comparison with the uploaded implementation.
+    static Genome RunAlgorithmLegacy(const Player players[2], uint64_t seed, int turns,
+                                     int maxGenerations, int actions[350], int seedOffset);
 };
 
 #endif // ACTION_OPTIMIZER_FIXED_H

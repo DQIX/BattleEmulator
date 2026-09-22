@@ -15,6 +15,7 @@
 #include "EnhancedCostCalculator.h"
 #include "EnhancedHeapQueue.h"
 #include "lcg.h"
+#include "Ganasadai2Search.h"
 
 struct ActionEntry{
 	int action;
@@ -152,6 +153,17 @@ uint32_t ActionOptimizer::getNodesUsed(){
 // Flexible A* Algorithm Implementation
 Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int turns, int maxGenerations,
                                      int actions[350], int seedOffset){
+#if defined(GOUKETU) && !defined(OPTIMIZE_MODE)
+	const auto result = Ganasadai2Search::Run(players, seed, actions);
+	Node_Used = static_cast<uint32_t>(std::min<uint64_t>(result.generated, UINT32_MAX));
+	return result.genome;
+#else
+	return RunAlgorithmLegacy(players, seed, turns, maxGenerations, actions, seedOffset);
+#endif
+}
+
+Genome ActionOptimizer::RunAlgorithmLegacy(const Player players[2], uint64_t seed, int turns, int maxGenerations,
+                                           int actions[350], int seedOffset){
 	lcg::init(seed, true);
 	Node_Used = 0;
 	//std::mt19937 rng(seed + seedOffset);

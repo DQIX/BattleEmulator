@@ -51,6 +51,7 @@ SRC_FILES=(
   camera.cpp
   debug.cpp
   ActionOptimizer.cpp
+  Ganasadai2Search.cpp
   EnhancedCostCalculator.cpp
   EnhancedHashCalculator.cpp
   EnhancedHeapQueue.cpp
@@ -60,6 +61,8 @@ EMCC_FLAGS=(
   -std=c++20
   -O3
   -sALLOW_MEMORY_GROWTH=1
+  # SearchRequest and exact replays use the existing large BattleResult records.
+  -sSTACK_SIZE=2097152
   -sENVIRONMENT=worker,web
   -sWASM_BIGINT=1
   -sNO_EXIT_RUNTIME=1
