@@ -10,6 +10,7 @@
 #include "BattleEmulator.h"
 #include "debug.h"
 #include "ActionOptimizer.h"
+#include "GanasadaiSearch.h"
 #include "EnhancedCostCalculator.h"
 
 #ifdef DEBUG
@@ -23,6 +24,11 @@
 #endif
 
 int startturn = -1;
+
+#if defined(ganasadai) && !defined(OPTIMIZE_MODE)
+static int ganasadaiSearchVariant = GanasadaiSearch::DefaultVariant;
+static int ganasadaiSearchBudgetMs = GanasadaiSearch::DefaultBudgetMs;
+#endif
 
 #if defined(ganasadai)
 
@@ -352,10 +358,71 @@ void showHeader(){
 	std::cout << "Waiting for input[q/b]: " << std::endl;
 }
 
+void PerformanceDebug(const char *name, int turnProcessed, double elapsed_time1, uint64_t seeds, std::stringstream &ss) {
+	// 正しい計算：1秒あたりの探索回数 (万回/秒)
+	double performance = (static_cast<double>(turnProcessed) * 100.0) /
+						 static_cast<double>(elapsed_time1);
+	ss << name << ": Turn Consumed: " << turnProcessed << " (" << (
+		static_cast<double>(turnProcessed) / 10000) << " mann), ";
+
+	if (seeds != 0) {
+		ss << "Seed Processd: " << (seeds) << "  (" << (
+			static_cast<double>(seeds) / 10000) << " mann), ";
+	}
+	ss << "elapsed time: " << double(elapsed_time1) / 1000 << " ms, " <<
+			"Performance: " << std::fixed << std::setprecision(2) << performance << " mann turns/s" << std::endl;
+}
 
 //int main(int argc, char *argv[]) {
 
 bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream &ss){
+#if defined(ganasadai) && !defined(OPTIMIZE_MODE)
+#ifdef DEBUG
+	auto t0 = std::chrono::high_resolution_clock::now();
+	BattleEmulator::ResetTurnProcessed();
+#endif
+	int prefixLength = 0;
+	while (prefixLength < 350 && aActions[prefixLength] != -1) ++prefixLength;
+	const auto result = GanasadaiSearch::Run(copiedPlayers2, seed, aActions, prefixLength,
+		ganasadaiSearchBudgetMs, ganasadaiSearchVariant);
+	ss << dumpTable(result.replay, result.actions.data(), startturn) << '\n';
+	ss << "[GanasadaiSearch] variant=" << ganasadaiSearchVariant
+		<< " (" << GanasadaiSearch::VariantName(ganasadaiSearchVariant) << ")"
+		<< " victory=" << result.victory << " input_valid=" << result.inputValid
+		<< " prefix=" << result.prefixLength << " replay=" << result.replayVerified
+		<< " elapsed_ms=" << result.elapsedMs << " expanded=" << result.expanded
+		<< " duplicates=" << result.duplicates << " rejected_replay=" << result.rejectedReplay
+		<< " equipment_branches=" << result.equipmentBranches
+		<< " tactical_expanded=" << result.tacticalExpanded
+		<< " completed_width=" << result.completedWidth << " updates=" << result.updates << '\n';
+	ss << "[Constraints] initial_mp=" << copiedPlayers2[0].mp
+		<< " victory_hp>=" << GanasadaiSearch::RequiredVictoryHp
+		<< " victory_mp>=" << result.minimumFinalMp << '\n';
+	if (!result.error.empty()) ss << result.error << '\n';
+	if (!result.victory || !result.replayVerified) return false;
+	int minimumPathHp = copiedPlayers2[0].hp;
+	for (int i = 0; i < result.replay.position; ++i)
+		minimumPathHp = std::min(minimumPathHp, result.replay.ahp[i]);
+	ss << "[Exact] position=" << result.replay.position
+		<< " equipment_changes=" << result.finalState.equipmentChanges
+		<< " turns=" << result.length << " hero_hp=" << result.finalState.players[0].hp
+		<< " hero_mp=" << result.finalState.players[0].mp
+		<< " enemy_hp=" << result.finalState.players[1].hp
+		<< " minimum_path_hp=" << minimumPathHp << '\n';
+	ss << "0x" << std::hex << seed << std::dec << ": ";
+	for (int i = 0; i < result.length; ++i) ss << result.actions[i] << ", ";
+	ss << '\n';
+
+#ifdef DEBUG
+	auto turnProcessed = BattleEmulator::getTurnProcessed();
+	auto t3 = std::chrono::high_resolution_clock::now();
+	auto elapsed_time1 =
+			std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0).count();
+	PerformanceDebug("Searcher", turnProcessed, static_cast<double>(elapsed_time1), 0, ss);
+#endif
+
+	return true;
+#else
 	int32_t gene[350] = {0};
 	auto turns = 0;
 	for(int i = 0; i < 349; ++i){
@@ -482,6 +549,7 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 
 	//探索成功
 	return true;
+#endif
 }
 
 // ブルートフォースリクエスト関数
@@ -880,7 +948,7 @@ EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed
 }
 #endif
 
-int main(){
+int main(int argc, char* argv[]){
 	showHeader();
 
 	//https://zenn.dev/reputeless/books/standard-cpp-for-competitive-programming/viewer/library-ios-iomanip#3.1-c-%E8%A8%80%E8%AA%9E%E3%81%AE%E5%85%A5%E5%87%BA%E5%8A%9B%E3%82%B9%E3%83%88%E3%83%AA%E3%83%BC%E3%83%A0%E3%81%A8%E3%81%AE%E5%90%8C%E6%9C%9F%E3%82%92%E7%84%A1%E5%8A%B9%E3%81%AB%E3%81%99%E3%82%8B
@@ -949,14 +1017,41 @@ int main(){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x450ff41f;
+	uint64_t time1 = 0x450ff410;
 
 	auto counter = 0;
 	int actions[350] = {0};
 	actions[counter++] = BattleEmulator::BUFF;
-	actions[counter++] = BattleEmulator::FLEE_ALLY;
 	//actions[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
 	actions[counter] = -1;
+
+#if defined(ganasadai) && !defined(OPTIMIZE_MODE)
+	// Benchmark controls on the existing DEBUG3 -> SearchRequest route, not a
+	// second search entry point. With no arguments its original input is kept.
+	try {
+		for (int i = 1; i < argc; ++i) {
+			const std::string option = argv[i];
+			if (i + 1 >= argc) throw std::invalid_argument("missing option value");
+			const std::string value = argv[++i];
+			if (option == "--search-variant") ganasadaiSearchVariant = std::stoi(value);
+			else if (option == "--search-budget-ms") ganasadaiSearchBudgetMs = std::stoi(value);
+			else if (option == "--seed") time1 = std::stoull(value, nullptr, 0);
+			else if (option == "--prefix") {
+				std::fill(std::begin(actions), std::end(actions), -1);
+				std::stringstream values(value);
+				std::string item;
+				counter = 0;
+				while (std::getline(values, item, ',')) {
+					if (counter >= 349) throw std::invalid_argument("prefix is too long");
+					actions[counter++] = std::stoi(item, nullptr, 0);
+				}
+			} else throw std::invalid_argument("unknown DEBUG3 option");
+		}
+	} catch (const std::exception& e) {
+		std::cerr << e.what() << '\n';
+		return 1;
+	}
+#endif
 
 	std::stringstream ss;
 	SearchRequest(copiedPlayers, time1, actions, false, ss);

@@ -4,6 +4,7 @@
 //
 
 #include "ActionOptimizer.h"
+#include "GanasadaiSearch.h"
 #include <random>
 #include <unordered_set>
 #include <memory>
@@ -152,6 +153,21 @@ uint32_t ActionOptimizer::getNodesUsed(){
 // Flexible A* Algorithm Implementation
 Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int turns, int maxGenerations,
                                      int actions[350], int seedOffset){
+#if defined(ganasadai) && !defined(OPTIMIZE_MODE)
+	const auto result = GanasadaiSearch::Run(players, seed, actions, turns);
+	Node_Used = static_cast<uint32_t>(result.expanded);
+	Genome genome{};
+	std::copy(result.actions.begin(), result.actions.end(), genome.actions);
+	genome.AllyPlayer = result.finalState.players[0];
+	genome.EnemyPlayer = result.finalState.players[1];
+	genome.state = result.finalState.nowState;
+	genome.position = result.finalState.rngPosition; // Genome retains its RNG-cursor meaning.
+	genome.turn = result.length + 1;
+	genome.processed = result.length;
+	genome.Initialized = result.victory;
+	genome.isEliminated = !result.victory;
+	return genome;
+#else
 	lcg::init(seed, true);
 	Node_Used = 0;
 	//std::mt19937 rng(seed + seedOffset);
@@ -455,6 +471,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 	}
 
 	return initialGenome;
+#endif
 }
 
 void ActionOptimizer::updateCompromiseScore(Genome& genome){

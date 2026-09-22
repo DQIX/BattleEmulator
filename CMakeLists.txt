@@ -45,6 +45,8 @@ set(SOURCES
         Equipment.h
         ActionOptimizer.cpp
         ActionOptimizer.h
+        GanasadaiSearch.cpp
+        GanasadaiSearch.h
         Genome.h
         EnhancedCostCalculator.h
         EnhancedCostCalculator.cpp
