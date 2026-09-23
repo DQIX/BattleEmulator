@@ -15,16 +15,16 @@
     const TEXT = {
         ja: {
             title: "白画面でタイマーを自動開始",
-            description: "映像認識パネルでカメラを接続してください。タイマー停止中に認識枠全体が完全に白くなると、そのフレームを撮影した時刻からタイマーを開始します。",
+            description: "",
             enabled: "白画面で自動開始",
             debug: "停止中も通常の映像認識を使う（デバッグ）",
-            help: "開始後は通常の映像認識に切り替わります。自動開始をOFF、またはデバッグをONにすると、停止中も通常認識を使います。設定はこのブラウザに保存されます。",
-            idle: ["接続待ち", "映像認識パネルでカメラを接続し、映像認識を有効にしてください。"],
+            help: "",
+            idle: ["接続待ち", ""],
             off: ["OFF", "白画面からの自動開始は無効です。映像認識は通常どおり動作します。"],
             debugMode: ["デバッグ中", "タイマー停止中も通常の映像認識を使います。白画面は検知しません。"],
             running: ["タイマー動作中", "白画面の検知を停止し、通常の映像認識を使っています。"],
             waiting: ["映像待ち", "カメラから新しい映像が届くと、白画面の検知を再開します。"],
-            watching: ["動作中", "認識枠全体の白画面をWebGPUで最大30fps確認しています。白くなったら自動でタイマーを開始します。"],
+            watching: ["動作中", "白画面を検知しています…"],
             timestamp: ["撮影時刻を取得できません", "この映像では実際の撮影時刻を取得できないため、自動開始できません。タイマー開始ボタンを使ってください。"],
             unsupported: ["フレーム取得に未対応", "このブラウザでは撮影時刻付きの映像を取得できません。タイマー開始ボタンを使ってください。"],
             size: ["認識枠を確認してください", "映像が認識枠より小さいため、枠全体を確認できません。カメラの出力サイズを確認してください。"],
@@ -32,22 +32,26 @@
         },
         en: {
             title: "Start timer on a white screen",
-            description: "Connect a camera in the Vision panel. While the timer is stopped, a completely white recognition frame starts the timer from the time that frame was captured.",
+            description: "",
             enabled: "Start automatically on white",
             debug: "Use normal recognition while stopped (debug)",
-            help: "Normal recognition resumes when the timer starts. Turn auto-start off or debug on to use normal recognition while stopped. Settings are saved in this browser.",
-            idle: ["Waiting for connection", "Connect a camera and enable recognition in the Vision panel."],
+            help: "",
+            idle: ["Waiting for connection", ""],
             off: ["OFF", "White-screen auto-start is disabled. Normal recognition is available."],
             debugMode: ["Debug", "Normal recognition runs while the timer is stopped. White detection is disabled."],
             running: ["Timer running", "White detection is stopped and normal recognition is in use."],
             waiting: ["Waiting for video", "White detection resumes when new camera frames arrive."],
-            watching: ["Active", "Checking the entire recognition frame for white with WebGPU at up to 30fps. A white frame starts the timer automatically."],
+            watching: ["Active", "Detecting a white screen…"],
             timestamp: ["Capture time unavailable", "This feed does not provide the actual capture time, so auto-start is unavailable. Use Start Timer."],
             unsupported: ["Frame capture unsupported", "This browser cannot provide video frames with capture times. Use Start Timer."],
             size: ["Check recognition area", "The video is smaller than the recognition area. Check the camera output size."],
             error: ["Cannot inspect video", "Reconnect the camera, or use Start Timer to start manually."]
         }
     };
+
+    const RING_FRAME_COUNT = 60;
+    const PROBE_INTERVAL_MS = 200;
+    const RESULT_BYTES = 16;
 
     // Separate device and buffers: never borrow or mutate the vision matcher's resources.
     class WhiteFrameDetector {
@@ -57,6 +61,10 @@
             this.output = null;
             this.readback = null;
             this.params = null;
+            this.ringTexture = null;
+            this.ringView = null;
+            this.ringWidth = 0;
+            this.ringHeight = 0;
             this.preparePromise = null;
             this.unavailable = false;
         }
@@ -88,22 +96,29 @@
                 device.lost.then((info) => {
                     lost = true;
                     if (this.device === device) this.releaseGpu();
-                    console.warn("White detector WebGPU device lost:", info);
+                    if (info.reason !== "destroyed") {
+                        console.warn("White detector WebGPU device lost:", info);
+                    }
                 });
                 const module = device.createShaderModule({code: `
 struct Params {
-    origin: vec2<u32>,
     size: vec2<u32>,
+    startLayer: u32,
+    count: u32,
 }
 
-@group(0) @binding(0) var frame: texture_external;
-struct Stats {
+struct FrameStats {
     below96: atomic<u32>,
     below112: atomic<u32>,
     below120: atomic<u32>,
     spread12: atomic<u32>,
 }
 
+struct Stats {
+    frames: array<FrameStats, 60>,
+}
+
+@group(0) @binding(0) var frame: texture_2d_array<f32>;
 @group(0) @binding(1) var<storage, read_write> stats: Stats;
 @group(0) @binding(2) var<uniform> params: Params;
 var<workgroup> tileBelow96: atomic<u32>;
@@ -128,8 +143,8 @@ fn main(@builtin(global_invocation_id) pixel: vec3<u32>,
     }
     workgroupBarrier();
     if (pixel.x < params.size.x && pixel.y < params.size.y) {
-        let sourcePixel = params.origin + pixel.xy;
-        let rgba = textureLoad(frame, vec2<i32>(i32(sourcePixel.x), i32(sourcePixel.y)));
+        let layer = (params.startLayer + pixel.z) % 60u;
+        let rgba = textureLoad(frame, vec2<i32>(i32(pixel.x), i32(pixel.y)), i32(layer), 0);
         let low = min(rgba.r, min(rgba.g, rgba.b));
         let high = max(rgba.r, max(rgba.g, rgba.b));
         if (low < (96.0 / 255.0)) { atomicAdd(&tileBelow96, 1u); }
@@ -139,10 +154,10 @@ fn main(@builtin(global_invocation_id) pixel: vec3<u32>,
     }
     workgroupBarrier();
     if (localIndex == 0u) {
-        atomicAdd(&stats.below96, atomicLoad(&tileBelow96));
-        atomicAdd(&stats.below112, atomicLoad(&tileBelow112));
-        atomicAdd(&stats.below120, atomicLoad(&tileBelow120));
-        atomicAdd(&stats.spread12, atomicLoad(&tileSpread12));
+        atomicAdd(&stats.frames[pixel.z].below96, atomicLoad(&tileBelow96));
+        atomicAdd(&stats.frames[pixel.z].below112, atomicLoad(&tileBelow112));
+        atomicAdd(&stats.frames[pixel.z].below120, atomicLoad(&tileBelow120));
+        atomicAdd(&stats.frames[pixel.z].spread12, atomicLoad(&tileSpread12));
     }
 }`});
                 const pipeline = await device.createComputePipelineAsync({
@@ -150,11 +165,11 @@ fn main(@builtin(global_invocation_id) pixel: vec3<u32>,
                 });
                 if (lost) throw new Error("White detector GPU lost during initialization");
                 const output = device.createBuffer({
-                    size: 16,
+                    size: RESULT_BYTES * RING_FRAME_COUNT,
                     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST
                 });
                 const readback = device.createBuffer({
-                    size: 16,
+                    size: RESULT_BYTES * RING_FRAME_COUNT,
                     usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
                 });
                 const params = device.createBuffer({
@@ -181,57 +196,110 @@ fn main(@builtin(global_invocation_id) pixel: vec3<u32>,
             this.output?.destroy();
             this.readback?.destroy();
             this.params?.destroy();
+            this.ringTexture?.destroy();
             this.output = null;
             this.readback = null;
             this.params = null;
+            this.ringTexture = null;
+            this.ringView = null;
+            this.ringWidth = 0;
+            this.ringHeight = 0;
             device?.destroy();
         }
 
-        async detect(video, rect) {
+        ensureRing(width, height) {
+            const device = this.device;
+            if (!device) {
+                throw new Error("White detector WebGPU is not ready");
+            }
+            if (this.ringTexture && this.ringWidth === width && this.ringHeight === height) return;
+            this.ringTexture?.destroy();
+            this.ringTexture = device.createTexture({
+                size: {width, height, depthOrArrayLayers: RING_FRAME_COUNT},
+                format: "rgba8unorm",
+                usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT
+            });
+            this.ringView = this.ringTexture.createView({
+                dimension: "2d-array",
+                baseArrayLayer: 0,
+                arrayLayerCount: RING_FRAME_COUNT
+            });
+            this.ringWidth = width;
+            this.ringHeight = height;
+        }
+
+        capture(video, rect, layer) {
             const width = rect.sourceCropWidth;
             const height = rect.sourceCropHeight;
             const device = this.device;
             if (!device) {
                 throw new Error("White detector WebGPU is not ready");
             }
+            this.ensureRing(width, height);
+            // WebGPU captures the external source data when this call is issued.
+            // Keep this inside requestVideoFrameCallback so captureTime and pixels
+            // refer to the same browser-provided frame. No CPU pixel readback occurs.
+            device.queue.copyExternalImageToTexture(
+                {
+                    source: video,
+                    origin: {x: rect.sourceX, y: rect.sourceY}
+                },
+                {
+                    texture: this.ringTexture,
+                    origin: {x: 0, y: 0, z: layer},
+                    colorSpace: "srgb",
+                    premultipliedAlpha: false
+                },
+                {width, height, depthOrArrayLayers: 1}
+            );
+        }
+
+        async inspect(startLayer, count) {
+            const device = this.device;
+            if (!device || !this.ringTexture || !this.ringView) {
+                throw new Error("White detector GPU ring is not ready");
+            }
+            if (!Number.isInteger(startLayer) || startLayer < 0 || startLayer >= RING_FRAME_COUNT
+                || !Number.isInteger(count) || count <= 0 || count > RING_FRAME_COUNT) {
+                throw new Error("Invalid white detector inspection range");
+            }
+            const byteLength = count * RESULT_BYTES;
             const readback = this.readback;
             try {
-                // Import and submit in this requestVideoFrameCallback task. This keeps the
-                // captureTime tied to exactly the video frame sampled by the GPU without a
-                // full-frame CPU readback or an intermediate rgba8 texture copy.
-                const externalTexture = device.importExternalTexture({source: video, colorSpace: "srgb"});
                 device.queue.writeBuffer(this.params, 0, new Uint32Array([
-                    rect.sourceX, rect.sourceY, width, height
+                    this.ringWidth, this.ringHeight, startLayer, count
                 ]));
                 const bindGroup = device.createBindGroup({
                     layout: this.pipeline.getBindGroupLayout(0),
                     entries: [
-                        {binding: 0, resource: externalTexture},
+                        {binding: 0, resource: this.ringView},
                         {binding: 1, resource: {buffer: this.output}},
                         {binding: 2, resource: {buffer: this.params}}
                     ]
                 });
                 const encoder = device.createCommandEncoder();
-                encoder.clearBuffer(this.output);
+                encoder.clearBuffer(this.output, 0, byteLength);
                 const pass = encoder.beginComputePass();
                 pass.setPipeline(this.pipeline);
                 pass.setBindGroup(0, bindGroup);
-                pass.dispatchWorkgroups(Math.ceil(width / 16), Math.ceil(height / 16));
+                pass.dispatchWorkgroups(
+                    Math.ceil(this.ringWidth / 16),
+                    Math.ceil(this.ringHeight / 16),
+                    count
+                );
                 pass.end();
-                encoder.copyBufferToBuffer(this.output, 0, readback, 0, 16);
+                encoder.copyBufferToBuffer(this.output, 0, readback, 0, byteLength);
                 device.queue.submit([encoder.finish()]);
-                await readback.mapAsync(GPUMapMode.READ);
-                const values = new Uint32Array(readback.getMappedRange());
-                return {
-                    white: values[2] === 0 && values[3] === 0,
-                    below96: values[0],
-                    below112: values[1],
-                    below120: values[2],
-                    spread12: values[3]
-                };
+                await readback.mapAsync(GPUMapMode.READ, 0, byteLength);
+                return new Uint32Array(readback.getMappedRange(0, byteLength)).slice();
             } finally {
                 if (readback?.mapState === "mapped") readback.unmap();
             }
+        }
+
+        static isWhite(values, index = 0) {
+            const base = index * 4;
+            return values[base + 2] === 0 && values[base + 3] === 0;
         }
     }
 
@@ -243,12 +311,26 @@ fn main(@builtin(global_invocation_id) pixel: vec3<u32>,
     let active = false;
     let frameHandle = null;
     let generation = 0;
-    let busy = false;
-    let clockOrigin = null;
-    let lastBucket = -1;
     let lastFrameTime = null;
+    let lastProbeFrameTime = null;
+    let frameSequence = 0;
+    let lastConfirmedNonWhiteSequence = null;
+    let inspectionBusy = false;
+    let resolvingWhite = false;
+    const captureTimes = new Float64Array(RING_FRAME_COUNT);
+    const slotSequences = new Array(RING_FRAME_COUNT).fill(-1);
     let frameStatus = "watching";
     let pageActive = true;
+
+    function resetFrameHistory() {
+        lastFrameTime = null;
+        lastProbeFrameTime = null;
+        frameSequence = 0;
+        lastConfirmedNonWhiteSequence = null;
+        resolvingWhite = false;
+        captureTimes.fill(0);
+        slotSequences.fill(-1);
+    }
 
     function restoreSettings() {
         try {
@@ -312,9 +394,7 @@ fn main(@builtin(global_invocation_id) pixel: vec3<u32>,
             if (frameHandle !== null) video.cancelVideoFrameCallback(frameHandle);
             frameHandle = null;
             active = nextActive;
-            clockOrigin = null;
-            lastFrameTime = null;
-            lastBucket = -1;
+            resetFrameHistory();
             frameStatus = "watching";
         }
         if (active && frameHandle === null) {
@@ -343,12 +423,10 @@ fn main(@builtin(global_invocation_id) pixel: vec3<u32>,
         const frameTime = Number.isFinite(metadata.mediaTime) ? metadata.mediaTime * 1000 : captureTime;
         if (lastFrameTime !== null && frameTime < lastFrameTime) {
             sync(true);
+            return;
         }
         lastFrameTime = frameTime;
-        clockOrigin ??= frameTime;
-        const bucket = Math.floor((frameTime - clockOrigin) * 30 / 1000 + 0.000001);
-        if (bucket <= lastBucket) return;
-        lastBucket = bucket;
+        if (resolvingWhite) return;
         const rect = source.getRect();
         const video = source.video;
         if (![rect.sourceX, rect.sourceY, rect.sourceCropWidth, rect.sourceCropHeight].every(Number.isInteger)
@@ -361,33 +439,89 @@ fn main(@builtin(global_invocation_id) pixel: vec3<u32>,
         }
         frameStatus = "watching";
         render();
-        // WebGPU readback is intentionally single-flight. If the GPU takes longer
-        // than one 30fps sampling interval, skip this frame instead of queueing work
-        // indefinitely or falling back to getImageData() on the CPU.
-        if (busy || !detector.device) return;
+        if (!detector.device) return;
+        const sequence = frameSequence++;
+        const slot = sequence % RING_FRAME_COUNT;
+        try {
+            // Copy every browser video frame into GPU memory. CPU keeps only
+            // captureTime and the sequence number for each ring slot.
+            detector.capture(video, rect, slot);
+        } catch (error) {
+            frameStatus = "error";
+            render();
+            console.warn("White frame capture failed:", error);
+            return;
+        }
+        captureTimes[slot] = captureTime;
+        slotSequences[slot] = sequence;
+        if (lastProbeFrameTime !== null && frameTime - lastProbeFrameTime < PROBE_INTERVAL_MS) return;
+        if (inspectionBusy) return;
+        lastProbeFrameTime = frameTime;
         const token = generation;
         const capturedStream = stream;
         const capturedTrack = track;
-        busy = true;
-        const acceptResult = (result) => {
-            if (token !== generation || capturedStream !== video.srcObject || !active || !wantsDetection()) return;
+        inspectionBusy = true;
+        const resultIsCurrent = () => {
+            if (token !== generation || capturedStream !== video.srcObject || !active || !wantsDetection()) return false;
             if (video.paused || capturedTrack.readyState !== "live" || capturedTrack.muted
-                || capturedStream.getVideoTracks()[0] !== capturedTrack) return;
+                || capturedStream.getVideoTracks()[0] !== capturedTrack) return false;
+            return true;
+        };
+        detector.inspect(slot, 1).then(async (probeValues) => {
+            if (!resultIsCurrent()) return;
             if (new URLSearchParams(location.search).has("whiteDebug")) {
                 document.title = `WDBG ${rect.sourceCropWidth}x${rect.sourceCropHeight} `
-                    + `b96=${result.below96} b112=${result.below112} b120=${result.below120} s12=${result.spread12}`;
+                    + `seq=${sequence} b96=${probeValues[0]} b112=${probeValues[1]} `
+                    + `b120=${probeValues[2]} s12=${probeValues[3]}`;
             }
-            if (result.white) timer.startFromCapture(captureTime);
-        };
-        // detect() imports and submits the callback's video frame before its first await.
-        detector.detect(video, rect).then(acceptResult).catch((error) => {
+            if (!WhiteFrameDetector.isWhite(probeValues)) {
+                lastConfirmedNonWhiteSequence = sequence;
+                return;
+            }
+            resolvingWhite = true;
+            const oldestSequence = Math.max(0, frameSequence - RING_FRAME_COUNT);
+            const startSequence = lastConfirmedNonWhiteSequence === null
+                ? oldestSequence
+                : lastConfirmedNonWhiteSequence + 1;
+            if (startSequence < oldestSequence) {
+                throw new Error("White transition fell outside the one-second GPU frame ring");
+            }
+            const count = sequence - startSequence + 1;
+            const historyValues = await detector.inspect(startSequence % RING_FRAME_COUNT, count);
+            if (!resultIsCurrent()) return;
+            let firstWhiteOffset = -1;
+            for (let index = 0; index < count; index += 1) {
+                if (WhiteFrameDetector.isWhite(historyValues, index)) {
+                    firstWhiteOffset = index;
+                    break;
+                }
+            }
+            if (firstWhiteOffset < 0) {
+                throw new Error("White probe was not white during historical verification");
+            }
+            const firstWhiteSequence = startSequence + firstWhiteOffset;
+            const firstWhiteSlot = firstWhiteSequence % RING_FRAME_COUNT;
+            if (slotSequences[firstWhiteSlot] !== firstWhiteSequence) {
+                throw new Error("First white frame was overwritten before verification");
+            }
+            const firstWhiteCaptureTime = captureTimes[firstWhiteSlot];
+            if (!Number.isFinite(firstWhiteCaptureTime)) {
+                throw new Error("First white frame captureTime is unavailable");
+            }
+            if (new URLSearchParams(location.search).has("whiteDebug")) {
+                document.title = `WDBG first=${firstWhiteSequence} probe=${sequence} `
+                    + `dt=${(captureTime - firstWhiteCaptureTime).toFixed(3)}ms`;
+            }
+            timer.startFromCapture(firstWhiteCaptureTime);
+        }).catch((error) => {
             if (token === generation) {
                 frameStatus = "error";
                 render();
             }
             console.warn("White frame inspection failed:", error);
         }).finally(() => {
-            busy = false;
+            inspectionBusy = false;
+            if (token === generation && !timer.isRunning()) resolvingWhite = false;
         });
     }
 
@@ -412,7 +546,13 @@ fn main(@builtin(global_invocation_id) pixel: vec3<u32>,
             sync(true);
         });
     }
-    window.addEventListener("battle-auto-timer-change", () => sync(true));
+    window.addEventListener("battle-auto-timer-change", () => {
+        const running = timer.isRunning();
+        sync(true);
+        if (running) {
+            detector.releaseGpu();
+        }
+    });
     window.addEventListener("storage", (event) => {
         if (event.key === null || event.key === ENABLED_KEY || event.key === DEBUG_KEY) {
             restoreSettings();
