@@ -2800,3 +2800,372 @@ Turn5へ進めようとしたところ、停止済みprobeの低レベルexec tr
 fresh 6ターンROM再演はTurn1入力済みで、長い戦闘待ちが非同期化しただけです。重複送信せず、その間に修正済みC++の同じ6ターンprefixを先に通し、Turn5/6の期待位置・HPを固定します。
 
 Turn2〜4は送信済みで、まとめたUI待ちが非同期化されています。重複入力はしません。その間に変更範囲を監査します。特にユーザーが疑ったdiffとは別の本修正が、手書きruntime・metadata生成器・生成物だけに閉じていて、探索本体へ触れていないことを確認します。
+
+
+了解。今回は3ターン目ザキだけに絞ります。前回と同じく、まず files__ で必要箇所とdebugger skillを読み、ROMのCtable checkpoint＋既存camera観測スクリプトを同じ tmp_geru.dst に当て、CLion側の3ターン目ザキと1対1比較して、最初に分岐したcamera stateだけ直します。
+
+まずC++側の3ターン目を固定します。前回修正後の正しい1・2ターン目を維持したまま、31 → 36 → 71:3（ザキB）をCLionで実走して、3ターン目開始/終了の position と camera event を取ります。同時にROM側は tmp_geru.dst baselineから ベホイミ→ザキBだけ進めます。
+
+C++側は3ターン目戦闘コア終了まで position=243、その後camera側で 0x0215962c #243 と tracking 0x0216f0e4 #244 の2消費だけ入り、next position=245 です。戦闘結果も提示ログと一致しています。次はROMを同じ2手（ベホイミ→ザキB）で進め、#168以降のCtable LR列とザキのselector/routeを取ります。
+
+実測で tmp_geru.dst の現在内容を確認すると、今回はロード直後が ROM live #167 でした。つまりこのファイル自体がもう2ターン目終了済みです。さっきベホイミをもう一度打った試行は破棄してbaselineへ戻し、今回はザキB 1発だけで3ターン目を観測します。
+
+ROM側はもう決定的です。3ターン目ザキBの戦闘結果はC++と一致したまま、ROMは最終 live #246、C++は next #245 なので、cameraで1個不足です。さらにROMはザキ自身で actor=Hero / target=B / route=[58,57] / freeCameraCalled=true / param5=1、C++は同じザキで route=0 / call=0。つまり今回のずれは ザキのfreecam発火前、Heroのgoal/route生成で既に起きています。
+
+Ctableでも最初の分岐が取れました。戦闘コアは #243 まで完全一致です。その次、ROMはザキfreecamで #244 = 0x0216FE40、#245 = 0x0216FFF8 を消費し、その後に敵actionのtracking #246 = 0x0216F0E4。C++はザキfreecamを呼ばず、#244でいきなりtrackingへ行っています。なので犯人箇所は camera のザキ用 goal/route 生成で確定です。
+
+C++のザキ処理だけを出すと、差はさらに前です。C++の3ターン目開始ノードが 58,47,22,60、ROMのザキselectorではBが start=59。つまりザキの判定式より前に、2ターン目終了→3ターン目開始のcamera stateでBが1ノードずれている可能性があります。ROMのaction24 setup開始時rosterを既存probeから直接抜きます。
+
+ROMのザキsetup開始時rosterも取れました。開始時点で Hero=58, A=47, Geru=22, B=59。C++は 58,47,22,60 なので、ザキ計算前からBだけ1ノードずれています。まずCLionで3ターン目 actionIndex=0 / ZAKI のsetup入口を止め、C++ runtime stateでB=60を確認します。その後、2ターン目終了処理のどこでROMの59ではなく60へcommitしたかを逆に追います。
+
+CLion側の3ターン目setup入口へ進めていますが、既存のユーザーブレークポイントが途中で複数回止めるので、そこは触らず通過中です。一方、通常traceだけでも 2ターン目最後はB=61 → 3ターン目開始でC++はB=60、ROMはB=59 と絞れています。したがって次は turn-end global recenter のBだけの差を見ます。
+
+ザキのroute差は、C++がザキ計算を間違えたというより ターン開始時B=60（ROM=59）を持ち込んだ結果です。ここをturn-end処理まで戻します。ROM側のturn-end実装はGhidraの実関数と既存probeで確認し、C++の RestoreAllPresentationActorsToBaseBattleWorld → global recenter と照合します。
+
+了解。1t_tmp.dst は1ターン目終了時点として使います。これなら2ターン目ベホイミ終了後の turn-end state をROMで直接観測できるので、Bが 61→59 になる正しい遷移と、C++の 61→60 を同じ1ターン分だけ比較できます。今の「3ターン目ザキrouteが出ない」原因を、その直前のturn-endまで戻して詰めます。
+
+1t_tmp.dst を読むと、これは「1ターン目開始状態」でした。HP=301、ROM live seed #0、敵ミラーなしなので、ここから マホカンタ → ベホイミ → ザキB を通せば、C++の 31 → 36 → 71:3 と完全に同じ履歴をROM側で作れます。これを正本に切り替えます。
+
+turn_end_recenter_probe_tmp.js がまさに既存資産としてありました。これは overlay26 の turn-end recenter で 0204A1B0 に渡される各actorの新start nodeを直接記録します。これを 1t_tmp.dst にだけ追加し、1ターン目→2ターン目の遷移を丸ごと観測します。
+
+turn_end_recenter_probe 自体は読み込めています。失敗したのは追加した listOptions(skill) だけで、現在のUIがfight submenuに入れない状態だったためです。観測は止めず、まずtopメニューのコマンド一覧を取り、その正規経路からミラーシールドを選びます。
+
+1ターン目終了のROM turn-end recenterは [Hero 59, A 11, Geru 23, B 51] でした。これはC++の2ターン目開始 59,11,23,51 と一致しています。つまりズレは1ターン目ではありません。次に同じ 1t_tmp.dst 履歴のまま2ターン目ベホイミを実行し、2ターン目turn-endでBがROM 59へどう移るかを直接取ります。
+
+ROMの2ターン目turn-endが完全に取れました。重要なのは同じstate3内で2段階あることです。
+
+restore-base-world 後の start は [59,48,23,60]
+その直後の global recenter が 全員を -1 column して [58,47,22,59]
+C++は3ターン目を [58,47,22,60] で始めているので、global recenter自体はHero/A/Geruへ適用しているのにBだけ適用漏れです。次にC++のturn-end呼び出し順とparticipant選別を見ます。
+
+C++のturn-endコード自体は全participantを対象にしており、そこでBだけ除外しているわけではありません。差はその直前です。C++はturn2終了時Bを goal=61 のまま持ち込み、restoreで61をstartに採用→recenterで60。一方ROMはturn-endに入る前にBが 61→60へroute完了済みで、restore時点から60→recenter59です。つまり次に見るべきは、最終通常攻撃のnon-actor B route [61,60] の完了処理です。
+
+ここは既存コードの意図と実測が食い違っています。CompleteActionPresentation() には「通常攻撃ならnon-actor routeも完了させる」コードが既にあるのに、Bが61→60になっていません。なので今度はその関数入口で currentRoutes.valid / B route [61,60] / triggerDecision.callFreeCamera をCLionで直接見て、既存処理がなぜ実行されていないかを確定します。
+
+
+続きます。いまの停止点 camera.cpp:610 で、state.currentRoutes ではBが0でした。まず同じ停止点の debugEvent.routeCounts/routeNodes も直接読み、**「trace表示だけ過去値なのか」「非最適化ビルドだけrouteが違うのか」**を切り分けます。ここを曖昧なまま修正には入りません。
+
+同じ停止点では debugEvent も state.currentRoutes もB=0でした。つまり非最適化 gerunikku は、O3の gerunikku_gouketu_opt とこのroute生成結果自体が違う可能性があります。修正前にそこを切ります。まず両run configが同じマクロ/ソース条件かを files__ で確認し、非最適化の通常実行traceも取ります。
+
+非最適化の通常traceでも、turn2最終通常攻撃のB routeは最初から0でした。つまり私がさっき「Bに [61,60] があった」とした部分は再確認が必要です。ここでO3本番構成を**同じ --trace-sequence 31 36**で取り直し、両構成のroute表を並べます。
+
+取り直しで整理できました。[61,60] があるのはROMで、C++は最終通常攻撃のroute planning時点からB route=0でした。つまり完了処理ではなく、actionIndex=4 の setup がBの goal を61のまま残しているのが本当の差です。次は既存 freecam_setup_probe_mcp.js でROMの「B: start61 → goal60」を作る入力とsetterを取り、C++の同じsetup入力と比較します。
+
+ROM replayはまだ同じ非同期処理の途中なので、待機だけに時間を使わず、並行してC++側のactionIndex=4 setupを詰めます。C++ではBが start=61 / goal=61 で固定されるので、AssignActorPresentationGoal() がBに呼ばれたか、fallbackへ落ちたか、row4条件でスキップされたかをCLionで直接見ます。
+
+actionIndex=4 ではBは「future」ではなくprevious participantです。なので見る場所を修正します。ROMは最終通常攻撃setupで、直前のB（DQ9 109）を previous participant として再配置して 61→60 にしています。C++の PreparePreviousActionPresentationParticipant() がBを61に据え置く理由を、ここから直接詰めます。
+
+ROM setup probeの結果から重要な事実が出ました。actionIndex=4 のBは、後処理に入る時点で既に start=61, goal=60, route=[61,60] になっています。つまりROMは previous-participant 処理でBのgoalを60に決めています。次はそのgoal=60を書いたイベント直前だけを絞って取り出し、C++の PreparePreviousActionPresentationParticipant() と入力を1対1比較します。
+
+ROM側の分岐条件まで取れました。Bは previous participant として movement-eligible=true、その直後に fallback-goal へ入り、roster row の field4=15 を持った状態で goal=60 を選んでいます。C++の同じactionIndex=4 traceは row4 がBだけ0なので、ここがかなり濃いです。次はCLionで previousIndex=3(B) の rosterField4Known/nonzero を直接確認します。
+
+今止まったのは1ターン目の actionIndex=4 でした。currentActorId=194 なので除外します。条件を actionIndex=4 && currentActorId=192 && previousIndex=3 まで絞って2ターン目最終通常攻撃だけ見ます。
+
+止まりました。2ターン目最終通常攻撃、previousIndex=3 のBで正しく停止しています。ここで actorId=194 / target=Hero まで一致。次はROMの field4=15(nonzero) に対し、C++が何を見ているかと fallback の入力occupancyをその場で読みます。
+
+原因条件は実測で一致しました。ROMはBのrow+4が 15(nonzero)、C++は同じ地点で known=true / nonzero=false。occupancyも 60=0xFF, 61=0xF8 なので、row4=falseだとfallbackが61据え置きになり、row4=trueならROM同様60を選べる条件です。次はこのBのrow4を0へ落とした直前の互換処理を特定して、そこだけ直します。
+
+C++がBだけfalseにした経路もかなり絞れています。turn2開始時はTTTTなのに、最終action前はTTTF。通常攻撃は「既存scratchを保持」なので、Bをfalseにしたproducerはその前の DQ9 55 などです。まず ApplyBattleHudRendererResidueCompatibility() のROM採掘済みmaskが実際にTTTFなのか確認し、ROM turn2のsetup時系列と照らします。
+
+mask自体は 15、つまりHUD renderer residueはTTTTでした。Bをfalseにしたのはそこではなく、**直前のDQ9 109（かぶと割り）**です。C++は109をpresentationType=1の汎用枝へ入れ、type1近似のTTTFを上書きしています。ROMは109後の次setupでもB row+4=15(nonzero)。ここが直接の誤上書きです。次に109が本当にそのTTTF producerを通らないことを、既存renderer観測/metadataで確認してから最小修正します。
+
+109が「type1だからTTTF」ではないことを、既存の採掘ログでも確認します。今回seedだけに合わせた例外にしたくないので、過去の roster_row4_mining_*.json で DQ9 109 の次setupがどう残っているかを見て、109のproducer有無を固めます。
+
+今回seedの実測では、109後の次setupでB row+4がnonzeroのままなのに、C++だけ109のpost-actionでtype1汎用TTTFへ上書きしています。ここは109を「TTTF producer」と扱っているのが誤りです。修正前に、ROMの previous-participant fallback 021E2664 がrow+4非zeroを分岐入力にしていることも batch_decompile で確認してから反映します。
+
+batch_decompile でも確認できました。021E2664 は roster row の +4 を直接 !=0 判定に使い、nonzeroならfallback選択を強制する構造です。今回ROM Bは field4=15、C++はfalseなので、goal 60/61の差はここで説明が完全に閉じます。109後のTTTF上書きを止める最小修正を入れます。
+
+修正は camera/freecam_fast_runtime.hpp の109 post-action row4処理と、その回帰validationだけに入れました。これからCLionで freecam_edge_validation、続けて同じ 0x1d4604dc / 31→36→71:3 を実走し、B goal=60、3ターン目ザキ route=[58,57] / call=1 / param5=1、RNG #244/#245 復活まで確認します。
+
+RNGずれは直りましたが、カメラ座標はまだ完全一致していません。修正後C++はザキfreecamを呼ぶようになり #244/#245/#246 はROMと一致した一方、ザキrouteがROM [58,57] に対してC++ [58,59]、3ターン目開始BもROM59に対してC++61です。なのでここで止めず、turn2最終通常攻撃のB routeが修正後どうなったかを再実測し、そのroute完了→turn-end遷移を詰めます。
+
+row4修正で分岐は正しくfallbackへ入りましたが、まだ完全一致ではありません。修正後C++はBを 61→62、ROMは 61→60。つまり次の差はfallback候補選択のoccupancy入力です。row4は直ったので、今度はROM 021E2664 に渡ったoccupancy配列とC++の同じ配列を比較し、最初に違うセルを特定します。
+
+次はfallback内部の候補比較です。ROM 021E2664 の occupancy は既に取得済みなので、同じpreviousIndex=3停止点でC++の occupancy 81セルと PresentationNeighbors(61) を直接読みます。これで「入力map差」か「fallbackアルゴリズム差」かを切り分けます。
+
+非最適化デバッガ起動だけビルド開始前に失敗したので、同じCLion構成を一度通常実行で再ビルドしてから再接続します。観測条件は変えません。
+
+実際にはデバッガセッションは起動済みで、目的の camera.cpp:241 に停止していました。起動返却だけが競合して失敗扱いになったようです。ここから occupancy と neighbor列を読みます。
+
+C++ occupancyの前半はROMとほぼ同じですが、fallback候補に効く61周辺を直接比較します。PresentationNeighbors(61) はデバッガから名前解決できなかったので、定義を files__ で読み、必要セルだけC++/ROMを照合します。
+
+occupancy差が見えています。ROMはfallback時 60=0, 61=0xF8 ですが、C++は同地点で既に 60=0xFF, 61=0xF8。これだけで最初の候補69の評価が落ち、後続の62側が勝てます。つまり次の犯人はfallbackロジックではなく、actionIndex=4 setup中にnode60へ余計な0xFFを置いた処理です。その最初の書込み元を追います。
+
+原因がもう一段確定しました。C++は AssignPresentationGoal() 内で、current actorなら無条件に PresentationNeighbors(conflictPivot) を0xFF化しています。今回C0→Heroでは conflictPivot=59 なので [67,68,58,60,49,50]、まさにROMにはない 60=0xFF を作ります。別途 InvalidateCurrentActionPresentationProximity() にはROM通り「DQ9 9..11だけ」のgateが既にあるので、同じinvalidatorを二重に置いています。Ghidraで 021E1FD8→021E2904 の条件を確認して、この重複だけ外します。
+
+Ghidraだけ見ると 021E1FD8 内にもcurrent actor時の 021E2904 呼び出しがあります。なので「action1では絶対呼ばれない」と静的だけで決めるのは危険です。既存setup probeは 021E2904 自体をhookしているので、今回ROMのactionIndex=4で実際に2904が走ったか、どのnodesを書いたかを直接確認します。
+
+実測で重要な訂正です。ROMのaction1でも 021E2904 は実際に走っています。ただしROMがinvalidにしたのは [57,58,47,49,39,40]、C++は [67,68,58,60,49,50]。つまり重複invalidatorが本丸ではなく、2904へ渡す conflictPivot（target battle-world nearest node）が1段ずれているのが本当の原因です。次にROMのnearest結果とC++ Hero battleWorldを直接比較します。
+
+ROM setup probeはnearest呼び出し自体だけ記録していて、戻りnodeまでは保持していません。既存の nearest_actor_world_probe_tmp.js がちょうど battle actor world→nearest node を取るので、これを同じ 1t_tmp.dst → ミラー → ベホイミ に当てます。同時にCLion側ではHeroの battleWorldX/Z を同じactionIndex=4 setupで読みます。
+
+C++側の同地点ではHero battleWorld=(10641,12868,18432)、presentation start/goal=59です。ROM側の 021E1E50 入力を、既存Ctableログ/nearest probeから同じ actionIndex=4 だけ抜きます。これで conflictPivot 59 vs 48系の差が、どのworld更新漏れから来たかを確定します。
+
+ROMとC++の次の差も実測で特定できました。最終通常攻撃setupで、ROMのHero battle-worldは (-6101,13871) で nearest=48、C++は (10641,18432) でnode59相当です。つまりoccupancyの誤りは直前DQ9 109後にHero battle-worldを進め損ねていることが原因です。次は109 setup/終了時のHero presentation・routeを既存setup probeから抜き、どのworld更新がROMだけに入るかを確認します
+
+うん、かなりその可能性が高いです。むしろ今の実測は requested.md で言及されている row+4 の stale/stack-residue 問題そのものにかなり寄っています。まず requested.md の該当記述を確認して、今取れた ROM B row+4=15 / C++ false と一致するか照合し、そのうえで残っている Hero battleWorld 差が「row4修正後の二次差」なのか、同じrow4ライフサイクル起因なのかを切ります。
+
+そう。少なくとも最初にザキfreecamを潰していた原因は、requested.md に書かれている row+4 問題そのものです。 私が途中で「109固有のTTTF/TTTT」と寄せすぎたのがまずかったです。requested.md 自体が「row+4 はaction属性ではなく stack residue＋局所write」「観測TTTTを action 固有属性として再注入するのは粗すぎる」と明記しています。今回の ROM B row+4=15 / C++ false → 021E2664 fallback不発 はまさにその症状です。
+ただし、row4を直した後に残った ROM goal=60 / C++ goal=62 は別の二次差です。requested.md にも「候補差はfallbackアルゴリズムではなく occupancy input」「021E1FD8→021E2904 は別xref」とあります。今の実測ではその occupancy 差が Hero battle-world nearest の 48 vs 59 から来ています。なので row4修正は正しいけど、それだけでは終わらない、という状態です。
+
+しかも requested.md の次の項目が、今の二次差をほぼそのまま説明しています。そこには「presentation world と battle actor world を混同するな」「Heroのpresentationが (10641,18432) のままでも battle actor が (0,10240) なら 021E1E50 は node48」「battle-world→presentation-world同期は無条件ではない」と書かれています。いまC++が Hero の battleWorld をpresentation側へ寄せてしまっているので、row4の次に直すべき場所も既知の論点に当たっています。
+
+なので結論としては、最初のバグはrow4問題で合っています。しかもrequested.mdは、その次にいま見えている「Heroのbattle-worldをpresentation-worldへ早く同期してnearestを59側へ寄せる」問題も別項目で警告済みでした。ここは新しい推理ではなく、既知仕様をC++が破っている箇所を探す段階です。次に DQ9 109 の camera placement sequence がHero targetへ SyncCameraPlacementActorWorldFromPresentation() を掛けていないかを確認します。
+
+row4の件は requested.md と完全に一致しています。次は二次差の切り分けです。DQ9 109 の処理前後で Hero battleWorld がいつ (10641,18432) に寄ったかをCLionで止めます。ここが ApplyMinedCameraPlacementBounds() なら、requested.md 6/13の「presentationとbattle-worldを無条件同期するな」にそのまま反しています。
+
+今のCLion実測では、DQ9 109のcamera placement metadataは sequence=0x01、つまりactor placementだけです。target Heroを直接placementしているわけではありません。しかも109のdebug event時点ですでに Hero battleWorld が (10641,18432) なので、誤同期は109より前に起きています。turn2の各action setupでHero battleWorldを時系列に取り、最初に変わるactionを特定します。
+
+いまのline610は1 actionにつきactor 4人分止まる位置だったので、actorIndex==0 に絞ります。これで turn2 の action0→4 ごとにHero battleWorldがいつ変わるかだけ取れます。
+
+ここで最初のbattleWorld分岐も取れました。C++はturn2 action0ベホイミの直後に Hero battleWorld を (0,10240) → (10641,18432) へ同期しています。なので109が原因ではなく、ベホイミ後から109 setupまでのどこかでROM側だけbaseへ戻っているのに、C++が戻していないのが正確です。次にCtableの 0x4F 実行列をturn2だけ抜いて、どのactionがbase-world restoreを起こしているか確認します。
+
+さらに実測で、row4とは別の二次差の発生時点も絞れました。ROMはturn2の action0ベホイミ後でも、action1/2/3 selectorまで Hero battleWorld を (0,10240) のbase側に維持しています。一方C++はベホイミ直後に (10641,18432) へ移してしまっています。requested.md 6/13で明示的に禁止されている「presentation world と battle-world の無条件同期」に当たります。ここを直せば、action4の 021E2904 conflict nodesもROMの [57,58,47,49,39,40] に戻るはずです。
+
+requested.mdだけでなく、同じcamera調査ログ a.txt にも今回の答えが残っていました。そこでは「Turn3 action0はcurrent actor route count=2なのでbattleWorldを進める、Turn4 action0はroute count=0なのでbaseのまま。無条件コピーを current actor routeが実際に動いている場合だけに狭める」と既に結論が出ています。今の SyncCameraPlacementActorWorldFromPresentation() はその結論を反映し切らず、camera placementがあるだけで無条件コピーしています。
+
+row4は最初の原因で確定、次のbattleWorld差は別件としてrequested.md 6/13どおりです。ここでは「ベホイミのplacementを止めればいい」と即断せず、ROMでaction31 selector後〜action55 selector前に base restore が走っていないかを既存triggerイベントで確認します。restoreが無ければ、C++の無条件placement同期がそのまま誤実装です。
+
+ここまで読むと、修正方針もかなり明確です。0216F62C はbattle actor座標をclampするだけで、presentation座標をbattleWorldへコピーする関数ではありません。今の SyncCameraPlacementActorWorldFromPresentation() は、ある実測例を補うために前段movement lifecycleまで一緒に代行してしまっていて、ベホイミのようにroute=0でもコピーするのが広すぎます。まず既知の導入根拠 31925,0 ケースが「実routeあり」だったかを過去ログで確認し、route gateへ狭めます。
+
+うん、ここはもっと重要な訂正があります。私が入れた「DQ9 109ならrow4を保持」という修正自体が、requested.mdの注意に反しています。 requested.mdでは row+4 はactionの意味状態ではなく、[ptr,ptr,8,15] のHUD/text renderer stack footprintが同じscratch帯へ残る、と明記されています。今回ROMでaction4 setupに実際に見えた値もまさに [37300512,37300512,8,15]。つまり「109だからTTTTを保つ」ではなく、action4 setup前にrenderer footprintがscratchへ再形成される generic lifecycle をC++が欠いていると見るべきです。109特例は撤回対象です。
+
+ここ、requested.md と現C++のrow4実装を見比べると、さらに根本差があります。現C++の ApplyBattleEntryRendererResidueCompatibility() は「turn開始時TTTT」を注入していますが、requested.mdの確定事項は turn開始時は1100 です。そして [ptr,ptr,8,15] = TTTT はHUD rendererが同じstack帯へ残す別のfootprint。つまり現実装は「turn-entry footprint」と「HUD renderer footprint」を混同しています。今の109特例より、まずこのライフサイクル分離を正すべきです。ROMの今回turn2 action0 setup row+4を既存probeで確認します。
+
+ROMで今回turn2 action0のrow+4は実際に [nonzero, nonzero, 0, 0] = 1100 でした。requested.mdどおりです。現C++はここをTTTTにしているので、109特例を足す以前にturn-entryモデルが間違っています。次にaction0→4の各setup入口row+4を全部並べて、どのタイミングで1100→TTTTへ変わるかをそのままC++のgeneric lifecycleへ移します。
+
+このturnのROM row+4遷移はきれいです。
+
+action0 ベホイミ setup: 1100
+action1 ミラーシールド setup: TTTT
+action2 怪しい光 setup: TTTT
+action3 かぶと割り setup: TTTT
+action4 通常攻撃 setup: TTTT
+
+なので、109がTTTTを「作った」のではありません。action0→action1の間にHUD renderer footprintが一度入り、その後このturnではTTTTが残り続けているだけです。requested.mdの「row+4はstack residue＋局所write」「action属性にするな」がそのまま当てはまります。
+
+requested.mdと a.txt の最終結論まで揃いました。正しいrow4モデルは、
+BeginTurn: 1100を再形成 → 未知actionでは消さず保持 → HUD rendererが実際に走った時だけTTTTへ上書き → 021E2904の局所write
+です。現コードの BeginTurn=TTTT と「109特例保持」は両方ズレています。まず現コード内のHUD residue適用位置を確認し、action0→1の実ROMタイミングへ移せる既存runtime条件があるか見ます。
+
+まず確定済みのrow4モデルへ戻します。変更は3点に限定します。BeginTurn footprintをTTTTではなくROM実測の1100へ戻す、今回入れた109特例は撤回する、HUD renderer footprint TTTTはaction属性ではなくaction1 setup前の独立ライフサイクルとして入れる。これで今回ROMの 1100 → TTTT → TTTT... をそのまま表現できます。その後、battleWorldの無条件placement同期をroute有無で狭めてザキrouteまで再確認します。
+
+ここで最小修正を入れます。109特例は撤回し、turn-entry row4は1100へ戻します。battleWorld側は 0216F62C の前段コピーを「そのplaced actorに実routeがあるときだけ」に制限します。これならベホイミはroute=0なのでHeroをbaseから動かさず、既知の「実routeありならmovement lifecycleでbattleWorldが進む」ケースは維持します。
+
+パッチを入れたので、まず結果を見ます。特に109特例を撤回したことでrow4が再びTTTFへ落ちるなら、それ自体が「type1 post-actionという抽象化が粗すぎる」証拠になります。その場合は109特例を戻すのではなく、type1一括上書き側をproducerベースへ狭めます。
+
+実走でも確認できました。109特例を外すと、C++はまたturn2 action4直前でTTTFに落ち、3ターン目ザキfreecamが消えました。つまり**「109を例外扱いすべき」ではなく、そもそも presentationType=1 → TTTF をaction終了時に機械適用している設計がrow4モデルと矛盾**しています。ここからはrequested.mdどおり、TTTFを作る実際のstack producer側へ寄せます。
+
+row4をaction ID特例に戻す前に、既存の「type1→TTTF」が何を代理していたのかを比較します。109と、過去にTTTF実測のあるメラミ/バギマ系で camera-placement / tracking / BACT固定metadataが違えば、その構造条件へ寄せられます。
+
+
+
+その通り。今の入力拒否は battle MCP の不具合じゃなく、私が載せた row4-stack-producer / row4-renderer / battle_entry_field4_last_writer_probe の常時exec/write hookが高頻度で止めて BUSY扱いにしているせいです。まずそれらだけ止めて入力状態を正常化します。常設のCtable/command/audit系は触りません。
+
+常時hookは全部外れました。いま残っているpauseは最後のwrite breakpointで止まったネイティブpauseだけなので、これをresumeして通常入力へ戻します。そのうえで、次の観測は常時4本watchではなく、目的action直前にだけarmして1回捕まえたら即停止にします。
+
+入力は正常化しました。ここからは常時breakpointを置かず、既に取れたSP実測をC++側へ写します。
+今の観測で重要なのは2つです。021E08BC のrow領域は固定 0x027E3340/4C/58/64、HUD renderer側は F2F8 entry SP=0x027E3358 などでそこへ物理的に重なっています。つまりrow4を「action種別のbool表」にする必要はなく、producerのstack frameがrow領域へどう重なるかを共通関数で再現できます。まず過去に同じ方針で入れた実装断片がないか、a.txt の該当区間だけ確認します。
+
+ここは実装を単純化します。row4 をboolパターンとして直接「生成」するのではなく、ROMの4つの固定scratch wordへ、観測済みproducer stack frameが重なった結果だけを書き込む小さいモデルにします。
+その上で既存の ApplyKnownRosterField4PostActionCompatibility() は「type→TTTF」のような意味表ではなく、どのproducer frameが走ったかを選ぶだけに縮めます。まずvalidationが今どのproducer形状を期待しているかを読み、壊さない最小差分にします。
+
+次に必要なのはTTTF側のproducerです。HUD側は SP=0x027E3358 で4slot全部を1111にすることが実測できたので、残る「type1だからTTTF」をやめるには、実際にTTTFへ変えた最後のwriterの PC/SP を同じやり方で拾えばいいです。既存 turn3_field4_transition_probe.js の過去結果にその lastWrites が残っているか、a.txtだけ確認します。
+
+TTTF側はまだproducer SPの実測が必要ですが、今の3ターン目ザキを直すのに109をaction特例に戻す必要はありません。まずROM実測どおり、turn開始は1100、次action index1の前にHUD producer SP 0x027E3358 が走って1111へ変える、という2つをstack producerとして入れます。109後は「未知producer＝何も書かない」で1111を保持させます。
+ただし既存のtype1/17/22近似は他fixture用に残す必要があるので、今のturnで実stack producerが観測済み状態なら粗いpost-action表で上書きしない、という優先順位にします。これならrow4の実値を意味表より優先できます。
+
+タイミングの整理もできます。TTTF は「前actionがtype1だから」ではなく、過去実測では次setup入口で観測されたscratchです。なのでpost-action表で109終了時にTTTFを注入するのが一番まずい。まずこのタイミング誤りを直し、current setup直前のstack producer選択へ移します。
+その際、DQ9 1/24の既存「preserve」もそのままsetup側で使えるので、今回action4通常攻撃はHUDの1111を保持できます。109 setup自身はROM実測1111なので、109もproducerなし＝保持になります。TTTFを本当に作るproducerは既存のBagima/Merami fixtureでSPを測ってから追加、という順にします。
+
+producer SP方式にするなら、残る粗い表は「このactionがどのstack frameを実行するか」だけです。そこも既存runtimeにある情報で決められないか確認します。021D94F0 の深いframeがTTTF producer候補なので、過去ログでこれが selector/BACT source と結びついている記録だけ探します。新しい別領域解析には行きません。
+
+常時breakpoint問題は解消済みです。今の観測だけでも、user案どおり「SPでstack footprintを選ぶ」方向が正しいと確認できています。
+さらに a.txt に、過去にまさに post-action注入をsetup直前へ移した記録が残っているので、そこだけ読みます。ここに当時の最小パッチ形が残っていれば、それを br 側へ戻すのが一番安全です。
+
+過去ログの結論をそのまま使える箇所がありました。BattleArrow 側には一時期「current actionのscratchをsetup前へ入れる」配線が実際に存在していた形跡があります。br と同じ箇所を比較して、post-action二重注入を避ける配線だけ戻せるか確認します。
+
+実測に合わせて最小実装します。0x027E3358 をHUD rendererのstack producer SPとしてswitchにし、各action index>0のsetup直前にそのfootprintを反映します。これで「109だからTTTT」ではなく、「次setup直前に同じrenderer frameがrow+4へ重なったから1111」という因果になります。既存のpost-action近似は削らず、後で別producerが実測できたケースを壊さないよう残します。
+
+stack producer switchは入りました。次にCLion正規runで同じ 0x1d4604dc / 31→36→71:3 を再実走します。確認点は、turn2 action4直前row4が1111、Bが61→60、turn3開始B=59、ザキroute [58,57]、freecam #244/#245復活です。
+
+RNG列はROMと一致しました。C++は #243→#244 FE40→#245 FFF8→#246 F0E4、next=247なのでROM last #246と規約一致です。
+ただし座標はまだ未完で、turn3開始BがROM59に対してC++61、ザキrouteもROM [58,57] に対してC++ [58,59]。ここで完了扱いにはしません。次はturn2だけを同じビルドで出し、stack producer修正後のB start/goal/route を確認します。
+
+row4は狙いどおり直っています。turn2は action0=1100、action1以降=1111、action4のBはfallbackへ入りました。ただし選択先がROM60ではなくC++62です。
+つまり残差は前に見えていた通りrow4ではなくoccupancy入力です。次に同じaction4 setupでHero battleWorldと occupancy[60] を再確認します。ここがROMの (−6101,13871), occupancy60=0 に戻っていなければ、残っている座標同期1本だけ直します。
+
+実値はまだ同じです。action4 setupでHero battleWorldがC++だけ (10641,18432)、occupancy60=0xFF。ROMはここが (-6101,13871) / occupancy60=0 なので、Bが62を選ぶ理由も閉じています。
+SyncCameraPlacementActorWorldFromPresentation() をroute有りだけに絞っても直らなかったので、コピー元は別です。次は CompleteActionPresentation() のHero self-action完了処理だけ見ます。
+
+CompleteActionPresentation() ではありませんでした。action4 setupより前にHero battleWorldが既に壊れているので、残る候補はベホイミ action0 の BACT 0x4F後処理です。
+過去資料にも「BACT内に0x4Fが存在する ≠ その実行で0x4Fを通った」「selected trigger sourceがaction_bactのときだけ適用すべき」という既知バグがあります。今の camera.cpp がsourceを見ずに bactOpcode4fModeMask を適用しているので、ここを実値で確認します。
+
+ベホイミの0x4Fではありませんでした。BactOpcode4fModeMask(31)=0 なので、Hero battleWorldを動かしたのは CameraPlacementSequence(31)=0x09 側です。
+次に ApplyMinedCameraPlacementBounds() の0x09解釈を見ます。ここで「route=0でもplaced actorをpresentationへ同期」しているなら、requested.md 6/13の既知違反そのものです。
+
+ここ、1点だけ実行環境を確認します。Sync... にroute gateを入れたのに実値が変わらないので、ロジック推理を続ける前に CLionのgerunikku実行バイナリが現ソースで再ビルドされているかを確認します。bannerのBuild dateが古いままなので、stale binaryなら今のデバッガ観測自体が旧コードです。
+
+現ソースは実行に反映されています。row4の変化が今回のpatchどおりtraceへ出ているので、banner時刻は判断材料にしません。
+Hero battleWorldをpresentationへコピーする残り経路を camera 内だけ検索します。ここで候補を全部出し、実行順で1本に絞ります。
+
+残っているコピー経路は4本ですが、ベホイミ直後に該当し得るのはかなり限られます。CommitAllCurrentRouteEnds() と ResetAllPresentationActorsForCameraPlacement() の呼び出し元だけ絞って、action0で実際に通る経路を確認します。
+
+コピー元を推測せず、現ビルドで時間順に切ります。turn2 action0 setup時点→action1 setup時点のHero battleWorldだけ取れば、「turn開始から既に壊れている」のか「ベホイミ処理中に壊れる」のかが一発で分かります。
+
+action0→action1ではHero battleWorldは正しくbase (0,10240) のままです。つまりベホイミ自体はもう犯人ではありません。action1→2→3のどこでpresentation側へ変わるかを同じセッションで続けます。
+
+これで発生点が確定しました。Hero battleWorldはaction3（かぶと割り）setup時まではbase (0,10240)、action4 setup時にはpresentation (10641,18432) に変わっています。
+かぶと割り自身のplacementはactor=C2だけなのでHeroは触りません。残るのは109後の ApplyBactOpcode4fPostTrackingEffects() です。C++が109をどのtrigger sourceとして扱い、mode mask=4を適用しているかをその場で確認します。
+
+犯人はここです。C++は109を source=actor_membership と判定しているのに、static BACT内にある 0x4F mask=4 を無条件で実行していました。ROM実測では「BACTに命令が存在する」だけでは実行されず、actor-membership経路では0x4Fを通りません。
+つまり修正はaction109例外ではなく、0x4F後処理を TriggerSource::action_bact のときだけ実行です。これは過去のrequested/a.txtの確定事項とも一致します。
+
+0x4F gate修正を入れました。これで現在の3ターン目ザキが座標までROM一致するか、同じCLion runで確認します。row4 stack-producer修正と合わせて、RNGだけでなく B start=59 / Zaki route=[58,57] まで見るのが完了条件です。
+
+0x4F gateで座標側は正しい方向へ動きましたが、turn2のnextが168→167になったので、そのまま採用はできません。これは「座標を直した結果、別のcamera分岐が1本消えた」状態です。turn2だけ再出力して、ROMの #163 F0E4 / #164 FE40 / #165 FE68 / #166 FFF8 のどれが欠けたかを確認します。
+
+0x4F gateで見えたのは「消費を1個減らした」ではなく、誤resetが偶然presentation startだけ正しくしていたことです。ROMはaction109後に C0 11→10、B 51→61 へ進める一方、Hero battleWorldはbaseのまま。C++のmode2 global resetはstartを正しく進める代わりにHero physical worldまで誤コピーしていました。
+つまり必要なのは0x4Fを戻すことではなく、presentationだけをcommitする正規のaction-completion lifecycleです。requested.md/a.txtにこのexactケースの記録がないか、109/actor_membership周辺だけ検索します。
+
+a.txtに、まさに 021DC1D4 のroute-start条件まで残っていました。current actorの 0204A264(route count) != 0 のときだけ全participantへ 02049C4C を回す、というものです。
+今回action3のcurrent actor C2はroute=0なので、その経路でC0/Bをcommitするのは違う。一方ROMのsetup probeではaction3後にstartが10/61へ更新されているので、これはroute-startではなく別の02049B10系presentation commitです。そこを既存setupイベントのLRで名前付けします。
+
+setup probeのsetter LRを変換すると set-start=0x02049BE8 / set-goal=0x02049BF4 / set-aux=0x02049C08 で、まさに 02049B10 本体内です。つまりROMはaction109後に 02049B10でpresentation startだけ10/61へcommit しています。battleWorld copyはflags &0x21 条件なのでHeroには入らない。
+この関数をGhidraで再確認し、C++へ「全員reset」ではなく同じflags条件付きcommitとして入れます。
+
+Ghidraで条件まで確定しました。ROMの 021DC1D4 は actionIndex>0 でも、
+
+いずれかのparticipant route count > 4
+または current actor/target の近接条件 bVar15
+のどちらかなら、全participantへ 02049B10 を回します。
+今回109では後者が成立し、C0はgoal10→start10、Bはaux61→start61へ進みます。ただし 02049B10 のbattleWorld copyは各actorのpre-call flags & 0x21だけなので、Hero flags=2ならphysical worldはbaseのままです。これがROM観測と完全一致します。
+C++にはこの 021DC1D4 global commit条件が既に別名であるかだけ探し、なければその条件と02049B10 helperを最小追加します。
+
+C++側には 021DC1D4 のselector用geometry stateが既にあります。新しい距離ロジックを作る前に、bVar15 相当を既存decisionがもう計算しているか確認します。あればそのboolをpresentation commit条件にも再利用できます。
+
+021DC1D4 の3条件は既にplaybookとruntime inputに実装済みです。なので新条件を増やしません。Decide() がmode1/param5を決めるために使っている「maxRoute>4 / previous actor一致 / geometry overlap」の判定結果を、そのまま 02049B10 global commit条件にも共有できるか確認します。
+
+ここで既存runtimeの未配線も見つかりました。Decide() 自体は actorsOverlap を実装済みですが、productionの camera.cpp は actorAndTargetHaveGeometry / distance / radius を一度も渡していません。だから今回109の 021DC1D4 bVar15 がC++では常にfalseになっています。
+つまり新しい条件を書く必要はなく、既存geometry inputをproductionへ配線し、その同じforceMode1Exceptionで02049B10 global commitを発火させればいいです。まずactor radiusがstateに既にあるか確認します。
+
+geometry overlapだけが今回の bVar15 です。問題はradius供給ですが、実はROM trigger probeではこの戦闘のradiusも既に取得済みです（Hero=4096、護衛=7372、ゲルニック=9828）。C++側のactor state初期化に既存の固定radius供給がないかだけ確認します。無ければ、この一点だけROM固定データから供給する必要があります。
+
+
+その通り。今の入力拒否は battle MCP の不具合じゃなく、私が載せた row4-stack-producer / row4-renderer / battle_entry_field4_last_writer_probe の常時exec/write hookが高頻度で止めて BUSY扱いにしているせいです。まずそれらだけ止めて入力状態を正常化します。常設のCtable/command/audit系は触りません。
+
+常時hookは全部外れました。いま残っているpauseは最後のwrite breakpointで止まったネイティブpauseだけなので、これをresumeして通常入力へ戻します。そのうえで、次の観測は常時4本watchではなく、目的action直前にだけarmして1回捕まえたら即停止にします。
+
+入力は正常化しました。ここからは常時breakpointを置かず、既に取れたSP実測をC++側へ写します。
+今の観測で重要なのは2つです。021E08BC のrow領域は固定 0x027E3340/4C/58/64、HUD renderer側は F2F8 entry SP=0x027E3358 などでそこへ物理的に重なっています。つまりrow4を「action種別のbool表」にする必要はなく、producerのstack frameがrow領域へどう重なるかを共通関数で再現できます。まず過去に同じ方針で入れた実装断片がないか、a.txt の該当区間だけ確認します。
+
+ここは実装を単純化します。row4 をboolパターンとして直接「生成」するのではなく、ROMの4つの固定scratch wordへ、観測済みproducer stack frameが重なった結果だけを書き込む小さいモデルにします。
+その上で既存の ApplyKnownRosterField4PostActionCompatibility() は「type→TTTF」のような意味表ではなく、どのproducer frameが走ったかを選ぶだけに縮めます。まずvalidationが今どのproducer形状を期待しているかを読み、壊さない最小差分にします。
+
+次に必要なのはTTTF側のproducerです。HUD側は SP=0x027E3358 で4slot全部を1111にすることが実測できたので、残る「type1だからTTTF」をやめるには、実際にTTTFへ変えた最後のwriterの PC/SP を同じやり方で拾えばいいです。既存 turn3_field4_transition_probe.js の過去結果にその lastWrites が残っているか、a.txtだけ確認します。
+
+TTTF側はまだproducer SPの実測が必要ですが、今の3ターン目ザキを直すのに109をaction特例に戻す必要はありません。まずROM実測どおり、turn開始は1100、次action index1の前にHUD producer SP 0x027E3358 が走って1111へ変える、という2つをstack producerとして入れます。109後は「未知producer＝何も書かない」で1111を保持させます。
+ただし既存のtype1/17/22近似は他fixture用に残す必要があるので、今のturnで実stack producerが観測済み状態なら粗いpost-action表で上書きしない、という優先順位にします。これならrow4の実値を意味表より優先できます。
+
+タイミングの整理もできます。TTTF は「前actionがtype1だから」ではなく、過去実測では次setup入口で観測されたscratchです。なのでpost-action表で109終了時にTTTFを注入するのが一番まずい。まずこのタイミング誤りを直し、current setup直前のstack producer選択へ移します。
+その際、DQ9 1/24の既存「preserve」もそのままsetup側で使えるので、今回action4通常攻撃はHUDの1111を保持できます。109 setup自身はROM実測1111なので、109もproducerなし＝保持になります。TTTFを本当に作るproducerは既存のBagima/Merami fixtureでSPを測ってから追加、という順にします。
+
+producer SP方式にするなら、残る粗い表は「このactionがどのstack frameを実行するか」だけです。そこも既存runtimeにある情報で決められないか確認します。021D94F0 の深いframeがTTTF producer候補なので、過去ログでこれが selector/BACT source と結びついている記録だけ探します。新しい別領域解析には行きません。
+
+常時breakpoint問題は解消済みです。今の観測だけでも、user案どおり「SPでstack footprintを選ぶ」方向が正しいと確認できています。
+さらに a.txt に、過去にまさに post-action注入をsetup直前へ移した記録が残っているので、そこだけ読みます。ここに当時の最小パッチ形が残っていれば、それを br 側へ戻すのが一番安全です。
+
+過去ログの結論をそのまま使える箇所がありました。BattleArrow 側には一時期「current actionのscratchをsetup前へ入れる」配線が実際に存在していた形跡があります。br と同じ箇所を比較して、post-action二重注入を避ける配線だけ戻せるか確認します。
+
+実測に合わせて最小実装します。0x027E3358 をHUD rendererのstack producer SPとしてswitchにし、各action index>0のsetup直前にそのfootprintを反映します。これで「109だからTTTT」ではなく、「次setup直前に同じrenderer frameがrow+4へ重なったから1111」という因果になります。既存のpost-action近似は削らず、後で別producerが実測できたケースを壊さないよう残します。
+
+stack producer switchは入りました。次にCLion正規runで同じ 0x1d4604dc / 31→36→71:3 を再実走します。確認点は、turn2 action4直前row4が1111、Bが61→60、turn3開始B=59、ザキroute [58,57]、freecam #244/#245復活です。
+
+RNG列はROMと一致しました。C++は #243→#244 FE40→#245 FFF8→#246 F0E4、next=247なのでROM last #246と規約一致です。
+ただし座標はまだ未完で、turn3開始BがROM59に対してC++61、ザキrouteもROM [58,57] に対してC++ [58,59]。ここで完了扱いにはしません。次はturn2だけを同じビルドで出し、stack producer修正後のB start/goal/route を確認します。
+
+row4は狙いどおり直っています。turn2は action0=1100、action1以降=1111、action4のBはfallbackへ入りました。ただし選択先がROM60ではなくC++62です。
+つまり残差は前に見えていた通りrow4ではなくoccupancy入力です。次に同じaction4 setupでHero battleWorldと occupancy[60] を再確認します。ここがROMの (−6101,13871), occupancy60=0 に戻っていなければ、残っている座標同期1本だけ直します。
+
+実値はまだ同じです。action4 setupでHero battleWorldがC++だけ (10641,18432)、occupancy60=0xFF。ROMはここが (-6101,13871) / occupancy60=0 なので、Bが62を選ぶ理由も閉じています。
+SyncCameraPlacementActorWorldFromPresentation() をroute有りだけに絞っても直らなかったので、コピー元は別です。次は CompleteActionPresentation() のHero self-action完了処理だけ見ます。
+
+CompleteActionPresentation() ではありませんでした。action4 setupより前にHero battleWorldが既に壊れているので、残る候補はベホイミ action0 の BACT 0x4F後処理です。
+過去資料にも「BACT内に0x4Fが存在する ≠ その実行で0x4Fを通った」「selected trigger sourceがaction_bactのときだけ適用すべき」という既知バグがあります。今の camera.cpp がsourceを見ずに bactOpcode4fModeMask を適用しているので、ここを実値で確認します。
+
+ベホイミの0x4Fではありませんでした。BactOpcode4fModeMask(31)=0 なので、Hero battleWorldを動かしたのは CameraPlacementSequence(31)=0x09 側です。
+次に ApplyMinedCameraPlacementBounds() の0x09解釈を見ます。ここで「route=0でもplaced actorをpresentationへ同期」しているなら、requested.md 6/13の既知違反そのものです。
+
+ここ、1点だけ実行環境を確認します。Sync... にroute gateを入れたのに実値が変わらないので、ロジック推理を続ける前に CLionのgerunikku実行バイナリが現ソースで再ビルドされているかを確認します。bannerのBuild dateが古いままなので、stale binaryなら今のデバッガ観測自体が旧コードです。
+
+現ソースは実行に反映されています。row4の変化が今回のpatchどおりtraceへ出ているので、banner時刻は判断材料にしません。
+Hero battleWorldをpresentationへコピーする残り経路を camera 内だけ検索します。ここで候補を全部出し、実行順で1本に絞ります。
+
+残っているコピー経路は4本ですが、ベホイミ直後に該当し得るのはかなり限られます。CommitAllCurrentRouteEnds() と ResetAllPresentationActorsForCameraPlacement() の呼び出し元だけ絞って、action0で実際に通る経路を確認します。
+
+コピー元を推測せず、現ビルドで時間順に切ります。turn2 action0 setup時点→action1 setup時点のHero battleWorldだけ取れば、「turn開始から既に壊れている」のか「ベホイミ処理中に壊れる」のかが一発で分かります。
+
+action0→action1ではHero battleWorldは正しくbase (0,10240) のままです。つまりベホイミ自体はもう犯人ではありません。action1→2→3のどこでpresentation側へ変わるかを同じセッションで続けます。
+
+これで発生点が確定しました。Hero battleWorldはaction3（かぶと割り）setup時まではbase (0,10240)、action4 setup時にはpresentation (10641,18432) に変わっています。
+かぶと割り自身のplacementはactor=C2だけなのでHeroは触りません。残るのは109後の ApplyBactOpcode4fPostTrackingEffects() です。C++が109をどのtrigger sourceとして扱い、mode mask=4を適用しているかをその場で確認します。
+
+犯人はここです。C++は109を source=actor_membership と判定しているのに、static BACT内にある 0x4F mask=4 を無条件で実行していました。ROM実測では「BACTに命令が存在する」だけでは実行されず、actor-membership経路では0x4Fを通りません。
+つまり修正はaction109例外ではなく、0x4F後処理を TriggerSource::action_bact のときだけ実行です。これは過去のrequested/a.txtの確定事項とも一致します。
+
+0x4F gate修正を入れました。これで現在の3ターン目ザキが座標までROM一致するか、同じCLion runで確認します。row4 stack-producer修正と合わせて、RNGだけでなく B start=59 / Zaki route=[58,57] まで見るのが完了条件です。
+
+0x4F gateで座標側は正しい方向へ動きましたが、turn2のnextが168→167になったので、そのまま採用はできません。これは「座標を直した結果、別のcamera分岐が1本消えた」状態です。turn2だけ再出力して、ROMの #163 F0E4 / #164 FE40 / #165 FE68 / #166 FFF8 のどれが欠けたかを確認します。
+
+0x4F gateで見えたのは「消費を1個減らした」ではなく、誤resetが偶然presentation startだけ正しくしていたことです。ROMはaction109後に C0 11→10、B 51→61 へ進める一方、Hero battleWorldはbaseのまま。C++のmode2 global resetはstartを正しく進める代わりにHero physical worldまで誤コピーしていました。
+つまり必要なのは0x4Fを戻すことではなく、presentationだけをcommitする正規のaction-completion lifecycleです。requested.md/a.txtにこのexactケースの記録がないか、109/actor_membership周辺だけ検索します。
+
+a.txtに、まさに 021DC1D4 のroute-start条件まで残っていました。current actorの 0204A264(route count) != 0 のときだけ全participantへ 02049C4C を回す、というものです。
+今回action3のcurrent actor C2はroute=0なので、その経路でC0/Bをcommitするのは違う。一方ROMのsetup probeではaction3後にstartが10/61へ更新されているので、これはroute-startではなく別の02049B10系presentation commitです。そこを既存setupイベントのLRで名前付けします。
+
+setup probeのsetter LRを変換すると set-start=0x02049BE8 / set-goal=0x02049BF4 / set-aux=0x02049C08 で、まさに 02049B10 本体内です。つまりROMはaction109後に 02049B10でpresentation startだけ10/61へcommit しています。battleWorld copyはflags &0x21 条件なのでHeroには入らない。
+この関数をGhidraで再確認し、C++へ「全員reset」ではなく同じflags条件付きcommitとして入れます。
+
+Ghidraで条件まで確定しました。ROMの 021DC1D4 は actionIndex>0 でも、
+
+いずれかのparticipant route count > 4
+または current actor/target の近接条件 bVar15
+のどちらかなら、全participantへ 02049B10 を回します。
+今回109では後者が成立し、C0はgoal10→start10、Bはaux61→start61へ進みます。ただし 02049B10 のbattleWorld copyは各actorのpre-call flags & 0x21だけなので、Hero flags=2ならphysical worldはbaseのままです。これがROM観測と完全一致します。
+C++にはこの 021DC1D4 global commit条件が既に別名であるかだけ探し、なければその条件と02049B10 helperを最小追加します。
+
+C++側には 021DC1D4 のselector用geometry stateが既にあります。新しい距離ロジックを作る前に、bVar15 相当を既存decisionがもう計算しているか確認します。あればそのboolをpresentation commit条件にも再利用できます。
+
+021DC1D4 の3条件は既にplaybookとruntime inputに実装済みです。なので新条件を増やしません。Decide() がmode1/param5を決めるために使っている「maxRoute>4 / previous actor一致 / geometry overlap」の判定結果を、そのまま 02049B10 global commit条件にも共有できるか確認します。
+
+ここで既存runtimeの未配線も見つかりました。Decide() 自体は actorsOverlap を実装済みですが、productionの camera.cpp は actorAndTargetHaveGeometry / distance / radius を一度も渡していません。だから今回109の 021DC1D4 bVar15 がC++では常にfalseになっています。
+つまり新しい条件を書く必要はなく、既存geometry inputをproductionへ配線し、その同じforceMode1Exceptionで02049B10 global commitを発火させればいいです。まずactor radiusがstateに既にあるか確認します。
+
+geometry overlapだけが今回の bVar15 です。問題はradius供給ですが、実はROM trigger probeではこの戦闘のradiusも既に取得済みです（Hero=4096、護衛=7372、ゲルニック=9828）。C++側のactor state初期化に既存の固定radius供給がないかだけ確認します。無ければ、この一点だけROM固定データから供給する必要があります。
+
+
+続けます。まず既存minerだけで、護衛 0x0118 とゲルニック 0x013A の mons_data2.nat / mons_btl_data2.nat 固定レコードを確認します。実測radius 0x1CCC / 0x2664 がレコード内に直接あるか、あるいはresource名経由でGP2/NARCへ辿る必要があるかを切ります。
+
+固定パラメータ2表にはradius実値は直接見当たりません。対応indexは護衛 0x0118 → 263、ゲルニック 0x013A → 296 まで確定しましたが、mons_btl_data2.nat の0x84-byte record内に 0x1CCC / 0x2664 はありません。なので次は mons_data2.nat のresource名から、そのmonster resource GP2/NARCへ辿ります。
+
+ちょうど既存minerがありました。BattleArrow\inspect_actor_radius_resources.mjs が、今回の護衛 0x0118 / 0x1CCC とゲルニック 0x013A / 0x2664 を対象にしてます。これを読んで、指定の nitro-fs.js / gp2.js / narc.js 経路でradius供給元をそのまま確認します。
+
+radius = source_u16 << 2 の形が見えてきました。護衛は 0x0733 << 2 = 0x1CCC、ゲルニックは 0x0999 << 2 = 0x2664 です。既存minerにもこの2値を含むdescriptor signatureが用意されているので、どのROMファイル・何バイト目にあるかを確定します。
+
+静的供給元が確定しました。mons_data2.nat の固定0x14-byte recordで、monster IDが record+0x08、radius sourceが record+0x0C のu16です。
+
+0x0118: record index263、+0x0C = 0x0733 → <<2 = 0x1CCC
+0x013A: record index296、+0x0C = 0x0999 → <<2 = 0x2664
+つまりGP2内の偶然一致を使う必要はなく、NitroFSの data/prm/mons_data2.nat だけで全monster radiusを機械生成できます。次は既存のmonster metadata binaryへradiusを追加できる最小経路を確認します。
+
+既存のenemy metadata配線がそのまま使えます。battleMonsterId は既に各敵sourceへ入っていて、SetMonsterPresentationMetadata(index, monsterId) が呼ばれています。ここへradiusも載せれば、戦闘個体の手書き分岐なしで全monsterへ適用できます。
+次に camera.h のactor source/stateと、hero側radiusの供給元を確認します。
+
+既存 FCMP は今「monsterId→occupancy depth」1バイトだけです。ここを同じ mons_data2.nat 由来のradiusも持つversion 2へ拡張すれば、camera側は battleMonsterId だけでdepthとradiusを両方取得できます。手書きmonster表は増やしません。
+まず生成側とC++ loaderの固定サイズ前提を読み、version bumpの最小差分を入れます。
+
+monster側は一般化できます。残るHeroは実測radius 0x1000 ですが、ここだけ手書きにする前に、既存調査ログにplayer +0x64 の静的供給元が残っているか確認します。無ければ「enemyはROM table、playerは現時点でlive-confirmed 0x1000」と分離して最小実装します。
+
+radius専用generatorはまだありません。なので br\BattleEmulator\camera 内に、NitroFS で mons_data2.nat の record+0x08 monsterId / +0x0C radiusSource を全件採掘して constexpr tableを出す小さいgeneratorを追加するのが最小です。既存FCMPのbinary formatを壊さず、radiusだけ独立生成にします。
+
+radius実装へ進む前に、109でglobal 02049B10 が走る条件をROM実測で1回だけ確認します。Ghidra上は later-action で「route>4 または actor/target overlap」がglobal commit条件ですが、推測でoverlapをtrueにしません。freecam_trigger_probe_mcp.js の既存geometry/radius観測を 1t_tmp.dst → ミラー → ベホイミ に当て、action109時点の actor/target world とradiusをそのまま取ります。

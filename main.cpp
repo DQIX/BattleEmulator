@@ -1951,7 +1951,7 @@ int main(int argc, char* argv[]){
 	static_assert(bad_karmour_A >= 1 && bad_karmour_A <= BattleEmulator::HERO_TARGET_MASK);
 	static_assert(Hootingham_Gore >= 1 && Hootingham_Gore <= BattleEmulator::HERO_TARGET_MASK);
 	static_assert(bad_karmour_B >= 1 && bad_karmour_B <= BattleEmulator::HERO_TARGET_MASK);
-	uint64_t time1 = 0x3c98d058;
+	uint64_t time1 = 0x1d4604dc;
 
 	int dummy[100];
 	lcg::init(time1);
@@ -1973,23 +1973,23 @@ int main(int argc, char* argv[]){
 	auto* NowState = new uint64_t(0); //エミュレーターの内部ステートを表すint
 
 	Player players1[4];
-	//int32_t gene1[350] = {0};
-	//THIS DEBUG CODE!
-	int32_t gene1[350] = {
-		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::MAGIC_MIRROR,
-		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::BUFF,
-		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
-		(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
-		(bad_karmour_A << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::ZAKI,
-		(bad_karmour_A << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::MAGIC_MIRROR,
-		// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
-		// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
-		// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::FULLHEAL,
-		// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
-		// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::FULLHEAL,
-		// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::DOUBLE_UP,
-		// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::MULTITHRUST,
-	};
+	int32_t gene1[350] = {31, 36, 24647, 8263, 62, 62, 62, 33, 16418};
+	// //THIS DEBUG CODE!
+	// int32_t gene1[350] = {
+	// 	(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::MAGIC_MIRROR,
+	// 	(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::BUFF,
+	// 	(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
+	// 	(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
+	// 	(bad_karmour_A << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::ZAKI,
+	// 	(bad_karmour_A << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::MAGIC_MIRROR,
+	// 	// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
+	// 	// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
+	// 	// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::FULLHEAL,
+	// 	// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
+	// 	// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::FULLHEAL,
+	// 	// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::DOUBLE_UP,
+	// 	// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::MULTITHRUST,
+	// };
 	//gene1[19-1] = BattleEmulator::DEFENCE;
 	int counter = 0;
 

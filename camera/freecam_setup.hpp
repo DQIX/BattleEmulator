@@ -204,6 +204,7 @@ struct PresentationActorState {
     std::int32_t battleWorldX{};
     std::int32_t battleWorldY{};
     std::int32_t battleWorldZ{};
+    std::int32_t battleRadius{};
     // presentation object +0x04/+0x08/+0x0C. BACT opcode 0x4F mode0 runs
     // 021695A8 -> 0204AB8C, which restores actor+0x44 from these base-world
     // coordinates after resetting the presentation-node state.
@@ -225,6 +226,23 @@ struct PresentationActorState {
 
 [[nodiscard]] constexpr std::int32_t BattleWorldZ(const PresentationActorState& actor) noexcept {
     return actor.battleWorldKnown ? actor.battleWorldZ : actor.worldZ;
+}
+
+[[nodiscard]] constexpr std::uint32_t RoundedBattleWorldDistance(
+    const PresentationActorState& actor,
+    const PresentationActorState& target
+) noexcept {
+    const std::int64_t dx =
+        static_cast<std::int64_t>(BattleWorldX(actor)) - BattleWorldX(target);
+    const std::int64_t dy =
+        static_cast<std::int64_t>(BattleWorldY(actor)) - BattleWorldY(target);
+    const std::int64_t dz =
+        static_cast<std::int64_t>(BattleWorldZ(actor)) - BattleWorldZ(target);
+    const std::uint64_t squared = static_cast<std::uint64_t>(
+        dx * dx + dy * dy + dz * dz
+    );
+    const std::uint64_t doubledRoot = IntegerSquareRoot(squared * UINT64_C(4));
+    return static_cast<std::uint32_t>((doubledRoot + 1) >> 1);
 }
 
 [[nodiscard]] constexpr PresentationActorInput PresentationRouteInput(

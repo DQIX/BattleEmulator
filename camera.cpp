@@ -84,6 +84,41 @@ inline void AssertCameraMapping(const int action) noexcept {
         : dq9::freecam::fast::kInvalidBattleActor;
 }
 
+[[nodiscard]] dq9::freecam::fast::ActionRuntimeInput BuildActionRuntimeInput(
+    const std::uint16_t actorId,
+    const std::uint16_t targetId,
+    const std::uint16_t turnActionIndex,
+    const std::uint8_t targetAuxiliaryNode
+) noexcept {
+    using namespace dq9::freecam::fast;
+    ActionRuntimeInput input{
+        .actorId = actorId,
+        .targetId = targetId,
+        .turnActionIndex = turnActionIndex,
+        .targetAuxiliaryNode = targetAuxiliaryNode,
+    };
+    const auto& state = ThreadContext();
+    const std::size_t actorSlot = FindPresentationActorIndex(actorId);
+    const std::size_t targetSlot = FindPresentationActorIndex(targetId);
+    if (actorSlot >= state.presentationActorCount
+        || targetSlot >= state.presentationActorCount) {
+        return input;
+    }
+    const auto& actor = state.presentationActors[actorSlot];
+    const auto& target = state.presentationActors[targetSlot];
+    if (!actor.battleWorldKnown || !target.battleWorldKnown
+        || actor.battleRadius <= 0 || target.battleRadius <= 0) {
+        return input;
+    }
+    input.actorAndTargetHaveGeometry = true;
+    input.actorTargetDistance = static_cast<std::int32_t>(
+        dq9::freecam::detail::RoundedBattleWorldDistance(actor, target)
+    );
+    input.actorRadius = actor.battleRadius;
+    input.targetRadius = target.battleRadius;
+    return input;
+}
+
 [[nodiscard]] bool PreloadPresentationTargetCache(
     const int32_t* actions,
     const BattleActorRef* actors,
@@ -310,6 +345,7 @@ bool camera::ResetBattle(const CameraPresentationActor *actors, const std::size_
                 .battleWorldX = source.battleWorldX,
                 .battleWorldY = source.battleWorldY,
                 .battleWorldZ = source.battleWorldZ,
+                .battleRadius = source.battleRadius,
                 .baseBattleWorldKnown = source.battleWorldKnown,
                 .baseBattleWorldX = source.battleWorldX,
                 .baseBattleWorldY = source.battleWorldY,
@@ -400,12 +436,14 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
         const std::uint8_t actorAuxiliaryNode = actorSlot < beforeCleanup.presentationActorCount
             ? beforeCleanup.presentationActors[actorSlot].auxiliaryNode
             : std::uint8_t{0xff};
-        const TriggerDecision cleanupDecision = Decide<CleanupAction>({
-            .actorId = actorId,
-            .targetId = actorId,
-            .turnActionIndex = static_cast<std::uint16_t>(beforeCleanup.presentationActionRecordIndex + 1),
-            .targetAuxiliaryNode = actorAuxiliaryNode,
-        });
+        const TriggerDecision cleanupDecision = Decide<CleanupAction>(
+            BuildActionRuntimeInput(
+                actorId,
+                actorId,
+                static_cast<std::uint16_t>(beforeCleanup.presentationActionRecordIndex + 1),
+                actorAuxiliaryNode
+            )
+        );
 
         DEBUG_TRACE_IF(traceBoundaries,
                        std::cout << "TRACE presentation slot1-child sourceActionIndex=" << sourceActionIndex
@@ -492,6 +530,18 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
         std::uint16_t runtimeTargetId = actors[i].valid()
             ? PresentationRecordTargetId(after, runtimeActorId, targets[i])
             : kInvalidBattleActor;
+        if (runtimeReady && i > 0) {
+            // Live ROM: before each subsequent 021E1958 setup, the generic
+            // battle-HUD renderer reuses the same physical stack area.
+            // FUN_0204F2F8 was measured at SP=027E3358 and overwrites the
+            // row+4 words with the renderer footprint 1111. Apply the actual
+            // stack producer before setup; later stack producers may still
+            // overwrite it through the existing compatibility lifecycle.
+            const bool applied = ApplyMeasuredRosterField4StackProducer(
+                kBattleHudRendererProducerSp
+            );
+            assert(applied && "battle HUD stack producer compatibility failed");
+        }
         if (runtimeReady && hasActionMetadata
             && actors[i].valid() && targets[i].valid()) {
             if (SetupCurrentAndFuturePresentationGoals(
@@ -510,12 +560,12 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                     const std::uint8_t targetAuxiliaryNode = targetSlot < presentationState.presentationActorCount
                         ? presentationState.presentationActors[targetSlot].auxiliaryNode
                         : std::uint8_t{0xff};
-                    runtimeDecision = binding->decide({
-                        .actorId = runtimeActorId,
-                        .targetId = runtimeTargetId,
-                        .turnActionIndex = static_cast<std::uint16_t>(presentationState.presentationActionRecordIndex + 1),
-                        .targetAuxiliaryNode = targetAuxiliaryNode,
-                    });
+                    runtimeDecision = binding->decide(BuildActionRuntimeInput(
+                        runtimeActorId,
+                        runtimeTargetId,
+                        static_cast<std::uint16_t>(presentationState.presentationActionRecordIndex + 1),
+                        targetAuxiliaryNode
+                    ));
                     hasRuntimeDecision = true;
                 }
             }

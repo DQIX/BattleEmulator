@@ -164,6 +164,80 @@ function formatU16(values) {
   return lines.join(",\n");
 }
 
+function formatU32(values) {
+  const lines = [];
+  const perLine = 16;
+  for (let offset = 0; offset < values.length; offset += perLine) {
+    lines.push(`    ${[...values.subarray(offset, offset + perLine)].join(", ")}`);
+  }
+  return lines.join(",\n");
+}
+
+function parseCsvLine(line) {
+  const fields = [];
+  let field = "";
+  let quoted = false;
+  for (let i = 0; i < line.length; ++i) {
+    const ch = line[i];
+    if (quoted) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') {
+          field += '"';
+          ++i;
+        } else {
+          quoted = false;
+        }
+      } else {
+        field += ch;
+      }
+    } else if (ch === '"') {
+      quoted = true;
+    } else if (ch === ",") {
+      fields.push(field);
+      field = "";
+    } else {
+      field += ch;
+    }
+  }
+  fields.push(field);
+  return fields;
+}
+
+function parseMonsterRadiusCsv(csv) {
+  const lines = csv.trimEnd().split(/\r?\n/);
+  const header = parseCsvLine(lines[0]);
+  const idColumn = header.indexOf("ID");
+  const radiusColumn = header.indexOf("Battle Radius");
+  if (idColumn < 0 || radiusColumn < 0) {
+    throw new Error("dq9-monster-radius.csv is missing ID or Battle Radius");
+  }
+  const radii = new Uint32Array(actionCount);
+  const seen = new Uint8Array(actionCount);
+  let rows = 0;
+  for (let lineIndex = 1; lineIndex < lines.length; ++lineIndex) {
+    if (!lines[lineIndex]) continue;
+    const fields = parseCsvLine(lines[lineIndex]);
+    const monsterId = Number.parseInt(fields[idColumn], 16);
+    const radius = Number(fields[radiusColumn]);
+    if (!Number.isInteger(monsterId) || monsterId < 0 || monsterId >= actionCount) {
+      throw new Error(`invalid monster ID at dq9-monster-radius.csv line ${lineIndex + 1}`);
+    }
+    if (!Number.isInteger(radius) || radius < 0 || radius > 0xffffffff) {
+      throw new Error(`invalid battle radius for monster 0x${monsterId.toString(16)}`);
+    }
+    if (seen[monsterId] !== 0) {
+      throw new Error(`duplicate monster ID 0x${monsterId.toString(16)} in dq9-monster-radius.csv`);
+    }
+    seen[monsterId] = 1;
+    radii[monsterId] = radius;
+    ++rows;
+  }
+  if (rows !== 438) {
+    throw new Error(`dq9-monster-radius.csv must contain all 438 monsters, got ${rows}`);
+  }
+  return { radii, rows };
+}
+
 function presentationExpansionDepths(monsterPresentationMetadata) {
   const capacity = monsterPresentationMetadata.readUInt32LE(8);
   const depths = new Set([0]);
@@ -466,6 +540,9 @@ for (const [name, file] of inputs) {
 const targetCsvName = "dq9-action-target-classification.csv";
 const targetCsv = await readFile(path.join(root, targetCsvName), "utf8");
 const classification = parseActionClassification(targetCsv);
+const monsterRadiusCsvPath = path.resolve(root, "../../../BattleArrow/dq9-monster-radius.csv");
+const monsterRadiusCsv = await readFile(monsterRadiusCsvPath, "utf8");
+const { radii: monsterBattleRadius, rows: monsterRadiusRows } = parseMonsterRadiusCsv(monsterRadiusCsv);
 const {
   present,
   targetSide: targetSideFromCsv,
@@ -572,6 +649,9 @@ chunks.push("};", "");
 chunks.push(`inline constexpr std::array<std::uint16_t, ${actionCount}> kTargetHandlerJudgment2 = {`);
 chunks.push(formatU16(targetHandlerJudgment2));
 chunks.push("};", "");
+chunks.push(`inline constexpr std::array<std::uint32_t, ${actionCount}> kMonsterBattleRadius = {`);
+chunks.push(formatU32(monsterBattleRadius));
+chunks.push("};", "");
 chunks.push(`inline constexpr std::array<std::uint8_t, ${actionCount}> kHasAnyMinedFreeCameraTriggerSource = {`);
 chunks.push(formatBytes(hasAnyMinedFreeCameraTriggerSource));
 chunks.push("};", "");
@@ -607,6 +687,10 @@ console.log(JSON.stringify({
     output: classOutputPath,
     sourceBytes: Buffer.byteLength(classOutput),
     expansionDepths: paintDepths,
+  },
+  monsterRadius: {
+    source: monsterRadiusCsvPath,
+    rows: monsterRadiusRows,
   },
   inputs: summary,
   actionClassification: {

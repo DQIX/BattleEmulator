@@ -318,7 +318,9 @@ bool ValidateRosterField4Compatibility() {
     if (!ApplyBattleEntryRendererResidueCompatibility()) return false;
     for (std::size_t index = 0; index < roster.size(); ++index) {
         if (index < 4) {
-            if (!RosterField4IsKnown(index) || RosterField4IsZero(index)) return false;
+            if (!RosterField4IsKnown(index)) return false;
+            const bool expectedNonzero = index < 2;
+            if (RosterField4IsZero(index) == expectedNonzero) return false;
         } else if (RosterField4IsKnown(index)) {
             return false;
         }

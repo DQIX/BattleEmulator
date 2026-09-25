@@ -67,6 +67,7 @@ bool InitializeCameraBattle() noexcept {
             .membershipKind = CameraMembershipKind::player,
             .membershipKeyA = kHeroBodyItemId, .membershipKeyB = kHeroPrimaryWeaponItemId,
             .battleWorldKnown = true, .battleWorldX = 0, .battleWorldY = 204, .battleWorldZ = 10240,
+            .battleRadius = 0x1000,
         },
         {
             .actor = BattleActorRef{BattleActorSide::enemy, 0},

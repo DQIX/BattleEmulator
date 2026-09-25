@@ -38,6 +38,7 @@ struct CameraPresentationActor {
     std::int32_t battleWorldX{};
     std::int32_t battleWorldY{};
     std::int32_t battleWorldZ{};
+    std::int32_t battleRadius{};
 };
 
 #if defined(gerunikku)

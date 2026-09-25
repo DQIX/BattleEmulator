@@ -101,6 +101,7 @@ static_assert(ReadU32(generated::kMonsterPresentationMetadataBytes, 4) == 1);
 inline constexpr std::size_t kMonsterPresentationCapacity =
     ReadU32(generated::kMonsterPresentationMetadataBytes, 8);
 static_assert(kMonsterPresentationCapacity == 1024);
+static_assert(generated::kMonsterBattleRadius.size() == 1024);
 
 inline constexpr std::size_t kActorProfileCount =
     ReadU32(generated::kMembershipMetadataBytes, 12);
@@ -240,6 +241,14 @@ static_assert(AttackFormationMode(kSlot1CleanupPresentationActionId) == 0);
 ) {
     if (monsterId >= kMonsterPresentationCapacity) return UINT8_C(0xff);
     return generated::kMonsterPresentationMetadataBytes[20 + monsterId];
+}
+
+[[nodiscard]] constexpr std::uint32_t MonsterBattleRadius(
+    const std::uint16_t monsterId
+) {
+    return monsterId < generated::kMonsterBattleRadius.size()
+        ? generated::kMonsterBattleRadius[monsterId]
+        : UINT32_C(0);
 }
 
 [[nodiscard]] constexpr std::uint64_t ActorMembershipPacked(
@@ -837,14 +846,36 @@ inline void InvalidateRosterField4Compatibility() noexcept {
 }
 
 // Stack compatibility present at the first 021E1958 roster build of a turn.
-// Natural naitoritti ROM captures at turns 1, 2, and 3 all show the first four
-// physical work-row +4 words nonzero. This is not an actor/monster/action
-// mask: these are physical stack-overlap rows, and only the zero/nonzero state
-// consumed by 021E08BC is represented here. Rows past the measured prefix
-// deliberately remain unknown.
+// Fresh multi-turn ROM captures show the physical prefix 1100. This is not an
+// actor/monster/action mask: these are physical stack-overlap rows, and only
+// the zero/nonzero state consumed by 021E08BC is represented here.
 [[nodiscard]] inline bool ApplyBattleEntryRendererResidueCompatibility() noexcept {
-    constexpr std::array<bool, 4> prefix{true, true, true, true};
+    // Fresh multi-turn ROM captures show the physical row+4 scratch prefix
+    // is recreated as 1100 at the first 021E1958 build of each turn. This is
+    // the turn-entry stack footprint, distinct from the later HUD/text
+    // renderer footprint [ptr, ptr, 8, 15] (1111).
+    constexpr std::array<bool, 4> prefix{true, true, false, false};
     return SetRosterField4CompatibilityPrefix(prefix);
+}
+
+// The physical E08BC row+4 words live at
+//   027E3340, 027E334C, 027E3358, 027E3364
+// in the measured battle stack. The generic HUD/text renderer enters
+// FUN_0204F2F8 with SP=027E3358; its frame overlaps those exact four words and
+// leaves [02392920,02392920,8,15], i.e. 1111. Model the compiler-stack
+// collision by the measured producer SP instead of attaching that footprint
+// to a DQ9 action or presentation type.
+inline constexpr std::uint32_t kBattleHudRendererProducerSp = UINT32_C(0x027e3358);
+
+[[nodiscard]] inline bool ApplyMeasuredRosterField4StackProducer(
+    const std::uint32_t producerSp
+) noexcept {
+    switch (producerSp) {
+        case kBattleHudRendererProducerSp:
+            return ApplyBattleHudRendererResidueCompatibility();
+        default:
+            return false;
+    }
 }
 
 [[nodiscard]] inline bool ApplyKnownRosterField4PostActionCompatibility(
@@ -1050,7 +1081,10 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     constexpr std::uint8_t invalidDepth = UINT8_C(0xff);
     const std::uint8_t depth = metadata::MonsterOccupancyExpansionDepth(monsterId);
     if (depth == invalidDepth) return false;
+    const std::uint32_t radius = metadata::MonsterBattleRadius(monsterId);
+    if (radius == 0 || radius > static_cast<std::uint32_t>(INT32_MAX)) return false;
     auto& actor = state.presentationActors[actorIndex];
+    actor.battleRadius = static_cast<std::int32_t>(radius);
     if (actor.occupancyExpansionDepth != depth) {
         actor.occupancyExpansionDepth = depth;
         state.presentationGoalSetupActive = false;
@@ -1594,6 +1628,10 @@ inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
     auto& state = ThreadContext();
     const std::size_t actorIndex = FindPresentationActorIndex(actorId);
     if (actorIndex >= state.presentationActorCount) return false;
+    const auto* route = FindCurrentRoute(actorId);
+    if (route == nullptr || route->count < 2) {
+        return true;
+    }
     auto& actor = state.presentationActors[actorIndex];
     actor.battleWorldKnown = true;
     actor.battleWorldX = actor.worldX;
