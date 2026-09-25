@@ -318,7 +318,8 @@ bool ValidateRosterField4Compatibility() {
     if (!ApplyBattleEntryRendererResidueCompatibility()) return false;
     for (std::size_t index = 0; index < roster.size(); ++index) {
         if (index < 4) {
-            if (!RosterField4IsKnown(index) || RosterField4IsZero(index)) return false;
+            const bool expectedNonzero = index < 2;
+            if (!RosterField4IsKnown(index) || RosterField4IsZero(index) == expectedNonzero) return false;
         } else if (RosterField4IsKnown(index)) {
             return false;
         }
@@ -332,46 +333,12 @@ bool ValidateRosterField4Compatibility() {
         if (RosterField4IsZero(index) == expectedNonzero) return false;
     }
 
-    // DQ9 1 shares presentation type 1 with DQ9 71, but natural ordinary-
-    // attack execution preserves the incoming scratch image.
-    constexpr std::array<bool, 4> attackIncoming{true, true, true, true};
-    if (!SetRosterField4CompatibilityPrefix(attackIncoming)) return false;
-    if (!ApplyKnownRosterField4PostActionCompatibility(
-            UINT16_C(1),
-            metadata::PresentationType(UINT16_C(1)))) {
-        return false;
-    }
-    for (std::size_t index = 0; index < roster.size(); ++index) {
-        if (index < 4) {
-            if (!RosterField4IsKnown(index) || RosterField4IsZero(index)) return false;
-        } else if (RosterField4IsKnown(index)) {
-            return false;
-        }
-    }
-
     if (!ApplyKnownRosterField4PostActionCompatibility(17)) return false;
     constexpr std::array<std::size_t, 8> type17Nonzero{0, 1, 4, 5, 6, 7, 8, 9};
     for (std::size_t index = 0; index < roster.size(); ++index) {
         bool expectedNonzero = false;
         for (const std::size_t candidate : type17Nonzero) expectedNonzero |= candidate == index;
         if (RosterField4IsZero(index) == expectedNonzero) return false;
-    }
-
-    // DQ9 24 (Zaki) is a measured exception to the generic type-17 residue:
-    // it preserves the incoming scratch image on the naitoritti path.
-    constexpr std::array<bool, 4> zakiIncoming{true, true, true, true};
-    if (!SetRosterField4CompatibilityPrefix(zakiIncoming)) return false;
-    if (!ApplyKnownRosterField4PostActionCompatibility(
-            UINT16_C(24),
-            metadata::PresentationType(UINT16_C(24)))) {
-        return false;
-    }
-    for (std::size_t index = 0; index < roster.size(); ++index) {
-        if (index < 4) {
-            if (!RosterField4IsKnown(index) || RosterField4IsZero(index)) return false;
-        } else if (RosterField4IsKnown(index)) {
-            return false;
-        }
     }
 
     if (!ApplyKnownRosterField4PostActionCompatibility(

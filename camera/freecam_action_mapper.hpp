@@ -82,8 +82,6 @@ inline constexpr auto kFreeCameraActions = [] {
     actions[BattleEmulator::VITAL_POINT_THRUST] = Bind<BattleEmulator::VITAL_POINT_THRUST>();
     actions[BattleEmulator::HELM_SPLITTER] = Bind<BattleEmulator::HELM_SPLITTER>();
     actions[BattleEmulator::DOUBLE_EDGED_SLASH] = Bind<BattleEmulator::DOUBLE_EDGED_SLASH>();
-    actions[BattleEmulator::DEFENDING_CHAMPION] = Bind<BattleEmulator::DEFENDING_CHAMPION>();
-
     actions[BattleEmulator::ZAKI] = Bind<BattleEmulator::ZAKI>();
     actions[BattleEmulator::ZARAKI] = Bind<BattleEmulator::ZARAKI>();
     actions[BattleEmulator::MEDICINAL_HERBS] = Bind<BattleEmulator::MEDICINAL_HERBS>();
@@ -149,6 +147,5 @@ static_assert(kFreeCameraActions[BattleEmulator::GERUNIKKU_MERAMI].dq9ActionId =
 static_assert(kFreeCameraActions[BattleEmulator::MERA_ZOMA].dq9ActionId == 11);
 static_assert(kFreeCameraActions[BattleEmulator::SKY_ATTACK].dq9ActionId == 540);
 static_assert(kFreeCameraActions[BattleEmulator::MERCURIAL_THRUST].dq9ActionId == 69);
-static_assert(kFreeCameraActions[BattleEmulator::DEFENDING_CHAMPION].dq9ActionId == 135);
 
 } // namespace dq9::freecam::bindings

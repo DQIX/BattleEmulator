@@ -2019,7 +2019,7 @@ int main(int argc, char* argv[]){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x1d4604dc;
+	uint64_t time1 = 0x1d460493;
 
 	auto counter = 0;
 	int actions[350] = {0};
@@ -2037,7 +2037,7 @@ int main(int argc, char* argv[]){
 	std::stringstream ss;
 	SearchRequest(copiedPlayers, time1, actions, false, ss, searchLimits);
 
-	if(false){
+	if(true){
 		SearchRequest(copiedPlayers, time1+1, actions, false, ss, searchLimits);
 		ss << std::endl;
 
