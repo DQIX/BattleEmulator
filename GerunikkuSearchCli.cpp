@@ -62,6 +62,10 @@ void printResult(const Result& r, std::uint64_t seed, std::ostream& os) {
         if (target != -1) os << ':' << target;
         if (BattleEmulator::HeroBareHands(r.gene[i])) os << ":sude";
     }
+    os << std::endl << "raw";
+    for (int i = 0; i < r.totalTurns; ++i) {
+         os << ", " << r.gene[i];
+    }
     os << '\n';
     if (!r.error.empty()) os << "SEARCH_ERROR " << r.error << '\n';
 }

@@ -191,7 +191,7 @@ public:
                                 BattleResult* result = nullptr, bool traceBoundaries = false);
 
     static bool
-    Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
+    Main(int *position, int RunCount, const int32_t Gene[350], Player (&players)[4],
          BattleResult* result, uint64_t seed, const int eActions[350], const int damages[350], int mode,
          uint64_t *NowState, int heroTargetOverride = -1, bool traceBoundaries = false,
          int heroActionOverride = -1, bool initializeCameraBattle = true);
@@ -211,6 +211,7 @@ public:
 
 
 private:
+	static void ProcessHealRage(const Player (&players)[4], int* position, bool kaisinn);
     static int ProcessMagicBurst(int *position);
 
     static void ProcessRage(int *position, int baseDamage, Player players[4], int defender);
@@ -233,7 +234,7 @@ private:
 
     static int FUN_021e8458_typeD(int *position, double difference, double base);
 
-    static int callAttackFun(int32_t Id, int *position, Player *players, int attacker, int defender,
+    static int callAttackFun(int32_t Id, int *position, Player (&players)[4], int attacker, int defender,
                              uint64_t *NowState, bool targetWasGuardRedirect = false);
 
     static double FUN_021dbc04(int baseHp, double maxHp);

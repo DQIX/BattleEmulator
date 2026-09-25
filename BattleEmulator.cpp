@@ -670,7 +670,7 @@ std::string BattleEmulator::getActionName(int actionId) {
     }
 }
 
-bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
+bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], Player (&players)[4],
                          BattleResult* result,
                           uint64_t seed, const int eActions[350], const int damages[350], int mode,
                           uint64_t *NowState, const int heroTargetOverride, const bool traceBoundaries,
@@ -745,7 +745,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         DEBUG_COUT2((*position));
         DEBUG_COUT2(counterJ);
         //THIS DEBUG CODE!
-        if ((*position) == 28) { //THIS DEBUG CODE!
+        if ((*position) == 81) { //THIS DEBUG CODE!
             std::cout << "!!" << std::endl;
         }
 #endif
@@ -1519,7 +1519,7 @@ const int proportionTable2[9] = {90, 90, 64, 32, 16, 8, 4, 2, 1}; //最後の項
 constexpr double Enemy_TensionTable[4] = {1.3, 2.0, 3.0, 4.5}; //一部の敵は特殊テンションテーブルを倍率として使う
 
 
-int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, int attacker, int defender,
+int BattleEmulator::callAttackFun(int32_t Id, int *position, Player (&players)[4], int attacker, int defender,
                                   uint64_t *NowState, const bool targetWasGuardRedirect) {
     for (int j = 0; j < 4; ++j) {
         preHP[j] = players[j].hp;
@@ -1969,10 +1969,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 (*position)++; //0x021ed7a8
             }
 
-            if (!players[1].rage) {
-                (*position)++; //0x021eb8c8
-            }
-            (*position)++; //? 0x021eb8f0
+            BattleEmulator::ProcessHealRage(players, position, false);//0x021eb8f0+0x021eb8c8
             if (!players[0].specialCharge && !players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
                 if (lcg::getPercent(position, 100) < 1) {
                     // 0x021edaf4
@@ -2057,18 +2054,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 (*position)++; //関係ない
             }
             //0x021eb8c8, randIntRange: 0x021eb8f0 怒り狂っている場合←の消費が発生しない。
-            if (!players[1].rage) {
-                (*position)++;
-            }
-            (*position)++; //?
-            if (kaisinn) {
-                if (!players[1].rage) {
-                    (*position)++; //会心時特殊処理　0x021e54fc
-                    (*position)++; //会心時特殊処理　0x021eb8c8
-                } else {
-                    (*position)++; //会心時特殊処理　既に怒り狂ってる場合は1消費になる
-                }
-            }
+            BattleEmulator::ProcessHealRage(players, position, kaisinn);//0x021eb8f0+0x021eb8c8
             if (!players[0].paralysis) {
                 if (!players[attacker].specialCharge && lcg::getPercent(position, 100) < 1) {
                     players[attacker].specialCharge = true;
@@ -2434,18 +2420,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
                 (*position)++; //関係ない
             }
             //0x021eb8c8, randIntRange: 0x021eb8f0 怒り狂っている場合←の消費が発生しない。
-            if (!players[1].rage) {
-                (*position)++;
-            }
-            (*position)++; //?
-            if (kaisinn) {
-                if (!players[1].rage) {
-                    (*position)++; //会心時特殊処理　0x021e54fc
-                    (*position)++; //会心時特殊処理　0x021eb8c8
-                } else {
-                    (*position)++; //会心時特殊処理　既に怒り狂ってる場合は1消費になる
-                }
-            }
+            BattleEmulator::ProcessHealRage(players, position, kaisinn);//0x021eb8f0+0x021eb8c8
             if (!players[0].paralysis) {
                 if (!players[attacker].specialCharge && lcg::getPercent(position, 100) < 1) {
                     players[attacker].specialCharge = true;
@@ -3243,19 +3218,7 @@ int BattleEmulator::callAttackFun(int32_t Id, int *position, Player *players, in
             if (!players[attacker].specialCharge) {
                 (*position)++; //関係ない
             }
-            //0x021eb8c8, randIntRange: 0x021eb8f0 怒り狂っている場合←の消費が発生しない。
-            if (!players[1].rage) {
-                (*position)++;
-            }
-            (*position)++; //?
-            if (kaisinn) {
-                if (!players[1].rage) {
-                    (*position)++; //会心時特殊処理　0x021e54fc
-                    (*position)++; //会心時特殊処理　0x021eb8c8
-                } else {
-                    (*position)++; //会心時特殊処理　既に怒り狂ってる場合は1消費になる
-                }
-            }
+            BattleEmulator::ProcessHealRage(players, position, kaisinn);//0x021eb8f0+0x021eb8c8
             if (!players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
                 if (!players[attacker].specialCharge && lcg::getPercent(position, 100) < 1) {
                     players[attacker].specialCharge = true;
@@ -3657,6 +3620,28 @@ void BattleEmulator::ProcessRage(int *position, int baseDamage, Player players[4
         }
     }
 }
+
+inline void BattleEmulator::ProcessHealRage(const Player (&players)[4], int* position, bool kaisinn) {
+    //0x021eb8c8, randIntRange: 0x021eb8f0 怒り狂っている場合←の消費が発生しない。
+    for (int i = 1; i < 4; ++i) {
+        if (!Player::isPlayerAlive(players[i])) {
+            continue;
+        }
+        if (!players[1].rage) {
+            (*position)++;
+        }
+        (*position)++; //?
+        if (kaisinn) {
+            if (!players[1].rage) {
+                (*position)++; //会心時特殊処理　0x021e54fc
+                (*position)++; //会心時特殊処理　0x021eb8c8
+            } else {
+                (*position)++; //会心時特殊処理　既に怒り狂ってる場合は1消費になる
+            }
+        }
+    }
+}
+
 int BattleEmulator::ProcessMagicBurst(int *position) {
     auto rand1 = lcg::floatRand(position, 0.9, 1.0);
     auto rand2 = lcg::floatRand(position, 0.9, 1.1);
