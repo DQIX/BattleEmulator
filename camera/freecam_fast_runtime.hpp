@@ -91,8 +91,9 @@ static_assert(generated::kCameraBehaviorCode.size() == kActionCount);
 static_assert(generated::kFreeCameraMapperAllowed.size() == kActionCount);
 
 static_assert(MagicIs(generated::kMembershipMetadataBytes, 'F', 'C', 'M', 'M'));
-static_assert(ReadU32(generated::kMembershipMetadataBytes, 4) == 3);
+static_assert(ReadU32(generated::kMembershipMetadataBytes, 4) == 4);
 static_assert(ReadU32(generated::kMembershipMetadataBytes, 8) == kActionCount);
+inline constexpr std::size_t kMembershipCellSize = 12;
 
 static_assert(generated::kMonsterPresentationMetadataBytes.size() == 20 + 1024);
 static_assert(MagicIs(generated::kMonsterPresentationMetadataBytes, 'F', 'C', 'M', 'P'));
@@ -248,17 +249,38 @@ static_assert(AttackFormationMode(kSlot1CleanupPresentationActionId) == 0);
     if (profileIndex >= kActorProfileCount || actionId >= kActionCount) return 0;
     constexpr std::size_t headerSize = 32;
     const std::size_t cell = static_cast<std::size_t>(profileIndex) * kActionCount + actionId;
-    return ReadU64(generated::kMembershipMetadataBytes, headerSize + cell * 8);
+    return ReadU64(generated::kMembershipMetadataBytes, headerSize + cell * kMembershipCellSize);
+}
+
+[[nodiscard]] constexpr std::uint8_t ActorMembershipBactOpcode4fModeMask(
+    const std::uint32_t profileIndex,
+    const std::uint16_t actionId
+) {
+    if (profileIndex >= kActorProfileCount || actionId >= kActionCount) return 0;
+    constexpr std::size_t headerSize = 32;
+    const std::size_t cell = static_cast<std::size_t>(profileIndex) * kActionCount + actionId;
+    return generated::kMembershipMetadataBytes[headerSize + cell * kMembershipCellSize + 8];
 }
 
 [[nodiscard]] constexpr std::uint64_t FallbackMembershipPacked(const std::uint16_t actionId) {
     if (actionId >= kActionCount) return 0;
     constexpr std::size_t headerSize = 32;
-    constexpr std::size_t actorCellsBytes = kActorProfileCount * kActionCount * 8;
+    constexpr std::size_t actorCellsBytes = kActorProfileCount * kActionCount * kMembershipCellSize;
     return ReadU64(
         generated::kMembershipMetadataBytes,
-        headerSize + actorCellsBytes + static_cast<std::size_t>(actionId) * 8
+        headerSize + actorCellsBytes + static_cast<std::size_t>(actionId) * kMembershipCellSize
     );
+}
+
+[[nodiscard]] constexpr std::uint8_t FallbackMembershipBactOpcode4fModeMask(
+    const std::uint16_t actionId
+) {
+    if (actionId >= kActionCount) return 0;
+    constexpr std::size_t headerSize = 32;
+    constexpr std::size_t actorCellsBytes = kActorProfileCount * kActionCount * kMembershipCellSize;
+    return generated::kMembershipMetadataBytes[
+        headerSize + actorCellsBytes + static_cast<std::size_t>(actionId) * kMembershipCellSize + 8
+    ];
 }
 
 template <std::uint16_t ActionId>
@@ -291,8 +313,8 @@ template <std::uint16_t ActionId>
 [[nodiscard]] consteval auto BuildPlayerProfiles() {
     std::array<PlayerProfileMapEntry, kPlayerProfileCount> result{};
     constexpr std::size_t offset0 = 32
-        + kActorProfileCount * kActionCount * 8
-        + kActionCount * 8;
+        + kActorProfileCount * kActionCount * kMembershipCellSize
+        + kActionCount * kMembershipCellSize;
     for (std::size_t index = 0; index < result.size(); ++index) {
         const std::size_t offset = offset0 + index * 8;
         result[index] = {
@@ -307,8 +329,8 @@ template <std::uint16_t ActionId>
 [[nodiscard]] consteval auto BuildMonsterProfiles() {
     std::array<ActorProfileMapEntry, kMonsterProfileCount> result{};
     constexpr std::size_t offset0 = 32
-        + kActorProfileCount * kActionCount * 8
-        + kActionCount * 8
+        + kActorProfileCount * kActionCount * kMembershipCellSize
+        + kActionCount * kMembershipCellSize
         + kPlayerProfileCount * 8;
     for (std::size_t index = 0; index < result.size(); ++index) {
         const std::size_t offset = offset0 + index * 8;
@@ -323,8 +345,8 @@ template <std::uint16_t ActionId>
 [[nodiscard]] consteval auto BuildSpecialProfiles() {
     std::array<ActorProfileMapEntry, kSpecialProfileCount> result{};
     constexpr std::size_t offset0 = 32
-        + kActorProfileCount * kActionCount * 8
-        + kActionCount * 8
+        + kActorProfileCount * kActionCount * kMembershipCellSize
+        + kActionCount * kMembershipCellSize
         + kPlayerProfileCount * 8
         + kMonsterProfileCount * 8;
     for (std::size_t index = 0; index < result.size(); ++index) {
@@ -340,8 +362,8 @@ template <std::uint16_t ActionId>
 [[nodiscard]] consteval auto BuildBodyItemModels() {
     std::array<ItemModelMapEntry, kBodyItemModelCount> result{};
     constexpr std::size_t offset0 = 32
-        + kActorProfileCount * kActionCount * 8
-        + kActionCount * 8
+        + kActorProfileCount * kActionCount * kMembershipCellSize
+        + kActionCount * kMembershipCellSize
         + kPlayerProfileCount * 8
         + kMonsterProfileCount * 8
         + kSpecialProfileCount * 8;
@@ -358,8 +380,8 @@ template <std::uint16_t ActionId>
 [[nodiscard]] consteval auto BuildWeaponItemModels() {
     std::array<ItemModelMapEntry, kWeaponItemModelCount> result{};
     constexpr std::size_t offset0 = 32
-        + kActorProfileCount * kActionCount * 8
-        + kActionCount * 8
+        + kActorProfileCount * kActionCount * kMembershipCellSize
+        + kActionCount * kMembershipCellSize
         + kPlayerProfileCount * 8
         + kMonsterProfileCount * 8
         + kSpecialProfileCount * 8
@@ -390,6 +412,7 @@ struct MembershipCell {
     std::uint32_t selectorProjection{};
     std::uint16_t count{};
     std::uint16_t trackingCameraOneRngCount{};
+    std::uint8_t bactOpcode4fModeMask{};
 
     [[nodiscard]] constexpr bool Present() const noexcept {
         return count != 0;
@@ -414,11 +437,15 @@ enum class TargetScope : std::uint8_t {
     actor_specific = 8,
 };
 
-[[nodiscard]] constexpr MembershipCell DecodeMembershipCell(const std::uint64_t packed) noexcept {
+[[nodiscard]] constexpr MembershipCell DecodeMembershipCell(
+    const std::uint64_t packed,
+    const std::uint8_t bactOpcode4fModeMask = 0
+) noexcept {
     return {
         static_cast<std::uint32_t>(packed),
         static_cast<std::uint16_t>((packed >> 32) & UINT64_C(0xffff)),
         static_cast<std::uint16_t>((packed >> 48) & UINT64_C(0xffff)),
+        bactOpcode4fModeMask,
     };
 }
 
@@ -458,12 +485,20 @@ struct FreeCamera {
         const std::uint32_t profileIndex
     ) noexcept {
         return profileIndex < actorMembershipPacked.size()
-            ? DecodeMembershipCell(actorMembershipPacked[profileIndex])
+            ? DecodeMembershipCell(
+                actorMembershipPacked[profileIndex],
+                metadata::ActorMembershipBactOpcode4fModeMask(profileIndex, Dq9ActionId)
+            )
             : MembershipCell{};
     }
 
     [[nodiscard]] static constexpr MembershipCell FallbackMembership() noexcept {
-        return DecodeMembershipCell(fallbackMembershipPacked);
+        return DecodeMembershipCell(
+            fallbackMembershipPacked,
+            fallbackLookupActionId == metadata::kInvalidActionId
+                ? 0
+                : metadata::FallbackMembershipBactOpcode4fModeMask(fallbackLookupActionId)
+        );
     }
 };
 
@@ -564,6 +599,7 @@ enum class TriggerSource : std::uint8_t {
 struct TrackingCameraDecision {
     TriggerSource source{TriggerSource::none};
     std::uint16_t rngCount{};
+    std::uint8_t bactOpcode4fModeMask{};
 };
 
 struct TriggerDecision {
@@ -800,14 +836,14 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     return SetRosterField4CompatibilityPrefix(prefix);
 }
 
-// Stack compatibility produced during the battle-entry renderer lifecycle.
-// Fresh live-ROM capture of the first 021E1958 roster build gives the first
-// four physical work rows as nonzero, nonzero, zero, zero. This is not an
-// actor/monster/action mask: these are physical stack-overlap rows, and only
-// the zero/nonzero state consumed by 021E08BC is represented here. Rows past
-// the measured prefix deliberately remain unknown.
+// Stack compatibility present at the first 021E1958 roster build of a turn.
+// Natural naitoritti ROM captures at turns 1, 2, and 3 all show the first four
+// physical work-row +4 words nonzero. This is not an actor/monster/action
+// mask: these are physical stack-overlap rows, and only the zero/nonzero state
+// consumed by 021E08BC is represented here. Rows past the measured prefix
+// deliberately remain unknown.
 [[nodiscard]] inline bool ApplyBattleEntryRendererResidueCompatibility() noexcept {
-    constexpr std::array<bool, 4> prefix{true, true, false, false};
+    constexpr std::array<bool, 4> prefix{true, true, true, true};
     return SetRosterField4CompatibilityPrefix(prefix);
 }
 
@@ -862,6 +898,20 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     const std::uint16_t dq9ActionId,
     const std::uint8_t presentationType
 ) noexcept {
+    if (dq9ActionId == UINT16_C(1)) {
+        // Natural naitoritti captures prove ordinary attacks do not replace
+        // the stale row+4 image in this path. In turn 2 it remains TTTT across
+        // all three enemy attacks even though DQ9 1 shares presentation type 1
+        // with DQ9 71, whose observed post-action image is TTTF.
+        return ThreadContext().rosterField4CompatibilityValid;
+    }
+    if (dq9ActionId == UINT16_C(24)) {
+        // Natural naitoritti capture proves Zaki does not replace the stale
+        // row+4 image in this path: the next 021E1958 build remains TTTT.
+        // Preserve the existing scratch state instead of applying the older
+        // presentation-type-17 TTFF approximation globally to DQ9 24.
+        return ThreadContext().rosterField4CompatibilityValid;
+    }
     if (dq9ActionId == UINT16_C(55) || dq9ActionId == UINT16_C(137)) {
         // Live ROM evidence now covers both measured presentation-type-31
         // actions used here. After DQ9 137 (seed 0x3EBB94) and DQ9 55
@@ -930,23 +980,37 @@ inline void InvalidateRosterField4Compatibility() noexcept {
 
     const std::uint32_t profile = PresentationMembershipProfileForActor(actorId);
     const MembershipCell actorMembership = DecodeMembershipCell(
-        metadata::ActorMembershipPacked(profile, dq9ActionId)
+        metadata::ActorMembershipPacked(profile, dq9ActionId),
+        metadata::ActorMembershipBactOpcode4fModeMask(profile, dq9ActionId)
     );
     if (actorMembership.Present()) {
-        return {TriggerSource::actor_membership, actorMembership.trackingCameraOneRngCount};
+        return {
+            TriggerSource::actor_membership,
+            actorMembership.trackingCameraOneRngCount,
+            actorMembership.bactOpcode4fModeMask,
+        };
     }
 
     if (metadata::HasBact(dq9ActionId)) {
-        return {TriggerSource::action_bact, metadata::TrackingCameraOneRngCount(dq9ActionId)};
+        return {
+            TriggerSource::action_bact,
+            metadata::TrackingCameraOneRngCount(dq9ActionId),
+            metadata::BactOpcode4fModeMask(dq9ActionId),
+        };
     }
 
     const std::uint16_t fallbackActionId = metadata::FallbackLookupActionId(dq9ActionId);
     if (fallbackActionId != metadata::kInvalidActionId) {
         const MembershipCell fallbackMembership = DecodeMembershipCell(
-            metadata::FallbackMembershipPacked(fallbackActionId)
+            metadata::FallbackMembershipPacked(fallbackActionId),
+            metadata::FallbackMembershipBactOpcode4fModeMask(fallbackActionId)
         );
         if (fallbackMembership.Present()) {
-            return {TriggerSource::fallback_membership, fallbackMembership.trackingCameraOneRngCount};
+            return {
+                TriggerSource::fallback_membership,
+                fallbackMembership.trackingCameraOneRngCount,
+                fallbackMembership.bactOpcode4fModeMask,
+            };
         }
     }
     return {};
@@ -1470,10 +1534,9 @@ inline void SetTargetRecord02161720ActorId(const std::uint16_t actorId) noexcept
 // Exact persistent state relevant to BACT opcode 0x4F mode0:
 //   021E71A4 -> 021695A8 -> 0204AB8C -> 02049B10 -> 0204A904.
 // 02049B10 first resolves aux -> goal -> start and clears transient route
-// state. 0204AB8C then overwrites battle actor +0x44/+0x48/+0x4C from the
-// presentation object's base transform at +0x04/+0x08/+0x0C. Live ROM
-// tracing on seed 0x1AB6C4 confirms Hero 0,18432 -> 0,10240 and the three
-// enemies restoring to -9009/-10240, 0/-10240, 9009/-10240 respectively.
+// state. 0204AB8C then restores the battle actor +0x44/+0x48/+0x4C from the
+// persistent encounter/base battle transform tracked independently from the
+// presentation object.
 [[nodiscard]] inline bool RestoreAllPresentationActorsToBaseBattleWorld() noexcept {
     auto& state = ThreadContext();
     if (state.presentationActorCount > state.presentationActors.size()) return false;
@@ -1580,8 +1643,91 @@ inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
     const int actionIndex,
     const TriggerDecision& triggerDecision
 ) noexcept {
-    (void)actionIndex;
     auto& state = ThreadContext();
+
+    // overlay_d_25:021DC1D4 has a dedicated actionIndex==0 path. It runs
+    // 02049B10 for every presentation participant before later actions are
+    // set up. 02049B10 chooses aux -> goal -> start, except that the current
+    // action target is passed param_2=1 and therefore keeps its existing
+    // start node. The current actor then restores its pre-call aux and, when
+    // both old aux and old goal were valid, restores start=old goal without
+    // moving the presentation transform again. This is generic turn/action
+    // lifecycle behavior, not an action-ID or encounter-specific rule.
+    if (actionIndex == 0
+        && state.hasPreviousAction
+        && state.previousActionIndex == 0
+        && triggerDecision.callFreeCamera) {
+        const std::uint16_t targetId = state.previousAction.targetId;
+        const std::size_t currentActorIndex = FindPresentationActorIndex(actorId);
+        if (currentActorIndex >= state.presentationActorCount) return false;
+
+        const std::uint8_t currentOldAux = state.presentationActors[currentActorIndex].auxiliaryNode;
+        const std::uint8_t currentOldGoal = state.presentationActors[currentActorIndex].goalNode;
+
+        for (std::size_t index = 0; index < state.presentationActorCount; ++index) {
+            auto& participant = state.presentationActors[index];
+            const bool isCurrentTarget = participant.actorId == targetId;
+
+            std::uint8_t newStart = participant.startNode;
+            if (!isCurrentTarget) {
+                if (participant.auxiliaryNode != detail::kInvalidPresentationNode) {
+                    newStart = participant.auxiliaryNode;
+                } else if (participant.goalNode != detail::kInvalidPresentationNode) {
+                    newStart = participant.goalNode;
+                }
+            }
+
+            if (newStart != detail::kInvalidPresentationNode) {
+                if (newStart >= detail::kPresentationNodePositions.size()) return false;
+                const auto position = detail::kPresentationNodePositions[newStart];
+                if (!position.valid) return false;
+                participant.startNode = newStart;
+                participant.worldX = position.x;
+                participant.worldZ = position.z;
+                // 02049B10 copies the presentation transform to the battle
+                // actor only when the pre-call presentation flags contain
+                // either bit 0x01 or 0x20.
+                if ((participant.presentationFlags & UINT32_C(0x21)) != 0) {
+                    participant.battleWorldKnown = true;
+                    participant.battleWorldX = position.x;
+                    participant.battleWorldZ = position.z;
+                }
+            }
+
+            participant.goalNode = detail::kInvalidPresentationNode;
+            if (!isCurrentTarget) {
+                participant.auxiliaryNode = detail::kInvalidPresentationNode;
+            }
+            // 02049AB0 clears the in-flight route state and flags 0x10/0x40.
+            participant.presentationFlags &= ~UINT32_C(0x50);
+            state.nearestNodeCache[index] = {};
+        }
+
+        auto& currentActor = state.presentationActors[currentActorIndex];
+        currentActor.auxiliaryNode = currentOldAux;
+        if (currentOldAux != detail::kInvalidPresentationNode
+            && currentOldGoal != detail::kInvalidPresentationNode) {
+            currentActor.startNode = currentOldGoal;
+            // The ROM advances actor+0x44/+0x4C to the selected presentation
+            // transform only when the current actor actually has an in-flight
+            // presentation route. Fresh 0x2D6A91 observations distinguish the
+            // two otherwise-identical Zaki action-0 cases: turn 3 has route
+            // 22->21 and reaches aux/world node 30 before the next setup,
+            // while turn 4 has no Hero route and keeps the battle actor at its
+            // prior physical world even though presentation aux/world is 57.
+            const detail::PresentationActorRoute* currentRoute = FindCurrentRoute(actorId);
+            if (currentRoute != nullptr && currentRoute->count >= 2) {
+                currentActor.battleWorldKnown = true;
+                currentActor.battleWorldX = currentActor.worldX;
+                currentActor.battleWorldZ = currentActor.worldZ;
+                state.nearestNodeCache[currentActorIndex] = {};
+            }
+        }
+
+        state.presentationGoalSetupActive = false;
+        InvalidateCurrentRoutes(state);
+        return true;
+    }
 
     // Live ROM seed 0x04A678 proves that the action-BACT selector path
     // (021DC5D4) explicitly starts routes for non-acting presentation
@@ -1597,23 +1743,29 @@ inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
     // routes have a frame-timed 02049D84 lifecycle and are deliberately left
     // untouched until that timing is modeled from live evidence.
     const auto* currentActorRoute = FindCurrentRoute(actorId);
+    const bool currentActorHasRoute =
+        currentActorRoute != nullptr && currentActorRoute->count != 0;
+    const bool ordinaryAttackCompletesNonActorRoutes =
+        state.hasPreviousAction && state.previousAction.dq9ActionId == UINT16_C(1);
+    const bool completesNonActorOneHopRoutes =
+        (triggerDecision.source == TriggerSource::action_bact && currentActorHasRoute)
+        || ordinaryAttackCompletesNonActorRoutes;
     if (triggerDecision.callFreeCamera
-        && triggerDecision.source == TriggerSource::action_bact
-        && state.currentRoutes.valid
-        && currentActorRoute != nullptr
-        && currentActorRoute->count != 0) {
+        && completesNonActorOneHopRoutes
+        && state.currentRoutes.valid) {
         for (std::size_t routeIndex = 0; routeIndex < state.currentRoutes.actorCount; ++routeIndex) {
             const auto& route = state.currentRoutes.actors[routeIndex];
             if (route.actorId == actorId
                 || route.actorId == detail::kInvalidPresentationActor
-                || route.count != 2) {
+                || route.count < 2
+                || (!ordinaryAttackCompletesNonActorRoutes && route.count != 2)) {
                 continue;
             }
             const std::size_t participantIndex = FindPresentationActorIndex(route.actorId);
             if (participantIndex >= state.presentationActorCount) return false;
             auto& participant = state.presentationActors[participantIndex];
             if (!participant.movementEnabled || route.nodes[0] != participant.startNode) continue;
-            const std::uint8_t node = route.nodes[1];
+            const std::uint8_t node = route.nodes[route.count - 1];
             if (node >= detail::kPresentationNodePositions.size()) return false;
             const auto position = detail::kPresentationNodePositions[node];
             if (!position.valid) return false;
@@ -1635,6 +1787,21 @@ inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
         }
     }
 
+    // Fresh ROM seed 0x2D6A91, turn 2 action 1 (ordinary C0 attack) proves
+    // that action completion copies the current target presentation X/Z to
+    // battle actor +0x44/+0x4C before action 2 setup. Keep Y untouched here:
+    // the camera nearest-node consumer reads only +0x44/+0x4C.
+    if (ordinaryAttackCompletesNonActorRoutes) {
+        const std::size_t targetIndex = FindPresentationActorIndex(state.previousAction.targetId);
+        if (targetIndex < state.presentationActorCount) {
+            auto& target = state.presentationActors[targetIndex];
+            target.battleWorldKnown = true;
+            target.battleWorldX = target.worldX;
+            target.battleWorldZ = target.worldZ;
+            state.nearestNodeCache[targetIndex] = {};
+        }
+    }
+
     // Fresh live-ROM seed 0x2D7A91, turn 3, DQ9 0x009B proves that
     // future participants may receive temporary goals (C0 56->55, C2 68->61)
     // without committing those goals to start nodes when the action completes.
@@ -1650,17 +1817,14 @@ inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
 // point rather than folding it into CompleteActionPresentation, because
 // 0216964C invalidates the in-flight presentation routes.
 [[nodiscard]] inline bool ApplyBactOpcode4fPostTrackingEffects(
-    const std::uint16_t dq9ActionId,
-    const TriggerSource triggerSource
+    const std::uint8_t modeMask
 ) noexcept {
-    // The raw 0x4F mask describes instructions present in spNNN.bact, not
-    // instructions that execute for every occurrence of that action ID.
-    // Live ROM confirms DQ9 0x009B can reach the selector through direct actor
-    // membership without entering 021DCF8C (the SP-BACT caller); in that path
-    // its static mode-0 instruction is not executed. Conversely DQ9 0x0019
-    // reaches the action-BACT path and does execute its mode-0 instruction.
-    if (triggerSource != TriggerSource::action_bact) return true;
-    const std::uint8_t modeMask = metadata::BactOpcode4fModeMask(dq9ActionId);
+    // The executed 0x4F instruction belongs to the presentation program that
+    // was actually selected for this actor/action occurrence. Direct actor
+    // membership, action BACT, and fallback membership can contain different
+    // command streams for the same DQ9 action ID. Use the ROM-mined mask from
+    // that selected source rather than inferring BACT execution from the
+    // selector source name or from spNNN.bact presence alone.
     if ((modeMask & UINT8_C(0x01)) != 0) {
         if (!RestoreAllPresentationActorsToBaseBattleWorld()) return false;
     }
