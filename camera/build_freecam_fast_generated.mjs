@@ -402,9 +402,13 @@ function buildPresentationPaintSource(depths) {
 
 function buildHasAnyMinedFreeCameraTriggerSource(cameraMetadata, actionMetadata, membershipMetadata) {
   const result = new Uint8Array(actionCount);
+  if (membershipMetadata.readUInt32LE(4) !== 4) {
+    throw new Error(`unsupported membership metadata version ${membershipMetadata.readUInt32LE(4)}`);
+  }
   const actorProfileCount = membershipMetadata.readUInt32LE(12);
   const headerSize = 32;
-  const actorCellsBytes = actorProfileCount * actionCount * 8;
+  const cellSize = 12;
+  const actorCellsBytes = actorProfileCount * actionCount * cellSize;
   const fallbackCellsOffset = headerSize + actorCellsBytes;
 
   const hasBact = (actionId) =>
@@ -422,7 +426,7 @@ function buildHasAnyMinedFreeCameraTriggerSource(cameraMetadata, actionMetadata,
     let present = false;
     for (let profile = 0; profile < actorProfileCount; ++profile) {
       const cell = profile * actionCount + actionId;
-      if (membershipPresentAt(headerSize + cell * 8)) {
+      if (membershipPresentAt(headerSize + cell * cellSize)) {
         present = true;
         break;
       }
@@ -430,7 +434,7 @@ function buildHasAnyMinedFreeCameraTriggerSource(cameraMetadata, actionMetadata,
     if (!present) {
       const fallbackId = fallbackLookupActionId(actionId);
       if (fallbackId !== 0xffff && fallbackId < actionCount) {
-        present = membershipPresentAt(fallbackCellsOffset + fallbackId * 8);
+        present = membershipPresentAt(fallbackCellsOffset + fallbackId * cellSize);
       }
     }
     result[actionId] = present ? 1 : 0;
