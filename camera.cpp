@@ -65,6 +65,20 @@ inline void AssertCameraMapping(const int action) noexcept {
         && metadata->targetScope == dq9::freecam::fast::TargetScope::self) {
         return actorId;
     }
+    if (metadata != nullptr && metadata->mapped()
+        && metadata->targetSide == dq9::freecam::fast::TargetSide::ally
+        && rawTarget.valid()) {
+        const bool actorIsEnemy = actorId >= UINT16_C(0x00c0);
+        const bool rawTargetIsEnemy =
+            rawTarget.side == dq9::freecam::fast::BattleActorSide::enemy;
+        if (actorIsEnemy != rawTargetIsEnemy) {
+            // BattleEmulator's one-member ally battle core can carry its
+            // default enemy target into an ally-target action record even
+            // though the action itself affects the acting ally.  The ROM
+            // presentation record never crosses sides in this case.
+            return actorId;
+        }
+    }
     return rawTarget.valid()
         ? dq9::freecam::fast::Dq9ActorId(rawTarget)
         : dq9::freecam::fast::kInvalidBattleActor;
@@ -475,8 +489,8 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
         std::uint16_t runtimeActorId = actors[i].valid()
             ? Dq9ActorId(actors[i])
             : kInvalidBattleActor;
-        std::uint16_t runtimeTargetId = targets[i].valid()
-            ? Dq9ActorId(targets[i])
+        std::uint16_t runtimeTargetId = actors[i].valid()
+            ? PresentationRecordTargetId(after, runtimeActorId, targets[i])
             : kInvalidBattleActor;
         if (runtimeReady && hasActionMetadata
             && actors[i].valid() && targets[i].valid()) {
