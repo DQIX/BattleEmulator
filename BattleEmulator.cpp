@@ -296,7 +296,11 @@ namespace {
         const Player &boss = players[2];
         switch (slot) {
             case 0: // こうげき
-                if (!Player::isPlayerAlive(players[0])) return false;
+                // Judgment-2 normal-attack target handler (DQ9 handler 1)
+                // rejects targets whose current DEF is not below 2 * current ATK.
+                // In that case the handler returns 0 before the target-selection RNG.
+                if (!Player::isPlayerAlive(players[0]) ||
+                    players[0].def >= players[2].atk * 2) return false;
                 (*position)++; // max: 2, lr: 0x02156874
                 selection = {BattleEmulator::ATTACK_ENEMY, 0, slot};
                 return true;
