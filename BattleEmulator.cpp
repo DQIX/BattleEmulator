@@ -3600,8 +3600,7 @@ void BattleEmulator::ProcessRage(int *position, int baseDamage, Player players[4
         if (hp_before * 2 >= maxHp) {
             if (!players[defender].rage) {
                 (*position)++;
-                players[defender].rage = true;
-                players[defender].rageTurns = lcg::intRangeRand(position, 2, 4);
+                (*position)++;
             } else {
                 (*position)++;
             }

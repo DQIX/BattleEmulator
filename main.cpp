@@ -1951,7 +1951,7 @@ int main(int argc, char* argv[]){
 	static_assert(bad_karmour_A >= 1 && bad_karmour_A <= BattleEmulator::HERO_TARGET_MASK);
 	static_assert(Hootingham_Gore >= 1 && Hootingham_Gore <= BattleEmulator::HERO_TARGET_MASK);
 	static_assert(bad_karmour_B >= 1 && bad_karmour_B <= BattleEmulator::HERO_TARGET_MASK);
-	uint64_t time1 = 0x1d4604dc;
+	uint64_t time1 = 0x4d4504dc;
 
 	int dummy[100];
 	lcg::init(time1);
@@ -1973,7 +1973,7 @@ int main(int argc, char* argv[]){
 	auto* NowState = new uint64_t(0); //エミュレーターの内部ステートを表すint
 
 	Player players1[4];
-	int32_t gene1[350] = {31, 36, 24647, 8263, 62, 62, 62, 33, 16418};
+	int32_t gene1[350] = {31, 62, 24647, 62, 8263, 62, 33, 16418};
 	// //THIS DEBUG CODE!
 	// int32_t gene1[350] = {
 	// 	(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::MAGIC_MIRROR,
@@ -2019,7 +2019,7 @@ int main(int argc, char* argv[]){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x1d4604dc;
+	uint64_t time1 = 0x4d4504dc;
 
 	auto counter = 0;
 	int actions[350] = {0};

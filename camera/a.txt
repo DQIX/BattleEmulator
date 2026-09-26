@@ -3169,3 +3169,59 @@ monster側は一般化できます。残るHeroは実測radius 0x1000 ですが�
 radius専用generatorはまだありません。なので br\BattleEmulator\camera 内に、NitroFS で mons_data2.nat の record+0x08 monsterId / +0x0C radiusSource を全件採掘して constexpr tableを出す小さいgeneratorを追加するのが最小です。既存FCMPのbinary formatを壊さず、radiusだけ独立生成にします。
 
 radius実装へ進む前に、109でglobal 02049B10 が走る条件をROM実測で1回だけ確認します。Ghidra上は later-action で「route>4 または actor/target overlap」がglobal commit条件ですが、推測でoverlapをtrueにしません。freecam_trigger_probe_mcp.js の既存geometry/radius観測を 1t_tmp.dst → ミラー → ベホイミ に当て、action109時点の actor/target world とradiusをそのまま取ります。
+
+了解、続けます。ここからは半端な2体表ではなく、dq9items - Monsters.csv の438行すべてを mons_data2.nat と monster IDで1対1照合して新規radius CSVを生成し、そのCSVだけを build_freecam_fast_generated.mjs が1024-entry constexprへ焼く形まで通します。その後C++側は monsterId -> constexpr radius で取得するように配線します。
+
+まずCSV生成とconstexpr化を先に完成させます。radiusの実際のselector配線は、その生成物を使う形にしてから入れます。なお mons_data2.nat は438レコード、dq9items - Monsters.csv もヘッダ除き438行なので、件数一致だけでなくID集合・Model ID(resourceName)まで全件一致しなければgeneratorを失敗させます。
+
+CSV generatorと埋め込み側の変更は入りました。次は構文チェック→438件CSV生成→先頭/末尾と0118/013A確認→freecam_fast_generated.hpp再生成の順で検証します。ここで1件でもID/Model ID不一致なら生成を止める作りです。
+
+全件照合で最初の重要な例外が出ました。ID をROM record+0x08 とそのまま結ぶと 0x010D: CSV model=b006b / ROM model=z001a で破綻します。2体だけ見てID直結を一般化するのは危険なので、ここは止めずに全438件の正しいjoin keyを確定します。まず dq9items - Monsters.csv の 010D / z001a / b006b とROM側レコードを突き合わせます。
+
+Model ID が重複するので、Model ID単独joinも不可です。次に見るべきはレコードindex順です。mons_data2.nat は438 recordsで、CSVも438 rowsなので、まず recordIndex == CSV行index が全件成立するかを検証します。これならvariant IDが重複modelを共有するケースも扱えます。
+
+recordIndex == CSV行index が今回の正しい軸です。dq9items のIDはvariantを区別しますが、mons_data2.nat +0x08 は同じmodel/resourceへ畳まれるcanonical IDがあり、010Dのように一致しない行があります。したがって生成CSVは CSV IDをlookup keyとして保持し、同じ行indexのROM recordからradiusを採る形に直します。Model IDは全438行でROM resource名と一致必須にします。
+
+row順でも 010D で崩れるので、mons_data2.nat と dq9items は途中から並び順も違います。次は推測でjoinしません。既に438件を正しく結合した旧minerのjoin規則だけ確認して、その規則を新generatorへ移します。
+
+旧minerを見ると dq9items の行順は mons_btl_data2.nat には一致しますが、mons_data2.nat のmodel/resource表とは別順です。radiusはmodel由来なので、Model ID をキーにして同一modelのROM recordsが同一radiusSourceであることを全件検証するのが正しいです。同じ b006b が6 variant IDsを持っても、radiusは同じmodelから一意に取れます。これへgeneratorを直します。
+
+同一Model IDでもradius違いが実在します（z038c: 0x0533 と 0x04CC）。なのでModel ID→単一radiusも一般化しすぎでした。正しくは (Model ID, そのModel内での出現順) で438行をROM recordsへ対応させる必要があります。まず各Modelの出現数がCSV/ROMで完全一致することを必須検証にして、n番目同士を結びます。
+
+Model出現数まで一致しないので、mons_data2.nat を「438件の単純0x14固定表」と見なす前提自体を再確認します。ここで無理にjoin規則を作るのは危険です。既存解析で mons_data2.nat の読込構造・ヘッダ解釈が確定している箇所を探し、必要ならユーザー指摘どおり16-byte header＋命令/data構造として読み直します。
+
+mons_data2.nat は既存membership minerでも「basename→複数canonical IDs」の資源表として使われており、dq9items のvariant IDと常に1対1ではありません。なので新CSVのjoinを正しくするには、battle record側のID（CSV ID）からresource recordへ渡るROM上の対応値を使う必要があります。まず既存の全438件完成表で 0x010D の実model解決結果を確認し、CSV側Model IDが正しいのか、mons_data2同index前提が間違っているのかを切ります。
+
+mons_data2 +0x08 のIDがCSV IDと一致する例・しない例が混在するので、ここはテーブルの意味を勝手に決めません。generatorにread-only診断モードを足し、問題の z010a / b006b / z038c について CSV側(ID,行順) とROM側(recordIndex,+0x08,+0x0C) をそのまま並べます。
+
+診断でかなり見えました。z038c はIDがそのままROM canonical IDと一致し、2 variantでradiusも別。一方 b006b はCSVに 0x010D が余り、ROM側ではその代わりに z010a の 0x010E が余っています。これは単純な「同model出現順」ではなく、CSV側Model IDに少なくとも一部誤割当/別名対応があるパターンです。まず隣の 0x010E を確認します。
+
+0x010E もCSVでは b003a、ROMでは z010a なので、ここはCSVのModel ID列とROM resource表がズレている連続区間です。radiusを正しく全件化するなら、CSV IDをキーにROM canonical IDを直接引ける行はそれを最優先し、引けないIDだけ別規則へ落とすのが安全です。まず全438件で「ID直結できる件数」「できないID一覧」を出します。
+
+全438件で答えが出ました。CSV ID ↔ mons_data2.nat +0x08 は438/438すべて一意一致します。Model IDだけ 0x010D と 0x010E の2件が食い違います。なので正しいjoin keyはIDです。元CSVのModel IDは書き換えず保持し、新CSVに ROM Model ID / Model ID Match を追加して不一致2件も可視化します。radiusはID直結で全438件取得します。
+
+CSVは438行・UTF-8で生成でき、0x0118=0x1CCC、0x013A=0x2664 も含め全IDをROM +0x08 で一意照合できています。次にこのCSVを正本として freecam_fast_generated.hpp を再生成し、SetMonsterPresentationMetadata() が MonsterBattleRadius(monsterId) をruntime actorへ格納するところまで配線します。
+
+constexpr tableは生成済みです。次はC++ runtimeへ載せます。monster actorは SetMonsterPresentationMetadata(index, monsterId) でそのIDのconstexpr radiusを格納し、selector入力はactor/targetのbattle-world＋radiusから既存 021DC1D4 geometry fieldsを埋める形にします。Heroはmonster表の対象外なので、既存ROM実測のplayer radiusは別フィールドとしてroster sourceから渡します。
+
+constexpr radius tableの生成はできています。C++側では PresentationActorState にradiusを保持し、monsterは MonsterBattleRadius(monsterId) で設定します。selectorの距離は既存のROM一致関数 RoundedPresentationDistance() があるので、別の近似距離は作らず、それを ActionRuntimeInput の geometry fieldsへ共通配線します。
+
+monster radius tableはできたので、次はselectorへ正確に流します。距離式を既存2D helperへ雑に流用せず、ROMの FUN_020C4AFC を batch_decompile で再確認してから geometry input helperを1本にまとめます。
+
+これからC++配線を入れます。全monsterは生成tableから、HeroだけはROM liveで確認済みのplayer actor radius 0x1000 をroster sourceへ持たせます。Decide() 呼び出しは1か所だけ特別扱いせず、共通helperでactor/targetのbattle-worldとradiusを詰めます。
+
+全monster constexpr取得までC++へ配線しました。次はCLionでコンパイルと既存validationを通し、その後 0x1d4604dc / 31→36→71:3 を再実走します。ここでgenerated radius自体だけでなく、geometry inputを有効にしたことでcamera分岐がROMへ近づくかも同時に確認します。
+
+全monster radiusのconstexpr配線で、3ターン目ザキのRNG列はROMと完全一致に戻りました（#244 FE40 → #245 FFF8 → #246 F0E4、C++ next=247）。ただし位置はまだ Zaki route=[58,59]、ROMは [58,57] なので未完です。次は現在のturn2 action4を再確認し、ROMの B start61→goal60→turn3 start59 に対してC++がどこで61を残すかを詰めます。
+
+turn2 action3終了時点はROMと同じ Hero59 / C0=10 / C1=23 / B=61 まで戻りました。残る差はaction4のprevious-B fallbackだけで、ROM 61→60、C++ 61→62。ここで再度同じ入口の Hero battleWorld / occupancy[60]/[62] / row4 を実値比較します。
+
+非最適化デバッガは今回その行に実行点が乗らず終了しました。壊れた扱いにはせず、現在の行番号を読み直して PreparePreviousActionPresentationParticipant() 呼び出し直前の実行可能行へ置き直します。
+
+条件式がその最適化状態では評価点に乗らず終了しました。今度は条件なしで PreparePreviousActionPresentationParticipant() 呼び出し行に止め、停止ごとに actionIndex/currentActorId/previousIndex を読んで目的のaction4だけ選別します。
+
+今の停止点は1ターン目 action0でした。ここでは条件式がちゃんと評価可能なので、この実行点のbreakpointを actionIndex==4 && currentActorId==192 に更新して、そのまま目的の2ターン目action4へ進めます。
+
+いまC++ action4入口の差を直接確認しました。row4は正しくnonzero、B fallbackが62を選ぶ直接原因はまだ occupancy[60]=0xFF です。さらにHero battleWorldがC++ (10641,18432)、ROM action4では (-6101,13871)。つまり残差はaction109 selector後〜action4 setup前のbattle-world更新ライフサイクルです。ここをROMの既存hookで時系列に取ります。
+
+ROM action4のHero battleWorld (-6101,13871) がどのpresentation node相当かを先に確認します。これが 02049B10 のnode座標そのものならcommit経路、そうでなければroute movement中の中間座標です。C++の同じnode tableでnearest/実座標を直接確認します。
