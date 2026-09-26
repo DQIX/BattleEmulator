@@ -540,7 +540,7 @@ for (const [name, file] of inputs) {
 const targetCsvName = "dq9-action-target-classification.csv";
 const targetCsv = await readFile(path.join(root, targetCsvName), "utf8");
 const classification = parseActionClassification(targetCsv);
-const monsterRadiusCsvPath = path.resolve(root, "../../../BattleArrow/dq9-monster-radius.csv");
+const monsterRadiusCsvPath = path.resolve(root, "./dq9-monster-radius.csv");
 const monsterRadiusCsv = await readFile(monsterRadiusCsvPath, "utf8");
 const { radii: monsterBattleRadius, rows: monsterRadiusRows } = parseMonsterRadiusCsv(monsterRadiusCsv);
 const {
