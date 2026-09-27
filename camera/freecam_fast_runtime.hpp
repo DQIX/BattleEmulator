@@ -1582,9 +1582,9 @@ inline void SetTargetRecord02161720ActorId(const std::uint16_t actorId) noexcept
 
 inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
 
-// Before overlay_d_00:0216F62C checks the camera-placement bounds, the ROM's
-// movement lifecycle has copied the presentation transform into the battle
-// actor transform through __Vector3_Operator_= (02013920). Live seed
+// Before overlay_d_00:0216F62C checks the camera-placement bounds, a
+// presentation-synchronized actor may have copied its presentation transform
+// into the battle actor through __Vector3_Operator_= (02013920). Live seed
 // 0x1FA72D / turn 2 shows Iron Man B entering action 0x0018 with
 // presentation/battle X,Z = 31925,0 immediately before the bounds clamp,
 // despite its base battle transform being 9009,-10240 at the end of turn 1.
@@ -1595,6 +1595,12 @@ inline constexpr std::int32_t kCameraActorWorldBound = INT32_C(0x6000);
     const std::size_t actorIndex = FindPresentationActorIndex(actorId);
     if (actorIndex >= state.presentationActorCount) return false;
     auto& actor = state.presentationActors[actorIndex];
+    // 02049BC0..02049BD4 gates the physical copy on flags & 0x21. With
+    // neither bit set, 0216F62C must use the existing physical transform:
+    // recentering a logical node is not movement. The live flags=2 path
+    // retains its base world and auxiliary node instead of clamping the
+    // logical node position and incorrectly resetting every actor.
+    if ((actor.presentationFlags & UINT32_C(0x21)) == 0) return true;
     actor.battleWorldKnown = true;
     actor.battleWorldX = actor.worldX;
     actor.battleWorldY = actor.worldY;
