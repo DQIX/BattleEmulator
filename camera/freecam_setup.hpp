@@ -779,14 +779,23 @@ constexpr void InvalidateGoalNeighborConflicts(
         return result;
     }
 
-    std::array<std::uint8_t, 12> outerCandidates{};
-    std::array<std::uint8_t, 6> innerCandidates{};
+    // 021E2330/021E2334 place the candidate lists at SP+0x2e/SP+0x22.
+    // The 81-node scan does not cap either list: inner entries beyond 12
+    // overwrite the beginning of the outer list before 021E1D90 reads it.
+    // Live 021E234C writes confirm this overlap; use one bounded buffer to
+    // reproduce the ROM's byte layout without overflowing a C++ array.
+    constexpr std::size_t outerCandidateOffset = 0x2e - 0x22;
+    std::array<std::uint8_t, outerCandidateOffset + kPresentationNodePositions.size()> candidateScratch{};
+    const std::span<std::uint8_t> innerCandidates(
+        candidateScratch.data(), kPresentationNodePositions.size());
+    const std::span<std::uint8_t> outerCandidates(
+        candidateScratch.data() + outerCandidateOffset, kPresentationNodePositions.size());
     std::size_t outerCount = 0;
     std::size_t innerCount = 0;
     for (std::uint8_t node = 0; node < levels.size(); ++node) {
-        if (levels[node] == maximumLayer - 1 && innerCount < innerCandidates.size()) {
+        if (levels[node] == maximumLayer - 1) {
             innerCandidates[innerCount++] = node;
-        } else if (levels[node] == maximumLayer && outerCount < outerCandidates.size()) {
+        } else if (levels[node] == maximumLayer) {
             outerCandidates[outerCount++] = node;
         }
     }
