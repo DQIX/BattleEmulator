@@ -867,6 +867,15 @@ namespace {
             return false;
         }
 
+        // A worker reuses the same WASM instance for multiple searches.
+        // ProcessInputBuilder appends through valuesIndex, so carrying the
+        // previous request's state forward eventually writes past these
+        // fixed-size buffers and also leaves stale actions in the next search.
+        valuesIndex = 0;
+        foundTurnOffset = 0;
+        std::memset(values1, 0, sizeof(values1));
+        std::memset(aActions1, 0, sizeof(aActions1));
+
         auto tokens = splitTokens(input);
         std::vector<std::string> argvStorage;
         argvStorage.reserve(tokens.size() + 4);
