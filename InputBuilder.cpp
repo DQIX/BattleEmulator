@@ -35,23 +35,11 @@ void InputBuilder::push(int damage, const char prefix) {
         entry.candidates.push_back(BattleEmulator::SLEEPING);
     } else
 
-#if defined(BattleEmulatorLV19)
     if (prefix == 'a') {
-        if (damage > 30 && damage <= 60) {
-            entry.candidates.push_back(BattleEmulator::MIRACLE_SLASH);
-        } else {
-            entry.candidates.push_back(BattleEmulator::ATTACK_ALLY);
-        }
+        entry.candidates.push_back(BattleEmulator::ATTACK_ALLY);
     } else {
         entry.candidates.push_back(BattleEmulator::ATTACK_ENEMY);
     }
-#elif defined(BattleEmulatorLV15) || defined(BattleEmulatorLV13)
-        if (prefix == 'a') {
-            entry.candidates.push_back(BattleEmulator::ATTACK_ALLY);
-        } else {
-            entry.candidates.push_back(BattleEmulator::ATTACK_ENEMY);
-        }
-#endif
 
     if (entry.candidates.empty()) {
         std::cerr << "WARNING: A damage value of 0 " << damage << " has no applicable range\n";
