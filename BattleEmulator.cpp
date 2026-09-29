@@ -165,8 +165,9 @@ bool BattleEmulator::StepBattle(State& s, Command command, BattleResult* result,
         if (trace) std::cout << "TRACE speed actor=" << i << " consume=" << at << " value=" << std::setprecision(9) << speed << '\n';
     }
     std::stable_sort(order.begin(), order.begin()+count, [](const auto& a, const auto& b) {
-        const bool af = a.action == FLEE_ENEMY, bf = b.action == FLEE_ENEMY;
-        return af != bf ? af : a.speed > b.speed;
+        // Fresh 0x0822b3 T3: hero defend (#267...) executes before the
+        // remaining slime's flee (#277...). Flee is not a priority class.
+        return a.speed > b.speed;
     });
     boundary(s, trace, "start enemy selection");
     for (int i = 0; i < count; ++i) {
@@ -230,10 +231,19 @@ bool BattleEmulator::StepBattle(State& s, Command command, BattleResult* result,
             damage = 0;
             if (q.target == 1) skip(s, trace, 0x021ed7a8);
         } else if (attack) {
-            // Slime/Cruelcumber rage check is reached only by a nonlethal hit.
-            // Fresh 0x0822b3: hero->Slime A, Ctable checkpoints 73 and 74.
+            // Keep the existing ProcessRage HP-threshold partition. Merely
+            // surviving a hit is insufficient: 0x3a259d Cruelcumber 10->5
+            // consumes neither roll, while 0x0822b3 Slime A 8->2 consumes
+            // eb8c8/eb8f0 (#73/#74). Exact 50%/25% are not below thresholds.
             if (q.target >= 2 && damage > 0 && damage < s.players[q.target].hp) {
-                skip(s, trace, 0x021eb8c8); skip(s, trace, 0x021eb8f0);
+                const auto& enemy = s.players[q.target];
+                const int afterHp = enemy.hp - damage;
+                const bool crossedHalf = enemy.hp * 2 >= enemy.maxHp && afterHp * 2 < enemy.maxHp;
+                const bool crossedQuarter = enemy.hp * 2 < enemy.maxHp &&
+                    enemy.hp * 4 >= enemy.maxHp && afterHp * 4 < enemy.maxHp;
+                if (crossedHalf || crossedQuarter) {
+                    skip(s, trace, 0x021eb8c8); skip(s, trace, 0x021eb8f0);
+                }
             }
             if (damage > 0) { skip(s, trace, 0x02158ac4); skip(s, trace, 0x021e54fc); }
             // This encounter's level-1 hero does not enter the charge rolls;
@@ -241,8 +251,10 @@ bool BattleEmulator::StepBattle(State& s, Command command, BattleResult* result,
             // The zero-damage rescue result still reaches this guest charge roll
             // (fresh 0x0822b3, turn 2: rescue #168 -> charge #169).
             if (q.target == 1) skip(s, trace, 0x021ed7a8);
-            if (q.actor == 1) skip(s, trace, 0x021edaf4);
             Player::reduceHp(s.players[q.target], damage);
+            // Last-enemy lethal hit exits before outgoing coup charge:
+            // fresh 0x3a259d T3, e54fc #345 -> freecam #346, no edaf4.
+            if (q.actor == 1 && firstEnemy(s) >= 0) skip(s, trace, 0x021edaf4);
         } else if (heal) {
             skip(s, trace, 0x021e54fc);
             for (int enemy = 2; enemy < 5; ++enemy) if (s.players[enemy].alive()) {

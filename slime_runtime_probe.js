@@ -17,6 +17,9 @@ let activeGoalSetup = null;
 const goalReturns = new Map();
 const retreatReturns = new Map();
 let lastFreecam = null;
+// Renderer provenance is opt-in. Ordinary replays must not install its
+// high-frequency callbacks (issue.txt v13).
+const CAPTURE_CAMERA = false;
 const valid = (p, n = 1) => p >= 0x02000000 && p + n <= 0x03000000;
 const reg = async name => (await memory.getregister(name, CPU)) >>> 0;
 const bytes = async (p, n) => {
@@ -103,6 +106,15 @@ for (const address of [0x021f8910, 0x021f89a8, 0x021f8acc, 0x021f8bc4, 0x021f8cb
     if (activeAi) activeAi.flow.push({pc: address, r0: await reg('r0'), lr: await reg('r14')});
   }, {cpu: CPU});
 }
+// One entry per enemy target decision, not a per-frame/render hook.
+await memory.registerexec(0x021566b0, async () => {
+  const id=await reg('r1'), p=await u32(0x020f33e0+4*id);
+  if (!valid(p,0x14c)) return;
+  const combat=await u32(p+0x138), ai=await u32(p+0x148);
+  const b=await bytes(combat+0x2e,8);
+  retain({kind:'enemy-target',id,seed:await seed(),flags:await u32(ai+0x10),
+    rageTarget:half(b),word30:half(b,2),weightPlus2:half(b,4),weightPlus1:half(b,6)});
+}, {cpu:CPU});
 // One bounded provenance interval: the previous action has completed, but
 // the next DB91C/E08BC setup has not read its uninitialized stack scratch.
 // Re-run this persistent script after capture to remove its write hooks.
@@ -145,6 +157,7 @@ await memory.registerexec(0x02161ffc, async () => {
   await emu.pause();
 }, {cpu:CPU});
 }
+if (CAPTURE_CAMERA) {
 await memory.registerexec(0x0216fda4,async()=>{
   const sp=await reg('sp');
   lastFreecam={actor:await reg('r1'),target:await reg('r2'),param5:await u32(sp),seed:await seed()};
@@ -202,6 +215,7 @@ await memory.registerexec(0x021e1a10, async () => {
   for (let i = 0; i < count; ++i) rows.push({id: b[i * 12], presentationId: b[i * 12 + 1], field4: word(b, i * 12 + 4), actor: word(b, i * 12 + 8)});
   retain({kind: 'camera-roster', seed: await seed(), lastFreecam:lastFreecam?{...lastFreecam}:null, table, lr: await reg('r14'), index: await u32(0x0238edc0 + 0x57c8), rows});
 }, {cpu: CPU});
+}
 return [
   {name:'getSlimeObservation',description:'Read Ctable_jp raw text and compact live observations; no derived RNG counter.',handler:async params=>{
     const c=await mcp.call('listScriptPrint',{id:5,max:8192});
@@ -209,7 +223,7 @@ return [
     const trial=texts.findLastIndex(t=>t.includes('trial seed marker:'));
     if(trial>=0 && !params?.allTrials) texts=texts.slice(trial);
     if(params?.lastTurn){const at=texts.findLastIndex(t=>t.includes('turn-order speed: actor=0 '));if(at>0)texts=texts.slice(at-1);}
-    const filter=params?.filter==='camera'?/freecam|camera|lr[= ]0x0216f|trial seed/:params?.filter==='rng'?/checkpoint|start FUN|end FUN|damage finalize|ProcessingDefense1|trial seed/:params?.filter==='boundary'?/start |end |trial seed|live seed/:null;
+    const filter=params?.filter==='combat'?/start FUN_02158dfc|damage finalize|ProcessingDefense1|c rand: lr 0x02159d40|c rand: lr 0x0215962c|c rand: lr 0x0216f|trial seed/:params?.filter==='camera'?/freecam|camera|lr[= ]0x0216f|trial seed/:params?.filter==='rng'?/checkpoint|start FUN|end FUN|damage finalize|ProcessingDefense1|trial seed/:params?.filter==='boundary'?/start |end |trial seed|live seed/:null;
     return {ctable:filter?texts.filter(t=>filter.test(t)).join('\n'):texts.join('\n'),events:events.filter(e=>!params?.kind||e.kind===params.kind)};
   }},
   {name:'armSlimeRow4Writer',description:'After command submission, arm one next-action stack-writer interval; pauses at its endpoint. Reload the probe after reading to remove watches.',handler:async params=>{writerRequest=Number(params.index);writerActive=false;writerLast=[null,null,null,null,null];writerCaptures=[];await installWriterHooks();return{index:writerRequest};}},

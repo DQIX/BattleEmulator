@@ -1,6 +1,3 @@
-読み込めてるよv13
+読み込めてるよv14
 
-probeは手段であって、目的じゃないぞ。わかったことはすぐ実装しろ
-あとrow4を追いすぎてエミュレータの速度落ちてるよ
-row4はスタックごみだよ
-C:\Users\owner\Documents\tunnelworkspace\BattleArrow\BattleEmulator\camera\requested.md
+rowについては読むたびにわかったことC:\Users\owner\Documents\tunnelworkspace\BattleArrow\BattleEmulator\camera\slime-row4-provenance.mdに書いといて
