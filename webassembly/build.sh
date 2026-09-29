@@ -31,14 +31,14 @@ cd "${ROOT}"
 # ------------------------------------------------------------
 declare -A BRANCH_VARIANTS
 
-BRANCH_VARIANTS[gerunikku1_new_arugo]="
-gerunikku1_gouketu: -Dgerunikku=1
+BRANCH_VARIANTS[slime_new_arugo]="
+slime: -Dgerunikku=1
 "
 
 
 
 #BRANCH_VARIANTS[webassembly]="
-#default:-DMULTITHREADING=0
+#slime: -Dgerunikku=1-DMULTITHREADING=0
 #"
 
 # 未定義ブランチ用フォールバック
@@ -52,8 +52,7 @@ SRC_FILES=(
   BattleEmulator.cpp
   camera.cpp
   debug.cpp
-  GerunikkuSearch.cpp
-  GerunikkuSearchCli.cpp
+
 )
 
 # Generated camera kernels are intentionally not tracked. Rebuild them from

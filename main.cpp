@@ -1,2070 +1,260 @@
-#include <iostream>
-#include <cstring>
-#include <cmath>
-#include <iomanip>
-#include <limits>
-#include <sstream>
-#include <fstream>
-#include <vector>
-#include <chrono>
-
-#include "lcg.h"
 #include "BattleEmulator.h"
-#include "camera.h"
-#include "camera/freecam_action_mapper.hpp"
-#include "debug.h"
-#include "GerunikkuSearchCli.h"
+#include "lcg.h"
 
-#ifdef DEBUG
+#include <algorithm>
+#include <array>
+#include <charconv>
+#include <cstdint>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <vector>
 
-#include <chrono>
-
-#endif
-
-
-int startturn = -1;
-
-#if defined(gerunikku)
-
-constexpr Player copiedPlayers[4] = {
-	// プレイヤー1
-	{
-	301, 301, 320, 320, 282, 282, 187, 234, 161, // 最初のメンバー
-		161, false, false, 0, false, 0, -1,
-		// specialCharge, dirtySpecialCharge, specialChargeTurn, inactive, paralysis, paralysisLevel, paralysisTurns
-		8, 1.0, false, -1, 0, -1, // SpecialMedicineCount, defence, sleeping, sleepingTurn, BuffLevel, BuffTurns
-		false, -1, 0, -1, 0, false, 1, 1, 1 , false
-	}, // hasMagicMirror, MagicMirrorTurn, AtkBuffLevel, AtkBuffTurn, TensionLevel
-	{
-		402, 402, 161, 161, 256, 256, 98, 0, 10,255,
-	},
-	// プレイヤー2
-	{
-		1854, 1854, 125, 125, 238, 238, 148, 0, 255,255,
-	},
-{
-		402, 402, 161, 161, 256, 256, 98, 0, 10,255,
-	},
-
-};
-
-#endif
-
-
-
-// 勝利フラグと確定した敵残HPを返す
-struct RunResult {
-	bool win;
-	int enemyHp;   // 使わなくなったが一応残す
-	int turn;
-	int position;
-};
-
-int toint(char* string);
-
-//void processResult(const Player *copiedPlayers, const uint64_t seed, std::string input);
-
-std::string ltrim(const std::string& s);
-
-std::string rtrim(const std::string& s);
-
-std::string trim(const std::string& s);
-
-bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aActions[350], bool dropbug,
-                   std::stringstream& ss, const gerunikku_search::Limits& limits = {});
-
-uint64_t BruteForceRequest(const Player copiedPlayers2[4], int hours, int minutes, int seconds, int turns,
-                           int eActions[350],
-                           int aActions[350], int damages[350]);
-
-
-void mainLoop(const Player copiedPlayers2[4]);
-
-using namespace std;
-
-int foundSeeds = 0;
-
-uint64_t FoundSeed = 0;
-
-void printHeader(std::stringstream& ss);
-
-// ヘッダーを出力する関数
-void printHeader(std::stringstream& ss){
-	ss << std::left << std::setw(6) << "turn"
-#if defined(gerunikku)
-		<< std::setw(8) << "equip"
-#endif
-		<< std::setw(18) << "aAct"
-		<< std::setw(8) << "target"
-		<< std::setw(18) << "eAct1"
-		<< std::setw(18) << "eAct2"
-		<< std::setw(18) << "eAct3"
-		<< std::setw(18) << "eAct4"
-		<< std::setw(6) << "aD"
-		<< std::setw(6) << "eD1"
-		<< std::setw(6) << "eD2"
-		<< std::setw(6) << "eD3"
-		<< std::setw(6) << "eD4"
-		<< std::setw(6) << "ahp"
-#if defined(gerunikku) && defined(DEBUG2)
-		<< std::setw(6) << "AHP"
-		<< std::setw(8) << "GeruHP"
-		<< std::setw(6) << "BHP"
-#elif defined(gerunikku)
-		<< std::setw(6) << "ehp"
-		<< std::setw(6) << "AB"
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
 #else
-		<< std::setw(6) << "ehp"
-#endif
-		<< std::setw(6) << "amp"
-
-		<< std::setw(6) << "ini"
-		//<< std::setw(6) << "Para"
-		//<< std::setw(6) << "Sle"
-		<< std::setw(6) << "ATT"
-		<< std::setw(6) << "DET"
-		//<< std::setw(6) << "MMT"
-		//<< std::setw(6) << "Tab"
-		<< std::setw(6) << "Sct" << "\n";
-	ss << std::string(205, '-') << "\n"; // 区切り線を出力
-
-}
-
-std::string dumpTable(const BattleResult& result,const int32_t gene[350], int PastTurns);
-
-std::string dumpTable(const BattleResult& result, const int32_t gene[350], int PastTurns){
-	stringstream ss6;
-	printHeader(ss6);
-	auto appendHeroTargetColumn = [&](const int turn) {
-		const int packed = turn >= 0 ? gene[turn] : -1;
-		const int target = packed != 0 && packed != -1 ? BattleEmulator::HeroTargetId(packed) : -1;
-		const char* targetName = "";
-		switch (target) {
-			case 1: targetName = "A"; break;
-			case 2: targetName = "Geru"; break;
-			case 3: targetName = "B"; break;
-			default: break;
-		}
-		ss6 << std::setw(8) << targetName;
-	};
-	int currentTurn = -1;
-	int eDamage[4] = {-1, -1, -1, -1}, aDamage = -1;
-	bool initiative_tmp = false;
-	std::string eAction[4], aAction, equipmentChange, sp, tmpState, ATKTurn1, DEFTurn1, magicMirrorTurn1, specialChargeTurn1, amp1, ahp2,
-	            ehp2, enemyHpA2, enemyHpB2, enemyAlive2, amp2;
-	auto counter = 0;
-	// データのループ
-	for(int i = 0; i < result.position; ++i){
-		auto action = result.actions[i];
-		auto damage = result.damages[i];
-		auto ATKTurn = result.AtkBuffTurns[i];
-		auto DEFTurn = result.BuffTurnss[i];
-		auto magicMirrorTurn = result.MagicMirrorTurns[i];
-		auto turn = result.turns[i];
-		auto initiative = result.initiative[i];
-		auto ehp1 = result.ehp[i];
-		auto enemyHpA1 = result.enemyHpA[i];
-		auto enemyHpB1 = result.enemyHpB[i];
-		auto ahp1 = result.ahp[i];
-		auto isEnemy = result.isEnemy[i];
-		auto state = result.state[i] & 0xf;
-		auto specialChargeTurn = result.scTurn[i];
-		auto defenseFlag = result.defenseFlag[i];
-		int amp = -1;
-		if(i >= 1){
-			amp = result.amp[i - 1];
-		}
-
-		auto special = gene[turn];
-
-		std::string specialAction;
-		if(special != 0 && special != -1){
-			specialAction = BattleEmulator::getActionName(BattleEmulator::HeroActionId(special));
-		}
-
-		// ターンが変わったら、前のターンのデータを出力
-		if(turn != currentTurn) {
-			if(currentTurn != -1){
-				// 前のターンの出力
-				if(turn > PastTurns){
-					ss6
-						<< std::left << std::setw(6) << (currentTurn + 1)
-#if defined(gerunikku)
-						<< std::setw(8) << equipmentChange
-#endif
-						<< std::setw(18) << aAction;
-					appendHeroTargetColumn(currentTurn);
-					ss6
-						<< std::setw(18) << eAction[0]
-						<< std::setw(18) << eAction[1]
-						<< std::setw(18) << eAction[2]
-						<< std::setw(18) << eAction[3]
-						<< std::setw(6) << aDamage
-						<< std::setw(6) << eDamage[0]
-						<< std::setw(6) << eDamage[1]
-						<< std::setw(6) << eDamage[2]
-						<< std::setw(6) << eDamage[3]
-						<< std::setw(6) << ahp2
-#if defined(gerunikku) && defined(DEBUG2)
-						<< std::setw(6) << enemyHpA2
-						<< std::setw(8) << ehp2
-						<< std::setw(6) << enemyHpB2
-#elif defined(gerunikku)
-						<< std::setw(6) << ehp2
-						<< std::setw(6) << enemyAlive2
-#else
-						<< std::setw(6) << ehp2
-#endif
-						<< std::setw(6) << amp2
-						<< std::setw(6) << (initiative_tmp ? "yes" : "")
-						//<< std::setw(6) << ((aAction == "Paralysis" || aAction == "Cure Paralysis") ? "yes" : "")
-						//<< std::setw(6) << ((aAction == "Sleeping" || aAction == "Cure Sleeping") ? "yes" : "")
-						<< std::setw(6) << ATKTurn1
-						<< std::setw(6) << DEFTurn1
-						//<< std::setw(6) << magicMirrorTurn1
-						//<< std::setw(6) << tmpState
-						<< std::setw(6) << specialChargeTurn1
-						<< std::setw(11) << "" << "\n";
-				}
-			}
-			// ターンの初期化
-			currentTurn = turn;
-			eAction[0] = "";
-			eAction[1] = "";
-			eAction[2] = "";
-			eAction[3] = "";
-			aAction = "";
-			equipmentChange = "";
-			eDamage[0] = 0;
-			eDamage[1] = 0;
-			eDamage[2] = 0;
-			eDamage[3] = 0;
-			aDamage = 0;
-			sp = "";
-			initiative_tmp = false;
-			counter = 0;
-			ATKTurn1 = "";
-			DEFTurn1 = "";
-			magicMirrorTurn1 = "";
-			specialChargeTurn1 = "";
-			//tmpState = (state == 0) ? "A" : "B";
-		}
-
-		// 敵か味方の行動を適切な変数に格納
-		if(isEnemy){
-			eAction[counter] = BattleEmulator::getActionName(action);
-			eDamage[counter] = damage;
-			counter++;
-			ahp2 = std::to_string(ahp1);
-		}else{
-			ehp2 = std::to_string(ehp1);
-#if defined(gerunikku)
-			enemyHpA2 = std::to_string(enemyHpA1);
-			enemyHpB2 = std::to_string(enemyHpB1);
-			enemyAlive2.clear();
-			enemyAlive2 += enemyHpA1 > 0 ? 'A' : '*';
-			enemyAlive2 += enemyHpB1 > 0 ? 'B' : '*';
-#endif
-			amp2 = std::to_string(amp);
-			aAction = BattleEmulator::getActionName(action);
-#if defined(gerunikku)
-			if(result.equipmentChange[i] == 1) equipmentChange = "on";
-			else if(result.equipmentChange[i] == 2) equipmentChange = "sude";
-#endif
-			aDamage = damage;
-			if(ATKTurn >= 0){
-				ATKTurn1 = std::to_string(ATKTurn);
-			}
-			if(DEFTurn >= 0){
-				DEFTurn1 = std::to_string(DEFTurn);
-			}
-			if(magicMirrorTurn >= 0){
-				magicMirrorTurn1 = std::to_string(magicMirrorTurn);
-			}
-			if(specialChargeTurn > 0){
-				specialChargeTurn1 = std::to_string(specialChargeTurn);
-			}
-
-			amp1 = std::to_string(amp);
-
-			initiative_tmp = initiative;
-			sp = specialAction;
-
-			if(eAction[0] != "magic Burst" && eAction[1] != "magic Burst" &&
-			   eAction[2] != "magic Burst" && eAction[3] != "magic Burst"){
-				if(!initiative && action == BattleEmulator::TURN_SKIPPED || action == BattleEmulator::PARALYSIS ||
-					action == BattleEmulator::SLEEPING){
-					sp = "---------------";
-				}
-				if((action == BattleEmulator::CURE_SLEEPING || action == BattleEmulator::CURE_PARALYSIS)){
-					sp = "---------------";
-				}
-				if((action == BattleEmulator::INACTIVE_ALLY) && !defenseFlag){
-					sp = "---------------";
-				}
-			}
-		}
-	}
-
-	// 最後のターンのデータを出力
-	if(currentTurn != -1){
-		ss6
-			<< std::left << std::setw(6) << (currentTurn + 1)
-#if defined(gerunikku)
-<< std::setw(8) << equipmentChange
-#endif
-			<< std::setw(18) << aAction;
-		appendHeroTargetColumn(currentTurn);
-		ss6
-			<< std::setw(18) << eAction[0]
-			<< std::setw(18) << eAction[1]
-			<< std::setw(18) << eAction[2]
-			<< std::setw(18) << eAction[3]
-			<< std::setw(6) << aDamage
-			<< std::setw(6) << eDamage[0]
-			<< std::setw(6) << eDamage[1]
-			<< std::setw(6) << eDamage[2]
-			<< std::setw(6) << eDamage[3]
-			<< std::setw(6) << ahp2
-#if defined(gerunikku) && defined(DEBUG2)
-			<< std::setw(6) << enemyHpA2
-			<< std::setw(8) << ehp2
-			<< std::setw(6) << enemyHpB2
-#elif defined(gerunikku)
-			<< std::setw(6) << ehp2
-			<< std::setw(6) << enemyAlive2
-#else
-			<< std::setw(6) << ehp2
-#endif
-			<< std::setw(6) << amp2
-			<< std::setw(6) << (initiative_tmp ? "yes" : "")
-			//<< std::setw(6) << ((aAction == "Paralysis" || aAction == "Cure Paralysis") ? "yes" : "")
-			//<< std::setw(6) << ((aAction == "Sleeping") ? "yes" : "")
-			<< std::setw(6) << ATKTurn1
-			<< std::setw(6) << DEFTurn1
-			//<< std::setw(6) << magicMirrorTurn1
-			//<< std::setw(6) << tmpState
-			<< std::setw(6) << specialChargeTurn1
-			<< std::setw(11) << "" << "\n";
-	}
-
-	return ss6.str();
-}
-
-const std::string version = "v1.0.17e";
-
-void showHeader(){
-#ifdef BUILD_DATE
-	const std::string buildDate = BUILD_DATE;
-#else
-	const std::string buildDate = "Unknown";
-#endif
-
-#ifdef BUILD_TIME
-	const std::string buildTime = BUILD_TIME;
-#else
-	const std::string buildTime = "Unknown";
-#endif
-
-	auto compiler = "Unknown";
-#if defined(MINGW_BUILD)
-	compiler = "mingw";
-#elif defined(MSVC_BUILD)
-	compiler = "msBuild";
-#endif
-
-
-#if defined(OPTIMIZATION_O3_ENABLED)
-	std::cout << "dq9 Corvus battle emulator " << version << " (Optimized for O3), Build date: " << buildDate << ", " <<
-		buildTime << " UTC/GMT, Compiler: " << compiler << std::endl;
-#elif defined(OPTIMIZATION_O2_ENABLED)
-	std::cout << "dq9 Corvus battle emulator " << version << " (Optimized for O2), Build date: " << buildDate << ", " << buildTime << " UTC/GMT, Compiler: " << compiler << std::endl;
-#elif defined(NO_OPTIMIZATION)
-	std::cout << "dq9 Corvus battle emulator " << version << " (No optimization), Build date: " << buildDate << ", " << buildTime << " UTC/GMT, Compiler: " << compiler << std::endl;
-#else
-#endif
-	std::cout << "Waiting for input[q/b]: " << std::endl;
-}
-
-
-//int main(int argc, char *argv[]) {
-
-bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aActions[350], bool dropbug,
-                   std::stringstream &ss, const gerunikku_search::Limits& limits){
-#if defined(gerunikku) && !defined(OPTIMIZE_MODE)
-	int knownTurns = 0;
-	while (knownTurns < 349 && aActions[knownTurns] > 0) ++knownTurns;
-	const auto searched = gerunikku_search::runRequest(copiedPlayers2, seed,
-		std::span<const int32_t>(aActions, knownTurns), limits, ss);
-	return searched.validInput && searched.verified && searched.won;
-#endif
-	int32_t gene[350] = {0};
-	auto turns = 0;
-	for(int i = 0; i < 349; ++i){
-		gene[i] = aActions[i];
-		if(aActions[i] == -1){
-			gene[i] = -1;
-			break;
-		}
-		turns++;
-	}
-
-	//探索成功
-	return true;
-}
-
-// ブルートフォースリクエスト関数
-[[nodiscard]] uint64_t BruteForceRequest(const Player copiedPlayers2[4], int hours, int minutes, int seconds, int turns,
-                                         int eActions[350],
-                                         int aActions[350], int damages[350]){
-	std::cout << "BruteForceRequest executed with time " << hours << ":" << minutes << ":" << seconds << std::endl;
-	std::cout << "eActions: ";
-	for(int i = 0; i < 350 && eActions[i] != -1; ++i) std::cout << eActions[i] << " ";
-	std::cout << "\naActions: ";
-	for(int i = 0; i < 350 && aActions[i] != -1; ++i) std::cout << aActions[i] << " ";
-	std::cout << "\ndamages: ";
-	for(int i = 0; i < 350 && damages[i] != -1; ++i) std::cout << damages[i] << " ";
-	std::cout << std::endl;
-
-	foundSeeds = 0;
-	FoundSeed = 0;
-
-	uint64_t totalSeconds = hours * 3600 + minutes * 60 + seconds;
-	totalSeconds = totalSeconds;
-	//数字は探索範囲(秒)
-	auto time1 = static_cast<uint64_t>(floor((totalSeconds - 30) * (1 / 0.12515)));
-	time1 = time1 << 16;
-	std::cout << time1 << std::endl;
-
-
-
-	//数字は探索範囲(秒)
-	auto time2 = static_cast<uint64_t>(floor((totalSeconds + 30) * (1 / 0.125155)));
-	time2 = time2 << 16;
-	std::cout << time2 << std::endl;
-	int32_t gene[350] = {0};
-
-	for(int i = 0; i < 349; ++i){
-		gene[i] = aActions[i];
-		if(aActions[i] == -1){
-			gene[i] = -1;
-			break;
-		}
-	}
-
-	/*
-	*NowStateの各ビットの使用状況は下記の通りである。
-	+-+-+-+-+-+-+-+-+- (* NowState) -+-+-+-+-+-+-+-+-+
-	   |            Name            |     size      |
-	0  | Current Rotation Table     |     4bit      |
-	4  | Rotation Internal State    |     4bit      |
-	8  | Free Camera State          |     4bit      |
-	12 | Turn Count Processed       |     20bit     |
-	32 | Combo Previous Attack Id   |     2byte     |
-	40 | Combo Counter              |     1byte     |
-	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	                             合計 6Byte
-	*/
-	int* position = new int(1);
-	auto* nowState = new uint64_t(0);
-	int maxElement = 350;
-	Player players[4];
-	for(uint64_t seed = time1; seed < time2; ++seed){
-		//        if (seed % 1000000000 == 0) {
-		//            std::cout << seed << std::endl;
-		//        }
-		lcg::init(seed);
-		// for (int st = BattleEmulator::TYPE_2A; st < BattleEmulator::TYPE_2D; ++st) {
-		(*nowState) = BattleEmulator::TYPE_2A;
-		(*position) = 1;
-		//std::memcpy(players, copiedPlayers, sizeof(players));
-		players[0] = copiedPlayers[0];
-		players[1] = copiedPlayers[1];
-		players[2] = copiedPlayers[2];
-		players[3] = copiedPlayers[3];
-
-
-		bool resultBool = BattleEmulator::Main(position, turns, gene, players,
-		                                       nullptr, seed, eActions, damages,
-		                                       maxElement,
-		                                       nowState);
-		if(resultBool){
-			//std::cout << seed << ", " << st << std::endl;
-			std::cout << std::hex << seed << std::dec << std::endl;
-			FoundSeed = seed;
-			foundSeeds++;
-		}
-		//}
-	}
-	delete position;
-	delete nowState;
-
-	std::cout << std::endl << "found: " << foundSeeds << std::endl;
-
-	if(foundSeeds == 1){
-		return FoundSeed;
-	}
-	if(foundSeeds == 0){
-		std::cout << "not found!!!" << std::endl;
-		return 0;
-	}
-	FoundSeed = 0;
-	foundSeeds = 0;
-	return 0;
-}
-
-
-void BruteForceMainLoop(const Player copiedPlayers[4], uint64_t start, uint64_t end, int gene[350],
-						int damages[350], int eaction1[350]) {
-	int maxElement = 350;
-	for (uint64_t seed = start; seed < end; ++seed) {
-		BattleEmulator::resetStartTurn();
-		lcg::init(seed);
-		int position = 1;
-		uint64_t nowState = 0;
-		Player players[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
-
-
-		bool resultBool = BattleEmulator::Main(&position, 100, gene, players,
-											  nullptr, seed, eaction1,
-											   damages,
-											   maxElement,
-											   &nowState);
-		if (resultBool) {
-			std::cout << seed << std::endl;
-			FoundSeed = seed;
-			foundSeeds++;
-			startturn = BattleEmulator::getStartTurn();
-		}
-	}
-}
-
-// 入力文字列を配列に分割するヘルパー関数
-void parseActions(const std::string& str, int actions[350]){
-	std::istringstream iss(str);
-	int value, index = 0;
-	while(iss >> value && index < 349){
-		actions[index++] = value;
-	}
-	actions[index++] = -1;
-}
-
-
-// メインループ
-void mainLoop(const Player copiedPlayers[4]){
-	int eActions[350] = {0};
-	int aActions[350] = {0};
-	int damages[350] = {0};
-
-	std::string input;
-	while(std::getline(std::cin, input)){
-		//意図せずcinが閉じられると無限ループするので対策
-		if(input.empty()) continue;
-
-		char command = input[0];
-		if(command == 'q'){
-			std::cout << "Exiting loop." << std::endl;
-			return;
-		}
-		if(command == 'b'){
-			// Check if there is enough input (e.g., at least "b " and some parameters)
-			if(input.size() < 3){
-				std::cerr << "Error: insufficient input for command 'b'." << std::endl;
-				continue;
-			}
-
-			// Extract the substring after the command character and a space
-			std::string params = input.substr(2);
-			if(params.empty()){
-				std::cerr << "Error: no parameters provided for command 'b'." << std::endl;
-				continue;
-			}
-
-			std::istringstream ss(params);
-
-			int hours, minutes, seconds, turns;
-			if(!(ss >> hours >> minutes >> seconds >> turns)){
-				std::cerr << "Error: failed to parse time parameters." << std::endl;
-				continue;
-			}
-
-			// Read the three action strings separated by '-' delimiters
-			std::string eActionsStr, aActionsStr, damagesStr;
-			if(!std::getline(ss, eActionsStr, '-')){
-				std::cerr << "Error: failed to read eActions." << std::endl;
-				continue;
-			}
-			if(!std::getline(ss, aActionsStr, '-')){
-				std::cerr << "Error: failed to read aActions." << std::endl;
-				continue;
-			}
-			if(!std::getline(ss, damagesStr, '-')){
-				std::cerr << "Error: failed to read damages." << std::endl;
-				continue;
-			}
-
-			// 各アクション配列に値を代入
-			parseActions(eActionsStr, eActions);
-			parseActions(aActionsStr, aActions);
-			parseActions(damagesStr, damages);
-
-			auto seed = BruteForceRequest(copiedPlayers, hours, minutes, seconds, turns, eActions, aActions, damages);
-			if(foundSeeds == 1){
-				std::stringstream ss2;
-				if(!SearchRequest(copiedPlayers, seed, aActions, true, ss2)){
-					std::cout << std::endl;
-					std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
-					std::cout << "      **YOU WILL NOW LOSE!**       " << std::endl;
-					std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
-					std::cout << std::endl;
-				}
-				std::cout << ss2.str();
-			}
-			continue;
-		}
-		if(command == 'h'){
-			showHeader();
-			continue;
-		}
-		std::cerr << "Unknown command." << std::endl;
-	}
-	if(std::cerr.good()){
-		std::cerr <<
-			"Unrecoverable Error: An anomaly occurred in the main loop of the C++ process, forcing the battle emulator process to terminate. To recover, please restart the integrated system"
-			<< std::endl;
-	}
-}
-
-int toint(char* str){
-	try{
-		int number = std::stoi(str);
-		return number;
-	}
-	catch(const std::invalid_argument& e){
-		std::cerr << "Invalid argument: " << e.what() << std::endl;
-		return -1;
-	}
-	catch(const std::out_of_range& e){
-		std::cerr << "Out of range: " << e.what() << std::endl;
-		return -1;
-	}
-}
-
-
-// 左側の空白をトリム
-std::string ltrim(const std::string& s){
-	size_t start = s.find_first_not_of(" \t\n\r\f\v");
-	return (start == std::string::npos) ? "" : s.substr(start);
-}
-
-// 右側の空白をトリム
-std::string rtrim(const std::string& s){
-	size_t end = s.find_last_not_of(" \t\n\r\f\v");
-	return (end == std::string::npos) ? "" : s.substr(0, end + 1);
-}
-
-// 両側の空白をトリム
-std::string trim(const std::string& s){
-	return rtrim(ltrim(s));
-}
-
-
-#if defined(MINGW_BUILD)
-#define __EMSCRIPTEN__
 #define EMSCRIPTEN_KEEPALIVE
 #endif
 
-#ifdef __EMSCRIPTEN__
-#if !defined(MINGW_BUILD) && !defined(MSVC_BUILD)
-#include <emscripten/emscripten.h>
-#endif
 namespace {
-    const int MAX = 350;
-    int aActions5[MAX] = {0};
-    int damages5[MAX] = {0};
-    // aActions[] は味方行動（ホイミ、味方攻撃、麻痺の場合は PARALYSIS）を格納する
-    int eActions5[MAX] = {0};
+using BE = BattleEmulator;
+std::string lastError, lastDump;
+std::vector<int> enemyObservations, damageObservations;
+std::vector<BE::Command> preparedCommands;
+uint64_t foundSeed = 0, lastTurnProcessed = 0;
+int foundSeeds = 0;
 
-    std::string wasmLastDump;
-    std::string wasmLastError;
-    uint64_t wasmLastTurnProcessed = 0;
+uint64_t number(std::string_view text) {
+    int base = 10;
+    if (text.starts_with("0x") || text.starts_with("0X")) { base = 16; text.remove_prefix(2); }
+    uint64_t n{};
+    const auto [end, ec] = std::from_chars(text.data(), text.data()+text.size(), n, base);
+    if (text.empty() || ec != std::errc{} || end != text.data()+text.size()) throw std::invalid_argument("invalid unsigned integer");
+    return n;
+}
 
-    bool buildResultsFromInput(const char *input) {
-        wasmLastError.clear();
-        if (input == nullptr) {
-            wasmLastError = "input is null";
-            return false;
-        }
+BE::Command command(std::string_view text) {
+    const auto colon = text.find(':');
+    const auto actionText = text.substr(0, colon);
+    int packed = 0;
+    if (actionText == "attack") packed = BE::ATTACK_ALLY;
+    else if (actionText == "defend") packed = BE::DEFENCE;
+    else if (actionText == "flee") packed = BE::FLEE_ALLY;
+    else packed = static_cast<int>(number(actionText));
+    BE::Command c{BE::HeroActionId(packed), BE::HeroTargetId(packed), BE::HeroBareHands(packed)};
+    if (colon != std::string_view::npos) c.target = static_cast<int>(number(text.substr(colon+1)));
+    if (c.bareHands || (c.action != BE::ATTACK_ALLY && c.action != BE::DEFENCE && c.action != BE::FLEE_ALLY))
+        throw std::invalid_argument("Slime hero commands: attack/25, defend/27, flee/53 only; no equipment changes");
+    if (c.target != -1 && (c.target < 1 || c.target > 3)) throw std::invalid_argument("enemy target must be 1..3");
+    return c;
+}
 
-    	std::stringstream ss2(input);
+std::vector<int> integers(std::string text) {
+    std::replace(text.begin(), text.end(), ',', ' ');
+    std::istringstream input(text);
+    std::vector<int> values;
+    for (std::string token; input >> token;) values.push_back(static_cast<int>(number(token)));
+    if (values.size() > 349) throw std::invalid_argument("at most 349 observations are supported");
+    return values;
+}
 
-    	// Read the three action strings separated by '-' delimiters
-    	std::string eActionsStr, aActionsStr, damagesStr;
-    	if(!std::getline(ss2, eActionsStr, '-')){
-    		std::cerr << "Error: failed to read eActions." << std::endl;
-    		return false;
-    	}
-    	if(!std::getline(ss2, aActionsStr, '-')){
-    		std::cerr << "Error: failed to read aActions." << std::endl;
-    		return false;
-    	}
-    	if(!std::getline(ss2, damagesStr, '-')){
-    		std::cerr << "Error: failed to read damages." << std::endl;
-    		return false;
-    	}
-
-    	// 各アクション配列に値を代入
-    	parseActions(eActionsStr, eActions5);
-    	parseActions(aActionsStr, aActions5);
-    	parseActions(damagesStr, damages5);
-
+bool prepare(const char* text) {
+    preparedCommands.clear(); enemyObservations.clear(); damageObservations.clear(); lastError.clear();
+    try {
+        if (text == nullptr) throw std::invalid_argument("missing input");
+        std::string_view input(text);
+        const auto first = input.find('-'), second = first == input.npos ? input.npos : input.find('-', first+1);
+        if (first == input.npos || second == input.npos || input.find('-', second+1) != input.npos)
+            throw std::invalid_argument("input format: enemyActions-heroActions-damages");
+        enemyObservations = integers(std::string(input.substr(0, first)));
+        damageObservations = integers(std::string(input.substr(second+1)));
+        std::string commands(input.substr(first+1, second-first-1));
+        std::replace(commands.begin(), commands.end(), ',', ' ');
+        std::istringstream stream(commands);
+        for (std::string token; stream >> token;) preparedCommands.push_back(command(token));
+        if (preparedCommands.empty()) throw std::invalid_argument("at least one hero command is required");
+        for (int a : enemyObservations) if (a != BE::ATTACK_ENEMY && a != BE::FLEE_ENEMY)
+            throw std::invalid_argument("enemy observations support common IDs 1 (attack) and 195 (flee)");
+        if (enemyObservations.empty() && damageObservations.empty()) throw std::invalid_argument("at least one observed action or damage is required");
         return true;
+    } catch (const std::exception& e) { lastError = e.what(); return false; }
+}
+
+uint64_t advance(uint64_t seed, int consumed) {
+    for (int i = 0; i < consumed; ++i) seed = seed * UINT64_C(0x5d588b656c078965) + UINT64_C(0x269ec3);
+    return seed;
+}
+
+void dumpRecords(std::ostream& out, const BattleResult& result) {
+    for (const auto& r : result.records) {
+        out << "TRACE record turn=" << r.turn << " actor=" << r.actor << " rawActor=0x" << std::hex << BE::RawActorId(r.actor)
+            << " rawTarget=0x" << BE::RawActorId(r.target) << std::dec << " action=" << r.action
+            << " name=" << BE::getActionName(r.action) << " target=" << r.target
+            << " damage=" << r.damage << " rawDamage=" << r.rawDamage << " critical=" << r.critical << " evaded=" << r.evaded
+            << " rng=" << r.rngBefore << "->" << r.rngAfter << " hp=";
+        for (int i = 0; i < 5; ++i) out << (i ? "," : "") << r.hp[i];
+        out << " mp=";
+        for (int i = 0; i < 5; ++i) out << (i ? "," : "") << r.mp[i];
+        out << " escaped=";
+        for (int i = 0; i < 5; ++i) out << r.escaped[i];
+        out << '\n';
     }
+}
 
-    std::string buildDumpOutput(const Player copiedPlayers[4], uint64_t seed, int numThreads, bool dropbug) {
-        BattleEmulator::ResetTurnProcessed();
-
-    	std::stringstream ss;
-    	if(!SearchRequest(copiedPlayers, seed, aActions5, true, ss)){
-    		ss << std::endl;
-    		ss << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
-    		ss << "      **YOU WILL NOW LOSE!**       " << std::endl;
-    		ss << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
-    		ss << std::endl;
-
-    		auto turns = 0;
-		    for(int a_action : aActions5){
-			    if(a_action == -1){
-				    break;
-			    }
-		    	turns++;
-		    }
-
-    		BattleResult res;
-    		Player players[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
-    		lcg::init(seed);
-    		int position = 1;
-    		uint64_t nowState = 0;
-    		BattleEmulator::Main(&position, 100, aActions5, players, &res, seed, nullptr, nullptr, -1, &nowState);
-    		ss << dumpTable(res, aActions5, startturn);
-    		ss << "startturn=" << startturn << std::endl;
-    		return ss.str();
-    	}
-    	std::cout << ss.str();
-    	ss << "startturn=" << startturn << std::endl;
-        wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
-        return ss.str();
+void dumpCamera(std::ostream& out) {
+#if defined(gerunikku)
+    for (std::size_t i = 0; i < camera::DebugEventCount(); ++i) {
+        const auto e = camera::DebugEventAt(i);
+        out << "TRACE main-camera turn=" << e.turnSerial+1 << " actionIndex=" << e.actionIndex
+            << " common=" << e.commonActionId << " dq9=" << e.dq9ActionId
+            << " actor=0x" << std::hex << e.actorId << " target=0x" << e.targetId << std::dec
+            << " route=" << int(e.actorRouteCount) << " maxRoute=" << int(e.maxRouteCount)
+            << " call=" << e.productionCalledFreeCamera << " param5=" << e.runtimeParam5
+            << " profile=" << e.membershipProfile << " membership=" << e.actorMembershipCount << " start=";
+        for (int j = 0; j < e.presentationActorCount; ++j) out << (j ? "," : "") << int(e.startNodesBefore[j]);
+        out << " after=";
+        for (int j = 0; j < e.presentationActorCount; ++j) out << (j ? "," : "") << int(e.startNodesAfter[j]);
+        out << " goals=";
+        for (int j = 0; j < e.presentationActorCount; ++j) out << (j ? "," : "") << int(e.goalNodes[j]);
+        out << " row4=";
+        for (int j = 0; j < e.presentationActorCount; ++j) out << (e.rosterField4Known[j] ? (e.rosterField4Nonzero[j] ? '1' : '0') : '?');
+        out << '\n';
     }
+#endif
+}
+
+void replay(std::ostream& out, uint64_t seed, int currentPosition, const std::vector<BE::Command>& commands, bool trace, int calibrationHp = -1, bool detailed = true) {
+    BE::State state;
+    lcg::init(seed);
+    if (!BE::InitializeBattle(state, currentPosition+1)) throw std::runtime_error("Slime presentation initialization failed");
+    if (calibrationHp >= 0) {
+        if (calibrationHp < 1 || calibrationHp > 20) throw std::invalid_argument("calibration HP must be 1..20");
+        state.players[0].hp = calibrationHp;
+        out << "CALIBRATION heroHp=" << calibrationHp << " (not an unchanged Slime.dst replay)\n";
+    }
+#if defined(gerunikku)
+    camera::SetDebugCapture(trace);
+    camera::ClearDebugEvents();
+#endif
+    for (auto c : commands) {
+        if (state.finished) break;
+        BattleResult result;
+        if (!BE::StepBattle(state, c, &result, trace && detailed)) throw std::runtime_error("command unavailable in current battle state");
+        dumpRecords(out, result);
+        out << "TRACE turn-end turn=" << state.turn << " consumed=" << state.position-1 << " next=" << state.position
+            << " live=0x" << std::hex << std::setw(16) << std::setfill('0') << advance(seed, state.position-1)
+            << std::dec << std::setfill(' ') << " finished=" << state.finished << " hp=";
+        for (int i = 0; i < 5; ++i) out << (i ? "," : "") << state.players[i].hp;
+        out << " escaped=";
+        for (const auto& p : state.players) out << p.escaped;
+        out << '\n';
+    }
+    if (trace) dumpCamera(out);
+#if defined(gerunikku)
+    camera::SetDebugCapture(false);
+#endif
+}
+
+bool matchSeed(uint64_t seed, BattleResult& result) {
+    BE::State state;
+    lcg::init(seed);
+    if (!BE::InitializeBattle(state)) return false;
+    std::size_t enemyIndex = 0, damageIndex = 0;
+    for (auto c : preparedCommands) {
+        if (state.finished) break;
+        result.clear();
+        if (!BE::StepBattle(state, c, &result)) return false;
+        for (const auto& r : result.records) {
+            if (r.actor >= 2 && enemyIndex < enemyObservations.size()) {
+                if (r.action != enemyObservations[enemyIndex++]) return false;
+            }
+            // Same flat chronological damage stream used by the frontend.
+            // The guest's visible normal attacks also belong in that stream;
+            // defend/flee dummy calculations and healing are not damage.
+            if ((r.action == BE::ATTACK_ALLY || r.action == BE::ATTACK_ENEMY) && damageIndex < damageObservations.size()) {
+                if (r.damage != damageObservations[damageIndex++]) return false;
+            }
+            if (enemyIndex == enemyObservations.size() && damageIndex == damageObservations.size()) return true;
+        }
+    }
+    return enemyIndex == enemyObservations.size() && damageIndex == damageObservations.size();
+}
 }
 
 extern "C" {
-EMSCRIPTEN_KEEPALIVE int wasm_prepare_input(const char *input) {;
-    if (!buildResultsFromInput(input)) {
-        return 0;
-    }
-
-    return 1;
-}
-
-EMSCRIPTEN_KEEPALIVE const char *wasm_get_last_error() {
-    return wasmLastError.c_str();
-}
-
+EMSCRIPTEN_KEEPALIVE int wasm_prepare_input(const char* input) { return prepare(input) ? 1 : 0; }
+EMSCRIPTEN_KEEPALIVE const char* wasm_get_last_error() { return lastError.c_str(); }
 EMSCRIPTEN_KEEPALIVE uint64_t wasm_bruteforce_range(int resultIndex, uint64_t startSeed, uint64_t endSeed) {
-    BattleEmulator::ResetTurnProcessed();
-    foundSeeds = 0;
-    FoundSeed = 0;
-
-    BruteForceMainLoop(copiedPlayers, startSeed, endSeed, aActions5, damages5, eActions5);
-    wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
-
-
-    if (foundSeeds == 1) {
-        return FoundSeed;
+    (void)resultIndex;
+    BE::ResetTurnProcessed(); foundSeeds = 0; foundSeed = 0;
+    if (preparedCommands.empty() || startSeed > endSeed || endSeed > (UINT64_C(1) << 22)) {
+        lastError = "prepare input first; seed interval must be [start,end) within 22 bits"; return 0;
     }
-    return 0;
-}
-
-EMSCRIPTEN_KEEPALIVE uint64_t wasm_get_turn_processed() {
-    return wasmLastTurnProcessed;
-}
-
-EMSCRIPTEN_KEEPALIVE int wasm_get_found_seeds() {
-    return foundSeeds;
-}
-
-EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed, int numThreads, int dropbug) {
-    BattleEmulator::ResetTurnProcessed();
-    if (resultIndex < 0) {
-        wasmLastError = "invalid result index";
-        wasmLastDump.clear();
-        return wasmLastDump.c_str();
+    BattleResult result; result.records.reserve(5);
+    for (uint64_t seed = startSeed; seed < endSeed; ++seed) {
+        if (matchSeed(seed, result)) { ++foundSeeds; foundSeed = seed; }
     }
-
-    wasmLastDump = buildDumpOutput(copiedPlayers, seed, numThreads,
-                                   dropbug != 0);
-    wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
-    return wasmLastDump.c_str();
+    lastTurnProcessed = BE::getTurnProcessed();
+    return foundSeeds == 1 ? foundSeed : 0;
+}
+EMSCRIPTEN_KEEPALIVE uint64_t wasm_get_turn_processed() { return lastTurnProcessed; }
+EMSCRIPTEN_KEEPALIVE int wasm_get_found_seeds() { return foundSeeds; }
+EMSCRIPTEN_KEEPALIVE const char* wasm_search_dump(int resultIndex, uint64_t seed, int numThreads, int dropbug) {
+    (void)numThreads; (void)dropbug;
+    try {
+        if (resultIndex < 0 || preparedCommands.empty()) throw std::invalid_argument("invalid/unprepared input");
+        std::ostringstream output;
+        replay(output, seed, 0, preparedCommands, false);
+        lastDump = output.str();
+    } catch (const std::exception& e) { lastError = e.what(); lastDump.clear(); }
+    return lastDump.c_str();
 }
 }
-#endif
 
-int main(int argc, char* argv[]){
-#if defined(gerunikku)
-	if (argc >= 2 && std::string_view(argv[1]) == "--search")
-		return gerunikku_search::runCli(argc, argv, copiedPlayers);
-#endif
-	showHeader();
-
-	//https://zenn.dev/reputeless/books/standard-cpp-for-competitive-programming/viewer/library-ios-iomanip#3.1-c-%E8%A8%80%E8%AA%9E%E3%81%AE%E5%85%A5%E5%87%BA%E5%8A%9B%E3%82%B9%E3%83%88%E3%83%AA%E3%83%BC%E3%83%A0%E3%81%A8%E3%81%AE%E5%90%8C%E6%9C%9F%E3%82%92%E7%84%A1%E5%8A%B9%E3%81%AB%E3%81%99%E3%82%8B
-	//std::cin.tie(0)->sync_with_stdio(0);
-
-#if defined(gerunikku)
-	auto makeDebugGene = [](int32_t (&gene)[350], const int turns, const int action) {
-		const int boundedTurns = std::clamp(turns, 1, 349);
-		for (int i = 0; i < boundedTurns; ++i) gene[i] = action;
-		gene[boundedTurns] = -1;
-	};
-
-	auto parseDebugCommand = [](const std::string_view token) {
-		BattleEmulator::SearchCommand command{};
-		const std::size_t firstColon = token.find(':');
-		command.action = std::stoi(std::string(token.substr(0, firstColon)), nullptr, 0);
-		if (firstColon == std::string_view::npos) return command;
-		const std::string_view remainder = token.substr(firstColon + 1);
-		const std::size_t secondColon = remainder.find(':');
-		const std::string_view second = remainder.substr(0, secondColon);
-		if (second == "sude" || second == "on") {
-			command.bareHands = second == "sude";
-		} else if (!second.empty()) {
-			command.target = std::stoi(std::string(second), nullptr, 0);
-		}
-		if (secondColon != std::string_view::npos) {
-			const std::string_view equipment = remainder.substr(secondColon + 1);
-			if (equipment == "sude") command.bareHands = true;
-			else if (equipment == "on") command.bareHands = false;
-			else throw std::invalid_argument("equipment must be on or sude");
-		}
-		return command;
-	};
-
-	auto parseEquipmentArg = [](const int argcValue, char* argvValue[], const int index) {
-		if (argcValue <= index) return false;
-		const std::string_view equipment(argvValue[index]);
-		if (equipment == "sude") return true;
-		if (equipment == "on") return false;
-		throw std::invalid_argument("equipment must be on or sude");
-	};
-
-	auto printTrace = [](const uint64_t traceSeed, const int tracePosition,
-	                     const Player (&tracePlayers)[4], const BattleResult& traceResult) {
-		std::cout << "TRACE seed=0x" << std::hex << traceSeed << std::dec
-		          << " position=" << tracePosition
-		          << " hp=" << tracePlayers[0].hp << ',' << tracePlayers[1].hp << ','
-		          << tracePlayers[2].hp << ',' << tracePlayers[3].hp
-		          << " heroAtk=" << tracePlayers[0].atk
-		          << " heroDefaultAtk=" << tracePlayers[0].defaultATK << '\n';
-		for (int i = 0; i < traceResult.position; ++i) {
-			std::cout << "TRACE record[" << i << "] turn=" << traceResult.turns[i]
-			          << " action=" << traceResult.actions[i]
-			          << " damage=" << traceResult.damages[i]
-			          << " enemy=" << traceResult.isEnemy[i]
-			          << " actor=" << traceResult.actorIndex[i]
-			          << " actorMp=" << traceResult.actorMp[i]
-			          << " equipment=" << traceResult.equipmentChange[i]
-			          << " aiGate=0x" << std::hex << traceResult.aiResourceGateMask[i] << std::dec
-			          << " originalSlot=" << traceResult.aiOriginalSlot[i]
-			          << " resolvedSlot=" << traceResult.aiResolvedSlot[i] << '\n';
-		}
-	};
-
-	if (argc >= 3 && std::string_view(argv[1]) == "--trace-turn") {
-		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
-		const int traceAction = argc >= 4 ? std::stoi(argv[3], nullptr, 0) : BattleEmulator::DEFENCE;
-		const int traceTarget = argc >= 5 ? std::stoi(argv[4], nullptr, 0) : -1;
-		const int currentSeedPosition = argc >= 6 ? std::stoi(argv[5], nullptr, 0) : 0;
-		const bool bareHands = parseEquipmentArg(argc, argv, 6);
-		int32_t traceGene[350] = {};
-		makeDebugGene(traceGene, 1, BattleEmulator::PackHeroAction(traceAction, traceTarget, bareHands));
-		Player tracePlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
-		BattleResult traceResult;
-		int tracePosition = currentSeedPosition + 1;
-		uint64_t traceState = 0;
-		lcg::init(traceSeed);
-		BattleEmulator::Main(&tracePosition, 1, traceGene, tracePlayers, &traceResult,
-		                     traceSeed, nullptr, nullptr, -1, &traceState, traceTarget, true);
-		printTrace(traceSeed, tracePosition, tracePlayers, traceResult);
-		return 0;
-	}
-
-	if (argc >= 7 && std::string_view(argv[1]) == "--bench-search-turn") {
-		const uint64_t benchSeed = std::stoull(argv[2], nullptr, 0);
-		const int benchAction = std::stoi(argv[3], nullptr, 0);
-		const int benchTarget = std::stoi(argv[4], nullptr, 0);
-		const int currentSeedPosition = std::stoi(argv[5], nullptr, 0);
-		const int iterations = std::stoi(argv[6], nullptr, 0);
-		const bool bareHands = parseEquipmentArg(argc, argv, 7);
-		if (iterations < 1) throw std::invalid_argument("benchmark iterations must be positive");
-
-		lcg::init(benchSeed, true);
-		BattleEmulator::SearchState root{};
-		if (!BattleEmulator::InitializeSearchState(&root, copiedPlayers, currentSeedPosition + 1)) {
-			throw std::runtime_error("failed to initialize benchmark search state");
-		}
-		BattleEmulator::SearchState child{};
-		std::uint64_t checksum = 0;
-		const auto started = std::chrono::steady_clock::now();
-		for (int iteration = 0; iteration < iterations; ++iteration) {
-			if (!BattleEmulator::StepSearchState(root, {benchAction, benchTarget, bareHands}, &child)) {
-				throw std::runtime_error("failed to execute benchmark search step");
-			}
-			checksum += static_cast<std::uint64_t>(child.position);
-			checksum += static_cast<std::uint32_t>(child.players[0].hp);
-			checksum += child.nowState;
-		}
-		const auto elapsed = std::chrono::steady_clock::now() - started;
-		const auto elapsedNs = std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
-		std::cout << "BENCH search-turn iterations=" << iterations
-		          << " elapsedMs=" << (elapsedNs / 1000000.0)
-		          << " nsPerTurn=" << (static_cast<double>(elapsedNs) / iterations)
-		          << " turnsPerSec=" << (iterations * 1000000000.0 / elapsedNs)
-		          << " checksum=" << checksum << '\n';
-		return 0;
-	}
-
-	if (argc >= 3 && std::string_view(argv[1]) == "--trace-battle") {
-		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
-		const int traceTurns = argc >= 4 ? std::stoi(argv[3], nullptr, 0) : 10;
-		const int traceAction = argc >= 5 ? std::stoi(argv[4], nullptr, 0) : BattleEmulator::DEFENCE;
-		const int traceTarget = argc >= 6 ? std::stoi(argv[5], nullptr, 0) : -1;
-		const int currentSeedPosition = argc >= 7 ? std::stoi(argv[6], nullptr, 0) : 0;
-		const bool bareHands = parseEquipmentArg(argc, argv, 7);
-		if (traceTurns < 1 || traceTurns > 349) throw std::invalid_argument("trace turns must be 1..349");
-		int32_t traceGene[350] = {};
-		makeDebugGene(traceGene, traceTurns, BattleEmulator::PackHeroAction(traceAction, traceTarget, bareHands));
-		Player tracePlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
-		BattleResult traceResult;
-		int tracePosition = currentSeedPosition + 1;
-		uint64_t traceState = 0;
-		lcg::init(traceSeed);
-		BattleEmulator::Main(&tracePosition, traceTurns, traceGene, tracePlayers, &traceResult,
-		                     traceSeed, nullptr, nullptr, -1, &traceState, traceTarget, true);
-		printTrace(traceSeed, tracePosition, tracePlayers, traceResult);
-		return 0;
-	}
-
-	if (argc >= 4 && std::string_view(argv[1]) == "--scan-iron-mp-gate-seeds") {
-		const uint64_t startSeed = std::stoull(argv[2], nullptr, 0);
-		const uint64_t count = std::stoull(argv[3], nullptr, 0);
-		const int scanTurns = argc >= 5 ? std::stoi(argv[4], nullptr, 0) : 6;
-		const int heroAction = argc >= 6 ? std::stoi(argv[5], nullptr, 0) : BattleEmulator::DEFENCE;
-		const int heroTarget = argc >= 7 ? std::stoi(argv[6], nullptr, 0) : -1;
-		const int currentSeedPosition = argc >= 8 ? std::stoi(argv[7], nullptr, 0) : 1;
-		const int emitLimit = argc >= 9 ? std::stoi(argv[8], nullptr, 0) : 16;
-		const bool bareHands = parseEquipmentArg(argc, argv, 9);
-		if (scanTurns < 3 || scanTurns > 349) throw std::invalid_argument("iron MP gate scan turns must be 3..349");
-		if (emitLimit < 0) throw std::invalid_argument("iron MP gate emitLimit must be >= 0");
-
-		int32_t scanGene[350] = {};
-		makeDebugGene(scanGene, scanTurns, BattleEmulator::PackHeroAction(heroAction, heroTarget, bareHands));
-		uint64_t matches = 0;
-		int emitted = 0;
-
-		for (uint64_t offset = 0; offset < count; ++offset) {
-			const uint64_t seed = startSeed + offset;
-			if (seed == 0) continue;
-			Player scanPlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
-			BattleResult scanResult;
-			int scanPosition = currentSeedPosition + 1;
-			uint64_t scanState = 0;
-			lcg::init(seed);
-			BattleEmulator::Main(&scanPosition, scanTurns, scanGene, scanPlayers, &scanResult,
-			                     seed, nullptr, nullptr, -1, &scanState, heroTarget);
-
-			for (const int actor : {1, 3}) {
-				int stage = 0;
-				int firstTurn = -1;
-				int shortageTurn = -1;
-				int fallbackTurn = -1;
-				for (int record = 0; record < scanResult.position; ++record) {
-					if (!scanResult.isEnemy[record] || scanResult.actorIndex[record] != actor) continue;
-					const int action = scanResult.actions[record];
-					const int originalSlot = scanResult.aiOriginalSlot[record];
-					const int resolvedSlot = scanResult.aiResolvedSlot[record];
-					const int mp = scanResult.actorMp[record];
-					const int gate = scanResult.aiResourceGateMask[record];
-
-					if (stage == 0 && action == BattleEmulator::KABUFF &&
-					    originalSlot == 4 && resolvedSlot == 4 && mp == 4 && (gate & 0x08) == 0) {
-						stage = 1;
-						firstTurn = scanResult.turns[record];
-						continue;
-					}
-					if (stage == 1 && action == BattleEmulator::KABUFF &&
-					    originalSlot == 4 && resolvedSlot == 4 && mp == 4 && (gate & 0x08) != 0) {
-						stage = 2;
-						shortageTurn = scanResult.turns[record];
-						continue;
-					}
-					if (stage == 2 && action == BattleEmulator::HELM_SPLITTER &&
-					    originalSlot == 4 && resolvedSlot == 3 && mp == 4 && (gate & 0x08) != 0) {
-						stage = 3;
-						fallbackTurn = scanResult.turns[record];
-						break;
-					}
-				}
-
-				if (stage == 3) {
-					++matches;
-					if (emitted < emitLimit) {
-						++emitted;
-						std::cout << "IRON_MP_GATE_CANDIDATE seed=0x" << std::hex << seed << std::dec
-						          << " actor=" << actor
-						          << " firstKabuffTurn=" << (firstTurn + 1)
-						          << " insufficientKabuffTurn=" << (shortageTurn + 1)
-						          << " fallbackHelmTurn=" << (fallbackTurn + 1)
-						          << " finalMp=" << scanPlayers[actor].mp
-						          << " finalGate=0x" << std::hex
-						          << static_cast<unsigned>(scanPlayers[actor].aiResourceGateMask)
-						          << std::dec << " finalPosition=" << scanPosition << '\n';
-					}
-				}
-			}
-		}
-
-		std::cout << "IRON_MP_GATE_SCAN_DONE start=0x" << std::hex << startSeed << std::dec
-		          << " count=" << count
-		          << " turns=" << scanTurns
-		          << " heroAction=" << heroAction
-		          << " currentSeedPosition=" << currentSeedPosition
-		          << " matches=" << matches << '\n';
-		return 0;
-	}
-
-	if (argc >= 4 && std::string_view(argv[1]) == "--scan-buffed-confusion-seeds") {
-		const uint64_t startSeed = std::stoull(argv[2], nullptr, 0);
-		const uint64_t count = std::stoull(argv[3], nullptr, 0);
-		const int currentSeedPosition = argc >= 5 ? std::stoi(argv[4], nullptr, 0) : 1;
-		// In the current one-member battle FUN_02160dfc cannot choose 0x00DB:
-		// its first RandInt(2) result is discarded and the four-entry table is
-		// forced. Scan only the four outcomes that are reachable in this State.
-		std::array<bool, 4> found{};
-		int foundCount = 0;
-		const auto previousCoutState = std::cout.rdstate();
-		std::cout.setstate(std::ios_base::failbit);
-
-		for (uint64_t offset = 0; offset < count && foundCount < 4; ++offset) {
-			const uint64_t seed = startSeed + offset;
-			if (seed == 0 || seed > 0x3fffff) continue;
-			lcg::init(seed, true);
-			BattleEmulator::SearchState state{};
-			if (!BattleEmulator::InitializeSearchState(&state, copiedPlayers, currentSeedPosition + 1)) {
-				throw std::runtime_error("failed to initialize buffed-confusion scan state");
-			}
-
-			bool firstTwoBuffs = true;
-			for (int turn = 0; turn < 2; ++turn) {
-				BattleResult result;
-				BattleEmulator::SearchState next{};
-				if (!BattleEmulator::StepSearchState(state, {BattleEmulator::BUFF, -1}, &next, &result, false)) {
-					firstTwoBuffs = false;
-					break;
-				}
-				bool heroActuallyUsedBuff = false;
-				for (int record = 0; record < result.position; ++record) {
-					if (!result.isEnemy[record] && result.actions[record] == BattleEmulator::BUFF) {
-						heroActuallyUsedBuff = true;
-						break;
-					}
-				}
-				if (!heroActuallyUsedBuff) {
-					firstTwoBuffs = false;
-					break;
-				}
-				state = next;
-			}
-			if (!firstTwoBuffs || state.players[0].BuffLevel != 2 || !state.players[0].confused) continue;
-
-			BattleResult result;
-			BattleEmulator::SearchState next{};
-			if (!BattleEmulator::StepSearchState(state, {BattleEmulator::PSYCHE_UP_ALLY, -1}, &next, &result, false)) continue;
-			for (int record = 0; record < result.position; ++record) {
-				if (result.isEnemy[record]) continue;
-				const int action = result.actions[record];
-				if (action < BattleEmulator::CONFUSION_CANT_DECIDE ||
-				    action > BattleEmulator::CONFUSION_FAILED_FLEE) continue;
-				const int index = action - BattleEmulator::CONFUSION_CANT_DECIDE;
-				if (found[index]) break;
-				found[index] = true;
-				++foundCount;
-				std::cerr << "BUFFED_CONFUSION_CANDIDATE seed=0x" << std::hex << seed << std::dec
-				          << " action=" << action
-				          << " buffLevel=" << state.players[0].BuffLevel
-				          << " buffTurns=" << state.players[0].BuffTurns
-				          << " positionBefore=" << state.position
-				          << " positionAfter=" << next.position << '\n';
-				break;
-			}
-		}
-
-		std::cout.clear(previousCoutState);
-		std::cout << "BUFFED_CONFUSION_1P_SCAN_DONE found=" << foundCount
-		          << " start=0x" << std::hex << startSeed << std::dec
-		          << " count=" << count << '\n';
-		return foundCount == 4 ? 0 : 2;
-	}
-
-	if (argc >= 5 && std::string_view(argv[1]) == "--trace-main-sequence") {
-		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
-		const int currentSeedPosition = std::stoi(argv[3], nullptr, 0);
-		const int traceTurns = argc - 4;
-		if (traceTurns < 1 || traceTurns > 349) {
-			throw std::invalid_argument("trace main sequence turns must be 1..349");
-		}
-		int32_t traceGene[350] = {};
-		for (int step = 0; step < traceTurns; ++step) {
-			const auto command = parseDebugCommand(argv[step + 4]);
-			traceGene[step] = BattleEmulator::PackHeroAction(command.action, command.target, command.bareHands);
-		}
-		traceGene[traceTurns] = -1;
-		Player tracePlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
-		BattleResult traceResult;
-		int tracePosition = currentSeedPosition + 1;
-		uint64_t traceState = 0;
-		lcg::init(traceSeed);
-		camera::SetDebugCapture(true);
-		camera::ClearDebugEvents();
-		BattleEmulator::Main(&tracePosition, traceTurns, traceGene, tracePlayers, &traceResult,
-		                     traceSeed, nullptr, nullptr, -1, &traceState, -1, true);
-		printTrace(traceSeed, tracePosition, tracePlayers, traceResult);
-		for (std::size_t eventIndex = 0; eventIndex < camera::DebugEventCount(); ++eventIndex) {
-			const CameraDebugEvent event = camera::DebugEventAt(eventIndex);
-			std::cout << "TRACE main-camera turn=" << event.turnSerial + 1
-			          << " actionIndex=" << event.actionIndex
-			          << " action=" << event.commonActionId
-			          << " dq9=" << event.dq9ActionId
-			          << " actor=0x" << std::hex << event.actorId
-			          << " target=0x" << event.targetId << std::dec
-			          << " route=" << static_cast<unsigned>(event.actorRouteCount)
-			          << " maxRoute=" << static_cast<unsigned>(event.maxRouteCount)
-			          << " source=" << static_cast<unsigned>(event.triggerSource)
-			          << " call=" << event.runtimeCallFreeCamera
-			          << " param5=" << event.runtimeParam5
-			          << " reset=" << event.runtimeResetOnly
-			          << " slot1Count=" << static_cast<unsigned>(event.slot1ChildCount)
-			          << " slot1Child=" << event.slot1LastChildActionId;
-			std::cout << " starts=";
-			for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
-				if (actorIndex != 0) std::cout << ',';
-				std::cout << static_cast<unsigned>(event.startNodesBefore[actorIndex]);
-			}
-			std::cout << "->";
-			for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
-				if (actorIndex != 0) std::cout << ',';
-				std::cout << static_cast<unsigned>(event.startNodesAfter[actorIndex]);
-			}
-			std::cout << " goals=";
-			for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
-				if (actorIndex != 0) std::cout << ',';
-				std::cout << static_cast<unsigned>(event.goalNodes[actorIndex]);
-			}
-			std::cout << " aux=";
-			for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
-				if (actorIndex != 0) std::cout << ',';
-				std::cout << static_cast<unsigned>(event.auxiliaryNodes[actorIndex]);
-			}
-			std::cout << " row4=";
-			for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
-				if (actorIndex != 0) std::cout << ',';
-				if (!event.rosterField4Known[actorIndex]) std::cout << '?';
-				else std::cout << (event.rosterField4Nonzero[actorIndex] ? '1' : '0');
-			}
-			std::cout << '\n';
-		}
-		camera::SetDebugCapture(false);
-		return 0;
-	}
-
-	if (argc >= 5 && std::string_view(argv[1]) == "--scan-sht-route-seeds") {
-		const uint64_t startSeed = std::stoull(argv[2], nullptr, 0);
-		const uint64_t count = std::stoull(argv[3], nullptr, 0);
-		const int currentSeedPosition = std::stoi(argv[4], nullptr, 0);
-		const int emitLimit = argc >= 6 ? std::stoi(argv[5], nullptr, 0) : 16;
-		if (emitLimit < 0) throw std::invalid_argument("SHT route emitLimit must be >= 0");
-
-		constexpr int kTurns = 6;
-		int32_t scanGene[350] = {};
-		scanGene[0] = BattleEmulator::PackHeroAction(BattleEmulator::MAGIC_MIRROR, -1);
-		scanGene[1] = BattleEmulator::PackHeroAction(BattleEmulator::PSYCHE_UP_ALLY, -1);
-		scanGene[2] = BattleEmulator::PackHeroAction(BattleEmulator::PSYCHE_UP_ALLY, -1);
-		scanGene[3] = BattleEmulator::PackHeroAction(BattleEmulator::PSYCHE_UP_ALLY, -1);
-		scanGene[4] = BattleEmulator::PackHeroAction(BattleEmulator::PSYCHE_UP_ALLY, -1);
-		scanGene[5] = BattleEmulator::PackHeroAction(BattleEmulator::BUFF, -1);
-		scanGene[kTurns] = -1;
-
-		uint64_t shtCount = 0;
-		uint64_t turn6MedapaniCount = 0;
-		uint64_t turn6MedapaniConfusedCount = 0;
-		uint64_t turn6MeramiCount = 0;
-		uint64_t turn6BagimaCount = 0;
-		uint64_t turn6BagimaStrongCount = 0;
-		int emittedSht = 0;
-		int emittedMedapani = 0;
-		int emittedConfused = 0;
-		int emittedMerami = 0;
-		int emittedBagima = 0;
-		int emittedBagimaStrong = 0;
-
-		for (uint64_t offset = 0; offset < count; ++offset) {
-			const uint64_t seed = startSeed + offset;
-			if (seed == 0 || seed > 0x3fffff) continue;
-
-			Player scanPlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
-			BattleResult scanResult;
-			int scanPosition = currentSeedPosition + 1;
-			uint64_t scanState = 0;
-			lcg::init(seed);
-			BattleEmulator::Main(&scanPosition, kTurns, scanGene, scanPlayers, &scanResult,
-			                     seed, nullptr, nullptr, -1, &scanState, -1);
-
-			if (!Player::isPlayerAlive(scanPlayers[0]) || scanPlayers[0].TensionLevel != 4) continue;
-			++shtCount;
-
-			bool turn6Medapani = false;
-			bool turn6Merami = false;
-			bool turn6Bagima = false;
-			bool turn6BagimaStrong = false;
-			for (int record = 0; record < scanResult.position; ++record) {
-				if (!scanResult.isEnemy[record] || scanResult.actorIndex[record] != 2) continue;
-				if (scanResult.turns[record] != 5) continue;
-				turn6Medapani |= scanResult.actions[record] == BattleEmulator::GERUNIKKU_MEDAPANI;
-				turn6Merami |= scanResult.actions[record] == BattleEmulator::GERUNIKKU_MERAMI;
-				turn6Bagima |= scanResult.actions[record] == BattleEmulator::GERUNIKKU_BAGIMA;
-				turn6BagimaStrong |= scanResult.actions[record] == BattleEmulator::GERUNIKKU_BAGIMA_STRONG;
-			}
-
-			if (turn6Medapani) ++turn6MedapaniCount;
-			if (turn6Medapani && scanPlayers[0].confused) ++turn6MedapaniConfusedCount;
-			if (turn6Merami) ++turn6MeramiCount;
-			if (turn6Bagima) ++turn6BagimaCount;
-			if (turn6BagimaStrong) ++turn6BagimaStrongCount;
-
-			auto emit = [&](const char* category, int& emitted) {
-				if (emitted >= emitLimit) return;
-				++emitted;
-				std::cout << "SHT_ROUTE_CANDIDATE category=" << category
-				          << " seed=0x" << std::hex << seed << std::dec
-				          << " position=" << scanPosition
-				          << " hp=" << scanPlayers[0].hp
-				          << " tension=" << scanPlayers[0].TensionLevel
-				          << " confused=" << scanPlayers[0].confused
-				          << " mirror=" << scanPlayers[0].hasMagicMirror
-				          << " mirrorTurn=" << scanPlayers[0].MagicMirrorTurn << '\n';
-			};
-
-			if (turn6Merami) emit("turn6-merami", emittedMerami);
-			else if (turn6Bagima) emit("turn6-bagima", emittedBagima);
-			else if (turn6BagimaStrong) emit("turn6-bagima-strong", emittedBagimaStrong);
-			else if (turn6Medapani && scanPlayers[0].confused) emit("turn6-medapani-confused", emittedConfused);
-			else if (turn6Medapani) emit("turn6-medapani", emittedMedapani);
-			else emit("sht", emittedSht);
-		}
-
-		std::cout << "SHT_ROUTE_SCAN_DONE start=0x" << std::hex << startSeed << std::dec
-		          << " count=" << count
-		          << " currentSeedPosition=" << currentSeedPosition
-		          << " sht=" << shtCount
-		          << " turn6Medapani=" << turn6MedapaniCount
-		          << " turn6MedapaniConfused=" << turn6MedapaniConfusedCount
-		          << " turn6Merami=" << turn6MeramiCount
-		          << " turn6Bagima=" << turn6BagimaCount
-		          << " turn6BagimaStrong=" << turn6BagimaStrongCount << '\n';
-		return 0;
-	}
-
-	if (argc >= 6 && std::string_view(argv[1]) == "--scan-main-sequence-seeds") {
-		const uint64_t startSeed = std::stoull(argv[2], nullptr, 0);
-		const uint64_t count = std::stoull(argv[3], nullptr, 0);
-		const int currentSeedPosition = std::stoi(argv[4], nullptr, 0);
-		const int traceTurns = argc - 5;
-		if (traceTurns < 1 || traceTurns > 349) {
-			throw std::invalid_argument("scan main sequence turns must be 1..349");
-		}
-
-		int32_t traceGene[350] = {};
-		for (int step = 0; step < traceTurns; ++step) {
-			const auto command = parseDebugCommand(argv[step + 5]);
-			traceGene[step] = BattleEmulator::PackHeroAction(command.action, command.target, command.bareHands);
-		}
-		traceGene[traceTurns] = -1;
-
-		std::array<std::uint64_t, 7> categoryCounts{};
-		std::array<int, 7> emittedCounts{};
-		std::array<std::uint64_t, 1024> lastDq9Counts{};
-		std::array<std::uint64_t, 1024> firstLastDq9Seed{};
-		int minFinalPosition = std::numeric_limits<int>::max();
-		int maxFinalPosition = std::numeric_limits<int>::min();
-		uint64_t minFinalPositionSeed = 0;
-		uint64_t maxFinalPositionSeed = 0;
-
-		auto emitCandidate = [&](const char* category, const int categoryIndex,
-		                         const uint64_t seed, const int finalPosition,
-		                         const uint64_t finalState, const std::size_t eventCount,
-		                         const CameraDebugEvent* lastEvent) {
-			++categoryCounts[categoryIndex];
-			if (emittedCounts[categoryIndex] >= 12) return;
-			++emittedCounts[categoryIndex];
-			std::cout << "MAIN_SEQUENCE_CANDIDATE category=" << category
-			          << " seed=0x" << std::hex << seed << std::dec
-			          << " position=" << finalPosition
-			          << " state=0x" << std::hex << finalState << std::dec
-			          << " events=" << eventCount;
-			if (lastEvent != nullptr) {
-				std::cout << " lastTurn=" << lastEvent->turnSerial + 1
-				          << " lastIndex=" << lastEvent->actionIndex
-				          << " lastAction=" << lastEvent->commonActionId
-				          << " lastDq9=" << lastEvent->dq9ActionId
-				          << " lastActor=0x" << std::hex << lastEvent->actorId
-				          << " lastTarget=0x" << lastEvent->targetId << std::dec
-				          << " lastRoute=" << static_cast<unsigned>(lastEvent->actorRouteCount)
-				          << " lastMaxRoute=" << static_cast<unsigned>(lastEvent->maxRouteCount)
-				          << " lastSource=" << static_cast<unsigned>(lastEvent->triggerSource)
-				          << " lastCall=" << lastEvent->runtimeCallFreeCamera
-				          << " lastParam5=" << lastEvent->runtimeParam5
-				          << " lastReset=" << lastEvent->runtimeResetOnly;
-			}
-			std::cout << '\n';
-		};
-
-		camera::SetDebugCapture(true);
-		for (uint64_t offset = 0; offset < count; ++offset) {
-			const uint64_t seed = startSeed + offset;
-			if (seed == 0) continue;
-			Player tracePlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
-			BattleResult traceResult;
-			int tracePosition = currentSeedPosition + 1;
-			uint64_t traceState = 0;
-			lcg::init(seed);
-			camera::ClearDebugEvents();
-			BattleEmulator::Main(&tracePosition, traceTurns, traceGene, tracePlayers, &traceResult,
-			                     seed, nullptr, nullptr, -1, &traceState, -1);
-
-			if (tracePosition < minFinalPosition) {
-				minFinalPosition = tracePosition;
-				minFinalPositionSeed = seed;
-			}
-			if (tracePosition > maxFinalPosition) {
-				maxFinalPosition = tracePosition;
-				maxFinalPositionSeed = seed;
-			}
-
-			const std::size_t eventCount = camera::DebugEventCount();
-			CameraDebugEvent lastEvent{};
-			const CameraDebugEvent* lastEventPtr = nullptr;
-			if (eventCount != 0) {
-				lastEvent = camera::DebugEventAt(eventCount - 1);
-				lastEventPtr = &lastEvent;
-				if (lastEvent.dq9ActionId < lastDq9Counts.size()) {
-					if (lastDq9Counts[lastEvent.dq9ActionId] == 0) {
-						firstLastDq9Seed[lastEvent.dq9ActionId] = seed;
-					}
-					++lastDq9Counts[lastEvent.dq9ActionId];
-				}
-			}
-
-			bool routeOver4 = false;
-			bool resetOnly = false;
-			bool callParam5Zero = false;
-			bool callParam5One = false;
-			for (std::size_t eventIndex = 0; eventIndex < eventCount; ++eventIndex) {
-				const CameraDebugEvent event = camera::DebugEventAt(eventIndex);
-				routeOver4 |= event.maxRouteCount > 4;
-				resetOnly |= event.runtimeResetOnly;
-				callParam5Zero |= event.runtimeCallFreeCamera && !event.runtimeParam5;
-				callParam5One |= event.runtimeCallFreeCamera && event.runtimeParam5;
-			}
-
-			if (lastEventPtr != nullptr && lastEvent.dq9ActionId == 175) {
-				emitCandidate("last-dq9-175", 0, seed, tracePosition, traceState, eventCount, lastEventPtr);
-			}
-			if (routeOver4) emitCandidate("route-over-4", 1, seed, tracePosition, traceState, eventCount, lastEventPtr);
-			if (resetOnly) emitCandidate("reset-only", 2, seed, tracePosition, traceState, eventCount, lastEventPtr);
-			if (callParam5Zero) emitCandidate("freecam-param5-0", 3, seed, tracePosition, traceState, eventCount, lastEventPtr);
-			if (callParam5One) emitCandidate("freecam-param5-1", 4, seed, tracePosition, traceState, eventCount, lastEventPtr);
-			if (eventCount != static_cast<std::size_t>(traceTurns * 5)) {
-				emitCandidate("event-count-not-5-per-turn", 5, seed, tracePosition, traceState, eventCount, lastEventPtr);
-			}
-			if (lastEventPtr != nullptr && lastEvent.runtimeCallFreeCamera) {
-				emitCandidate("last-event-freecam", 6, seed, tracePosition, traceState, eventCount, lastEventPtr);
-			}
-		}
-		camera::SetDebugCapture(false);
-
-		std::cout << "MAIN_SEQUENCE_SCAN_DONE seeds=" << count
-		          << " currentSeedPosition=" << currentSeedPosition
-		          << " turns=" << traceTurns
-		          << " minPosition=" << minFinalPosition
-		          << " minSeed=0x" << std::hex << minFinalPositionSeed << std::dec
-		          << " maxPosition=" << maxFinalPosition
-		          << " maxSeed=0x" << std::hex << maxFinalPositionSeed << std::dec;
-		for (std::size_t index = 0; index < categoryCounts.size(); ++index) {
-			std::cout << " c" << index << '=' << categoryCounts[index];
-		}
-		std::cout << '\n';
-		for (std::size_t dq9ActionId = 0; dq9ActionId < lastDq9Counts.size(); ++dq9ActionId) {
-			if (lastDq9Counts[dq9ActionId] == 0) continue;
-			std::cout << "MAIN_SEQUENCE_LAST_DQ9 dq9=" << dq9ActionId
-			          << " count=" << lastDq9Counts[dq9ActionId]
-			          << " firstSeed=0x" << std::hex << firstLastDq9Seed[dq9ActionId] << std::dec << '\n';
-		}
-		return 0;
-	}
-
-	if (argc >= 5 && std::string_view(argv[1]) == "--trace-sequence") {
-		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
-		const int currentSeedPosition = std::stoi(argv[3], nullptr, 0);
-		lcg::init(traceSeed, true);
-		BattleEmulator::SearchState traceState{};
-		if (!BattleEmulator::InitializeSearchState(&traceState, copiedPlayers,
-		                                          currentSeedPosition + 1)) {
-			throw std::runtime_error("failed to initialize trace search state");
-		}
-		camera::SetDebugCapture(false);
-		camera::ClearDebugEvents();
-		std::size_t cameraEventOffset = 0;
-
-		for (int step = 0; step < argc - 4; ++step) {
-			if (step == argc - 5) {
-				camera::SetDebugCapture(true);
-				camera::ClearDebugEvents();
-				cameraEventOffset = 0;
-			}
-			const auto command = parseDebugCommand(argv[step + 4]);
-			const int action = command.action;
-			const int target = command.target;
-			BattleResult traceResult;
-
-			std::cout << "TRACE sequence-step=" << step
-			          << " action=" << action
-			          << " target=" << target
-			          << " startPosition=" << traceState.position << '\n';
-			BattleEmulator::SearchState nextState{};
-			if (!BattleEmulator::StepSearchState(traceState, command, &nextState,
-			                                     &traceResult, step == argc - 5)) {
-				throw std::runtime_error("failed to execute trace search step");
-			}
-			traceState = nextState;
-			std::cout << "TRACE sequence-state step=" << step
-			          << " position=" << traceState.position
-			          << " hp=" << traceState.players[0].hp << ',' << traceState.players[1].hp << ','
-			          << traceState.players[2].hp << ',' << traceState.players[3].hp
-			          << " heroMp=" << traceState.players[0].mp
-			          << " mirror=" << traceState.players[0].hasMagicMirror
-			          << " mirrorTurn=" << traceState.players[0].MagicMirrorTurn
-			          << " buffLevel=" << traceState.players[0].BuffLevel
-			          << " buffTurns=" << traceState.players[0].BuffTurns
-			          << " magicRes=" << traceState.players[0].magicResistanceLevel
-			          << " tension=" << traceState.players[0].TensionLevel
-			          << " ironA.mp=" << traceState.players[1].mp
-			          << " ironA.aiGate=0x" << std::hex
-			          << static_cast<unsigned>(traceState.players[1].aiResourceGateMask)
-			          << " gerunikuMirror=" << std::dec << traceState.players[2].hasMagicMirror
-			          << " gerunikuMirrorTurn=" << traceState.players[2].MagicMirrorTurn
-			          << " ironB.mp=" << std::dec << traceState.players[3].mp
-			          << " ironB.aiGate=0x" << std::hex
-			          << static_cast<unsigned>(traceState.players[3].aiResourceGateMask)
-			          << std::dec << '\n';
-			for (int i = 0; i < traceResult.position; ++i) {
-				std::cout << "TRACE sequence-record step=" << step
-				          << " record=" << i
-				          << " turn=" << traceResult.turns[i]
-				          << " action=" << traceResult.actions[i]
-				          << " damage=" << traceResult.damages[i]
-				          << " enemy=" << traceResult.isEnemy[i] << '\n';
-			}
-			const std::size_t cameraEventCount = camera::DebugEventCount();
-			for (; cameraEventOffset < cameraEventCount; ++cameraEventOffset) {
-				const CameraDebugEvent event = camera::DebugEventAt(cameraEventOffset);
-				std::cout << "TRACE sequence-camera step=" << step
-				          << " actionIndex=" << event.actionIndex
-				          << " action=" << event.commonActionId
-				          << " dq9=" << event.dq9ActionId
-				          << " type=" << static_cast<unsigned>(event.presentationType)
-				          << " actor=0x" << std::hex << event.actorId
-				          << " target=0x" << event.targetId << std::dec
-				          << " route=" << static_cast<unsigned>(event.actorRouteCount)
-				          << " maxRoute=" << static_cast<unsigned>(event.maxRouteCount)
-				          << " profile=" << event.membershipProfile
-				          << " membership=" << event.actorMembershipCount
-				          << " mapped=" << event.mapped
-				          << " decision=" << event.runtimeDecisionAvailable
-				          << " source=" << static_cast<unsigned>(event.triggerSource)
-				          << " call=" << event.runtimeCallFreeCamera
-				          << " param5=" << event.runtimeParam5
-				          << " reset=" << event.runtimeResetOnly
-				          << " manual=" << event.manualRuleWouldCall
-				          << " production=" << event.productionCalledFreeCamera
-				          << " synthetic=" << event.syntheticPresentationRecord
-				          << " slot1Count=" << static_cast<unsigned>(event.slot1ChildCount)
-				          << " slot1Child=" << event.slot1LastChildActionId
-				          << " nodesBefore=";
-				for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
-					if (actorIndex != 0) std::cout << ',';
-					std::cout << static_cast<unsigned>(event.startNodesBefore[actorIndex]);
-				}
-				std::cout << " nodesAfter=";
-				for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
-					if (actorIndex != 0) std::cout << ',';
-					std::cout << static_cast<unsigned>(event.startNodesAfter[actorIndex]);
-				}
-				std::cout << " goals=";
-				for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
-					if (actorIndex != 0) std::cout << ',';
-					std::cout << static_cast<unsigned>(event.goalNodes[actorIndex]);
-				}
-				std::cout << " targets=";
-				for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
-					if (actorIndex != 0) std::cout << ',';
-					std::cout << static_cast<unsigned>(event.targetNodes[actorIndex]);
-				}
-				std::cout << " aux=";
-				for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
-					if (actorIndex != 0) std::cout << ',';
-					std::cout << static_cast<unsigned>(event.auxiliaryNodes[actorIndex]);
-				}
-				std::cout << " row4=";
-				for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
-					if (actorIndex != 0) std::cout << ',';
-					if (!event.rosterField4Known[actorIndex]) {
-						std::cout << '?';
-					} else {
-						std::cout << (event.rosterField4Nonzero[actorIndex] ? '1' : '0');
-					}
-				}
-				std::cout << " routes=";
-				for (std::size_t routeIndex = 0; routeIndex < event.routeActorCount; ++routeIndex) {
-					if (routeIndex != 0) std::cout << ';';
-					std::cout << "0x" << std::hex << event.routeActorIds[routeIndex] << std::dec
-					          << ':' << static_cast<unsigned>(event.routeCounts[routeIndex]) << '[';
-					for (std::size_t nodeIndex = 0; nodeIndex < event.routeCounts[routeIndex]; ++nodeIndex) {
-						if (nodeIndex != 0) std::cout << ',';
-						std::cout << static_cast<unsigned>(event.routeNodes[routeIndex][nodeIndex]);
-					}
-					std::cout << ']';
-				}
-				if (event.actionIndex == 2) {
-					std::cout << " grid=";
-					for (std::size_t node = 0; node < event.presentationOccupancy.size(); ++node) {
-						if (node != 0) std::cout << ',';
-						std::cout << static_cast<unsigned>(event.presentationOccupancy[node]);
-					}
-				}
-				std::cout << '\n';
-			}
-			if (traceState.players[0].hp <= 0 ||
-			    (traceState.players[1].hp <= 0 && traceState.players[2].hp <= 0 && traceState.players[3].hp <= 0)) {
-				break;
-			}
-		}
-		camera::SetDebugCapture(false);
-		return 0;
-	}
-
-	if (argc >= 5 && std::string_view(argv[1]) == "--trace-sequence-summary") {
-		const uint64_t traceSeed = std::stoull(argv[2], nullptr, 0);
-		const int currentSeedPosition = std::stoi(argv[3], nullptr, 0);
-		lcg::init(traceSeed, true);
-		BattleEmulator::SearchState traceState{};
-		if (!BattleEmulator::InitializeSearchState(&traceState, copiedPlayers,
-		                                          currentSeedPosition + 1)) {
-			throw std::runtime_error("failed to initialize trace search state");
-		}
-		for (int step = 0; step < argc - 4; ++step) {
-			const auto command = parseDebugCommand(argv[step + 4]);
-			const int action = command.action;
-			const int target = command.target;
-			if (!BattleEmulator::StepSearchStateInPlace(&traceState, command)) {
-				throw std::runtime_error("failed to execute summary trace search step");
-			}
-			std::cout << "TRACE_SUMMARY step=" << (step + 1)
-			          << " action=" << action
-			          << " target=" << target
-			          << " position=" << traceState.position
-			          << " hp=" << traceState.players[0].hp << ',' << traceState.players[1].hp << ','
-			          << traceState.players[2].hp << ',' << traceState.players[3].hp
-			          << " heroMp=" << traceState.players[0].mp << '\n';
-			if (traceState.players[0].hp <= 0 ||
-			    (traceState.players[1].hp <= 0 && traceState.players[2].hp <= 0 && traceState.players[3].hp <= 0)) {
-				break;
-			}
-		}
-		return 0;
-	}
-
-	if (argc >= 7 && std::string_view(argv[1]) == "--scan-camera") {
-		const int traceAction = std::stoi(argv[2], nullptr, 0);
-		const int traceTarget = std::stoi(argv[3], nullptr, 0);
-		const int traceTurns = std::stoi(argv[4], nullptr, 0);
-		const uint64_t startSeed = std::stoull(argv[5], nullptr, 0);
-		const uint64_t count = std::stoull(argv[6], nullptr, 0);
-		const int currentSeedPosition = argc >= 8 ? std::stoi(argv[7], nullptr, 0) : 1;
-		const bool bareHands = parseEquipmentArg(argc, argv, 8);
-		if (traceTurns < 1 || traceTurns > 349) throw std::invalid_argument("scan turns must be 1..349");
-		int32_t traceGene[350] = {};
-		makeDebugGene(traceGene, traceTurns, BattleEmulator::PackHeroAction(traceAction, traceTarget, bareHands));
-		std::array<int, 10> categoryCounts{};
-		auto emitCandidate = [&](const char* category, const int categoryIndex, const uint64_t seed,
-		                         const CameraDebugEvent& event) {
-			if (categoryCounts[categoryIndex] >= 12) return;
-			++categoryCounts[categoryIndex];
-			std::cout << "CAMERA_CANDIDATE category=" << category
-			          << " seed=0x" << std::hex << seed << std::dec
-			          << " turn=" << event.turnSerial + 1
-			          << " actionIndex=" << event.actionIndex
-			          << " action=" << event.commonActionId
-			          << " actor=0x" << std::hex << event.actorId
-			          << " target=0x" << event.targetId << std::dec
-			          << " route=" << static_cast<unsigned>(event.actorRouteCount)
-			          << " maxRoute=" << static_cast<unsigned>(event.maxRouteCount)
-			          << " source=" << static_cast<unsigned>(event.triggerSource)
-			          << " call=" << event.runtimeCallFreeCamera
-			          << " param5=" << event.runtimeParam5
-			          << " reset=" << event.runtimeResetOnly
-			          << " manual=" << event.manualRuleWouldCall
-			          << " production=" << event.productionCalledFreeCamera
-			          << " nodesBefore=";
-			for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
-				if (actorIndex != 0) std::cout << ',';
-				std::cout << static_cast<unsigned>(event.startNodesBefore[actorIndex]);
-			}
-			std::cout << " nodesAfter=";
-			for (std::size_t actorIndex = 0; actorIndex < event.presentationActorCount; ++actorIndex) {
-				if (actorIndex != 0) std::cout << ',';
-				std::cout << static_cast<unsigned>(event.startNodesAfter[actorIndex]);
-			}
-			std::cout << '\n';
-		};
-
-		camera::SetDebugCapture(true);
-		for (uint64_t offset = 0; offset < count; ++offset) {
-			const uint64_t seed = startSeed + offset;
-			if (seed == 0) continue;
-			Player tracePlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
-			BattleResult traceResult;
-			int tracePosition = currentSeedPosition + 1;
-			uint64_t traceState = 0;
-			lcg::init(seed);
-			camera::ClearDebugEvents();
-			BattleEmulator::Main(&tracePosition, traceTurns, traceGene, tracePlayers, &traceResult,
-			                     seed, nullptr, nullptr, -1, &traceState, traceTarget);
-			CameraDebugEvent previousAttackEvent{};
-			bool havePreviousAttackEvent = false;
-			for (std::size_t eventIndex = 0; eventIndex < camera::DebugEventCount(); ++eventIndex) {
-				const CameraDebugEvent event = camera::DebugEventAt(eventIndex);
-				if (!event.runtimeDecisionAvailable) continue;
-				const bool attackAction = event.commonActionId == BattleEmulator::ATTACK_ENEMY
-				    || event.commonActionId == BattleEmulator::ATTACK_ALLY;
-				if (attackAction && havePreviousAttackEvent && event.actionIndex > 0
-				    && event.actorId == previousAttackEvent.actorId
-				    && event.targetId == previousAttackEvent.targetId) {
-					emitCandidate("potential-consecutive-attack-reset", 8, seed, event);
-				}
-				if (event.runtimeResetOnly) emitCandidate("reset-only", 0, seed, event);
-				if (event.manualRuleWouldCall && (!event.runtimeCallFreeCamera || event.runtimeResetOnly)) {
-					emitCandidate("manual-runtime-mismatch", 1, seed, event);
-				}
-				if (event.commonActionId == BattleEmulator::ZAKI && !event.runtimeCallFreeCamera) {
-					emitCandidate("zaki-suppressed", 2, seed, event);
-				}
-				if (event.commonActionId == BattleEmulator::ZAKI && event.runtimeCallFreeCamera && !event.runtimeParam5) {
-					emitCandidate("zaki-call-param5-0", 3, seed, event);
-				}
-				if (event.commonActionId == BattleEmulator::ZAKI && event.runtimeCallFreeCamera && event.runtimeParam5) {
-					emitCandidate("zaki-call-param5-1", 4, seed, event);
-				}
-				if (event.maxRouteCount > 4) emitCandidate("route-over-4", 5, seed, event);
-				if (event.triggerSource == 1) emitCandidate("actor-membership", 6, seed, event);
-				if (event.triggerSource == 3) emitCandidate("fallback-membership", 7, seed, event);
-				if (event.mapped && event.runtimeDecisionAvailable) {
-					emitCandidate("mapped-presentation", 9, seed, event);
-				}
-				if (attackAction) {
-					previousAttackEvent = event;
-					havePreviousAttackEvent = true;
-				}
-			}
-		}
-		camera::SetDebugCapture(false);
-		std::cout << "CAMERA_SCAN_DONE seeds=" << count
-		          << " currentSeedPosition=" << currentSeedPosition
-		          << " firstConsumedPosition=" << (currentSeedPosition + 1);
-		for (std::size_t i = 0; i < categoryCounts.size(); ++i) std::cout << " c" << i << '=' << categoryCounts[i];
-		std::cout << '\n';
-		return 0;
-	}
-
-	if (argc >= 4 && std::string_view(argv[1]) == "--scan-action-seeds") {
-		const uint64_t startSeed = std::stoull(argv[2], nullptr, 0);
-		const uint64_t count = std::stoull(argv[3], nullptr, 0);
-		const int searchTurns = argc >= 5 ? std::stoi(argv[4], nullptr, 0) : 1;
-		const int perAction = argc >= 6 ? std::stoi(argv[5], nullptr, 0) : 4;
-		const int heroAction = argc >= 7 ? std::stoi(argv[6], nullptr, 0) : BattleEmulator::DEFENCE;
-		const int heroTarget = argc >= 8 ? std::stoi(argv[7], nullptr, 0) : -1;
-		const int wantedPresentationType = argc >= 9 ? std::stoi(argv[8], nullptr, 0) : -1;
-		const int currentSeedPosition = argc >= 10 ? std::stoi(argv[9], nullptr, 0) : 0;
-		const int wantedCommonAction = argc >= 11 ? std::stoi(argv[10], nullptr, 0) : -1;
-		const int maxRecord = argc >= 12 ? std::stoi(argv[11], nullptr, 0) : std::numeric_limits<int>::max();
-		const bool bareHands = parseEquipmentArg(argc, argv, 12);
-		if (searchTurns < 1 || searchTurns > 349) throw std::invalid_argument("scan-action-seeds turns must be 1..349");
-		if (perAction < 0) throw std::invalid_argument("scan-action-seeds perAction must be >= 0 (0 = emit all matches)");
-
-		using dq9::freecam::actions::Find;
-		using namespace dq9::freecam::fast;
-		if (wantedPresentationType >= 0) {
-			std::cout << "ROM_PRESENTATION_TYPE type=" << wantedPresentationType << '\n';
-			for (std::uint16_t actionId = 0; actionId < metadata::kActionCount; ++actionId) {
-				if (metadata::PresentationType(actionId) != wantedPresentationType) continue;
-				std::cout << "ROM_ACTION dq9=" << actionId
-				          << " formation=" << static_cast<unsigned>(metadata::AttackFormationMode(actionId))
-				          << " selector=0x" << std::hex << metadata::SelectorProjection(actionId) << std::dec
-				          << " fallback=" << metadata::FallbackLookupActionId(actionId)
-				          << " bact=" << metadata::HasBact(actionId) << '\n';
-			}
-		}
-
-		constexpr std::size_t kCommonActionCapacity = BattleEmulator::MAX_COMMON_ACTION_ID + 1;
-		std::array<std::uint64_t, kCommonActionCapacity> occurrenceCounts{};
-		std::array<int, kCommonActionCapacity> emittedCounts{};
-		std::array<int, kCommonActionCapacity> bestRecord{};
-		std::array<std::uint64_t, kCommonActionCapacity> bestSeed{};
-		bestRecord.fill(std::numeric_limits<int>::max());
-		int32_t searchGene[350] = {};
-		makeDebugGene(searchGene, searchTurns, BattleEmulator::PackHeroAction(heroAction, heroTarget, bareHands));
-
-		for (uint64_t offset = 0; offset < count; ++offset) {
-			const uint64_t seed = startSeed + offset;
-			if (seed == 0) continue;
-			Player searchPlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
-			BattleResult searchResult;
-			int searchPosition = currentSeedPosition + 1;
-			uint64_t searchState = 0;
-			lcg::init(seed);
-			BattleEmulator::Main(&searchPosition, searchTurns, searchGene, searchPlayers, &searchResult,
-			                     seed, nullptr, nullptr, -1, &searchState, heroTarget);
-
-			for (int record = 0; record < searchResult.position; ++record) {
-				if (!searchResult.isEnemy[record]) continue;
-				const int commonAction = searchResult.actions[record];
-				if (commonAction < 0 || commonAction >= static_cast<int>(kCommonActionCapacity)) continue;
-				if (wantedCommonAction >= 0 && commonAction != wantedCommonAction) continue;
-				if (record > maxRecord) continue;
-				const auto* binding = Find(commonAction);
-				const bool mapped = binding != nullptr && binding->mapped();
-				if (wantedPresentationType >= 0
-				    && (!mapped || binding->presentationType != wantedPresentationType)) continue;
-				++occurrenceCounts[static_cast<std::size_t>(commonAction)];
-				if (record < bestRecord[static_cast<std::size_t>(commonAction)]) {
-					bestRecord[static_cast<std::size_t>(commonAction)] = record;
-					bestSeed[static_cast<std::size_t>(commonAction)] = seed;
-				}
-				if (perAction != 0 && emittedCounts[static_cast<std::size_t>(commonAction)] >= perAction) continue;
-				++emittedCounts[static_cast<std::size_t>(commonAction)];
-				std::cout << "ACTION_SEED common=" << commonAction
-				          << " name=\"" << BattleEmulator::getActionName(commonAction) << "\""
-				          << " seed=0x" << std::hex << seed << std::dec
-				          << " turn=" << searchResult.turns[record]
-				          << " record=" << record
-				          << " finalPosition=" << searchPosition;
-				if (mapped) {
-					std::cout << " dq9=" << binding->dq9ActionId
-					          << " type=" << static_cast<unsigned>(binding->presentationType)
-					          << " formation=" << static_cast<unsigned>(binding->attackFormationMode)
-					          << " selector=0x" << std::hex
-					          << metadata::SelectorProjection(binding->dq9ActionId) << std::dec;
-				} else {
-					std::cout << " dq9=unmapped type=unknown";
-				}
-				std::cout << '\n';
-			}
-		}
-
-		std::cout << "ACTION_SEED_SCAN_DONE startSeed=0x" << std::hex << startSeed << std::dec
-		          << " seeds=" << count
-		          << " turns=" << searchTurns
-		          << " heroAction=" << heroAction
-		          << " heroTarget=" << heroTarget
-		          << " wantedType=" << wantedPresentationType
-		          << " wantedCommon=" << wantedCommonAction
-		          << " maxRecord=" << maxRecord
-		          << " currentSeedPosition=" << currentSeedPosition << '\n';
-		for (std::size_t commonAction = 0; commonAction < occurrenceCounts.size(); ++commonAction) {
-			if (occurrenceCounts[commonAction] == 0) continue;
-			const auto* binding = Find(static_cast<int>(commonAction));
-			const bool mapped = binding != nullptr && binding->mapped();
-			std::cout << "ACTION_SUMMARY common=" << commonAction
-			          << " name=\"" << BattleEmulator::getActionName(static_cast<int>(commonAction)) << "\""
-			          << " occurrences=" << occurrenceCounts[commonAction]
-			          << " emitted=" << emittedCounts[commonAction]
-			          << " bestRecord=" << bestRecord[commonAction]
-			          << " bestSeed=0x" << std::hex << bestSeed[commonAction] << std::dec;
-			if (mapped) {
-				std::cout << " dq9=" << binding->dq9ActionId
-				          << " type=" << static_cast<unsigned>(binding->presentationType);
-			} else {
-				std::cout << " dq9=unmapped type=unknown";
-			}
-			std::cout << '\n';
-		}
-		return 0;
-	}
-
-	if (argc >= 4 && std::string_view(argv[1]) == "--find-hero-zero") {
-		const int traceAction = std::stoi(argv[2], nullptr, 0);
-		const int traceTarget = std::stoi(argv[3], nullptr, 0);
-		const uint64_t startSeed = argc >= 5 ? std::stoull(argv[4], nullptr, 0) : 1;
-		const uint64_t count = argc >= 6 ? std::stoull(argv[5], nullptr, 0) : 10000;
-		const bool requireNoGuard = argc >= 7 && std::stoi(argv[6], nullptr, 0) != 0;
-		const bool bareHands = parseEquipmentArg(argc, argv, 7);
-		int32_t traceGene[350] = {};
-		makeDebugGene(traceGene, 1, BattleEmulator::PackHeroAction(traceAction, traceTarget, bareHands));
-		for (uint64_t offset = 0; offset < count; ++offset) {
-			const uint64_t seed = startSeed + offset;
-			if (seed == 0) continue;
-			Player tracePlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
-			BattleResult traceResult;
-			int tracePosition = 1;
-			uint64_t traceState = 0;
-			lcg::init(seed);
-			BattleEmulator::Main(&tracePosition, 1, traceGene, tracePlayers, &traceResult,
-			                     seed, nullptr, nullptr, -1, &traceState, traceTarget);
-			bool guardWasPlanned = false;
-			if (requireNoGuard) {
-				for (int record = 0; record < traceResult.position; ++record) {
-					if (traceResult.isEnemy[record] &&
-					    traceResult.actions[record] == BattleEmulator::WHIPPING_BOY) {
-						guardWasPlanned = true;
-						break;
-					}
-				}
-			}
-			if (guardWasPlanned) continue;
-			for (int record = 0; record < traceResult.position; ++record) {
-				if (!traceResult.isEnemy[record] && traceResult.actions[record] == traceAction &&
-				    traceResult.damages[record] == 0) {
-					std::cout << "FOUND_HERO_ZERO action=" << traceAction
-					          << " target=" << traceTarget
-					          << " seed=0x" << std::hex << seed << std::dec
-					          << " position=" << tracePosition << '\n';
-					printTrace(seed, tracePosition, tracePlayers, traceResult);
-					return 0;
-				}
-			}
-		}
-		std::cout << "NOT_FOUND_HERO_ZERO action=" << traceAction
-		          << " target=" << traceTarget
-		          << " startSeed=0x" << std::hex << startSeed << std::dec
-		          << " count=" << count << '\n';
-		return 0;
-	}
-
-	if (argc >= 3 && std::string_view(argv[1]) == "--find-enemy-action") {
-		const int wantedAction = std::stoi(argv[2], nullptr, 0);
-		const uint64_t startSeed = argc >= 4 ? std::stoull(argv[3], nullptr, 0) : 1;
-		const uint64_t count = argc >= 5 ? std::stoull(argv[4], nullptr, 0) : 1000000;
-		const int searchTurns = argc >= 6 ? std::stoi(argv[5], nullptr, 0) : 1;
-		if (searchTurns < 1 || searchTurns > 349) throw std::invalid_argument("search turns must be 1..349");
-		int32_t searchGene[350] = {};
-		makeDebugGene(searchGene, searchTurns, BattleEmulator::DEFENCE);
-
-		for (uint64_t offset = 0; offset < count; ++offset) {
-			const uint64_t seed = startSeed + offset;
-			if (seed == 0) continue;
-			Player searchPlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
-			BattleResult searchResult;
-			int searchPosition = 1;
-			uint64_t searchState = 0;
-			lcg::init(seed);
-			BattleEmulator::Main(&searchPosition, searchTurns, searchGene, searchPlayers, &searchResult,
-			                     seed, nullptr, nullptr, -1, &searchState);
-			for (int record = 0; record < searchResult.position; ++record) {
-				if (searchResult.isEnemy[record] && searchResult.actions[record] == wantedAction) {
-					std::cout << "FOUND action=" << wantedAction
-					          << " seed=0x" << std::hex << seed << std::dec
-					          << " turn=" << searchResult.turns[record]
-					          << " record=" << record
-					          << " position=" << searchPosition << '\n';
-					printTrace(seed, searchPosition, searchPlayers, searchResult);
-					return 0;
-				}
-			}
-		}
-
-		std::cout << "NOT_FOUND action=" << wantedAction
-		          << " startSeed=0x" << std::hex << startSeed << std::dec
-		          << " count=" << count << " turns=" << searchTurns << '\n';
-		return 0;
-	}
-
-	if (argc >= 2 && std::string_view(argv[1]) == "--find-confusion-seed") {
-		const uint64_t startSeed = argc >= 3 ? std::stoull(argv[2], nullptr, 0) : 1;
-		const uint64_t count = argc >= 4 ? std::stoull(argv[3], nullptr, 0) : 1000000;
-		const int searchTurns = argc >= 5 ? std::stoi(argv[4], nullptr, 0) : 1;
-		if (searchTurns < 1 || searchTurns > 349) throw std::invalid_argument("search turns must be 1..349");
-		int32_t searchGene[350] = {};
-		makeDebugGene(searchGene, searchTurns, BattleEmulator::DEFENCE);
-
-		for (uint64_t offset = 0; offset < count; ++offset) {
-			const uint64_t seed = startSeed + offset;
-			if (seed == 0) continue;
-			Player searchPlayers[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
-			BattleResult searchResult;
-			int searchPosition = 1;
-			uint64_t searchState = 0;
-			lcg::init(seed);
-			BattleEmulator::Main(&searchPosition, searchTurns, searchGene, searchPlayers, &searchResult,
-			                     seed, nullptr, nullptr, -1, &searchState);
-			if (searchPlayers[0].confused) {
-				std::cout << "FOUND_CONFUSION seed=0x" << std::hex << seed << std::dec
-				          << " turns=" << searchTurns << " position=" << searchPosition << '\n';
-				printTrace(seed, searchPosition, searchPlayers, searchResult);
-				return 0;
-			}
-		}
-
-		std::cout << "NOT_FOUND_CONFUSION startSeed=0x" << std::hex << startSeed << std::dec
-		          << " count=" << count << " turns=" << searchTurns << '\n';
-		return 0;
-	}
-
-
-
-#endif
-
-#ifdef DEBUG2
-	//THIS DEBUG CODE!
-	//THIS DEBUG CODE
-	//0x3f1b3c6c: 30, 62, 33, 37, 49, 62, 62, 62, 37, 33, 34,
-	//0x3c98d058: 30, 62, 62, 62, 37, 62, 37, 33, 34,
-	constexpr int bad_karmour_A = 1;
-	constexpr int Hootingham_Gore = 2;
-	constexpr int bad_karmour_B = 3;
-	static_assert(bad_karmour_A >= 1 && bad_karmour_A <= BattleEmulator::HERO_TARGET_MASK);
-	static_assert(Hootingham_Gore >= 1 && Hootingham_Gore <= BattleEmulator::HERO_TARGET_MASK);
-	static_assert(bad_karmour_B >= 1 && bad_karmour_B <= BattleEmulator::HERO_TARGET_MASK);
-	uint64_t time1 = 0x4d4504dc;
-
-	int dummy[100];
-	lcg::init(time1);
-	int* position1 = new int(1);
-
-	/*
-	    *NowStateの各ビットの使用状況は下記の通りである。
-	    +-+-+-+-+-+-+-+-+- (* NowState) -+-+-+-+-+-+-+-+-+
-	       |            Name            |     size      |
-	    0  | Current Rotation Table     |     4bit      |
-	    4  | Rotation Internal State    |     4bit      |
-	    8  | Free Camera State          |     4bit      |
-	    12 | Turn Count Processed       |     20bit     |
-	    32 | Combo Previous Attack Id   |     2byte     |
-	    40 | Combo Counter              |     1byte     |
-	    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	                                 合計 6Byte
-	*/
-	auto* NowState = new uint64_t(0); //エミュレーターの内部ステートを表すint
-
-	Player players1[4];
-	int32_t gene1[350] = {31, 62, 24647, 62, 8263, 62, 33, 16418};
-	// //THIS DEBUG CODE!
-	// int32_t gene1[350] = {
-	// 	(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::MAGIC_MIRROR,
-	// 	(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::BUFF,
-	// 	(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
-	// 	(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
-	// 	(bad_karmour_A << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::ZAKI,
-	// 	(bad_karmour_A << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::MAGIC_MIRROR,
-	// 	// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
-	// 	// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
-	// 	// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::FULLHEAL,
-	// 	// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::PSYCHE_UP_ALLY,
-	// 	// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::FULLHEAL,
-	// 	// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::DOUBLE_UP,
-	// 	// (Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::MULTITHRUST,
-	// };
-	//gene1[19-1] = BattleEmulator::DEFENCE;
-	int counter = 0;
-
-	//gene1[counter++] = BattleEmulator::BUFF;
-
-	for (int i = 0; i < 20; ++i) {
-		if (gene1[i] == 0) {
-			gene1[i] = -1;
-			break;
-		}
-		counter++;
-	}
-	(*NowState) = BattleEmulator::TYPE_2A;
-	(*position1) = 1;
-	BattleResult dummy1;
-	std::memcpy(players1, copiedPlayers, sizeof(players1));
-	BattleEmulator::Main(position1, counter, gene1, players1, &dummy1, time1, dummy, dummy, -1, NowState);
-
-	std::stringstream ss1;
-	ss1 << time1 << " ";
-	std::cout << dumpTable(dummy1, gene1, -1) << std::endl;
-	//}
-	delete position1;
-	delete NowState;
-
-	return 0;
-#endif
-
-#ifdef DEBUG3
-	uint64_t time1 = 0x4d4504dc;
-
-	auto counter = 0;
-	int actions[350] = {0};
-	actions[counter++] = BattleEmulator::MAGIC_MIRROR;
-	//actions[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
-	actions[counter] = -1;
-
-	gerunikku_search::Limits searchLimits;
-	searchLimits.milliseconds = 1500.0;
-	searchLimits.initialPosition = 1;
-	searchLimits.maxBeamWidth = 96;
-	searchLimits.maxSuffixTurns = 64;
-	searchLimits.variant = 0;
-
-	std::stringstream ss;
-	SearchRequest(copiedPlayers, time1, actions, false, ss, searchLimits);
-
-	if(false){
-		SearchRequest(copiedPlayers, time1+1, actions, false, ss, searchLimits);
-		ss << std::endl;
-
-		SearchRequest(copiedPlayers, time1+2, actions, false, ss, searchLimits);
-		ss << std::endl;
-
-		SearchRequest(copiedPlayers, time1+6, actions, false, ss, searchLimits);
-		ss << std::endl;
-
-		SearchRequest(copiedPlayers, time1+10, actions, false, ss, searchLimits);
-		ss << std::endl;
-
-
-		SearchRequest(copiedPlayers, time1+40, actions, false, ss, searchLimits);
-		ss << std::endl;
-
-		SearchRequest(copiedPlayers, time1+70, actions, false, ss, searchLimits);
-		ss << std::endl;
-	}
-
-	std::cout << ss.str();
-	return 0;
-#endif
-
-	std::cout << "option missing" << std::endl;
-	return 1;
-
-	mainLoop(copiedPlayers);
-	return 0;
+int main(int argc, char** argv) {
+    try {
+        if (argc < 2 || std::string_view(argv[1]) == "--help") {
+            std::cout << "Slime.dst exact replay (hero + Izayaaru + 3 enemies; full camera)\n"
+                         "--trace-main-sequence SEED CURRENT_POSITION COMMAND...\n"
+                         "--trace-turn SEED COMMAND [TARGET=-1] [CURRENT_POSITION=0]\n"
+                         "--trace-battle SEED TURNS COMMAND [TARGET=-1] [CURRENT_POSITION=0]\n"
+                         "--calibrate-hp SEED HERO_HP COMMAND... (explicit modified-state observation)\n"
+                         "--frontend-range START END enemyActions-heroActions-damages\n"
+                         "Commands: attack/25[:1..3], defend/27, flee/53. Target 1=A,2=cruelcumber,3=B.\n"
+                         "No battle-path optimizer is implemented. Existing wasm_search_dump replays the supplied commands.\n";
+            return 0;
+        }
+        const std::string mode(argv[1]);
+        if (mode == "--frontend-range") {
+            if (argc != 5 || !wasm_prepare_input(argv[4])) throw std::invalid_argument(lastError.empty() ? "expected START END INPUT" : lastError);
+            const auto seed = wasm_bruteforce_range(0, number(argv[2]), number(argv[3]));
+            std::cout << "found=" << foundSeeds << " uniqueSeed=0x" << std::hex << seed << std::dec << " turns=" << lastTurnProcessed << '\n';
+            return 0;
+        }
+        if (argc < 4) throw std::invalid_argument("missing replay arguments");
+        const uint64_t seed = number(argv[2]);
+        int currentPosition = 0, hp = -1;
+        std::vector<BE::Command> commands;
+        if (mode == "--trace-main-sequence" || mode == "--trace-camera-sequence" || mode == "--calibrate-hp") {
+            if (argc < 5) throw std::invalid_argument("at least one command is required");
+            if (mode == "--calibrate-hp") hp = static_cast<int>(number(argv[3]));
+            else currentPosition = static_cast<int>(number(argv[3]));
+            for (int i = 4; i < argc; ++i) commands.push_back(command(argv[i]));
+        } else if (mode == "--trace-turn" || mode == "--trace-battle") {
+            const bool many = mode == "--trace-battle";
+            const int actionArg = many ? 4 : 3;
+            if (argc <= actionArg) throw std::invalid_argument("missing command");
+            auto c = command(argv[actionArg]);
+            if (argc > actionArg+1 && std::string_view(argv[actionArg+1]) != "-1") c.target = static_cast<int>(number(argv[actionArg+1]));
+            if (argc > actionArg+2) currentPosition = static_cast<int>(number(argv[actionArg+2]));
+            const int turns = many ? static_cast<int>(number(argv[3])) : 1;
+            if (turns < 1 || turns > 100) throw std::invalid_argument("turns must be 1..100");
+            commands.assign(turns, c);
+        } else throw std::invalid_argument("unknown mode");
+        replay(std::cout, seed, currentPosition, commands, true, hp, mode != "--trace-camera-sequence");
+        return 0;
+    } catch (const std::exception& e) { std::cerr << "error: " << e.what() << '\n'; return 2; }
 }

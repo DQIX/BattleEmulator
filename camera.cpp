@@ -12,6 +12,7 @@
 #include "debug.h"
 #include "camera/dq9_action_mapper.hpp"
 #include "camera/freecam_action_mapper.hpp"
+#include <iostream>
 
 namespace {
 
@@ -33,12 +34,7 @@ enum class CameraRule {
     switch (action) {
         case BattleEmulator::ATTACK_ENEMY:
         case BattleEmulator::ATTACK_ALLY:
-        case BattleEmulator::BEAST_THRUST:
-        case BattleEmulator::VITAL_POINT_THRUST:
-        case BattleEmulator::THUNDER_THRUST:
-        case BattleEmulator::SKY_ATTACK:
-        case BattleEmulator::MERA_ZOMA:
-        case BattleEmulator::MERCURIAL_THRUST:
+        case BattleEmulator::HEAL:
             return CameraRule::free_camera;
         default:
             return CameraRule::none;

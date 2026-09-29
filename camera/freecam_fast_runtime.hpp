@@ -837,6 +837,12 @@ inline void InvalidateRosterField4Compatibility() noexcept {
 // a presentation-type property.  The mask itself is ROM-mined from the ARM9
 // call immediates plus font_lv5.gp2 metrics by build_freecam_renderer_metadata.mjs.
 [[nodiscard]] inline bool ApplyBattleHudRendererResidueCompatibility() noexcept {
+    if (ThreadContext().presentationActorCount == 5) {
+        // Slime.dst's five-row stack, observed at 021E1A10 after the HUD
+        // renderer. The fifth word is live stack residue too, not padding.
+        constexpr std::array<bool, 5> slimeRows{true, true, true, true, true};
+        return SetRosterField4Compatibility(slimeRows);
+    }
     std::array<bool, 4> prefix{};
     for (std::size_t index = 0; index < prefix.size(); ++index) {
         prefix[index] =
@@ -850,6 +856,12 @@ inline void InvalidateRosterField4Compatibility() noexcept {
 // actor/monster/action mask: these are physical stack-overlap rows, and only
 // the zero/nonzero state consumed by 021E08BC is represented here.
 [[nodiscard]] inline bool ApplyBattleEntryRendererResidueCompatibility() noexcept {
+    if (ThreadContext().presentationActorCount == 5) {
+        // Slime.dst entry words: [027e3488,2,0,0,027e35b4]. The old four-row
+        // capture describes only the prefix; leaving row 4 unknown is wrong.
+        constexpr std::array<bool, 5> slimeRows{true, true, false, false, true};
+        return SetRosterField4Compatibility(slimeRows);
+    }
     // Fresh multi-turn ROM captures show the physical row+4 scratch prefix
     // is recreated as 1100 at the first 021E1958 build of each turn. This is
     // the turn-entry stack footprint, distinct from the later HUD/text

@@ -63,7 +63,6 @@ static inline uint64_t lcg_advance(uint64_t seed, uint64_t delta) {
 }
 
 inline void lcg::GenerateifNeed(int need) {
-    assert(now_seed != 0);
     assert(need != 0);
 
     // init_mode=false ではキャッシュ運用自体をしない
@@ -83,7 +82,6 @@ inline void lcg::GenerateifNeed(int need) {
 
 // init_mode=false のとき：キャッシュせず、position まで前方スキップして top32 を返す
 inline uint64_t lcg::nextTop32NoCache(int position) {
-    assert(now_seed != 0);
     // 既に通過した位置には戻れない（キャッシュ無しの制約）
     assert(position >= nowCounter);
 

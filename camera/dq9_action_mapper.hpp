@@ -1,20 +1,11 @@
 #pragma once
-
 #include <array>
 #include <cstdint>
-
 #include "freecam_fast_runtime.hpp"
 
 namespace dq9::freecam::actions {
-
-// Common-action -> DQ9-action crosswalk for actions that BattleEmulator
-// already models and whose DQ9 ID is confirmed by ROM mining / live records.
-// This is NOT a free-camera whitelist. Free-camera eligibility belongs only in
-// freecam_action_mapper.hpp.
-//
-// Every DQ9 ID below must exist in camera/dq9-action-target-classification.csv.
-// All other fixed action fields are pulled automatically from
-// freecam_fast_generated.hpp through fast::metadata constexpr accessors.
+// Presentation mapping is deliberately distinct from free-camera eligibility.
+// Action IDs are confirmed by freecam-action-trigger-table.csv and live calls.
 struct ActionMetadata {
     std::uint16_t dq9ActionId{fast::metadata::kInvalidActionId};
     fast::TargetSide targetSide{fast::TargetSide::none_or_context};
@@ -26,113 +17,35 @@ struct ActionMetadata {
     std::uint8_t resourceCost{};
     std::uint16_t targetHandlerJudgment1{};
     std::uint16_t targetHandlerJudgment2{};
-
-    [[nodiscard]] constexpr bool mapped() const noexcept {
-        return dq9ActionId != fast::metadata::kInvalidActionId;
-    }
+    [[nodiscard]] constexpr bool mapped() const noexcept { return dq9ActionId != fast::metadata::kInvalidActionId; }
 };
-
-template <std::uint16_t Dq9ActionId>
+template <std::uint16_t Id>
 [[nodiscard]] constexpr ActionMetadata Describe() noexcept {
-    static_assert(Dq9ActionId < fast::metadata::kActionCount);
-    static_assert(
-        fast::metadata::HasActionClassification(Dq9ActionId),
-        "DQ9 action ID is absent from camera/dq9-action-target-classification.csv"
-    );
-    return {
-        Dq9ActionId,
-        static_cast<fast::TargetSide>(generated::kTargetSideCode[Dq9ActionId]),
-        static_cast<fast::TargetScope>(generated::kTargetScopeCode[Dq9ActionId]),
-        fast::metadata::AttackFormationMode(Dq9ActionId),
-        fast::metadata::PresentationType(Dq9ActionId),
-        fast::metadata::OperationType(Dq9ActionId),
-        fast::metadata::RepeatMode(Dq9ActionId),
-        fast::metadata::ResourceCost(Dq9ActionId),
-        fast::metadata::TargetHandlerJudgment1(Dq9ActionId),
-        fast::metadata::TargetHandlerJudgment2(Dq9ActionId),
-    };
+    static_assert(Id < fast::metadata::kActionCount && fast::metadata::HasActionClassification(Id));
+    return {Id, static_cast<fast::TargetSide>(generated::kTargetSideCode[Id]),
+        static_cast<fast::TargetScope>(generated::kTargetScopeCode[Id]),
+        fast::metadata::AttackFormationMode(Id), fast::metadata::PresentationType(Id),
+        fast::metadata::OperationType(Id), fast::metadata::RepeatMode(Id), fast::metadata::ResourceCost(Id),
+        fast::metadata::TargetHandlerJudgment1(Id), fast::metadata::TargetHandlerJudgment2(Id)};
 }
-
 inline constexpr auto kActions = [] {
     std::array<ActionMetadata, BattleEmulator::MAX_COMMON_ACTION_ID + 1> actions{};
-
     actions[BattleEmulator::ATTACK_ENEMY] = Describe<1>();
     actions[BattleEmulator::ATTACK_ALLY] = Describe<1>();
-    actions[BattleEmulator::SKY_ATTACK] = Describe<540>();
-    actions[BattleEmulator::MERA_ZOMA] = Describe<11>();
-    actions[BattleEmulator::MERCURIAL_THRUST] = Describe<69>();
-    actions[BattleEmulator::THUNDER_THRUST] = Describe<72>();
-    actions[BattleEmulator::MULTITHRUST] = Describe<73>();
-    actions[BattleEmulator::DOUBLE_UP] = Describe<173>();
-    actions[BattleEmulator::BEAST_THRUST] = Describe<70>();
-    actions[BattleEmulator::VITAL_POINT_THRUST] = Describe<71>();
-    actions[BattleEmulator::DRAGON_SLASH] = Describe<63>();
-    actions[BattleEmulator::MIRACLE_SLASH] = Describe<65>();
-    actions[BattleEmulator::ZAKI] = Describe<24>();
-    actions[BattleEmulator::ZARAKI] = Describe<25>();
-    actions[BattleEmulator::MIDHEAL] = Describe<31>();
-    actions[BattleEmulator::MORE_HEAL] = Describe<32>();
-    actions[BattleEmulator::FULLHEAL] = Describe<33>();
-    actions[BattleEmulator::DEFENDING_CHAMPION] = Describe<135>();
-    actions[BattleEmulator::MEDICINAL_HERBS] = Describe<255>();
-    // スカラ. Live 021E08BC action records and the ROM actdata row both
-    // identify BattleEmulator::BUFF as DQ9 action 41. Keep it in the general
-    // presentation mapper so an index-0 スカラ record participates in the
-    // same action-record lifecycle as every other mapped action.
-    actions[BattleEmulator::BUFF] = Describe<41>();
-    // Ally Psyche Up / ためる. The DQ9 action ID and presentation type are
-    // generated from the unique ally/self ためる row in the mined action
-    // classification data. Its presentation path matters here because it
-    // leaves compiler-stack residue consumed by overlay_d_25:021E08BC.
-    actions[BattleEmulator::PSYCHE_UP_ALLY] = Describe<generated::kPsycheUpActionId>();
-
-    // Gerunikku battle actions already implemented by BattleEmulator. These
-    // mappings are presentation metadata, not declarations that freecam runs.
-    actions[BattleEmulator::GERUNIKKU_MERAMI] = Describe<10>();
-    actions[BattleEmulator::GERUNIKKU_BAGIMA] = Describe<19>();
-    actions[BattleEmulator::GERUNIKKU_BAGIMA_STRONG] = Describe<463>();
-    actions[BattleEmulator::EERIE_LIGHT] = Describe<155>();
-    actions[BattleEmulator::MAGIC_MIRROR] = Describe<137>();
-    actions[BattleEmulator::GERUNIKKU_MAGIC_MIRROR] = Describe<55>();
-    actions[BattleEmulator::INACTIVE_ENEMY] = Describe<503>();
-    actions[BattleEmulator::GERUNIKKU_MEDAPANI] = Describe<912>();
-    actions[BattleEmulator::CONFUSION_PARTY_ATTACK] = Describe<219>();
-    actions[BattleEmulator::CONFUSION_CANT_DECIDE] = Describe<221>();
-    actions[BattleEmulator::CONFUSION_TO_PARALYSIS] = Describe<915>();
-    actions[BattleEmulator::CONFUSION_FAILED_ATTACK] = Describe<222>();
-    actions[BattleEmulator::CONFUSION_FAILED_FLEE] = Describe<918>();
-    actions[BattleEmulator::WHIPPING_BOY] = Describe<929>();
-    actions[BattleEmulator::HELM_SPLITTER] = Describe<109>();
-    actions[BattleEmulator::KABUFF] = Describe<42>();
-    actions[BattleEmulator::DOUBLE_EDGED_SLASH] = Describe<175>();
+    actions[BattleEmulator::HEAL] = Describe<30>();
+    actions[BattleEmulator::DEFENCE] = Describe<3>();
+    actions[BattleEmulator::FLEE_ALLY] = Describe<225>();
+    actions[BattleEmulator::FLEE_ENEMY] = Describe<225>();
     return actions;
 }();
-
-[[nodiscard]] constexpr const ActionMetadata* Find(const int commonActionId) noexcept {
-    return commonActionId >= 0 && commonActionId < static_cast<int>(kActions.size())
-        ? &kActions[static_cast<std::size_t>(commonActionId)]
-        : nullptr;
+[[nodiscard]] constexpr const ActionMetadata* Find(int id) noexcept {
+    return id >= 0 && id < static_cast<int>(kActions.size()) ? &kActions[id] : nullptr;
 }
-
-template <int CommonActionId>
+template <int Id>
 [[nodiscard]] consteval std::uint16_t Dq9ActionId() {
-    static_assert(CommonActionId >= 0 && CommonActionId < static_cast<int>(kActions.size()));
-    constexpr std::uint16_t actionId = kActions[static_cast<std::size_t>(CommonActionId)].dq9ActionId;
-    static_assert(actionId != fast::metadata::kInvalidActionId, "common action has no confirmed DQ9 mapping");
-    return actionId;
+    static_assert(Id >= 0 && Id < static_cast<int>(kActions.size()));
+    constexpr auto action = kActions[Id].dq9ActionId;
+    static_assert(action != fast::metadata::kInvalidActionId);
+    return action;
 }
-
-static_assert(kActions[BattleEmulator::WHIPPING_BOY].dq9ActionId == 929);
-static_assert(kActions[BattleEmulator::CONFUSION_TO_PARALYSIS].dq9ActionId == 915);
-static_assert(kActions[BattleEmulator::CONFUSION_FAILED_ATTACK].dq9ActionId == 222);
-static_assert(kActions[BattleEmulator::CONFUSION_FAILED_FLEE].dq9ActionId == 918);
-static_assert(kActions[BattleEmulator::HELM_SPLITTER].dq9ActionId == 109);
-static_assert(kActions[BattleEmulator::INACTIVE_ENEMY].dq9ActionId == 503);
-static_assert(kActions[BattleEmulator::BUFF].dq9ActionId == 41);
-static_assert(kActions[BattleEmulator::PSYCHE_UP_ALLY].dq9ActionId == generated::kPsycheUpActionId);
-static_assert(kActions[BattleEmulator::MULTITHRUST].dq9ActionId == 73);
-static_assert(
-    kActions[BattleEmulator::PSYCHE_UP_ALLY].presentationType == generated::kTensionGainPresentationType
-);
-
-} // namespace dq9::freecam::actions
+}

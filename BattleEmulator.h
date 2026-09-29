@@ -135,7 +135,9 @@ public:
 	static constexpr int CONFUSION_FAILED_FLEE = 192;    // DQ9 0x0396
 	static constexpr int CURE_CONFUSION = 193;           // DQ9 0x03AA
 	static constexpr int GERUNIKKU_MAGIC_MIRROR = 194;  // マホカンタ / DQ9 0x0037
-	static constexpr int MAX_COMMON_ACTION_ID = GERUNIKKU_MAGIC_MIRROR;
+	// Reserved ecosystem common IDs are kept, not re-used for other actions.
+	static constexpr int FLEE_ENEMY = 195;
+	static constexpr int MAX_COMMON_ACTION_ID = FLEE_ENEMY;
 
     struct SearchCommand {
         int action = -1;
@@ -173,76 +175,33 @@ public:
         return packed >= 0 && (packed & HERO_BARE_HANDS_BIT) != 0;
     }
 
-    struct SearchState {
-        Player players[4]{};
-        int position = 1;
+    using Command = SearchCommand;
+    static constexpr int ACTOR_COUNT = 5;
+    static constexpr int ALLY_COUNT = 2;
+    static constexpr int FIRST_ENEMY = 2;
+
+    struct State {
+        std::array<Player, ACTOR_COUNT> players{};
+        int position = 1; // Next checkpoint, not the live consumed index.
+        int turn = 0;
         uint64_t nowState = 0;
+        bool finished = false;
+        bool heroDead = false;
         camera::RuntimeSnapshot cameraRuntime{};
     };
 
-    static bool InitializeSearchState(SearchState* state, const Player initialPlayers[4],
-                                      int initialPosition = 1);
-    [[nodiscard]] static bool IsHeroCommandSelectable(const SearchState& state,
-                                                      SearchCommand command) noexcept;
-    static bool StepSearchStateInPlace(SearchState* state, SearchCommand command,
-                                       BattleResult* result = nullptr, bool traceBoundaries = false);
-    static bool StepSearchState(const SearchState& source, SearchCommand command,
-                                SearchState* destination,
-                                BattleResult* result = nullptr, bool traceBoundaries = false);
+    static bool InitializeBattle(State& state, int initialPosition = 1);
+    [[nodiscard]] static bool IsHeroCommandSelectable(const State& state, Command command) noexcept;
+    static bool StepBattle(State& state, Command command, BattleResult* result = nullptr,
+                           bool traceBoundaries = false);
+    static const char* getActionName(int actionId) noexcept;
+    static const char* getActorName(int actor) noexcept;
+    static int RawActorId(int actor) noexcept;
+    static void ResetTurnProcessed() noexcept;
+    static uint64_t getTurnProcessed() noexcept;
 
-    static bool
-    Main(int *position, int RunCount, const int32_t Gene[350], Player (&players)[4],
-         BattleResult* result, uint64_t seed, const int eActions[350], const int damages[350], int mode,
-         uint64_t *NowState, int heroTargetOverride = -1, bool traceBoundaries = false,
-         int heroActionOverride = -1, bool initializeCameraBattle = true);
-
-    static std::string getActionName(int actionId);
-
-    static int roundCustom(double value);
-
-	static void ResetTurnProcessed();
-
-	static int getTurnProcessed();
-
-	static void processTurn();
-
-	static void resetStartTurn();
-	static int getStartTurn();
-
-
-private:
-	static void ProcessHealRage(const Player (&players)[4], int* position, bool kaisinn);
-    static int ProcessMagicBurst(int *position);
-
-    static void ProcessRage(int *position, int baseDamage, Player players[4], int defender);
-
-    static void RecalculateBuff(Player players[4], int actor);
-
-    static int CalculateMoreHealBase(const Player players[4], int actor);
-
-    static int CalculateMidHealBase(const Player players[4], int actor);
-
-    static int FUN_0208aecc(int *position, uint64_t *NowState);
-
-    static void resetCombo(uint64_t *NowState);
-
-    static double processCombo(int32_t Id, double damage, uint64_t *NowState);
-
+    // Keep the existing optimized physical-damage arithmetic.
     static int FUN_0207564c(int *position, int atk, int def);
-
-    static int FUN_021e8458_typeC(int *position, double min, double max, double base);
-
-    static int FUN_021e8458_typeD(int *position, double difference, double base);
-
-    static int callAttackFun(int32_t Id, int *position, Player (&players)[4], int attacker, int defender,
-                             uint64_t *NowState, bool targetWasGuardRedirect = false);
-
-    static double FUN_021dbc04(int baseHp, double maxHp);
-
-    static int ProcessEnemyRandomAction2A(int *position);
-
-
-    static void process7A8(int *position, int baseDamage, Player players[4], int defender);
 };
 
 
