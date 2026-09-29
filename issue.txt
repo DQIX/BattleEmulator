@@ -1,9 +1,6 @@
-読み込めてるよv10
+読み込めてるよv13
 
-データマイニングは、できれば全データマイニングして、スライムだけで終わらせず、binにして後続のAIが使える方式にする。
-スライムだけで終わらせない。また、スクリプトにどういうデータか書いておく
-別dst用意したよ
-"C:\Users\owner\Documents\tunnelworkspace\suraimu2.dst"
-今バトルmcpが拒否してくるのは、常時ヒットするブレイクポイントのせいだよ。ブロッカーではないので常時ヒットブロッカーを削除して続行
-
-row4はスタックごみだよ。書いた人追っても時間がもったいないだけ
+probeは手段であって、目的じゃないぞ。わかったことはすぐ実装しろ
+あとrow4を追いすぎてエミュレータの速度落ちてるよ
+row4はスタックごみだよ
+C:\Users\owner\Documents\tunnelworkspace\BattleArrow\BattleEmulator\camera\requested.md

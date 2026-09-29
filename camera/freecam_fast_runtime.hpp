@@ -119,7 +119,7 @@ inline constexpr std::size_t kWeaponItemModelCount =
 static_assert(kActorProfileCount == 617);
 static_assert(kPlayerProfileCount == 13);
 static_assert(kMonsterProfileCount == 438);
-static_assert(kSpecialProfileCount == 1);
+static_assert(kSpecialProfileCount == 2); // ROM membership: existing special actor + s019 (Izayaaru).
 static_assert(kBodyItemModelCount == 183);
 static_assert(kWeaponItemModelCount == 268);
 

@@ -121,6 +121,13 @@ void dumpCamera(std::ostream& out) {
         for (int j = 0; j < e.presentationActorCount; ++j) out << (j ? "," : "") << int(e.goalNodes[j]);
         out << " row4=";
         for (int j = 0; j < e.presentationActorCount; ++j) out << (e.rosterField4Known[j] ? (e.rosterField4Nonzero[j] ? '1' : '0') : '?');
+        out << " aux=";
+        for (int j = 0; j < e.presentationActorCount; ++j) out << (j ? "," : "") << int(e.auxiliaryNodes[j]);
+        out << " routes=";
+        for (int j = 0; j < e.routeActorCount; ++j) {
+            out << (j ? ";" : "") << e.routeActorIds[j] << ':';
+            for (int k = 0; k < e.routeCounts[j]; ++k) out << (k ? "," : "") << int(e.routeNodes[j][k]);
+        }
         out << '\n';
     }
 #endif

@@ -195,9 +195,9 @@ bool BattleEmulator::StepBattle(State& s, Command command, BattleResult* result,
         }
         record.action = q.action; record.target = q.target;
         boundary(s, trace, "start actor", q.actor);
+        boundary(s, trace, "start FUN_02158dfc", q.actor);
         if (q.actor >= 2) for (int ally = 0; ally < 2; ++ally) if (s.players[ally].alive()) skip(s, trace, 0x021588ec);
         skip(s, trace, 0x02159b10);
-        boundary(s, trace, "start FUN_02158dfc", q.actor);
         boundary(s, trace, "end FUN_02158dfc", q.actor);
         boundary(s, trace, "start FUN_021ebd9c_ct", q.actor);
         skip(s, trace, 0x0216139c); skip(s, trace, 0x021613b0); skip(s, trace, 0x021ec6f8);
@@ -228,10 +228,20 @@ bool BattleEmulator::StepBattle(State& s, Command command, BattleResult* result,
         record.rawDamage = damage;
         if (evaded) {
             damage = 0;
-            if (q.target < 2) skip(s, trace, 0x021ed7a8);
+            if (q.target == 1) skip(s, trace, 0x021ed7a8);
         } else if (attack) {
+            // Slime/Cruelcumber rage check is reached only by a nonlethal hit.
+            // Fresh 0x0822b3: hero->Slime A, Ctable checkpoints 73 and 74.
+            if (q.target >= 2 && damage > 0 && damage < s.players[q.target].hp) {
+                skip(s, trace, 0x021eb8c8); skip(s, trace, 0x021eb8f0);
+            }
             if (damage > 0) { skip(s, trace, 0x02158ac4); skip(s, trace, 0x021e54fc); }
-            if (q.actor < 2) skip(s, trace, 0x021edaf4);
+            // This encounter's level-1 hero does not enter the charge rolls;
+            // Izayaaru does, including positive incoming damage (31/46 above).
+            // The zero-damage rescue result still reaches this guest charge roll
+            // (fresh 0x0822b3, turn 2: rescue #168 -> charge #169).
+            if (q.target == 1) skip(s, trace, 0x021ed7a8);
+            if (q.actor == 1) skip(s, trace, 0x021edaf4);
             Player::reduceHp(s.players[q.target], damage);
         } else if (heal) {
             skip(s, trace, 0x021e54fc);
