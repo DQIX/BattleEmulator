@@ -11,6 +11,7 @@ public:
 	void clear(){
 		position = 0;
 		turn = 0;
+		publicTurnLimit = -1;
 	}
 
 
@@ -39,6 +40,8 @@ public:
 
 	int position = 0;
 	int turn = 0;
+	// Exclusive turn count permitted in the normal dump. Search reach is separate.
+	int publicTurnLimit = -1;
 	int actions[1000] = {};
 	int damages[1000] = {};
 	int isEnemy[1000] = {};

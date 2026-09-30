@@ -155,6 +155,7 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 	auto counter = 0;
 	// データのループ
 	for(int i = 0; i < result.position; ++i){
+		if (result.publicTurnLimit >= 0 && result.turns[i] >= result.publicTurnLimit) break;
 		auto action = result.actions[i];
 		auto damage = result.damages[i];
 		auto ATKTurn = result.AtkBuffTurns[i];
@@ -394,8 +395,10 @@ bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aAct
 #if defined(gerunikku) && !defined(OPTIMIZE_MODE)
 	int knownTurns = 0;
 	while (knownTurns < 349 && aActions[knownTurns] > 0) ++knownTurns;
+	auto requestLimits = limits;
+	requestLimits.foundTurn = std::max(0, startturn);
 	const auto searched = gerunikku_search::runRequest(copiedPlayers2, seed,
-		std::span<const int32_t>(aActions, knownTurns), limits, ss);
+		std::span<const int32_t>(aActions, knownTurns), requestLimits, ss);
 	return searched.validInput && searched.verified && searched.won;
 #endif
 	int32_t gene[350] = {0};
@@ -428,6 +431,7 @@ bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aAct
 
 	foundSeeds = 0;
 	FoundSeed = 0;
+	startturn = -1;
 
 	uint64_t totalSeconds = hours * 3600 + minutes * 60 + seconds;
 	totalSeconds = totalSeconds;
@@ -493,6 +497,7 @@ bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aAct
 			std::cout << std::hex << seed << std::dec << std::endl;
 			FoundSeed = seed;
 			foundSeeds++;
+			startturn = BattleEmulator::getStartTurn();
 		}
 		//}
 	}
@@ -611,7 +616,10 @@ void mainLoop(const Player copiedPlayers[4]){
 			auto seed = BruteForceRequest(copiedPlayers, hours, minutes, seconds, turns, eActions, aActions, damages);
 			if(foundSeeds == 1){
 				std::stringstream ss2;
-				if(!SearchRequest(copiedPlayers, seed, aActions, true, ss2)){
+				gerunikku_search::Limits observed;
+				observed.observedActions.assign(eActions, std::find(eActions, eActions + 350, -1));
+				observed.observedDamages.assign(damages, std::find(damages, damages + 350, -1));
+				if(!SearchRequest(copiedPlayers, seed, aActions, true, ss2, observed)){
 					std::cout << std::endl;
 					std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
 					std::cout << "      **YOU WILL NOW LOSE!**       " << std::endl;
@@ -688,9 +696,11 @@ namespace {
     std::string wasmLastDump;
     std::string wasmLastError;
     uint64_t wasmLastTurnProcessed = 0;
+    gerunikku_search::Limits wasmSearchLimits;
 
     bool buildResultsFromInput(const char *input) {
         wasmLastError.clear();
+        startturn = -1;
         if (input == nullptr) {
             wasmLastError = "input is null";
             return false;
@@ -716,7 +726,12 @@ namespace {
     	// 各アクション配列に値を代入
     	parseActions(eActionsStr, eActions5);
     	parseActions(aActionsStr, aActions5);
-    	parseActions(damagesStr, damages5);
+     	parseActions(damagesStr, damages5);
+
+
+        wasmSearchLimits = {};
+        wasmSearchLimits.observedActions.assign(eActions5, std::find(eActions5, eActions5 + MAX, -1));
+        wasmSearchLimits.observedDamages.assign(damages5, std::find(damages5, damages5 + MAX, -1));
 
         return true;
     }
@@ -725,7 +740,7 @@ namespace {
         BattleEmulator::ResetTurnProcessed();
 
     	std::stringstream ss;
-    	if(!SearchRequest(copiedPlayers, seed, aActions5, true, ss)){
+    	if(!SearchRequest(copiedPlayers, seed, aActions5, true, ss, wasmSearchLimits)){
     		ss << std::endl;
     		ss << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
     		ss << "      **YOU WILL NOW LOSE!**       " << std::endl;
@@ -746,8 +761,8 @@ namespace {
     		int position = 1;
     		uint64_t nowState = 0;
     		BattleEmulator::Main(&position, 100, aActions5, players, &res, seed, nullptr, nullptr, -1, &nowState);
-    		ss << dumpTable(res, aActions5, startturn);
-    		ss << "startturn=" << startturn << std::endl;
+     		ss << dumpTable(res, aActions5, startturn);
+     		ss << "startturn=" << startturn << std::endl;
     		return ss.str();
     	}
     	std::cout << ss.str();
@@ -774,9 +789,12 @@ EMSCRIPTEN_KEEPALIVE uint64_t wasm_bruteforce_range(int resultIndex, uint64_t st
     BattleEmulator::ResetTurnProcessed();
     foundSeeds = 0;
     FoundSeed = 0;
+    startturn = -1;
+
 
     BruteForceMainLoop(copiedPlayers, startSeed, endSeed, aActions5, damages5, eActions5);
     wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
+
 
 
     if (foundSeeds == 1) {
@@ -811,7 +829,8 @@ EMSCRIPTEN_KEEPALIVE const char *wasm_search_dump(int resultIndex, uint64_t seed
 
 int main(int argc, char* argv[]){
 #if defined(gerunikku)
-	if (argc >= 2 && std::string_view(argv[1]) == "--search")
+	if (argc >= 2 && (std::string_view(argv[1]) == "--search"
+		|| std::string_view(argv[1]) == "--debug2" || std::string_view(argv[1]) == "--debug3"))
 		return gerunikku_search::runCli(argc, argv, copiedPlayers);
 #endif
 	showHeader();
@@ -1951,7 +1970,7 @@ int main(int argc, char* argv[]){
 	static_assert(bad_karmour_A >= 1 && bad_karmour_A <= BattleEmulator::HERO_TARGET_MASK);
 	static_assert(Hootingham_Gore >= 1 && Hootingham_Gore <= BattleEmulator::HERO_TARGET_MASK);
 	static_assert(bad_karmour_B >= 1 && bad_karmour_B <= BattleEmulator::HERO_TARGET_MASK);
-	uint64_t time1 = 0x4d4504dc;
+	uint64_t time1 = 0x4d45051e;
 
 	int dummy[100];
 	lcg::init(time1);
@@ -1973,7 +1992,7 @@ int main(int argc, char* argv[]){
 	auto* NowState = new uint64_t(0); //エミュレーターの内部ステートを表すint
 
 	Player players1[4];
-	int32_t gene1[350] = {31, 62, 24647, 62, 8263, 62, 33, 16418};
+	int32_t gene1[350] = {31, 24646, 8264, 62, 33, 62, 62, 16418};
 	// //THIS DEBUG CODE!
 	// int32_t gene1[350] = {
 	// 	(Hootingham_Gore << BattleEmulator::HERO_TARGET_SHIFT) | BattleEmulator::MAGIC_MIRROR,
@@ -2019,7 +2038,7 @@ int main(int argc, char* argv[]){
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x4d4504dc;
+	uint64_t time1 = 0x4d4504d8;
 
 	auto counter = 0;
 	int actions[350] = {0};
@@ -2037,7 +2056,7 @@ int main(int argc, char* argv[]){
 	std::stringstream ss;
 	SearchRequest(copiedPlayers, time1, actions, false, ss, searchLimits);
 
-	if(false){
+	if(true){
 		SearchRequest(copiedPlayers, time1+1, actions, false, ss, searchLimits);
 		ss << std::endl;
 

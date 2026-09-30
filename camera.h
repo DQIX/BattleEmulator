@@ -87,6 +87,11 @@ class camera {
 public:
     using RuntimeSnapshot = dq9::freecam::fast::RuntimeState;
 
+    static void SetBranchChoice(int actorSlot, bool param5) noexcept;
+    static bool BranchPending() noexcept;
+    static bool UsedBranchChoice() noexcept;
+    static bool ResolveExternalChoice(int actionIndex, int actorSlot, bool* value) noexcept;
+
     static bool ResetBattle(const CameraPresentationActor *actors, std::size_t actorCount);
     static RuntimeSnapshot CaptureRuntimeState() noexcept;
     static void RestoreRuntimeState(const RuntimeSnapshot& state) noexcept;

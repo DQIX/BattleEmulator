@@ -150,13 +150,19 @@ public:
     static constexpr int HERO_TARGET_SHIFT = 13;
     static constexpr int HERO_TARGET_MASK = 0x3;
     static constexpr int HERO_BARE_HANDS_BIT = 1 << 15;
+    // Gene bits 16..19: physical camera row + 1 (0 = no hypothesis).
+    // Bit 20: that participant's param5 candidate. Low command bits stay intact.
+    static constexpr int HERO_CAMERA_ACTOR_SHIFT = 16;
+    static constexpr int HERO_CAMERA_ACTOR_MASK = 0xF;
+    static constexpr int HERO_CAMERA_PARAM5_BIT = 1 << 20;
+    static constexpr int HERO_CAMERA_BITS = (HERO_CAMERA_ACTOR_MASK << HERO_CAMERA_ACTOR_SHIFT) | HERO_CAMERA_PARAM5_BIT;
 
     [[nodiscard]] static constexpr int PackHeroAction(const int action, const int target = -1,
                                                       const bool bareHands = false) noexcept {
         if (action < 0) return -1;
         const int encodedTarget = target >= 1 && target <= 3 ? target : 0;
         return (action & HERO_ACTION_MASK) | (encodedTarget << HERO_TARGET_SHIFT)
-            | (bareHands ? HERO_BARE_HANDS_BIT : 0);
+            | (bareHands ? HERO_BARE_HANDS_BIT : 0) | (action & HERO_CAMERA_BITS);
     }
 
     [[nodiscard]] static constexpr int HeroActionId(const int packed) noexcept {
@@ -171,6 +177,17 @@ public:
 
     [[nodiscard]] static constexpr bool HeroBareHands(const int packed) noexcept {
         return packed >= 0 && (packed & HERO_BARE_HANDS_BIT) != 0;
+    }
+
+    [[nodiscard]] static constexpr int HeroCameraActor(const int packed) noexcept {
+        return packed < 0 ? -1 : ((packed >> HERO_CAMERA_ACTOR_SHIFT) & HERO_CAMERA_ACTOR_MASK) - 1;
+    }
+    [[nodiscard]] static constexpr bool HeroCameraParam5(const int packed) noexcept {
+        return packed >= 0 && (packed & HERO_CAMERA_PARAM5_BIT) != 0;
+    }
+    [[nodiscard]] static constexpr int WithCameraChoice(const int packed, const int actor, const bool param5) noexcept {
+        return (packed & ~HERO_CAMERA_BITS) | ((actor + 1) << HERO_CAMERA_ACTOR_SHIFT)
+            | (param5 ? HERO_CAMERA_PARAM5_BIT : 0);
     }
 
     struct SearchState {

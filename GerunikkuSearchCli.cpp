@@ -13,6 +13,14 @@ std::int32_t parsePackedCommand(const std::string_view token) {
     const auto firstColon = token.find(':');
     const std::string_view actionText = token.substr(0, firstColon);
     const int action = std::stoi(std::string(actionText), nullptr, 0);
+    if (firstColon == token.npos && action > BattleEmulator::HERO_ACTION_MASK) {
+        constexpr int validBits = BattleEmulator::HERO_ACTION_MASK
+            | (BattleEmulator::HERO_TARGET_MASK << BattleEmulator::HERO_TARGET_SHIFT)
+            | BattleEmulator::HERO_BARE_HANDS_BIT | BattleEmulator::HERO_CAMERA_BITS;
+        if ((action & ~validBits) != 0 || BattleEmulator::HeroActionId(action) == 0
+            || BattleEmulator::HeroCameraActor(action) >= 12) throw std::invalid_argument("invalid packed command");
+        return action;
+    }
     int target = -1;
     bool bareHands = false;
     if (firstColon != token.npos) {
@@ -46,28 +54,48 @@ void printResult(const Result& r, std::uint64_t seed, std::ostream& os) {
        << " win=" << r.won << " verified=" << r.verified
        << " pastTurns=" << r.pastTurns << " turns=" << r.totalTurns
        << " resultPosition=" << r.battle.position
-       << " rngPosition=" << r.finalState.position
-       << " hp=" << r.finalState.players[0].hp << ',' << r.finalState.players[1].hp
-       << ',' << r.finalState.players[2].hp << ',' << r.finalState.players[3].hp
-       << " mp=" << r.finalState.players[0].mp
+       << " rngPosition=" << r.publicationState.position
+       << " hp=" << r.publicationState.players[0].hp << ',' << r.publicationState.players[1].hp
+       << ',' << r.publicationState.players[2].hp << ',' << r.publicationState.players[3].hp
+       << " mp=" << r.publicationState.players[0].mp
        << " elapsedMs=" << r.stats.elapsedMs << " firstWinMs=" << r.stats.firstWinMs
        << " transitions=" << r.stats.transitions << " expanded=" << r.stats.expanded
        << " passes=" << r.stats.passes << " updates=" << r.stats.updates
        << " replayFailures=" << r.stats.replayFailures
-       << " capacityLimited=" << r.capacityLimited << '\n';
+       << " capacityLimited=" << r.capacityLimited
+       << " cameraTurns=" << r.cameraTurns << " riskyTurns=" << r.riskyTurns
+       << " cameraCoverageComplete=" << r.cameraCoverageComplete
+       << " publishedTurns=" << r.publishedTurns << '\n';
+    if (r.firstUnconfirmedTurn >= 0) {
+        os << "CAMERA_BOUNDARY turn=" << r.publishedTurns
+           << " expectedPosition=" << r.publicationState.position
+           << " actor=" << BattleEmulator::HeroCameraActor(r.gene[r.publishedTurns - 1])
+           << " param5=" << BattleEmulator::HeroCameraParam5(r.gene[r.publishedTurns - 1])
+           << " recheck=1\n";
+    }
+    for (int i = r.pastTurns; i < r.publishedTurns; ++i) {
+        os << "SEARCH_COMMAND turn=" << i + 1
+           << " commonId=" << BattleEmulator::HeroActionId(r.gene[i])
+           << " target=" << BattleEmulator::HeroTargetId(r.gene[i])
+           << " bareHands=" << BattleEmulator::HeroBareHands(r.gene[i])
+           << " cameraActor=" << BattleEmulator::HeroCameraActor(r.gene[i])
+           << " cameraParam5=" << BattleEmulator::HeroCameraParam5(r.gene[i])
+           << " packed=" << r.gene[i] << '\n';
+    }
     os << "GENE";
-    for (int i = 0; i < r.totalTurns; ++i) {
+    for (int i = 0; i < r.publishedTurns; ++i) {
         os << ' ' << BattleEmulator::HeroActionId(r.gene[i]);
         int target = BattleEmulator::HeroTargetId(r.gene[i]);
         if (target != -1) os << ':' << target;
         if (BattleEmulator::HeroBareHands(r.gene[i])) os << ":sude";
     }
     os << std::endl << "raw";
-    for (int i = 0; i < r.totalTurns; ++i) {
+    for (int i = 0; i < r.publishedTurns; ++i) {
          os << ", " << r.gene[i];
     }
     os << '\n';
     if (!r.error.empty()) os << "SEARCH_ERROR " << r.error << '\n';
+    for (const auto& row : r.cameraDebugRows) os << row << '\n';
 }
 
 Result runRequest(const Player players[4], const std::uint64_t seed,
@@ -80,13 +108,16 @@ Result runRequest(const Player players[4], const std::uint64_t seed,
 
 int runCli(int argc, char* argv[], const Player players[4]) {
     try {
-        if (argc < 4) throw std::invalid_argument(
-            "usage: --search <seed> <milliseconds> [--initial-position=N] [--beam=N] [--depth=N] [--variant=0|1|2] [past action[:target][:sude|on] ...]");
+        const bool debug2 = argc > 1 && std::string_view(argv[1]) == "--debug2";
+        const bool debug3 = argc > 1 && std::string_view(argv[1]) == "--debug3";
+        if (argc < (debug2 ? 3 : 4)) throw std::invalid_argument(
+            "usage: --search|--debug3 <seed> <milliseconds> [--initial-position=N] [--beam=N] [--depth=N] [--variant=0|1|2] [past action[:target][:sude|on] or packed Gene ...]; --debug2 <seed> [packed Gene ...]");
         const std::uint64_t seed = std::stoull(argv[2], nullptr, 0);
         Limits limits;
-        limits.milliseconds = std::stod(argv[3]);
+        limits.milliseconds = debug2 ? 0.0 : std::stod(argv[3]);
+        limits.debugCameraCandidates = debug2 || debug3;
         std::vector<std::int32_t> prefix;
-        for (int i = 4; i < argc; ++i) {
+        for (int i = debug2 ? 3 : 4; i < argc; ++i) {
             const std::string_view token(argv[i]);
             if (token.starts_with("--initial-position=")) limits.initialPosition = std::stoi(std::string(token.substr(19)));
             else if (token.starts_with("--beam=")) limits.maxBeamWidth = std::stoi(std::string(token.substr(7)));
@@ -97,7 +128,7 @@ int runCli(int argc, char* argv[], const Player players[4]) {
             }
         }
         const Result result = runRequest(players, seed, prefix, limits, std::cout);
-        return !result.validInput || !result.verified ? 1 : result.won ? 0 : 2;
+        return !result.validInput || !result.verified ? 1 : debug2 || result.won ? 0 : 2;
     } catch (const std::exception& ex) {
         std::cerr << "SEARCH_ERROR " << ex.what() << '\n';
         return 1;

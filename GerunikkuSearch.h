@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <span>
 #include <string>
+#include <vector>
 
 // The original Player world and fixed command prefix are input, never search variables.
 namespace gerunikku_search {
@@ -17,6 +18,10 @@ struct Limits {
     // 0: diverse beam + directed neighborhood repair; 1: plain beam;
     // 2: checkpoint-01 diverse beam (both retained evaluation baselines).
     int variant = 0;
+    int foundTurn = 0; // Existing brute-force observation boundary.
+    std::vector<int> observedActions;
+    std::vector<int> observedDamages;
+    bool debugCameraCandidates = false;
 };
 struct Statistics {
     std::uint64_t transitions = 0;
@@ -35,14 +40,21 @@ struct Result {
     BattleResult battle{}; // Always from a fresh whole-prefix + suffix Main replay.
     BattleEmulator::SearchState root{};
     BattleEmulator::SearchState finalState{};
+    BattleEmulator::SearchState publicationState{};
     Statistics stats{};
     int pastTurns = 0;
     int totalTurns = 0;
+    int firstUnconfirmedTurn = -1;
+    int publishedTurns = 0;
+    int cameraTurns = 0;
+    int riskyTurns = 0;
+    bool cameraCoverageComplete = true;
     bool won = false;
     bool verified = false;
     bool validInput = true;
     bool capacityLimited = false;
     std::string error;
+    std::vector<std::string> cameraDebugRows;
 };
 
 // The existing encounter profile, not all internal emulator action IDs.

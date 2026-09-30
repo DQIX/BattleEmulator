@@ -16,6 +16,11 @@
 namespace {
 
 using dq9::freecam::fast::BattleActorRef;
+thread_local bool gUnresolvedCamera = false;
+thread_local int gCameraCandidateActor = -1;
+thread_local bool gCameraCandidateParam5 = false;
+thread_local bool gUsedCameraCandidate = false;
+thread_local bool gUncertainCameraAction = false;
 
 #if defined(gerunikku)
 thread_local bool gCameraDebugCapture = false;
@@ -222,9 +227,12 @@ inline void AssertCameraMapping(const int action) noexcept {
         // lifecycle code must therefore keep this slot known; reaching unknown
         // means the compatibility state was lost earlier and is a hard bug.
         if (!RosterField4IsKnown(actorSlot)) {
-            assert(false && "unknown roster row+4 pattern for future participant");
-            return false;
+            bool nonzero{};
+            if (!camera::ResolveExternalChoice(actionIndex, static_cast<int>(actorSlot), &nonzero)) return false;
+            (void)SetRosterField4SlotNonzero(actorSlot, nonzero);
+            ThreadContext().rosterField4Assumed[actorSlot] = true;
         }
+        if (ThreadContext().rosterField4Assumed[actorSlot]) gUncertainCameraAction = true;
         if (!RosterField4IsZero(actorSlot)) {
             if (!AssignActorFallbackPresentationGoal(actorId, true)) return false;
             continue;
@@ -270,9 +278,12 @@ inline void AssertCameraMapping(const int action) noexcept {
         );
         if (primaryTargetId == kInvalidBattleActor) continue;
         if (!RosterField4IsKnown(actorSlot)) {
-            assert(false && "unknown roster row+4 pattern for previous participant");
-            return false;
+            bool nonzero{};
+            if (!camera::ResolveExternalChoice(actionIndex, static_cast<int>(actorSlot), &nonzero)) return false;
+            (void)SetRosterField4SlotNonzero(actorSlot, nonzero);
+            ThreadContext().rosterField4Assumed[actorSlot] = true;
         }
+        if (ThreadContext().rosterField4Assumed[actorSlot]) gUncertainCameraAction = true;
         const bool row4Nonzero = !RosterField4IsZero(actorSlot);
         if (!PreparePreviousActionPresentationParticipant(actorId, primaryTargetId, row4Nonzero)) return false;
     }
@@ -390,12 +401,41 @@ void camera::UnbindRuntimeState() noexcept {
     dq9::freecam::fast::UnbindThreadContext();
 }
 
+void camera::SetBranchChoice(const int actorSlot, const bool param5) noexcept {
+    gCameraCandidateActor = actorSlot;
+    gCameraCandidateParam5 = param5;
+    gUsedCameraCandidate = false;
+    gUnresolvedCamera = false;
+}
+
+bool camera::BranchPending() noexcept {
+    return gUnresolvedCamera;
+}
+
+bool camera::UsedBranchChoice() noexcept { return gUsedCameraCandidate; }
+
+bool camera::ResolveExternalChoice(const int actionIndex, const int actorSlot, bool* value) noexcept {
+    (void)actionIndex;
+    if (gCameraCandidateActor < 0) {
+        gUnresolvedCamera = true;
+        // Manual traces stop at the boundary instead of silently choosing a mask.
+        return false;
+    }
+    // Finite participant/selector hypotheses, not a fixed renderer mask. Known
+    // physical rows never enter this path. Each hypothesis keeps its routes.
+    *value = actorSlot == gCameraCandidateActor ? gCameraCandidateParam5 : !gCameraCandidateParam5;
+    gUsedCameraCandidate = true;
+    gUncertainCameraAction = true;
+    return true;
+}
+
 void camera::Main(int *position, const int32_t *actions, const BattleActorRef *actors, const BattleActorRef *targets,
                   const std::uint8_t *slot1ChildCounts,
                   const std::uint16_t *slot1LastChildActionIds,
                   const int actionCount, uint64_t *NowState, bool preemptive1, bool bakuti,
                   const bool traceBoundaries) {
     (void)preemptive1;
+    gUnresolvedCamera = false;
 
     using namespace dq9::freecam::fast;
     std::array<BattleActorRef, dq9::freecam::detail::kMaxPresentationActions> actionOrder{};
@@ -515,6 +555,7 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
 #endif
     };
     for (int i = 0; i < actionCount; ++i) {
+        gUncertainCameraAction = false;
         const int32_t after = actions[i];
         if (after < 0) break;
 
@@ -567,9 +608,16 @@ void camera::Main(int *position, const int32_t *actions, const BattleActorRef *a
                         targetAuxiliaryNode
                     ));
                     hasRuntimeDecision = true;
+                    // Unknown residue exposes two selector outcomes only when
+                    // Decide actually calls free-camera; no extra reset/no-call branch.
+                    if (gUncertainCameraAction && runtimeDecision.callFreeCamera
+                        && FindPresentationActorIndex(runtimeActorId) == static_cast<std::size_t>(gCameraCandidateActor)) {
+                        runtimeDecision.param5 = gCameraCandidateParam5;
+                    }
                 }
             }
         }
+        if (BranchPending()) return;
         const TrackingCameraDecision trackingCameraDecision = hasActionMetadata
             ? TrackingCameraFor(actionMetadata->dq9ActionId, runtimeActorId)
             : TrackingCameraDecision{};

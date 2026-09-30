@@ -689,6 +689,7 @@ struct RuntimeState {
     // Knowledge is per physical row. A live-confirmed four-row encounter must
     // not invent residue for rows 4..11 in a larger encounter.
     std::array<bool, detail::kMaxPresentationActors> rosterField4Known{};
+    std::array<bool, detail::kMaxPresentationActors> rosterField4Assumed{};
     bool rosterField4CompatibilityValid{};
     // The battle-entry renderer runs before the first 021E08BC setup and
     // leaves a distinct compiler-stack footprint for that first setup only.
@@ -731,6 +732,7 @@ inline void ResetBattle() noexcept {
     state.presentationMembershipProfiles.fill(kInvalidMembershipProfile);
     state.rosterField4Nonzero.fill(false);
     state.rosterField4Known.fill(false);
+    state.rosterField4Assumed.fill(false);
     state.battleEntryRendererResiduePending = true;
 }
 
@@ -768,6 +770,7 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     auto& state = ThreadContext();
     state.rosterField4CompatibilityValid = false;
     state.rosterField4Known.fill(false);
+    state.rosterField4Assumed.fill(false);
 }
 
 [[nodiscard]] inline bool SetRosterField4Compatibility(
@@ -777,6 +780,7 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     if (nonzero.size() != state.presentationActorCount) return false;
     state.rosterField4Nonzero.fill(false);
     state.rosterField4Known.fill(false);
+    state.rosterField4Assumed.fill(false);
     for (std::size_t index = 0; index < nonzero.size(); ++index) {
         state.rosterField4Nonzero[index] = nonzero[index];
         state.rosterField4Known[index] = true;
@@ -795,6 +799,7 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     const std::size_t count = nonzero.size() < state.presentationActorCount
         ? nonzero.size()
         : state.presentationActorCount;
+    state.rosterField4Assumed.fill(false);
     for (std::size_t index = 0; index < count; ++index) {
         state.rosterField4Nonzero[index] = nonzero[index];
         state.rosterField4Known[index] = true;
@@ -827,6 +832,7 @@ inline void InvalidateRosterField4Compatibility() noexcept {
     if (index >= state.presentationActorCount) return false;
     state.rosterField4Nonzero[index] = nonzero;
     state.rosterField4Known[index] = true;
+    state.rosterField4Assumed[index] = false;
     state.rosterField4CompatibilityValid = true;
     return true;
 }

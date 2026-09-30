@@ -7,6 +7,10 @@
 #include <numeric>
 #include <utility>
 #include <vector>
+#include <memory>
+#include <tuple>
+#include <sstream>
+
 
 namespace gerunikku_search {
 namespace {
@@ -32,15 +36,27 @@ constexpr std::array<Command, 36> profile{{
 }};
 struct Node {
     State state{};
-    std::array<std::uint16_t, 349> path{};
+    std::array<std::int32_t, 349> path{};
     int depth = 0;
     int records = 0;
     double score = 0;
     std::uint64_t hash = 0;
+    std::shared_ptr<const std::vector<State>> alternatives;
+    int firstUnconfirmedTurn = -1;
+    int cameraTurns = 0;
+    int riskyTurns = 0;
+    int fatalOutcomes = 0;
+    bool coverageComplete = true;
 };
 Command unpack(int packed) noexcept {
-    return {BE::HeroActionId(packed), BE::HeroTargetId(packed)};
+    return {BE::HeroActionId(packed) | (packed & BE::HERO_CAMERA_BITS), BE::HeroTargetId(packed), BE::HeroBareHands(packed)};
 }
+struct Outcome {
+    State state;
+    int packed;
+    int records;
+    bool cameraChoice;
+};
 // This is only a hash bucket selector. FULL semantic equality, including the
 // complete camera snapshot, is required before dropping a duplicate.
 std::uint64_t bucketHash(const State& s) noexcept {
@@ -109,6 +125,7 @@ unsigned diversityClass(const State& s) noexcept {
 class Engine {
     const Player* initial;
     std::uint64_t seed;
+    int foundTurn = 0;
     std::span<const std::int32_t> prefix;
     Limits limits;
     Clock::time_point started = Clock::now();
@@ -121,6 +138,7 @@ class Engine {
     std::vector<Node> current;
     std::vector<Node> children;
     std::vector<Node> selected;
+    std::vector<Node> roots;
     std::vector<std::size_t> order;
     double bestPartial = std::numeric_limits<double>::infinity();
     std::uint64_t noiseSalt = 0;
@@ -138,12 +156,48 @@ class Engine {
         }
         return n.state.players[0].hp > 0 && !allEnemiesDead(n.state);
     }
+    void candidates(const State& parent, const Command cmd, std::vector<Outcome>& outcomes) {
+        outcomes.clear();
+        const int packed = BE::PackHeroAction(cmd.action, cmd.target, cmd.bareHands);
+        State child;
+        ++out.stats.transitions;
+        if (BE::StepSearchState(parent, cmd, &child, &scratch)) {
+            outcomes.push_back({child, packed, scratch.position, camera::UsedBranchChoice()});
+            return;
+        }
+        if (!camera::BranchPending() || BE::HeroCameraActor(packed) >= 0) return;
+        for (int actor = 0; actor < parent.cameraRuntime.presentationActorCount; ++actor) {
+            for (bool param5 : {false, true}) {
+                const int choice = BE::WithCameraChoice(packed, actor, param5);
+                ++out.stats.transitions;
+                if (!BE::StepSearchState(parent, unpack(choice), &child, &scratch)) continue;
+                bool duplicate = false;
+                for (const auto& old : outcomes) if (sameState(old.state, child)) { duplicate = true; break; }
+                if (!duplicate) outcomes.push_back({child, choice, scratch.position, true});
+            }
+        }
+    }
+    bool matchesObservation(const Node& n) {
+        if (limits.observedActions.empty() && limits.observedDamages.empty()) return true;
+        std::array<int, 350> actions, damages;
+        actions.fill(-1);
+        damages.fill(-1);
+        std::copy(limits.observedActions.begin(), limits.observedActions.end(), actions.begin());
+        std::copy(limits.observedDamages.begin(), limits.observedDamages.end(), damages.begin());
+        State check;
+        BE::InitializeSearchState(&check, initial, limits.initialPosition);
+        auto gene = out.gene;
+        std::copy_n(n.path.begin(), prefix.size(), gene.begin());
+        const bool matched = BE::Main(&check.position, int(prefix.size()) + 1, gene.data(), check.players,
+                                     nullptr, seed, actions.data(), damages.data(), 350, &check.nowState,
+                                      -1, false, -1, false);
+        return matched;
+    }
     bool replay(const Node& candidate, bool keep) {
         ++out.stats.replayChecks;
         std::array<std::int32_t, 350> gene;
         gene.fill(-1);
-        std::copy(prefix.begin(), prefix.end(), gene.begin());
-        for (int i = 0; i < candidate.depth; ++i) gene[prefix.size() + i] = candidate.path[i];
+        std::copy_n(candidate.path.begin(), prefix.size() + candidate.depth, gene.begin());
         State checked{};
         lcg::init(seed, true);
         if (!BE::InitializeSearchState(&checked, initial, limits.initialPosition)) return false;
@@ -151,8 +205,12 @@ class Engine {
         const int turns = int(prefix.size()) + candidate.depth;
         if (turns > 0) {
             BE::Main(&checked.position, turns, gene.data(), checked.players, &result,
-                     seed, nullptr, nullptr, -1, &checked.nowState);
+                     seed, nullptr, nullptr, -1, &checked.nowState, -1, false, -1, false);
             checked.cameraRuntime = camera::CaptureRuntimeState();
+            if (camera::BranchPending()) {
+                ++out.stats.replayFailures;
+                return false;
+            }
         }
         if (!sameState(checked, candidate.state) || result.position != candidate.records) {
             ++out.stats.replayFailures;
@@ -163,16 +221,35 @@ class Engine {
             out.battle = result;
             out.finalState = checked;
             out.totalTurns = turns;
-            out.won = allEnemiesDead(checked);
+            out.won = allEnemiesDead(checked) && checked.players[0].hp > 0;
             out.verified = true;
+            out.firstUnconfirmedTurn = candidate.firstUnconfirmedTurn;
+            out.cameraTurns = candidate.cameraTurns;
+            out.riskyTurns = candidate.riskyTurns;
+            out.cameraCoverageComplete = candidate.coverageComplete;
+            out.publishedTurns = candidate.firstUnconfirmedTurn < 0 ? turns
+                : std::min(turns, candidate.firstUnconfirmedTurn + 1);
+            out.battle.publicTurnLimit = out.publishedTurns;
+            out.publicationState = checked;
+            if (out.publishedTurns < turns) {
+                State boundary;
+                BE::InitializeSearchState(&boundary, initial, limits.initialPosition);
+                BE::Main(&boundary.position, out.publishedTurns, gene.data(), boundary.players,
+                         nullptr, seed, nullptr, nullptr, -1, &boundary.nowState, -1, false, -1, false);
+                boundary.cameraRuntime = camera::CaptureRuntimeState();
+                out.publicationState = boundary;
+            }
         }
         return true;
     }
     void consider(const Node& n) {
         const bool win = allEnemiesDead(n.state);
         if (win) {
-            if (haveWin && (n.records > best.records ||
-                (n.records == best.records && n.state.players[0].hp <= best.state.players[0].hp))) return;
+            const auto quality = [](const Node& x) {
+                return std::tuple{x.riskyTurns, x.fatalOutcomes, !x.coverageComplete, x.cameraTurns, x.depth,
+                                  x.records, -x.state.players[0].hp};
+            };
+            if (haveWin && quality(n) >= quality(best)) return;
             if (!replay(n, true)) return;
             if (!haveWin) out.stats.firstWinMs = elapsed();
             haveWin = true;
@@ -180,7 +257,9 @@ class Engine {
             ++out.stats.updates;
         } else if (!haveWin) {
             const double value = estimate(n.state, n.records, 0);
-            if (value < bestPartial) {
+            const auto risk = std::tuple{n.riskyTurns, n.fatalOutcomes, !n.coverageComplete};
+            const auto bestRisk = std::tuple{best.riskyTurns, best.fatalOutcomes, !best.coverageComplete};
+            if (risk < bestRisk || (risk == bestRisk && value < bestPartial)) {
                 bestPartial = value;
                 best = n;
             }
@@ -190,6 +269,9 @@ class Engine {
         order.resize(children.size());
         std::iota(order.begin(), order.end(), std::size_t(0));
         std::sort(order.begin(), order.end(), [&](auto a, auto b) {
+            const auto riskA = std::tuple{children[a].riskyTurns, children[a].fatalOutcomes, !children[a].coverageComplete, children[a].cameraTurns};
+            const auto riskB = std::tuple{children[b].riskyTurns, children[b].fatalOutcomes, !children[b].coverageComplete, children[b].cameraTurns};
+            if (riskA != riskB) return riskA < riskB;
             if (children[a].score != children[b].score) return children[a].score < children[b].score;
             return a < b;
         });
@@ -197,7 +279,10 @@ class Engine {
         auto accept = [&](std::size_t index) {
             Node& c = children[index];
             for (const Node& n : selected) {
-                if (n.hash == c.hash && sameState(n.state, c.state)) {
+                if (n.hash == c.hash && sameState(n.state, c.state)
+                    && n.alternatives == c.alternatives && n.riskyTurns <= c.riskyTurns
+                    && n.fatalOutcomes <= c.fatalOutcomes
+                    && n.cameraTurns <= c.cameraTurns && n.coverageComplete == c.coverageComplete) {
                     ++out.stats.exactDuplicates;
                     return false;
                 }
@@ -232,34 +317,74 @@ class Engine {
     void beam(const Node& start, int width, int mode, bool diverse) {
         ++out.stats.passes;
         current.clear();
-        current.push_back(start);
+        if (start.depth == 0) current = roots;
+        else current.push_back(start);
         while (!current.empty() && !expired()) {
             children.clear();
             for (const Node& parent : current) {
                 if (!room(parent)) continue;
-                if (haveWin && parent.records >= best.records) {
+                const auto parentRisk = std::tuple{parent.riskyTurns, parent.fatalOutcomes, !parent.coverageComplete, parent.cameraTurns};
+                const auto winningRisk = std::tuple{best.riskyTurns, best.fatalOutcomes, !best.coverageComplete, best.cameraTurns};
+                if (haveWin && (parentRisk > winningRisk || (parentRisk == winningRisk && parent.depth >= best.depth))) {
                     ++out.stats.boundPruned;
                     continue;
                 }
                 ++out.stats.expanded;
+                const std::size_t begin = children.size();
+                bool haveSafeCommand = false;
+                std::vector<Outcome> variants;
                 for (const Command cmd : profile) {
                     if (expired()) return;
                     if (!canSearchCommand(parent.state, cmd)) continue;
-                    Node child;
-                    if (!BE::StepSearchState(parent.state, cmd, &child.state, &scratch)) continue;
-                    ++out.stats.transitions;
-                    child.depth = parent.depth + 1;
-                    child.path = parent.path;
-                    child.path[parent.depth] = std::uint16_t(BE::PackHeroAction(cmd.action, cmd.target));
-                    child.records = parent.records + scratch.position;
-                    consider(child);
-                    if (!room(child)) continue;
-                    if (haveWin && child.records >= best.records) {
-                        ++out.stats.boundPruned;
-                        continue;
+                    candidates(parent.state, cmd, variants);
+                    bool complete = true;
+                    std::shared_ptr<std::vector<State>> alternatives;
+                    if (parent.alternatives || std::any_of(variants.begin(), variants.end(),
+                            [](const Outcome& v) { return v.cameraChoice; }))
+                        alternatives = std::make_shared<std::vector<State>>();
+                    int deaths = 0;
+                    auto collect = [&](const std::vector<Outcome>& outcomes) {
+                        for (const auto& v : outcomes) {
+                            if (v.state.players[0].hp <= 0) { ++deaths; continue; }
+                            if (!alternatives) continue;
+                            bool duplicate = false;
+                            for (const auto& old : *alternatives) if (sameState(old, v.state)) { duplicate = true; break; }
+                            if (!duplicate) {
+                                const int width = std::max(2, 2 * int(parent.state.cameraRuntime.presentationActorCount));
+                                if (alternatives->size() < static_cast<std::size_t>(width)) alternatives->push_back(v.state);
+                                else complete = false;
+                            }
+                        }
+                    };
+                    collect(variants);
+                    if (parent.alternatives) for (const auto& possible : *parent.alternatives) {
+                        if (sameState(possible, parent.state) || allEnemiesDead(possible)) continue;
+                        if (!BE::IsHeroCommandSelectable(possible, cmd)) { complete = false; continue; }
+                        std::vector<Outcome> outcomes;
+                        candidates(possible, cmd, outcomes);
+                        if (outcomes.empty()) complete = false;
+                        collect(outcomes);
                     }
+                    const bool safe = deaths == 0 && complete && parent.coverageComplete;
+                    haveSafeCommand = haveSafeCommand || safe;
+                    for (const auto& v : variants) {
+                    if (v.state.players[0].hp <= 0) continue;
+                    Node child = parent;
+                    child.state = v.state;
+                    child.depth = parent.depth + 1;
+                    child.path[prefix.size() + parent.depth] = v.packed;
+                    child.alternatives = alternatives;
+                    child.coverageComplete = parent.coverageComplete && complete;
+                    child.riskyTurns += !safe;
+                    child.fatalOutcomes += deaths;
+                    if (v.cameraChoice) {
+                        ++child.cameraTurns;
+                        const int turn = int(prefix.size()) + parent.depth;
+                        if (foundTurn < turn + 1 && child.firstUnconfirmedTurn < 0) child.firstUnconfirmedTurn = turn;
+                    }
+                    child.records = parent.records + v.records;
                     child.hash = bucketHash(child.state);
-                    child.score = estimate(child.state, child.records, mode);
+                    child.score = estimate(child.state, child.depth * 6, mode);
                     if (noiseScale != 0) {
                         // Search-order noise only. Never touches emulator RNG.
                         std::uint64_t x = child.hash + noiseSalt;
@@ -269,8 +394,26 @@ class Engine {
                         child.score += noiseScale * (double(x >> 11) * 0x1p-53 - .5);
                     }
                     children.push_back(std::move(child));
+                    }
+                }
+                // A short winning branch cannot bypass a surviving alternative
+                // command. Check the whole command set before considering wins.
+                if (haveSafeCommand) children.erase(std::remove_if(children.begin() + begin, children.end(),
+                    [&](const Node& n) { return n.riskyTurns > parent.riskyTurns; }), children.end());
+                for (std::size_t i = begin; i < children.size(); ++i) consider(children[i]);
+                // Bound temporary children as well as the retained beam. No
+                // future residue Cartesian product is materialized here.
+                const std::size_t capacity = std::max(32, width * 4);
+                if (children.size() > capacity) {
+                    std::nth_element(children.begin(), children.begin() + capacity, children.end(),
+                        [](const Node& a, const Node& b) {
+                            return std::tuple{a.riskyTurns, a.fatalOutcomes, !a.coverageComplete, a.cameraTurns, a.score}
+                                 < std::tuple{b.riskyTurns, b.fatalOutcomes, !b.coverageComplete, b.cameraTurns, b.score};
+                        });
+                    children.resize(capacity);
                 }
             }
+            children.erase(std::remove_if(children.begin(), children.end(), [&](const Node& n) { return !room(n); }), children.end());
             if (children.empty()) return;
             select(width, diverse);
         }
@@ -278,11 +421,11 @@ class Engine {
     Node bestPrefix(int depth) {
         Node n = root;
         for (int i = 0; i < depth; ++i) {
-            const Command cmd = unpack(best.path[i]);
+            const Command cmd = unpack(best.path[prefix.size() + i]);
             BE::StepSearchStateInPlace(&n.state, cmd, &scratch);
             ++out.stats.transitions;
             n.records += scratch.position;
-            n.path[i] = best.path[i];
+            n.path[prefix.size() + i] = best.path[prefix.size() + i];
             ++n.depth;
         }
         return n;
@@ -294,7 +437,7 @@ class Engine {
         // The cut is relative to the searched suffix, never to the input prefix.
         const int cut = trial % best.depth;
         Node start = bestPrefix(cut);
-        const int originalCommand = best.path[cut];
+        const int originalCommand = best.path[prefix.size() + cut];
         std::vector<Node> alternatives;
         alternatives.reserve(profile.size());
         for (Command cmd : profile) {
@@ -304,7 +447,7 @@ class Engine {
             Node child = start;
             BE::StepSearchStateInPlace(&child.state, cmd, &scratch);
             ++out.stats.transitions;
-            child.path[child.depth++] = std::uint16_t(packed);
+            child.path[prefix.size() + child.depth++] = packed;
             child.records += scratch.position;
             consider(child);
             if (!room(child) || (haveWin && child.records >= best.records)) continue;
@@ -324,6 +467,7 @@ class Engine {
 public:
     Engine(const Player* p, std::uint64_t s, std::span<const std::int32_t> past, Limits l)
         : initial(p), seed(s), prefix(past), limits(l) {
+        foundTurn = std::max(0, l.foundTurn);
         const double budget = std::isfinite(l.milliseconds) && l.milliseconds >= 0
             ? std::min(l.milliseconds, 86400000.0) : 0.0;
         const double reserve = std::min(2.0, std::max(.05, budget * .02));
@@ -339,6 +483,11 @@ public:
             || limits.variant < 0 || limits.variant > 2) {
             out.validInput = false;
             out.error = "invalid search input or limits";
+            return std::move(out);
+        }
+        if (limits.observedActions.size() > 349 || limits.observedDamages.size() > 349) {
+            out.validInput = false;
+            out.error = "observation exceeds supplied history";
             return std::move(out);
         }
         for (int a : prefix) {
@@ -357,30 +506,81 @@ public:
         // Replay exactly the fixed prefix, using Main's original command/history
         // semantics (including status-display actions). Never optimize this part.
         std::copy(prefix.begin(), prefix.end(), out.gene.begin());
+        std::copy(prefix.begin(), prefix.end(), root.path.begin());
+        roots.push_back(root);
         if (!prefix.empty()) {
             // Check fixed emulator capacities before replaying each supplied turn.
             for (int i = 0; i < int(prefix.size()); ++i) {
-                if (root.state.position >= 6400 || root.records > 990) {
+                if (roots.front().state.position >= 6400 || roots.front().records > 990) {
                     out.validInput = false;
                     out.capacityLimited = true;
                     out.error = "fixed prefix exceeds emulator buffer capacity";
                     return std::move(out);
                 }
-                scratch.clear();
-                BE::Main(&root.state.position, 1, out.gene.data(), root.state.players, &scratch,
-                         seed, nullptr, nullptr, -1, &root.state.nowState, -1, false, -1, i == 0);
-                root.records += scratch.position;
-                if (allEnemiesDead(root.state) || root.state.players[0].hp <= 0) {
-                    if (i + 1 < int(prefix.size())) {
-                        out.validInput = false;
-                        out.error = "fixed prefix continues after the battle has ended";
-                        return std::move(out);
+                std::vector<Node> next;
+                bool complete = true;
+                const int width = std::max(2, 2 * int(root.state.cameraRuntime.presentationActorCount));
+                for (const auto& parent : roots) {
+                    if (allEnemiesDead(parent.state) || parent.state.players[0].hp <= 0) continue;
+                    std::vector<Outcome> variants;
+                    candidates(parent.state, unpack(prefix[i]), variants);
+                    for (auto& v : variants) {
+                        Node n = parent;
+                        n.state = v.state;
+                        n.records += v.records;
+                        n.path[i] = v.packed;
+                        if (v.cameraChoice) {
+                            ++n.cameraTurns;
+                            if (foundTurn < i + 1 && n.firstUnconfirmedTurn < 0) n.firstUnconfirmedTurn = i;
+                        }
+                        bool duplicate = false;
+                        for (const auto& old : next) if (sameState(n.state, old.state)) { duplicate = true; break; }
+                        if (!duplicate) {
+                            if (next.size() < static_cast<std::size_t>(width)) next.push_back(std::move(n));
+                            else complete = false;
+                        }
                     }
-                    break;
                 }
+                if (next.empty()) {
+                    out.validInput = false;
+                    out.error = "fixed prefix ended before the supplied history";
+                    return std::move(out);
+                }
+                for (auto& n : next) n.coverageComplete = n.coverageComplete && complete;
+                roots.swap(next);
             }
-            root.state.cameraRuntime = camera::CaptureRuntimeState();
         }
+        roots.erase(std::remove_if(roots.begin(), roots.end(), [&](const Node& n) { return !matchesObservation(n); }), roots.end());
+        if (roots.empty()) {
+            out.validInput = false;
+            out.error = "no camera candidate matches the measured history/state";
+            return std::move(out);
+        }
+        std::shared_ptr<std::vector<State>> possibilities;
+        if (roots.size() > 1) {
+            possibilities = std::make_shared<std::vector<State>>();
+            for (const auto& n : roots) possibilities->push_back(n.state);
+        }
+        for (auto& n : roots) {
+            n.alternatives = possibilities;
+            // Prefix is observed, but only subsequent observations disambiguate
+            // camera state. Surviving roots remain separate possibilities.
+        }
+        if (limits.debugCameraCandidates) {
+            for (std::size_t index = 0; index < roots.size(); ++index) {
+                const auto& n = roots[index];
+                std::ostringstream row;
+                row << "DEBUG_CAMERA_CANDIDATE index=" << index << " rngPosition=" << n.state.position
+                    << " hp=" << n.state.players[0].hp << " row4=";
+                for (int actor = 0; actor < n.state.cameraRuntime.presentationActorCount; ++actor)
+                    row << (n.state.cameraRuntime.rosterField4Known[actor]
+                        ? (n.state.cameraRuntime.rosterField4Nonzero[actor] ? '1' : '0') : '?');
+                row << " packed";
+                for (std::size_t i = 0; i < prefix.size(); ++i) row << ' ' << n.path[i];
+                out.cameraDebugRows.push_back(row.str());
+            }
+        }
+        root = roots.front();
         out.root = root.state;
         best = root;
         bestPartial = estimate(root.state, root.records, 0);
@@ -394,24 +594,16 @@ public:
         if (room(root) && !expired()) {
             current.reserve(limits.maxBeamWidth);
             selected.reserve(limits.maxBeamWidth);
-            children.reserve(std::size_t(limits.maxBeamWidth) * profile.size());
+            children.reserve(std::max(32, limits.maxBeamWidth * 4));
             int width = std::min(6, limits.maxBeamWidth);
             int round = 0;
-            int repairTrial = 0;
             while (!expired()) {
                 // Start with a small, deep search to secure an incumbent, then
                 // widen and alternate value estimates. Later suffix repair keeps
                 // useful discovered setup but never locks it across root passes.
-                if (limits.variant == 0 && haveWin && round >= 6 && round % 5 != 4) {
-                    neighborhood(repairTrial++);
-                    ++round;
-                    continue;
-                }
                 Node start = root;
-                if ((limits.variant != 0 || round < 6) && haveWin && round % 3 == 2 && best.depth > 3) {
-                    const int cut = std::max(1, best.depth - 3 - (round / 3) % (best.depth - 2));
-                    start = bestPrefix(cut);
-                }
+                // Every pass starts from the observed roots. Nominal suffix
+                // repair cannot discard the other camera outcomes of its path.
                 if (limits.variant == 0 && round >= 6) {
                     noiseSalt = std::uint64_t(round + 1) * 0x9e3779b97f4a7c15ULL;
                     noiseScale = 2.0 + (round % 5);

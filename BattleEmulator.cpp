@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <iostream>
 #include <cmath>
+#include <vector>
 #include "BattleEmulator.h"
 
 #include <cassert>
@@ -598,7 +599,7 @@ std::string BattleEmulator::getActionName(int actionId) {
         case BattleEmulator::RESTORE_MP:
             return "Restore MP";
         case BattleEmulator::MERCURIAL_THRUST:
-            return "Mercurial Thrust";
+            return "sippuu Thrust";
         case BattleEmulator::TURN_SKIPPED:
             return "**Turn Skipped**";
 
@@ -682,6 +683,54 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         if (!InitializeCameraBattle()) return false;
     }
 #endif
+    static thread_local bool replayingCameraCandidate = false;
+    if (mode >= 0 && !replayingCameraCandidate && Gene != nullptr
+        && dq9::freecam::fast::ThreadContext().presentationActorCount > 4) {
+        // Keep the existing brute-force entry point and observation validator.
+        // Only unknown camera reads cause another replay of this SAME seed.
+        const Player initialPlayers[4] = {players[0], players[1], players[2], players[3]};
+        const int initialPosition = *position;
+        const uint64_t initialState = *NowState;
+        const auto initialCamera = camera::CaptureRuntimeState();
+        const std::size_t width = std::max(2, 2 * int(initialCamera.presentationActorCount));
+        std::array<int32_t, 350> originalGene;
+        std::copy(Gene, Gene + 350, originalGene.begin());
+        std::vector<std::array<int32_t, 350>> frontier{originalGene};
+        bool complete = true;
+        while (!frontier.empty()) {
+            std::vector<std::array<int32_t, 350>> next;
+            for (const auto& candidateGene : frontier) {
+                std::copy(std::begin(initialPlayers), std::end(initialPlayers), std::begin(players));
+                *position = initialPosition;
+                *NowState = initialState;
+                camera::RestoreRuntimeState(initialCamera);
+                lcg::init(seed);
+                if (result != nullptr) result->clear();
+                replayingCameraCandidate = true;
+                const bool matched = Main(position, RunCount, candidateGene.data(), players, result, seed,
+                    eActions, damages, mode, NowState, heroTargetOverride, traceBoundaries,
+                    heroActionOverride, false);
+                replayingCameraCandidate = false;
+                if (camera::BranchPending()) {
+                    const int turn = static_cast<int>((*NowState >> 12) & 0xfffff) - 1;
+                    if (turn < 0 || turn >= 350 || HeroCameraActor(candidateGene[turn]) >= 0) return false;
+                    for (int actor = 0; actor < initialCamera.presentationActorCount; ++actor) {
+                        for (bool param5 : {false, true}) {
+                            if (next.size() >= width) { complete = false; continue; }
+                            auto choice = candidateGene;
+                            choice[turn] = WithCameraChoice(choice[turn], actor, param5);
+                            next.push_back(std::move(choice));
+                        }
+                    }
+                } else if (matched) {
+                    return true; // A seed is counted once regardless of camera branches.
+                }
+            }
+            frontier.swap(next);
+        }
+        if (!complete) std::cout << "CAMERA_COVERAGE seed=0x" << std::hex << seed << std::dec << " complete=0\n";
+        return false;
+    }
     assert(position != nullptr);
     assert(*position != 0);//positionは1始まりなので守ってね
     int genePosition = 0;
@@ -698,6 +747,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         RunCount++;
     }
     for (int counterJ = startPos; counterJ < RunCount; ++counterJ) {
+        const int cameraGene = heroActionOverride > 0 ? heroActionOverride
+            : (Gene != nullptr && counterJ <= 350 ? Gene[counterJ - 1] : -1);
+        camera::SetBranchChoice(HeroCameraActor(cameraGene), HeroCameraParam5(cameraGene));
         auto defenseFlag = false;
         processTurn();
         if (genePosition != -1) {
@@ -1378,6 +1430,12 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                      actionPresentationSlot1LastChildActionIds,
                      actionsPosition,
                      NowState, player0_has_initiative, TiggerSkyAttack, traceBoundaries);
+        if (result != nullptr && (camera::UsedBranchChoice() || camera::BranchPending())
+            && getStartTurn() < counterJ) {
+            if (result->publicTurnLimit < 0 || result->publicTurnLimit > counterJ)
+                result->publicTurnLimit = counterJ;
+        }
+        if (camera::BranchPending()) return false;
     }
     if (mode != -1 && mode != -2) {
         startTurn = RunCount - 2;
@@ -1483,7 +1541,7 @@ bool BattleEmulator::StepSearchState(const SearchState& source, const SearchComm
     } else {
         destination->cameraRuntime = camera::CaptureRuntimeState();
     }
-    return true;
+    return !camera::BranchPending();
 }
 
 bool BattleEmulator::StepSearchStateInPlace(SearchState* state, const SearchCommand command,
@@ -1503,8 +1561,9 @@ bool BattleEmulator::StepSearchStateInPlace(SearchState* state, const SearchComm
 
     if (searchFastPath) camera::UnbindRuntimeState();
     else state->cameraRuntime = camera::CaptureRuntimeState();
-    return true;
+    return !camera::BranchPending();
 }
+
 
 double BattleEmulator::FUN_021dbc04(int baseHp, double maxHp) {
     auto hp = static_cast<double>(baseHp);
