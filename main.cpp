@@ -492,6 +492,28 @@ bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aAct
 		                                       nullptr, seed, eActions, damages,
 		                                       maxElement,
 		                                       nowState);
+		if (!resultBool && camera::BranchPending()) {
+			int32_t cameraGene[350];
+			std::memcpy(cameraGene, gene, sizeof(cameraGene));
+			int previousCameraTurn = -1;
+			while (!resultBool && camera::BranchPending()) {
+				const int cameraTurn = static_cast<int>((*nowState >> 12) & 0xfffff) - 1;
+				if (cameraTurn <= previousCameraTurn || cameraTurn >= 350 || cameraGene[cameraTurn] <= 0) break;
+				previousCameraTurn = cameraTurn;
+				const int candidateCount = 2 * dq9::freecam::fast::ThreadContext().presentationActorCount;
+				// Only this encountered boundary gets actor x param5 trials.
+				for (int choice = 0; choice < candidateCount; ++choice) {
+					cameraGene[cameraTurn] = BattleEmulator::WithCameraChoice(cameraGene[cameraTurn], choice / 2, (choice & 1) != 0);
+					lcg::init(seed);
+					*position = 1;
+					*nowState = BattleEmulator::TYPE_2A;
+					std::memcpy(players, copiedPlayers2, sizeof(players));
+					resultBool = BattleEmulator::Main(position, turns, cameraGene, players,
+						nullptr, seed, eActions, damages, maxElement, nowState);
+					if (resultBool || camera::BranchPending()) break;
+				}
+			}
+		}
 		if(resultBool){
 			//std::cout << seed << ", " << st << std::endl;
 			std::cout << std::hex << seed << std::dec << std::endl;
@@ -535,6 +557,28 @@ void BruteForceMainLoop(const Player copiedPlayers[4], uint64_t start, uint64_t 
 											   damages,
 											   maxElement,
 											   &nowState);
+		if (!resultBool && camera::BranchPending()) {
+			int32_t cameraGene[350];
+			std::memcpy(cameraGene, gene, sizeof(cameraGene));
+			int previousCameraTurn = -1;
+			while (!resultBool && camera::BranchPending()) {
+				const int cameraTurn = static_cast<int>((nowState >> 12) & 0xfffff) - 1;
+				if (cameraTurn <= previousCameraTurn || cameraTurn >= 350 || cameraGene[cameraTurn] <= 0) break;
+				previousCameraTurn = cameraTurn;
+				const int candidateCount = 2 * dq9::freecam::fast::ThreadContext().presentationActorCount;
+				// Earlier choices stay in Gene; future choices are not prebuilt.
+				for (int choice = 0; choice < candidateCount; ++choice) {
+					cameraGene[cameraTurn] = BattleEmulator::WithCameraChoice(cameraGene[cameraTurn], choice / 2, (choice & 1) != 0);
+					lcg::init(seed);
+					position = 1;
+					nowState = 0;
+					std::memcpy(players, copiedPlayers, sizeof(players));
+					resultBool = BattleEmulator::Main(&position, 100, cameraGene, players,
+						nullptr, seed, eaction1, damages, maxElement, &nowState);
+					if (resultBool || camera::BranchPending()) break;
+				}
+			}
+		}
 		if (resultBool) {
 			std::cout << seed << std::endl;
 			FoundSeed = seed;
