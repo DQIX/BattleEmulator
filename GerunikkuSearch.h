@@ -3,6 +3,7 @@
 
 #include "BattleEmulator.h"
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <span>
 #include <string>
@@ -11,20 +12,26 @@
 // The original Player world and fixed command prefix are input, never search variables.
 namespace gerunikku_search {
 struct Limits {
-    double milliseconds = 250.0;
+    double milliseconds = 1500.0;
     int initialPosition = 1; // First RNG entry, matching normal Main/BruteForce startup.
     int maxSuffixTurns = 64;
     int maxBeamWidth = 96;
-    // 0: diverse beam + directed neighborhood repair; 1: plain beam;
-    // 2: checkpoint-01 diverse beam (both retained evaluation baselines).
+    // 0: widening diverse root passes + camera-aware suffix repair;
+    // 1: widening plain root passes; 2: widening diverse root passes.
     int variant = 0;
     int foundTurn = 0; // Existing brute-force observation boundary.
     std::vector<int> observedActions;
     std::vector<int> observedDamages;
     bool debugCameraCandidates = false;
+    // Optional cooperative cancellation for a resident WASM worker. The host
+    // changes this shared atomic even while synchronous WASM is executing.
+    const std::atomic<std::uint32_t>* requestGeneration = nullptr;
+    std::uint32_t expectedGeneration = 0;
 };
 struct Statistics {
     std::uint64_t transitions = 0;
+    std::uint64_t battlePreparations = 0;
+    std::uint64_t cameraReplays = 0;
     std::uint64_t expanded = 0;
     std::uint64_t exactDuplicates = 0;
     std::uint64_t boundPruned = 0;
@@ -48,8 +55,11 @@ struct Result {
     int publishedTurns = 0;
     int cameraTurns = 0;
     int riskyTurns = 0;
+    int equipmentChanges = 0;
+    int fatalOutcomes = 0;
     bool cameraCoverageComplete = true;
     bool won = false;
+    bool cancelled = false;
     bool verified = false;
     bool validInput = true;
     bool capacityLimited = false;

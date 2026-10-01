@@ -48,30 +48,44 @@ std::int32_t parsePackedCommand(const std::string_view token) {
 }
 
 void printResult(const Result& r, std::uint64_t seed, std::ostream& os) {
+    if (r.cancelled) { os << "SEARCH_CANCELLED\n"; return; }
     os << dumpTable(r.battle, r.gene.data(), r.pastTurns - 1);
     os << std::fixed << std::setprecision(3)
        << "GERUNIKKU_SEARCH seed=0x" << std::hex << seed << std::dec
        << " win=" << r.won << " verified=" << r.verified
        << " pastTurns=" << r.pastTurns << " turns=" << r.totalTurns
        << " resultPosition=" << r.battle.position
+       << " equipmentChanges=" << r.equipmentChanges
        << " rngPosition=" << r.publicationState.position
        << " hp=" << r.publicationState.players[0].hp << ',' << r.publicationState.players[1].hp
        << ',' << r.publicationState.players[2].hp << ',' << r.publicationState.players[3].hp
        << " mp=" << r.publicationState.players[0].mp
        << " elapsedMs=" << r.stats.elapsedMs << " firstWinMs=" << r.stats.firstWinMs
        << " transitions=" << r.stats.transitions << " expanded=" << r.stats.expanded
+       << " battlePreparations=" << r.stats.battlePreparations
+       << " cameraReplays=" << r.stats.cameraReplays
        << " passes=" << r.stats.passes << " updates=" << r.stats.updates
        << " replayFailures=" << r.stats.replayFailures
        << " capacityLimited=" << r.capacityLimited
        << " cameraTurns=" << r.cameraTurns << " riskyTurns=" << r.riskyTurns
+       << " fatalOutcomes=" << r.fatalOutcomes
        << " cameraCoverageComplete=" << r.cameraCoverageComplete
        << " publishedTurns=" << r.publishedTurns << '\n';
     if (r.firstUnconfirmedTurn >= 0) {
-        os << "CAMERA_BOUNDARY turn=" << r.publishedTurns
-           << " expectedPosition=" << r.publicationState.position
-           << " actor=" << BattleEmulator::HeroCameraActor(r.gene[r.publishedTurns - 1])
-           << " param5=" << BattleEmulator::HeroCameraParam5(r.gene[r.publishedTurns - 1])
-           << " recheck=1\n";
+        os << "CAMERA_BOUNDARY turn=" << r.firstUnconfirmedTurn + 1
+           << " beforePosition=" << r.publicationState.position << " recheck=1\n";
+        // One executable INPUT, not a predicted outcome or a speculative suffix.
+        // No input is issued until it follows all already-observed commands.
+        if (r.verified && r.cameraCoverageComplete && r.firstUnconfirmedTurn >= r.pastTurns
+            && r.firstUnconfirmedTurn < r.totalTurns) {
+            const int packed = r.gene[r.firstUnconfirmedTurn] & ~BattleEmulator::HERO_CAMERA_BITS;
+            os << "NEXT_INPUT turn=" << r.firstUnconfirmedTurn + 1
+               << " commonId=" << BattleEmulator::HeroActionId(packed)
+               << " target=" << BattleEmulator::HeroTargetId(packed)
+               << " bareHands=" << BattleEmulator::HeroBareHands(packed)
+               << " packed=" << packed << " observeBeforeContinuing=1"
+               << " knownFatalCandidate=" << (r.fatalOutcomes != 0) << '\n';
+        }
     }
     for (int i = r.pastTurns; i < r.publishedTurns; ++i) {
         os << "SEARCH_COMMAND turn=" << i + 1

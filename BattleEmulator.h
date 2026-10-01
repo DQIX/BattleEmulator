@@ -7,6 +7,7 @@
 
 
 #include <cstdint>
+#include <array>
 #include <optional>
 #include "Player.h"
 #include "BattleResult.h"
@@ -203,6 +204,27 @@ public:
         bool matched = false;
     };
 
+    // Single-turn continuation at the existing Main -> camera::Main boundary.
+    // Evaluate the battle prefix once; replay only the camera suffix per branch.
+    struct CameraContinuation {
+        static constexpr std::size_t actionCapacity = 8;
+        std::array<int32_t, actionCapacity> actions{};
+        std::array<dq9::freecam::fast::BattleActorRef, actionCapacity> actors{}, targets{};
+        std::array<std::uint8_t, actionCapacity> childCounts{};
+        std::array<std::uint16_t, actionCapacity> lastChildActionIds{};
+        int actionCount = 0;
+        int records = 0;
+        int equipmentChanges = 0;
+        bool ready = false;
+        bool initiative = false;
+        bool skyAttack = false;
+    };
+
+    static bool PrepareSearchTurn(const SearchState& source, SearchCommand command,
+                                  SearchState* beforeCamera, CameraContinuation* continuation);
+    static bool CompleteSearchCamera(SearchState* state, const CameraContinuation& continuation,
+                                     int packedCommand, bool traceBoundaries = false);
+
     static bool InitializeSearchState(SearchState* state, const Player initialPlayers[4],
                                       int initialPosition = 1);
     [[nodiscard]] static bool IsHeroCommandSelectable(const SearchState& state,
@@ -218,7 +240,8 @@ public:
          BattleResult* result, uint64_t seed, const int eActions[350], const int damages[350], int mode,
          uint64_t *NowState, int heroTargetOverride = -1, bool traceBoundaries = false,
           int heroActionOverride = -1, bool initializeCameraBattle = true,
-          ObservationCursor* observationCursor = nullptr);
+          ObservationCursor* observationCursor = nullptr,
+          CameraContinuation* continuation = nullptr);
 
     static std::string getActionName(int actionId);
 

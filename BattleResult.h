@@ -10,6 +10,7 @@ public:
 	// 各メンバの内容を 0 にリセットする clear 関数
 	void clear(){
 		position = 0;
+		equipmentChanges = 0;
 		turn = 0;
 		publicTurnLimit = -1;
 	}
@@ -39,6 +40,7 @@ public:
 	}
 
 	int position = 0;
+	int equipmentChanges = 0;
 	int turn = 0;
 	// Exclusive turn count permitted in the normal dump. Search reach is separate.
 	int publicTurnLimit = -1;

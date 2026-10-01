@@ -676,7 +676,14 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                           uint64_t seed, const int eActions[350], const int damages[350], int mode,
                           uint64_t *NowState, const int heroTargetOverride, const bool traceBoundaries,
                           const int heroActionOverride, const bool initializeCameraBattle,
-                          ObservationCursor* observationCursor) {
+                          ObservationCursor* observationCursor, CameraContinuation* continuation) {
+    if (continuation != nullptr) {
+        // This is a single-turn continuation, never a truncated multi-turn run.
+        if (RunCount != 1) return false;
+        continuation->ready = false;
+        continuation->records = 0;
+        continuation->equipmentChanges = 0;
+    }
 #if defined(gerunikku)
     if (initializeCameraBattle) {
         InitializeBattleActorRefs();
@@ -725,6 +732,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                 players[0].defaultATK = requestedDefaultATK;
                 RecalculateBuff(players, 0);
                 equipmentChangedThisTurn = true;
+                if (continuation != nullptr) ++continuation->equipmentChanges;
+                if (result != nullptr) ++result->equipmentChanges;
             }
         }
 #endif
@@ -948,6 +957,9 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         auto addResult = [&](const int action, const int damage, const bool isEnemy,
                              const int actor = -1, const int originalSlot = -1,
                              const int resolvedSlot = -1) {
+            // Same record-producing calls as a full BattleResult, without its
+            // 1000-row zero-fill and column writes on every search transition.
+            if (continuation != nullptr) ++continuation->records;
             if (mode != -1) return;
             int atkTurn = players[0].AtkBuffTurn > 0 ? players[0].AtkBuffTurn
                 : (players[0].AtkBuffLevel != 0 ? 0 : -1);
@@ -1383,6 +1395,22 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                            std::cout << "TRACE rng lr=0x0215962c consume=" << *position << '\n');
             (*position)++; // max: 100, lr: 0x0215962c
         }
+        if (continuation != nullptr) {
+            static_assert(std::size(actions) == CameraContinuation::actionCapacity);
+            assert(actionsPosition >= 0 && actionsPosition <= int(continuation->actions.size()));
+            std::copy_n(actions, actionsPosition, continuation->actions.begin());
+            std::copy_n(actionActors, actionsPosition, continuation->actors.begin());
+            std::copy_n(actionTargets, actionsPosition, continuation->targets.begin());
+            std::copy_n(actionPresentationSlot1ChildCounts, actionsPosition, continuation->childCounts.begin());
+            std::copy_n(actionPresentationSlot1LastChildActionIds, actionsPosition,
+                        continuation->lastChildActionIds.begin());
+            continuation->actionCount = actionsPosition;
+            continuation->initiative = player0_has_initiative;
+            continuation->skyAttack = TiggerSkyAttack;
+            continuation->ready = true;
+            if (mode != -1 && mode != -2) startTurn = counterJ - 1;
+            return true;
+        }
         camera::Main(position, actions, actionActors, actionTargets,
                      actionPresentationSlot1ChildCounts,
                      actionPresentationSlot1LastChildActionIds,
@@ -1390,8 +1418,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                      NowState, player0_has_initiative, TiggerSkyAttack, traceBoundaries);
         if (result != nullptr && (camera::UsedBranchChoice() || camera::BranchPending())
             && getStartTurn() < counterJ) {
-            if (result->publicTurnLimit < 0 || result->publicTurnLimit > counterJ)
-                result->publicTurnLimit = counterJ;
+            if (result->publicTurnLimit < 0 || result->publicTurnLimit > counterJ - 1)
+                result->publicTurnLimit = counterJ - 1;
         }
         if (camera::BranchPending()) return false;
     }
@@ -1416,6 +1444,35 @@ bool BattleEmulator::InitializeSearchState(SearchState* state, const Player init
 #endif
     state->cameraRuntime = camera::CaptureRuntimeState();
     return true;
+}
+
+bool BattleEmulator::PrepareSearchTurn(const SearchState& source, const SearchCommand command,
+                                      SearchState* beforeCamera, CameraContinuation* continuation) {
+    if (beforeCamera == nullptr || continuation == nullptr || command.action <= 0) return false;
+    *beforeCamera = source;
+    camera::BindRuntimeState(&beforeCamera->cameraRuntime);
+    const int packed = PackHeroAction(command.action, command.target, command.bareHands);
+    Main(&beforeCamera->position, 1, nullptr, beforeCamera->players, nullptr,
+         0, nullptr, nullptr, -2, &beforeCamera->nowState, -1, false, packed, false,
+         nullptr, continuation);
+    camera::UnbindRuntimeState();
+    // Main also returns false on victory/death. Those are completed battle
+    // transitions; ready=false correctly means they have no camera suffix.
+    return !camera::BranchPending();
+}
+
+bool BattleEmulator::CompleteSearchCamera(SearchState* state, const CameraContinuation& continuation,
+                                         const int packedCommand, const bool traceBoundaries) {
+    if (state == nullptr) return false;
+    camera::SetBranchChoice(HeroCameraActor(packedCommand), HeroCameraParam5(packedCommand));
+    if (!continuation.ready) return true;
+    camera::BindRuntimeState(&state->cameraRuntime);
+    camera::Main(&state->position, continuation.actions.data(), continuation.actors.data(),
+                 continuation.targets.data(), continuation.childCounts.data(),
+                 continuation.lastChildActionIds.data(), continuation.actionCount,
+                 &state->nowState, continuation.initiative, continuation.skyAttack, traceBoundaries);
+    camera::UnbindRuntimeState();
+    return !camera::BranchPending();
 }
 
 bool BattleEmulator::IsHeroCommandSelectable(const SearchState& state,

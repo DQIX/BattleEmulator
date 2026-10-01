@@ -396,10 +396,10 @@ bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aAct
 	int knownTurns = 0;
 	while (knownTurns < 349 && aActions[knownTurns] > 0) ++knownTurns;
 	auto requestLimits = limits;
-	requestLimits.foundTurn = std::max(0, startturn);
+	requestLimits.foundTurn = std::max(requestLimits.foundTurn, std::max(0, startturn));
 	const auto searched = gerunikku_search::runRequest(copiedPlayers2, seed,
 		std::span<const int32_t>(aActions, knownTurns), requestLimits, ss);
-	return searched.validInput && searched.verified && searched.won;
+	return !searched.cancelled && searched.validInput && searched.verified && searched.won;
 #endif
 	int32_t gene[350] = {0};
 	auto turns = 0;
@@ -418,89 +418,110 @@ bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aAct
 
 namespace {
 class BruteForceObservationMatcher {
-	struct Branch {
-		BattleEmulator::SearchState battle;
-		BattleEmulator::ObservationCursor observation;
-		lcg::RuntimeState rng;
-	};
-	BattleEmulator::SearchState initial;
-	std::array<int32_t, 350> gene;
-	const int* enemyActions;
-	const int* damages;
-	int turns;
-	std::size_t width;
-	std::vector<Branch> frontier;
-	std::vector<Branch> next;
+    using BE = BattleEmulator;
+    struct Branch {
+        BE::SearchState battle;
+        BE::ObservationCursor observation;
+        lcg::RuntimeState rng;
+    };
+    struct Deferred {
+        Branch branch;
+        int processed;
+    };
+    BE::SearchState initial;
+    std::array<int32_t, 350> gene;
+    const int* enemyActions;
+    const int* damages;
+    int turns;
+    // Depth-first deferred siblings: O(turns * actorCount) live states, not a
+    // breadth-first Cartesian frontier and not a width-limited seed filter.
+    std::vector<Deferred> deferred;
+    std::vector<Branch> outcomes;
 
-	bool step(const Branch& parent, Branch& child, const int turn, const int command) {
-		child = parent;
-		lcg::RestoreRuntimeState(parent.rng);
-		camera::BindRuntimeState(&child.battle.cameraRuntime);
-		const int original = gene[turn];
-		gene[turn] = command;
-		const bool accepted = BattleEmulator::Main(&child.battle.position, 1, gene.data(),
-			child.battle.players, nullptr, 0, enemyActions, damages, 350,
-			&child.battle.nowState, -1, false, -1, false, &child.observation);
-		gene[turn] = original;
-		camera::UnbindRuntimeState();
-		child.rng = lcg::CaptureRuntimeState();
-		return accepted;
-	}
+    bool prepare(const Branch& parent, Branch& beforeCamera, BE::CameraContinuation& continuation) {
+        beforeCamera = parent;
+        lcg::RestoreRuntimeState(parent.rng);
+        camera::BindRuntimeState(&beforeCamera.battle.cameraRuntime);
+        const bool accepted = BE::Main(&beforeCamera.battle.position, 1, gene.data(),
+            beforeCamera.battle.players, nullptr, 0, enemyActions, damages, 350,
+            &beforeCamera.battle.nowState, -1, false, -1, false,
+            &beforeCamera.observation, &continuation);
+        camera::UnbindRuntimeState();
+        beforeCamera.rng = lcg::CaptureRuntimeState();
+        return accepted;
+    }
 
-	void retain(const Branch& child) {
-		for (const auto& old : next) {
-			if (old.observation.actionIndex == child.observation.actionIndex
-				&& old.observation.damageIndex == child.observation.damageIndex
-				&& gerunikku_search::sameState(old.battle, child.battle)) return;
-		}
-		// Bound live states at every turn, rather than multiplying future choices.
-		if (next.size() < width) next.push_back(child);
-	}
+    bool complete(const Branch& prepared, const BE::CameraContinuation& continuation,
+                  const int command, Branch& child) {
+        child = prepared;
+        lcg::RestoreRuntimeState(prepared.rng);
+        if (!BE::CompleteSearchCamera(&child.battle, continuation, command)) return false;
+        child.rng = lcg::CaptureRuntimeState();
+        return true;
+    }
+
+    void retain(const Branch& child) {
+        for (const auto& old : outcomes) {
+            if (old.observation.actionIndex == child.observation.actionIndex
+                && old.observation.damageIndex == child.observation.damageIndex
+                && old.observation.matched == child.observation.matched
+                && gerunikku_search::sameState(old.battle, child.battle)) return;
+        }
+        outcomes.push_back(child);
+    }
 
 public:
-	BruteForceObservationMatcher(const BattleEmulator::SearchState& state, const int runTurns,
-		const int32_t commands[350], const int actions[350], const int damageHistory[350])
-		: initial(state), enemyActions(actions), damages(damageHistory), turns(runTurns),
-		  width(std::max<std::size_t>(1, 2 * state.cameraRuntime.presentationActorCount)) {
-		std::copy_n(commands, gene.size(), gene.begin());
-		frontier.reserve(width);
-		next.reserve(width);
-	}
+    BruteForceObservationMatcher(const BE::SearchState& state, const int runTurns,
+        const int32_t commands[350], const int actions[350], const int damageHistory[350])
+        : initial(state), enemyActions(actions), damages(damageHistory), turns(runTurns) {
+        std::copy_n(commands, gene.size(), gene.begin());
+        outcomes.reserve(std::max<std::size_t>(1, 2 * state.cameraRuntime.presentationActorCount));
+        deferred.reserve(32);
+    }
 
-	bool match(const uint64_t seed) {
-		BattleEmulator::resetStartTurn();
-		lcg::init(seed);
-		frontier.clear();
-		frontier.push_back({initial, {}, lcg::CaptureRuntimeState()});
-		for (int processed = 0; processed < turns; ++processed) {
-			next.clear();
-			for (const auto& parent : frontier) {
-				const int turn = static_cast<int>((parent.battle.nowState >> 12) & 0xfffff);
-				if (turn >= static_cast<int>(gene.size())) continue;
-				Branch child;
-				const int command = gene[turn];
-				if (step(parent, child, turn, command)) {
-					if (child.observation.matched || processed + 1 == turns) return true;
-					retain(child);
-					continue;
-				}
-				if (!camera::BranchPending() || BattleEmulator::HeroCameraActor(command) >= 0) continue;
-				// Only this encountered boundary gets actor x param5 trials.
-				// Earlier choices stay in Gene; future choices are not prebuilt.
-				// Their effects already live in the parent's battle/camera state.
-				const int candidateCount = 2 * parent.battle.cameraRuntime.presentationActorCount;
-				for (int choice = 0; choice < candidateCount; ++choice) {
-					const int candidate = BattleEmulator::WithCameraChoice(command, choice / 2, (choice & 1) != 0);
-					if (!step(parent, child, turn, candidate)) continue;
-					if (child.observation.matched || processed + 1 == turns) return true;
-					retain(child);
-				}
-			}
-			if (next.empty()) return false;
-			frontier.swap(next);
-		}
-		return true;
-	}
+    bool match(const uint64_t seed) {
+        BE::resetStartTurn();
+        lcg::init(seed);
+        deferred.clear();
+        Branch current{initial, {}, lcg::CaptureRuntimeState()};
+        Branch prepared, child;
+        BE::CameraContinuation continuation;
+        int processed = 0;
+        for (;;) {
+            if (processed >= turns) return true;
+            outcomes.clear();
+            const int turn = static_cast<int>((current.battle.nowState >> 12) & 0xfffff);
+            if (turn < static_cast<int>(gene.size()) && prepare(current, prepared, continuation)) {
+                // Observation validation is inside the battle prefix. Reject
+                // wrong seeds there, before doing any camera work.
+                if (prepared.observation.matched) return true;
+                const int command = gene[turn];
+                if (complete(prepared, continuation, command, child)) {
+                    retain(child);
+                } else if (camera::BranchPending() && BE::HeroCameraActor(command) < 0) {
+                    const int count = 2 * prepared.battle.cameraRuntime.presentationActorCount;
+                    for (int choice = 0; choice < count; ++choice) {
+                        const int packed = BE::WithCameraChoice(command, choice / 2, (choice & 1) != 0);
+                        if (complete(prepared, continuation, packed, child)) retain(child);
+                    }
+                }
+            }
+            if (!outcomes.empty()) {
+                if (processed + 1 == turns) return true;
+                // The first hypothesis is explored now; every other distinct
+                // hypothesis is deferred, never silently dropped at a width cap.
+                for (std::size_t i = outcomes.size(); i-- > 1;)
+                    deferred.push_back({outcomes[i], processed + 1});
+                current = outcomes.front();
+                ++processed;
+                continue;
+            }
+            if (deferred.empty()) return false;
+            current = std::move(deferred.back().branch);
+            processed = deferred.back().processed;
+            deferred.pop_back();
+        }
+    }
 };
 }
 
@@ -762,6 +783,7 @@ namespace {
     std::string wasmLastError;
     uint64_t wasmLastTurnProcessed = 0;
     gerunikku_search::Limits wasmSearchLimits;
+    std::atomic<std::uint32_t> wasmSearchGeneration{0};
 
     bool buildResultsFromInput(const char *input) {
         wasmLastError.clear();
@@ -805,32 +827,12 @@ namespace {
         BattleEmulator::ResetTurnProcessed();
 
     	std::stringstream ss;
-    	if(!SearchRequest(copiedPlayers, seed, aActions5, true, ss, wasmSearchLimits)){
-    		ss << std::endl;
-    		ss << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
-    		ss << "      **YOU WILL NOW LOSE!**       " << std::endl;
-    		ss << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
-    		ss << std::endl;
-
-    		auto turns = 0;
-		    for(int a_action : aActions5){
-			    if(a_action == -1){
-				    break;
-			    }
-		    	turns++;
-		    }
-
-    		BattleResult res;
-    		Player players[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
-    		lcg::init(seed);
-    		int position = 1;
-    		uint64_t nowState = 0;
-    		BattleEmulator::Main(&position, 100, aActions5, players, &res, seed, nullptr, nullptr, -1, &nowState);
-     		ss << dumpTable(res, aActions5, startturn);
-     		ss << "startturn=" << startturn << std::endl;
-    		return ss.str();
-    	}
-    	std::cout << ss.str();
+        (void)numThreads;
+        if (!SearchRequest(copiedPlayers, seed, aActions5, dropbug, ss, wasmSearchLimits)) {
+            // No unchecked fallback Main/dump: an incomplete timed search does
+            // not prove defeat and cannot publish an unobserved camera suffix.
+            ss << "SEARCH_STATUS no_verified_win_within_budget\n";
+        }
     	ss << "startturn=" << startturn << std::endl;
         wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
         return ss.str();
@@ -838,6 +840,21 @@ namespace {
 }
 
 extern "C" {
+EMSCRIPTEN_KEEPALIVE std::uintptr_t wasm_search_generation_address() {
+    static_assert(std::atomic<std::uint32_t>::is_always_lock_free);
+    static_assert(sizeof(wasmSearchGeneration) == sizeof(std::uint32_t));
+    return reinterpret_cast<std::uintptr_t>(&wasmSearchGeneration);
+}
+
+EMSCRIPTEN_KEEPALIVE void wasm_configure_search(double milliseconds, std::uint32_t generation,
+                                               int confirmedTurns) {
+    wasmSearchLimits.milliseconds = std::isfinite(milliseconds)
+        ? std::clamp(milliseconds, 300.0, 1500.0) : 1500.0;
+    wasmSearchLimits.requestGeneration = &wasmSearchGeneration;
+    wasmSearchLimits.expectedGeneration = generation;
+    if (confirmedTurns >= 0) wasmSearchLimits.foundTurn = std::clamp(confirmedTurns, 0, 349);
+}
+
 EMSCRIPTEN_KEEPALIVE int wasm_prepare_input(const char *input) {;
     if (!buildResultsFromInput(input)) {
         return 0;
@@ -848,6 +865,10 @@ EMSCRIPTEN_KEEPALIVE int wasm_prepare_input(const char *input) {;
 
 EMSCRIPTEN_KEEPALIVE const char *wasm_get_last_error() {
     return wasmLastError.c_str();
+}
+
+EMSCRIPTEN_KEEPALIVE int wasm_get_observed_turn() {
+    return std::max(0, startturn);
 }
 
 EMSCRIPTEN_KEEPALIVE uint64_t wasm_bruteforce_range(int resultIndex, uint64_t startSeed, uint64_t endSeed) {

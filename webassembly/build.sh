@@ -79,7 +79,7 @@ EMCC_FLAGS=(
   -sSINGLE_FILE=1
   -sPTHREAD_POOL_SIZE=8
 
-  "-sEXPORTED_FUNCTIONS=['_wasm_prepare_input','_wasm_get_last_error','_wasm_bruteforce_range','_wasm_get_turn_processed','_wasm_get_found_seeds','_wasm_search_dump']"
+  "-sEXPORTED_FUNCTIONS=['_wasm_prepare_input','_wasm_get_last_error','_wasm_bruteforce_range','_wasm_get_turn_processed','_wasm_get_found_seeds','_wasm_search_dump','_wasm_search_generation_address','_wasm_configure_search','_wasm_get_observed_turn']"
   "-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','UTF8ToString']"
 )
 
