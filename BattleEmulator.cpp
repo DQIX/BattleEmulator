@@ -675,7 +675,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                          BattleResult* result,
                           uint64_t seed, const int eActions[350], const int damages[350], int mode,
                           uint64_t *NowState, const int heroTargetOverride, const bool traceBoundaries,
-                          const int heroActionOverride, const bool initializeCameraBattle) {
+                          const int heroActionOverride, const bool initializeCameraBattle,
+                          ObservationCursor* observationCursor) {
 #if defined(gerunikku)
     if (initializeCameraBattle) {
         InitializeBattleActorRefs();
@@ -685,8 +686,10 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
     assert(position != nullptr);
     assert(*position != 0);//positionは1始まりなので守ってね
     int genePosition = 0;
-    int exCounter = 0;
-    int exCounter1 = 0;
+    int localDamageIndex = 0;
+    int localActionIndex = 0;
+    int& exCounter = observationCursor != nullptr ? observationCursor->damageIndex : localDamageIndex;
+    int& exCounter1 = observationCursor != nullptr ? observationCursor->actionIndex : localActionIndex;
     uint64_t tmpState;
 
     auto startPos = static_cast<int>(((*NowState) >> 12) & 0xfffff);
@@ -995,12 +998,14 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             const int need = eActions[exCounter1++];
             if (need == -1) {
                 startTurn = counterJ - 1;
+                if (observationCursor != nullptr) observationCursor->matched = true;
                 return 1;
             }
             if (need != action) return -1;
             if (enemyDamageIsTracked(action)) {
                 if (damages[exCounter] == -1) {
                     startTurn = counterJ - 1;
+                    if (observationCursor != nullptr) observationCursor->matched = true;
                     return 1;
                 }
                 if (damages[exCounter++] != damage) return -1;
@@ -1168,6 +1173,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                                 if (mode != -1 && mode != -2) {
                                     if (damages[exCounter] == -1) {
                                         startTurn = counterJ - 1;
+                                        if (observationCursor != nullptr) observationCursor->matched = true;
                                         return true;
                                     }
                                     if (damages[exCounter++] != basedamage) return false;
@@ -1178,6 +1184,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                                     (action == ATTACK_ALLY || action == MERCURIAL_THRUST)) {
                                     if (damages[exCounter] == -1) {
                                         startTurn = counterJ - 1;
+                                        if (observationCursor != nullptr) observationCursor->matched = true;
                                         return true;
                                     }
                                     if (damages[exCounter++] != basedamage) return false;

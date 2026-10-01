@@ -197,6 +197,12 @@ public:
         camera::RuntimeSnapshot cameraRuntime{};
     };
 
+    struct ObservationCursor {
+        int actionIndex = 0;
+        int damageIndex = 0;
+        bool matched = false;
+    };
+
     static bool InitializeSearchState(SearchState* state, const Player initialPlayers[4],
                                       int initialPosition = 1);
     [[nodiscard]] static bool IsHeroCommandSelectable(const SearchState& state,
@@ -211,7 +217,8 @@ public:
     Main(int *position, int RunCount, const int32_t Gene[350], Player (&players)[4],
          BattleResult* result, uint64_t seed, const int eActions[350], const int damages[350], int mode,
          uint64_t *NowState, int heroTargetOverride = -1, bool traceBoundaries = false,
-         int heroActionOverride = -1, bool initializeCameraBattle = true);
+          int heroActionOverride = -1, bool initializeCameraBattle = true,
+          ObservationCursor* observationCursor = nullptr);
 
     static std::string getActionName(int actionId);
 

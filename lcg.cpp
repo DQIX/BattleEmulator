@@ -113,6 +113,16 @@ void lcg::init(uint64_t seed, bool init) {
     }
 }
 
+lcg::RuntimeState lcg::CaptureRuntimeState() noexcept {
+    return {now_seed, nowCounter, init_mode};
+}
+
+void lcg::RestoreRuntimeState(const RuntimeState state) noexcept {
+    now_seed = state.seed;
+    nowCounter = state.counter;
+    init_mode = state.cached;
+}
+
 // ... existing code ...
 
 uint8_t lcg::getSeed(int *position) {

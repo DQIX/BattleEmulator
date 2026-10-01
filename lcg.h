@@ -19,7 +19,16 @@ private:
     static int calculatePercent(uint64_t input);
 
 public:
+    struct RuntimeState {
+        uint64_t seed;
+        int counter;
+        bool cached;
+    };
+
     static void init(uint64_t seed, bool init = false);
+    // Checkpoints belong to the same initialized seed; the cached table is shared.
+    static RuntimeState CaptureRuntimeState() noexcept;
+    static void RestoreRuntimeState(RuntimeState state) noexcept;
 
     /**
      * Do not write `(void)lcg::getPercent(position, max)` when only the RNG

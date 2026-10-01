@@ -416,6 +416,94 @@ bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aAct
 	return true;
 }
 
+namespace {
+class BruteForceObservationMatcher {
+	struct Branch {
+		BattleEmulator::SearchState battle;
+		BattleEmulator::ObservationCursor observation;
+		lcg::RuntimeState rng;
+	};
+	BattleEmulator::SearchState initial;
+	std::array<int32_t, 350> gene;
+	const int* enemyActions;
+	const int* damages;
+	int turns;
+	std::size_t width;
+	std::vector<Branch> frontier;
+	std::vector<Branch> next;
+
+	bool step(const Branch& parent, Branch& child, const int turn, const int command) {
+		child = parent;
+		lcg::RestoreRuntimeState(parent.rng);
+		camera::BindRuntimeState(&child.battle.cameraRuntime);
+		const int original = gene[turn];
+		gene[turn] = command;
+		const bool accepted = BattleEmulator::Main(&child.battle.position, 1, gene.data(),
+			child.battle.players, nullptr, 0, enemyActions, damages, 350,
+			&child.battle.nowState, -1, false, -1, false, &child.observation);
+		gene[turn] = original;
+		camera::UnbindRuntimeState();
+		child.rng = lcg::CaptureRuntimeState();
+		return accepted;
+	}
+
+	void retain(const Branch& child) {
+		for (const auto& old : next) {
+			if (old.observation.actionIndex == child.observation.actionIndex
+				&& old.observation.damageIndex == child.observation.damageIndex
+				&& gerunikku_search::sameState(old.battle, child.battle)) return;
+		}
+		// Bound live states at every turn, rather than multiplying future choices.
+		if (next.size() < width) next.push_back(child);
+	}
+
+public:
+	BruteForceObservationMatcher(const BattleEmulator::SearchState& state, const int runTurns,
+		const int32_t commands[350], const int actions[350], const int damageHistory[350])
+		: initial(state), enemyActions(actions), damages(damageHistory), turns(runTurns),
+		  width(std::max<std::size_t>(1, 2 * state.cameraRuntime.presentationActorCount)) {
+		std::copy_n(commands, gene.size(), gene.begin());
+		frontier.reserve(width);
+		next.reserve(width);
+	}
+
+	bool match(const uint64_t seed) {
+		BattleEmulator::resetStartTurn();
+		lcg::init(seed);
+		frontier.clear();
+		frontier.push_back({initial, {}, lcg::CaptureRuntimeState()});
+		for (int processed = 0; processed < turns; ++processed) {
+			next.clear();
+			for (const auto& parent : frontier) {
+				const int turn = static_cast<int>((parent.battle.nowState >> 12) & 0xfffff);
+				if (turn >= static_cast<int>(gene.size())) continue;
+				Branch child;
+				const int command = gene[turn];
+				if (step(parent, child, turn, command)) {
+					if (child.observation.matched || processed + 1 == turns) return true;
+					retain(child);
+					continue;
+				}
+				if (!camera::BranchPending() || BattleEmulator::HeroCameraActor(command) >= 0) continue;
+				// Only this encountered boundary gets actor x param5 trials.
+				// Earlier choices stay in Gene; future choices are not prebuilt.
+				// Their effects already live in the parent's battle/camera state.
+				const int candidateCount = 2 * parent.battle.cameraRuntime.presentationActorCount;
+				for (int choice = 0; choice < candidateCount; ++choice) {
+					const int candidate = BattleEmulator::WithCameraChoice(command, choice / 2, (choice & 1) != 0);
+					if (!step(parent, child, turn, candidate)) continue;
+					if (child.observation.matched || processed + 1 == turns) return true;
+					retain(child);
+				}
+			}
+			if (next.empty()) return false;
+			frontier.swap(next);
+		}
+		return true;
+	}
+};
+}
+
 // ブルートフォースリクエスト関数
 [[nodiscard]] uint64_t BruteForceRequest(const Player copiedPlayers2[4], int hours, int minutes, int seconds, int turns,
                                          int eActions[350],
@@ -469,51 +557,17 @@ bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aAct
 	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 	                             合計 6Byte
 	*/
-	int* position = new int(1);
-	auto* nowState = new uint64_t(0);
-	int maxElement = 350;
-	Player players[4];
+	BattleEmulator::SearchState initial;
+	if (!BattleEmulator::InitializeSearchState(&initial, copiedPlayers2)) return 0;
+	initial.nowState = BattleEmulator::TYPE_2A;
+	BruteForceObservationMatcher matcher(initial, turns, gene, eActions, damages);
 	for(uint64_t seed = time1; seed < time2; ++seed){
 		//        if (seed % 1000000000 == 0) {
 		//            std::cout << seed << std::endl;
 		//        }
-		lcg::init(seed);
 		// for (int st = BattleEmulator::TYPE_2A; st < BattleEmulator::TYPE_2D; ++st) {
-		(*nowState) = BattleEmulator::TYPE_2A;
-		(*position) = 1;
 		//std::memcpy(players, copiedPlayers, sizeof(players));
-		players[0] = copiedPlayers[0];
-		players[1] = copiedPlayers[1];
-		players[2] = copiedPlayers[2];
-		players[3] = copiedPlayers[3];
-
-
-		bool resultBool = BattleEmulator::Main(position, turns, gene, players,
-		                                       nullptr, seed, eActions, damages,
-		                                       maxElement,
-		                                       nowState);
-		if (!resultBool && camera::BranchPending()) {
-			int32_t cameraGene[350];
-			std::memcpy(cameraGene, gene, sizeof(cameraGene));
-			int previousCameraTurn = -1;
-			while (!resultBool && camera::BranchPending()) {
-				const int cameraTurn = static_cast<int>((*nowState >> 12) & 0xfffff) - 1;
-				if (cameraTurn <= previousCameraTurn || cameraTurn >= 350 || cameraGene[cameraTurn] <= 0) break;
-				previousCameraTurn = cameraTurn;
-				const int candidateCount = 2 * dq9::freecam::fast::ThreadContext().presentationActorCount;
-				// Only this encountered boundary gets actor x param5 trials.
-				for (int choice = 0; choice < candidateCount; ++choice) {
-					cameraGene[cameraTurn] = BattleEmulator::WithCameraChoice(cameraGene[cameraTurn], choice / 2, (choice & 1) != 0);
-					lcg::init(seed);
-					*position = 1;
-					*nowState = BattleEmulator::TYPE_2A;
-					std::memcpy(players, copiedPlayers2, sizeof(players));
-					resultBool = BattleEmulator::Main(position, turns, cameraGene, players,
-						nullptr, seed, eActions, damages, maxElement, nowState);
-					if (resultBool || camera::BranchPending()) break;
-				}
-			}
-		}
+		const bool resultBool = matcher.match(seed);
 		if(resultBool){
 			//std::cout << seed << ", " << st << std::endl;
 			std::cout << std::hex << seed << std::dec << std::endl;
@@ -523,8 +577,6 @@ bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aAct
 		}
 		//}
 	}
-	delete position;
-	delete nowState;
 
 	std::cout << std::endl << "found: " << foundSeeds << std::endl;
 
@@ -543,42 +595,11 @@ bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aAct
 
 void BruteForceMainLoop(const Player copiedPlayers[4], uint64_t start, uint64_t end, int gene[350],
 						int damages[350], int eaction1[350]) {
-	int maxElement = 350;
+	BattleEmulator::SearchState initial;
+	if (!BattleEmulator::InitializeSearchState(&initial, copiedPlayers)) return;
+	BruteForceObservationMatcher matcher(initial, 100, gene, eaction1, damages);
 	for (uint64_t seed = start; seed < end; ++seed) {
-		BattleEmulator::resetStartTurn();
-		lcg::init(seed);
-		int position = 1;
-		uint64_t nowState = 0;
-		Player players[4] = {copiedPlayers[0], copiedPlayers[1], copiedPlayers[2], copiedPlayers[3]};
-
-
-		bool resultBool = BattleEmulator::Main(&position, 100, gene, players,
-											  nullptr, seed, eaction1,
-											   damages,
-											   maxElement,
-											   &nowState);
-		if (!resultBool && camera::BranchPending()) {
-			int32_t cameraGene[350];
-			std::memcpy(cameraGene, gene, sizeof(cameraGene));
-			int previousCameraTurn = -1;
-			while (!resultBool && camera::BranchPending()) {
-				const int cameraTurn = static_cast<int>((nowState >> 12) & 0xfffff) - 1;
-				if (cameraTurn <= previousCameraTurn || cameraTurn >= 350 || cameraGene[cameraTurn] <= 0) break;
-				previousCameraTurn = cameraTurn;
-				const int candidateCount = 2 * dq9::freecam::fast::ThreadContext().presentationActorCount;
-				// Earlier choices stay in Gene; future choices are not prebuilt.
-				for (int choice = 0; choice < candidateCount; ++choice) {
-					cameraGene[cameraTurn] = BattleEmulator::WithCameraChoice(cameraGene[cameraTurn], choice / 2, (choice & 1) != 0);
-					lcg::init(seed);
-					position = 1;
-					nowState = 0;
-					std::memcpy(players, copiedPlayers, sizeof(players));
-					resultBool = BattleEmulator::Main(&position, 100, cameraGene, players,
-						nullptr, seed, eaction1, damages, maxElement, &nowState);
-					if (resultBool || camera::BranchPending()) break;
-				}
-			}
-		}
+		const bool resultBool = matcher.match(seed);
 		if (resultBool) {
 			std::cout << seed << std::endl;
 			FoundSeed = seed;
