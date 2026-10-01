@@ -3,7 +3,6 @@
 
 #include "BattleEmulator.h"
 #include <array>
-#include <atomic>
 #include <cstdint>
 #include <span>
 #include <string>
@@ -23,10 +22,6 @@ struct Limits {
     std::vector<int> observedActions;
     std::vector<int> observedDamages;
     bool debugCameraCandidates = false;
-    // Optional cooperative cancellation for a resident WASM worker. The host
-    // changes this shared atomic even while synchronous WASM is executing.
-    const std::atomic<std::uint32_t>* requestGeneration = nullptr;
-    std::uint32_t expectedGeneration = 0;
 };
 struct Statistics {
     std::uint64_t transitions = 0;
@@ -59,7 +54,6 @@ struct Result {
     int fatalOutcomes = 0;
     bool cameraCoverageComplete = true;
     bool won = false;
-    bool cancelled = false;
     bool verified = false;
     bool validInput = true;
     bool capacityLimited = false;

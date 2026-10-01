@@ -162,11 +162,7 @@ class Engine {
     double noiseScale = 0;
 
     double elapsed() const { return std::chrono::duration<double, std::milli>(Clock::now() - started).count(); }
-    bool cancelled() const {
-        return limits.requestGeneration != nullptr
-            && limits.requestGeneration->load(std::memory_order_relaxed) != limits.expectedGeneration;
-    }
-    bool expired() const { return cancelled() || Clock::now() >= deadline; }
+    bool expired() const { return Clock::now() >= deadline; }
     bool room(const Node& n) {
         // The emulator owns fixed RNG/result buffers. Stop BEFORE capacity, not
         // by changing RNG position or continuing beyond the supplied gene.
@@ -179,7 +175,6 @@ class Engine {
     }
     bool candidates(const State& parent, const Command cmd, std::vector<Outcome>& outcomes) {
         outcomes.clear();
-        if (cancelled()) return false;
         const int packed = BE::PackHeroAction(cmd.action, cmd.target, cmd.bareHands);
         State prepared, child;
         BE::CameraContinuation continuation;
@@ -200,7 +195,6 @@ class Engine {
         bool complete = true;
         for (int actor = 0; actor < parent.cameraRuntime.presentationActorCount; ++actor) {
             for (bool param5 : {false, true}) {
-                if (cancelled()) return false;
                 const int choice = BE::WithCameraChoice(packed, actor, param5);
                 if (!finish(choice)) { complete = false; continue; }
                 bool duplicate = false;
@@ -535,7 +529,7 @@ public:
         bool rootCoverageComplete = true;
         while (!deferred.empty()) {
             // A zero budget is the existing DEBUG2 root-only inspection mode.
-            if (cancelled() || (limits.milliseconds > 0 && expired())) {
+            if (limits.milliseconds > 0 && expired()) {
                 rootCoverageComplete = false;
                 break;
             }
@@ -590,7 +584,6 @@ public:
         if (roots.empty()) {
             out.validInput = !rootCoverageComplete;
             out.cameraCoverageComplete = rootCoverageComplete;
-            out.cancelled = cancelled();
             out.error = rootCoverageComplete ? "no camera candidate matches the measured history/state"
                 : "root enumeration incomplete; no measured-state candidate verified within the budget";
             out.stats.elapsedMs = elapsed();
@@ -665,11 +658,6 @@ public:
             }
         }
         // Fresh original-world replay is the source of every output field.
-        if (cancelled()) {
-            out.cancelled = true;
-            out.stats.elapsedMs = elapsed();
-            return std::move(out);
-        }
         if (!replay(best, true)) {
             // The last verified incumbent is deliberately retained on mismatch.
             out.error = "candidate mismatch; retained the last verified incumbent";

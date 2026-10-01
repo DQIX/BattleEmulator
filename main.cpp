@@ -399,7 +399,7 @@ bool SearchRequest(const Player copiedPlayers2[4], uint64_t seed, const int aAct
 	requestLimits.foundTurn = std::max(requestLimits.foundTurn, std::max(0, startturn));
 	const auto searched = gerunikku_search::runRequest(copiedPlayers2, seed,
 		std::span<const int32_t>(aActions, knownTurns), requestLimits, ss);
-	return !searched.cancelled && searched.validInput && searched.verified && searched.won;
+	return searched.validInput && searched.verified && searched.won;
 #endif
 	int32_t gene[350] = {0};
 	auto turns = 0;
@@ -783,7 +783,6 @@ namespace {
     std::string wasmLastError;
     uint64_t wasmLastTurnProcessed = 0;
     gerunikku_search::Limits wasmSearchLimits;
-    std::atomic<std::uint32_t> wasmSearchGeneration{0};
 
     bool buildResultsFromInput(const char *input) {
         wasmLastError.clear();
@@ -840,21 +839,6 @@ namespace {
 }
 
 extern "C" {
-EMSCRIPTEN_KEEPALIVE std::uintptr_t wasm_search_generation_address() {
-    static_assert(std::atomic<std::uint32_t>::is_always_lock_free);
-    static_assert(sizeof(wasmSearchGeneration) == sizeof(std::uint32_t));
-    return reinterpret_cast<std::uintptr_t>(&wasmSearchGeneration);
-}
-
-EMSCRIPTEN_KEEPALIVE void wasm_configure_search(double milliseconds, std::uint32_t generation,
-                                               int confirmedTurns) {
-    wasmSearchLimits.milliseconds = std::isfinite(milliseconds)
-        ? std::clamp(milliseconds, 300.0, 1500.0) : 1500.0;
-    wasmSearchLimits.requestGeneration = &wasmSearchGeneration;
-    wasmSearchLimits.expectedGeneration = generation;
-    if (confirmedTurns >= 0) wasmSearchLimits.foundTurn = std::clamp(confirmedTurns, 0, 349);
-}
-
 EMSCRIPTEN_KEEPALIVE int wasm_prepare_input(const char *input) {;
     if (!buildResultsFromInput(input)) {
         return 0;
@@ -865,10 +849,6 @@ EMSCRIPTEN_KEEPALIVE int wasm_prepare_input(const char *input) {;
 
 EMSCRIPTEN_KEEPALIVE const char *wasm_get_last_error() {
     return wasmLastError.c_str();
-}
-
-EMSCRIPTEN_KEEPALIVE int wasm_get_observed_turn() {
-    return std::max(0, startturn);
 }
 
 EMSCRIPTEN_KEEPALIVE uint64_t wasm_bruteforce_range(int resultIndex, uint64_t startSeed, uint64_t endSeed) {

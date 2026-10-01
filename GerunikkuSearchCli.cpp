@@ -48,7 +48,6 @@ std::int32_t parsePackedCommand(const std::string_view token) {
 }
 
 void printResult(const Result& r, std::uint64_t seed, std::ostream& os) {
-    if (r.cancelled) { os << "SEARCH_CANCELLED\n"; return; }
     os << dumpTable(r.battle, r.gene.data(), r.pastTurns - 1);
     os << std::fixed << std::setprecision(3)
        << "GERUNIKKU_SEARCH seed=0x" << std::hex << seed << std::dec
