@@ -8,7 +8,7 @@
 namespace {
 	constexpr uint64_t kTurnBitsMask = 0xFFFFF000ULL;
 	constexpr std::size_t kBoxBytes = 500ULL * 1024ULL * 1024ULL;
-	constexpr int kMaxEncodedTurns = 32;
+	constexpr int kMaxEncodedTurns = 64 / 3;
 	constexpr int kHighDamageThreshold = 27;
 	constexpr int kMaxStoredSolutions = 2000;
 	constexpr int kAllyAttackAnimationCost = 10;
@@ -24,6 +24,8 @@ namespace {
 		BattleEmulator::ATTACK_ALLY,
 		BattleEmulator::FLEE_ALLY,
 		BattleEmulator::DEFENCE,
+		BattleEmulator::ATTACK_ALLY | BattleEmulator::ACTION_BARE_HANDS,
+		BattleEmulator::DEFENCE | BattleEmulator::ACTION_BARE_HANDS,
 	};
 	static_assert(sizeof(kBranchActions) / sizeof(kBranchActions[0]) == ActionOptimizer::BranchActionCount);
 
@@ -124,7 +126,7 @@ namespace {
 	}
 
 	int actionAnimationCost(int action) {
-		switch (action) {
+		switch (action & BattleEmulator::ACTION_ID_MASK) {
 			case BattleEmulator::HEAL:
 				return kAllyHealAnimationCost;
 			case BattleEmulator::FLEE_ALLY:
@@ -140,7 +142,7 @@ namespace {
 	int estimateAnimationCost(uint64_t pathBits, int depth, uint16_t enemyAttackMask, uint16_t enemyRubbleMask) {
 		int cost = 0;
 		for (int i = 0; i < depth; ++i) {
-			const auto actionIndex = static_cast<int>((pathBits >> (i * 2)) & 0x3ULL);
+			const auto actionIndex = static_cast<int>((pathBits >> (i * 3)) & 0x7ULL);
 			cost += actionAnimationCost(kBranchActions[actionIndex]);
 		}
 		cost += countBits(enemyAttackMask) * kEnemyAttackAnimationCost;
@@ -250,7 +252,7 @@ namespace {
 			actions[i] = 0;
 		}
 		for (int i = 0; i < depth; ++i) {
-			const auto actionIndex = static_cast<int>((pathBits >> (i * 2)) & 0x3ULL);
+			const auto actionIndex = static_cast<int>((pathBits >> (i * 3)) & 0x7ULL);
 			actions[i] = kBranchActions[actionIndex];
 		}
 		if (depth < 350) {
@@ -322,7 +324,7 @@ ActionOptimizer::Result ActionOptimizer::FindShortestWin(const Player startPlaye
 				(void) step;
 				++result.nodesVisited;
 
-				const uint64_t pathBits = node.pathBits | (static_cast<uint64_t>(actionIndex) << (depth * 2));
+				const uint64_t pathBits = node.pathBits | (static_cast<uint64_t>(actionIndex) << (depth * 3));
 				const auto turnBit = static_cast<uint16_t>(1U << depth);
 				uint16_t highDamageMask = node.highDamageMask;
 				uint16_t enemyAttackMask = node.enemyAttackMask;

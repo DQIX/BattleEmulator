@@ -13,6 +13,11 @@
 
 class BattleEmulator {
 public:
+    static constexpr int ACTION_ID_MASK = 0xffff;
+    static constexpr int ACTION_BARE_HANDS = 1 << 16;
+    static constexpr int BARUBOROSU_EQUIPPED_ATK = 29;
+    static constexpr int BARUBOROSU_BARE_HANDS_ATK = 16;
+
     static constexpr int TYPE_2A = 0;
     static constexpr int TYPE_2B = 1;
     static constexpr int TYPE_2C = 2;

@@ -90,6 +90,13 @@ RBE_FORCE_INLINE BattleEmulator::StepResult BattleEmulator::Step(int *position, 
     if (genePosition != -1) {
         genePosition = counterJ - 1;
     }
+    players[0].atk = BARUBOROSU_EQUIPPED_ATK;
+    if (genePosition != -1) {
+        const int32_t gene = Gene[genePosition];
+        if (gene != 0 && gene != -1 && (gene & ACTION_BARE_HANDS) != 0) {
+            players[0].atk = BARUBOROSU_BARE_HANDS_ATK;
+        }
+    }
 #ifdef DEBUG2
     DEBUG_COUT2((*position));
     //THIS DEBUG CODE!
@@ -122,7 +129,7 @@ RBE_FORCE_INLINE BattleEmulator::StepResult BattleEmulator::Step(int *position, 
             genePosition = -1;
             //throw std::invalid_argument("GenePosition is invalid");
         } else {
-            action = gene;
+            action = gene & ACTION_ID_MASK;
         }
     }
     if (action == -1) {

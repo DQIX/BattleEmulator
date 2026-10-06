@@ -27,7 +27,7 @@ int startturn = -1;
 const Player copiedPlayers[2] = {
 	// プレイヤー1
 	{
-		37, 37, 29,  21, 19, 0, 6, 6
+		37, 37, BattleEmulator::BARUBOROSU_EQUIPPED_ATK, 21, 19, 0, 6, 6
 	},
 
 	// プレイヤー2
@@ -41,7 +41,7 @@ const Player copiedPlayers[2] = {
 const Player copiedPlayers[2] = {
 	// プレイヤー1
 	{
-		37, 37, 29,  24, 19, 0, 6, 6
+		37, 37, BattleEmulator::BARUBOROSU_EQUIPPED_ATK, 24, 19, 0, 6, 6
 	},
 
 	// プレイヤー2
@@ -93,6 +93,7 @@ void printHeader(std::stringstream &ss);
 void printHeader(std::stringstream &ss) {
 	ss << std::left << std::setw(6) << "turn"
 			<< std::setw(18) << "sp"
+			<< std::setw(8) << "equip"
 			<< std::setw(18) << "aAct"
 			<< std::setw(18) << "eAct"
 			<< std::setw(6) << "aD"
@@ -101,7 +102,7 @@ void printHeader(std::stringstream &ss) {
 			<< std::setw(6) << "ehp"
 			<< std::setw(6) << "amp"
 			<< std::setw(6) << "ini"<< "\n";
-	ss << std::string(140, '-') << "\n"; // 区切り線を出力
+	ss << std::string(148, '-') << "\n"; // 区切り線を出力
 }
 
 std::string dumpTable(const BattleResult &result, const int32_t gene[350], int PastTurns);
@@ -112,7 +113,7 @@ std::string dumpTable(const BattleResult &result, const int32_t gene[350], int P
 	int currentTurn = -1;
 	int eDamage[2] = {-1, -1}, aDamage = -1;
 	bool initiative_tmp = false;
-	std::string eAction[2], aAction, sp, tmpState, ATKTurn1, DEFTurn1, magicMirrorTurn1, specialChargeTurn1, amp1, ahp2,
+	std::string eAction[2], aAction, equipment, sp, tmpState, ATKTurn1, DEFTurn1, magicMirrorTurn1, specialChargeTurn1, amp1, ahp2,
 			ehp2, amp2;
 	auto counter = 0;
 	// データのループ
@@ -134,7 +135,7 @@ std::string dumpTable(const BattleResult &result, const int32_t gene[350], int P
 
 		std::string specialAction;
 		if (special != 0 && special != -1) {
-			specialAction = BattleEmulator::getActionName(special & 0x3ff);
+			specialAction = BattleEmulator::getActionName(special & BattleEmulator::ACTION_ID_MASK);
 		}
 
 		// ターンが変わったら、前のターンのデータを出力
@@ -145,6 +146,7 @@ std::string dumpTable(const BattleResult &result, const int32_t gene[350], int P
 					ss6
 							<< std::left << std::setw(6) << (currentTurn + 1)
 							<< std::setw(18) << sp
+							<< std::setw(8) << equipment
 							<< std::setw(18) << aAction
 							<< std::setw(18) << eAction[0]
 							<< std::setw(6) << aDamage
@@ -157,6 +159,8 @@ std::string dumpTable(const BattleResult &result, const int32_t gene[350], int P
 			}
 			// ターンの初期化
 			currentTurn = turn;
+			equipment = (gene[turn] != 0 && gene[turn] != -1
+			             && (gene[turn] & BattleEmulator::ACTION_BARE_HANDS) != 0) ? "off" : "on";
 			eAction[0] = "";
 			eAction[1] = "";
 			aAction = "";
@@ -205,6 +209,7 @@ std::string dumpTable(const BattleResult &result, const int32_t gene[350], int P
 		ss6
 				<< std::left << std::setw(6) << (currentTurn + 1)
 				<< std::setw(18) << sp
+				<< std::setw(8) << equipment
 				<< std::setw(18) << aAction
 				<< std::setw(18) << eAction[0]
 				<< std::setw(6) << aDamage
