@@ -32,16 +32,17 @@ public:
 
 	int position = 0;
 	int turn = 0;
-	int actions[100] = {};
-	int damages[100] = {};
-	int isEnemy[100] = {};
-	int turns[100] = {};
-	bool initiative[100] = {};
-	int ehp[100] = {};
-	int ahp[100] = {};
-	int scTurn[100] = {};
-	int amp[100] = {};
-	uint64_t state[100] = {};
+	static constexpr int Capacity = 700;
+	int actions[Capacity] = {};
+	int damages[Capacity] = {};
+	int isEnemy[Capacity] = {};
+	int turns[Capacity] = {};
+	bool initiative[Capacity] = {};
+	int ehp[Capacity] = {};
+	int ahp[Capacity] = {};
+	int scTurn[Capacity] = {};
+	int amp[Capacity] = {};
+	uint64_t state[Capacity] = {};
 };
 
 #endif //NEWDIRECTORY_BATTLERESULT_H

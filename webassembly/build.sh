@@ -52,6 +52,7 @@ SRC_FILES=(
   camera.cpp
   debug.cpp
   ActionOptimizer.cpp
+  BurudogaSearch.cpp
 )
 
 EMCC_FLAGS=(

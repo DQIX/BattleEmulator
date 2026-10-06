@@ -37,6 +37,8 @@ set(SOURCES
         BattleEmulator.cpp
         BattleEmulator.h
         ActionOptimizer.cpp
+        BurudogaSearch.cpp
+        BurudogaSearch.h
         ActionOptimizer.h
         Player.h
         camera.cpp

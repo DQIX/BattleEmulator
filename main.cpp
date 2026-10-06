@@ -111,6 +111,10 @@ std::string dumpTable(const BattleResult &result, const int32_t gene[350], int P
 	stringstream ss6;
 	printHeader(ss6);
 	int currentTurn = -1;
+	int defaultAttackTurn = 0;
+	while (defaultAttackTurn < 350 && gene[defaultAttackTurn] != 0 && gene[defaultAttackTurn] != -1) {
+		++defaultAttackTurn;
+	}
 	int eDamage[2] = {-1, -1}, aDamage = -1;
 	bool initiative_tmp = false;
 	std::string eAction[2], aAction, equipment, sp, tmpState, ATKTurn1, DEFTurn1, magicMirrorTurn1, specialChargeTurn1, amp1, ahp2,
@@ -131,7 +135,7 @@ std::string dumpTable(const BattleResult &result, const int32_t gene[350], int P
 			amp = result.amp[i - 1];
 		}
 
-		auto special = gene[turn];
+		auto special = turn < defaultAttackTurn ? gene[turn] : 0;
 
 		std::string specialAction;
 		if (special != 0 && special != -1) {
@@ -159,8 +163,8 @@ std::string dumpTable(const BattleResult &result, const int32_t gene[350], int P
 			}
 			// ターンの初期化
 			currentTurn = turn;
-			equipment = (gene[turn] != 0 && gene[turn] != -1
-			             && (gene[turn] & BattleEmulator::ACTION_BARE_HANDS) != 0) ? "off" : "on";
+			equipment = (special != 0 && special != -1
+			             && (special & BattleEmulator::ACTION_BARE_HANDS) != 0) ? "off" : "on";
 			eAction[0] = "";
 			eAction[1] = "";
 			aAction = "";
@@ -278,62 +282,17 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 	}
 	pastActions[currentTurn] = -1;
 
-	Player startPlayers[2] = {copiedPlayers2[0], copiedPlayers2[1]};
-	int startPosition = 1;
-	uint64_t startNowState = BattleEmulator::TYPE_2A;
-	if (currentTurn > 0) {
-		lcg::init(seed);
-		BattleEmulator::Main(&startPosition, currentTurn, pastActions, startPlayers, nullptr, seed, nullptr,
-		                     nullptr, -2, &startNowState);
-	}
-
-	if (startPlayers[0].hp == 0) {
-		ss << "BFS search failed: player is already dead at turn=" << currentTurn << std::endl;
-		return false;
-	}
-	if (startPlayers[1].hp == 0) {
-		BattleResult battleResult;
-		Player players[2] = {copiedPlayers2[0], copiedPlayers2[1]};
-		int position = 1;
-		uint64_t nowState = 0;
-		lcg::init(seed);
-		BattleEmulator::Main(&position, currentTurn, pastActions, players, &battleResult, seed, nullptr,
-		                     nullptr, -1, &nowState);
-
-		ss << dumpTable(battleResult, pastActions, startturn) << std::endl;
-		ss << "0x" << std::hex << seed << std::dec << ": ";
-		for (auto i = 0; i < 100; ++i) {
-			if (pastActions[i] == 0 || pastActions[i] == -1) {
-				break;
-			}
-			ss << pastActions[i] << ", ";
-		}
-		ss << std::endl;
-		ss << "BFS currentTurn=" << currentTurn
-				<< " futureTurn=0"
-				<< " winTurn=" << currentTurn
-				<< " maxDepth=0"
-				<< " nodes=0"
-				<< " sameTurnWins=1" << std::endl;
-		return true;
-	}
-
-	int maxDepth = ActionOptimizer::MaxSearchDepth;
-	const int maxFutureTurns = 349 - currentTurn;
-	if (maxDepth > maxFutureTurns) {
-		maxDepth = maxFutureTurns;
-	}
-	if (maxDepth <= 0) {
-		ss << "BFS search failed: no future turn capacity currentTurn=" << currentTurn << std::endl;
-		return false;
-	}
-
 	const ActionOptimizer::Result searchResult = ActionOptimizer::FindShortestWin(
-		startPlayers, seed, startPosition, startNowState, currentTurn, maxDepth);
+		copiedPlayers2, seed, pastActions, currentTurn);
 	if (!searchResult.solved) {
-		ss << "BFS search failed: maxTurn=" << searchResult.maxDepth
-				<< " currentTurn=" << currentTurn
-				<< " nodes=" << searchResult.nodesVisited;
+		ss << "Search failed: currentTurn=" << currentTurn
+				<< " maxDepth=" << searchResult.maxDepth
+				<< " nodes=" << searchResult.nodesVisited
+				<< " passes=" << searchResult.passes
+				<< " replayChecks=" << searchResult.replayChecks
+				<< " elapsedMs=" << searchResult.elapsedMs
+				<< " finalAllyHp=" << searchResult.finalAllyHp
+				<< " finalEnemyHp=" << searchResult.finalEnemyHp;
 		if (searchResult.exhausted) {
 			ss << " exhausted";
 		}
@@ -350,29 +309,25 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 	}
 	fullActions[currentTurn + searchResult.turn] = -1;
 
-	BattleResult battleResult;
-	Player players[2] = {copiedPlayers2[0], copiedPlayers2[1]};
-	int position = 1;
-	uint64_t nowState = 0;
-	lcg::init(seed);
-	BattleEmulator::Main(&position, currentTurn + searchResult.turn, fullActions, players, &battleResult, seed, nullptr,
-	                     nullptr, -1, &nowState);
-
-	ss << dumpTable(battleResult, fullActions, startturn) << std::endl;
+	ss << dumpTable(searchResult.replay, fullActions, startturn) << std::endl;
 	ss << "0x" << std::hex << seed << std::dec << ": ";
-	for (auto i = 0; i < 100; ++i) {
-		if (fullActions[i] == 0 || fullActions[i] == -1) {
-			break;
-		}
+	for (auto i = 0; i < currentTurn + searchResult.turn; ++i) {
 		ss << fullActions[i] << ", ";
 	}
 	ss << std::endl;
-	ss << "BFS currentTurn=" << currentTurn
+	ss << "Search currentTurn=" << currentTurn
 			<< " futureTurn=" << searchResult.turn
-			<< " winTurn=" << (currentTurn + searchResult.turn)
-			<< " maxDepth=" << maxDepth
+			<< " winTurn=" << (searchResult.replay.position > 0 ? searchResult.replay.turn + 1 : 0)
+			<< " exactPosition=" << searchResult.replay.position
+			<< " equipmentChanges=" << searchResult.equipmentChanges
+			<< " maxDepth=" << searchResult.maxDepth
 			<< " nodes=" << searchResult.nodesVisited
-			<< " sameTurnWins=" << searchResult.winningNodes << std::endl;
+			<< " winningNodes=" << searchResult.winningNodes
+			<< " passes=" << searchResult.passes
+			<< " replayChecks=" << searchResult.replayChecks
+			<< " elapsedMs=" << searchResult.elapsedMs
+			<< " finalAllyHp=" << searchResult.finalAllyHp
+			<< " finalEnemyHp=" << searchResult.finalEnemyHp << std::endl;
 
 	return true;
 }
@@ -687,28 +642,8 @@ namespace {
 
 		std::stringstream ss;
 		if (!SearchRequest(copiedPlayers, seed, aActions5, true, ss)) {
-			ss << std::endl;
-			ss << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
-			ss << "      **YOU WILL NOW LOSE!**       " << std::endl;
-			ss << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
-			ss << std::endl;
-
-			auto turns = 0;
-			for (int a_action: aActions5) {
-				if (a_action == -1) {
-					break;
-				}
-				turns++;
-			}
-
-			BattleResult res;
-			Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
-			lcg::init(seed);
-			int position = 1;
-			uint64_t nowState = 0;
-			BattleEmulator::Main(&position, 100, aActions5, players, &res, seed, nullptr, nullptr, -1, &nowState);
-			ss << dumpTable(res, aActions5, startturn);
 			ss << "startturn=" << startturn << std::endl;
+			wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
 			return ss.str();
 		}
 		std::cout << ss.str();
@@ -821,7 +756,7 @@ static void runDebug4Benchmark(const Player copiedPlayers[2]) {
 }
 #endif
 
-int main() {
+int main(int argc, char *argv[]) {
 	showHeader();
 
 	//https://zenn.dev/reputeless/books/standard-cpp-for-competitive-programming/viewer/library-ios-iomanip#3.1-c-%E8%A8%80%E8%AA%9E%E3%81%AE%E5%85%A5%E5%87%BA%E5%8A%9B%E3%82%B9%E3%83%88%E3%83%AA%E3%83%BC%E3%83%A0%E3%81%A8%E3%81%AE%E5%90%8C%E6%9C%9F%E3%82%92%E7%84%A1%E5%8A%B9%E3%81%AB%E3%81%99%E3%82%8B
@@ -908,7 +843,25 @@ int main() {
 
 	auto counter = 0;
 	int actions[350] = {0};
-	actions[counter++] = BattleEmulator::ATTACK_ALLY;
+	try {
+		if (argc > 1) {
+			time1 = std::stoull(argv[1], nullptr, 0);
+		}
+		if (argc > 2) {
+			for (int i = 2; i < argc && counter < 349; ++i) {
+				const int action = std::stoi(argv[i], nullptr, 0);
+				if (action == -1) {
+					break;
+				}
+				actions[counter++] = action;
+			}
+		} else {
+			actions[counter++] = BattleEmulator::ATTACK_ALLY;
+		}
+	} catch (const std::exception &error) {
+		std::cerr << "Invalid DEBUG3 seed/action: " << error.what() << std::endl;
+		return 1;
+	}
 	// actions[counter++] = BattleEmulator::ATTACK_ALLY;
 	// actions[counter++] = BattleEmulator::HEAL;
 	actions[counter] = -1;

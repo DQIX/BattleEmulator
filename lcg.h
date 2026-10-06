@@ -11,7 +11,7 @@
 
 class lcg {
 private:
-    static constexpr int ARRAY_SIZE = 7000;
+    static constexpr int ARRAY_SIZE = 16384;
     static constexpr uint64_t LCG_MULTIPLIER = 0x5d588b656c078965;
     static constexpr uint64_t LCG_INCREMENT = 0x269ec3;
     static constexpr int LINEAR_ADVANCE_LIMIT = 32;
