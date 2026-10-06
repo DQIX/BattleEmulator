@@ -5,7 +5,7 @@ declare(strict_types=1);
 return [
 	'id' => 'hexagoon',
 	'thresholds' => [
-		'whiteSaturationMaxDark' => 0.14,//こっちのほうを小さくないといけない
+		'whiteSaturationMaxDark' => 0.50,//こっちのほうを小さくないといけない
 		'whiteSaturationMaxBright' => 0.17,  //こっちが大きい
         "matchWhiteThresholdBright" => 0.65,
 		"matchWhiteThresholdDark" => 0.60,
