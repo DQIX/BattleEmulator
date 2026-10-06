@@ -19,6 +19,7 @@ public:
 		uint64_t winningNodes = 0;
 		int32_t actions[350] = {-1};
 		BattleResult replay;
+		int enemyRubbleCount = 0;
 		int equipmentChanges = 0;
 		int rngPosition = 1;
 		double elapsedMs = 0;

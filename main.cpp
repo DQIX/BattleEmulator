@@ -319,12 +319,14 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 			<< " futureTurn=" << searchResult.turn
 			<< " winTurn=" << (searchResult.replay.position > 0 ? searchResult.replay.turn + 1 : 0)
 			<< " exactPosition=" << searchResult.replay.position
+			<< " enemyRubbleCount=" << searchResult.enemyRubbleCount
 			<< " equipmentChanges=" << searchResult.equipmentChanges
 			<< " maxDepth=" << searchResult.maxDepth
 			<< " nodes=" << searchResult.nodesVisited
 			<< " winningNodes=" << searchResult.winningNodes
 			<< " passes=" << searchResult.passes
 			<< " replayChecks=" << searchResult.replayChecks
+			<< " exhausted=" << searchResult.exhausted
 			<< " elapsedMs=" << searchResult.elapsedMs
 			<< " finalAllyHp=" << searchResult.finalAllyHp
 			<< " finalEnemyHp=" << searchResult.finalEnemyHp << std::endl;

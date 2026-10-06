@@ -1,22 +1,23 @@
-burudoga_v9_new_arugo 探索実装報告
+burudoga_v9_new_arugo 探索実装報告（Rubble比較・飽和時の早期終了を反映）
 対象：burudoga_v9_tate（-Dtate=1）、burudoga_v9_no_tate（-Dno_tate=1）。添付ソースの戦闘処理を使用。
 探索本体：BurudogaSearch.cpp / BurudogaSearch.h。ActionOptimizerは既存SearchRequestから新探索へ接続する窓口。
-方式：実時間の期限を共有する反復beam探索。保持幅192→512→1536→4096→8192で探索し、その後も評価と候補選択を変えて期限まで続ける。通常の探索は初勝利や短い深さで終了しない。約1485msで展開を止め、1500msの総予算内に最終Main照合と返却を収める余地を残す。
-各遷移はBattleEmulator::StepActionで実行。同一のHP/MP/装備/乱数位置/カメラ状態/記録行動数へ到達した経路は装備変更回数が少ない方を保持。敵HPが小さいだけの理由では状態を統合しない。攻撃の進行と生存資源を評価し、保持枠の1/4は異なる乱数位置・カメラ状態にも配分する。
-prefixは最初にそのまま再生し、以後はその現在状態からsuffixだけを探索する。経路は親参照で保持するため3bit×uint64_tの制約はない。入力配列の範囲でprefixとsuffixの合計349手まで扱う。新たに勝利候補を採用するときは初期状態からprefixとsuffixを完全再生し、HP/MP/装備/乱数位置/nowState/記録行動数/装備変更回数を照合する。採用結果は最後にMainでも再生し、行動・ダメージ・先攻・HP/MP記録を照合する。
-評価順位：fresh replayの敵HP==0を満たす候補について、BattleResult.positionを最小化し、同値なら装備変更回数を最小化する。ここでpositionは記録した実行行動数であり、乱数位置ではない。装備変更回数はfresh replayの各turnで実際のATKが前turnから変わった回数。探索で見つかった候補の比較であり、全入力の数学的最適性は保証しない。
+方式：実時間の期限を共有する反復beam探索。保持幅192→512→1536→4096→8192で探索し、その後も評価と候補選択を変える。1500msは上限であり、飽和を判定できた時点で早期終了する。判定できなければ約1485msまで展開し、最終Main照合と返却に残りの余地を使う。初勝利、特定の手数、更新が止まったpass数を理由に終了しない。
+各遷移はBattleEmulator::StepActionで実行。同一のHP/MP/装備/乱数位置/カメラ状態/記録行動数へ到達した経路は、敵Rubble回数、次に装備変更回数が少ない方を保持。敵HPが小さいだけの理由では状態を統合しない。攻撃の進行と生存資源を評価し、保持枠の1/4は異なる乱数位置・カメラ状態にも配分する。同じ層で勝利候補が改善したときは、beamを選ぶ直前にも下界で改善不能な候補を除く。
+prefixは最初にそのまま再生し、以後はその現在状態からsuffixだけを探索する。経路は親参照で保持するため3bit×uint64_tの制約はない。入力配列の範囲でprefixとsuffixの合計349手まで扱う。新たに勝利候補を採用するときは初期状態からprefixとsuffixを完全再生し、HP/MP/装備/乱数位置/nowState/記録行動数/敵Rubble回数/装備変更回数を照合する。採用結果は最後にMainでも再生し、行動・ダメージ・先攻・HP/MP記録と、実行記録から再集計した敵Rubble回数を照合する。
+評価順位：fresh replayの敵HP==0を満たす候補について、(BattleResult.position, 敵Rubble回数, 装備変更回数)を辞書順で最小化する。Rubble回数を理由にpositionが大きい候補を採用しない。positionは記録した実行行動数であり、乱数位置ではない。Rubble回数はprefixを含む実行済みの敵技の回数で、回避・ダメージ0も数える。先手撃破で実行されなかった技は数えない。装備変更回数はfresh replayの各turnで実際のATKが前turnから変わった回数。時間切れで返す場合は探索で見つかった候補の比較であり、全入力の最適性を保証するものではない。
+飽和判定：生存候補の楽観的な目的値を(records + 2 * ceil(enemyHP / 30) - 1, 現在の敵Rubble回数, 現在の装備変更回数)とする。対象worldの一撃は最大30、撃破以前のturnは2記録、撃破turnは最低1記録であり、既に発生したRubble・変更回数は減らないため、安全な下界になる。1回のpassの全層で、beam幅によって最終的に捨てた候補の下界の最小値を保持する。passを最後まで完了し、その最小値が最終採用結果以上なら早期終了する。捨て候補がなければ同様に終了する。未完了pass、経路復元やfresh replayに不一致があったpassは飽和と扱わない。生成候補集合・行動配列上限の範囲で、早期終了によって改善可能な枝を失わない条件である。
 行動：装備攻撃、素手攻撃、ホイミ、防御、逃走。非攻撃時は現在の装備を維持する。対象両variantでは防御の結果・乱数消費は装備有無で変わらない。ホイミはMP>=2のみ。素手会心は実際の攻撃ダメージから識別して生成suffixから除外し、fresh replayでも再確認する。対象worldの素手通常は1～3、素手会心は15～16で分離している。固定prefixは変更しない。攻撃の進行を優先しつつ、乱数調整に使う低ダメージの経路も保持する。
 接続：SearchRequest→ActionOptimizer→BurudogaSearch。DEBUG3は同じSearchRequestを維持。wasm_search_dumpも同じSearchRequestを使用。CMakeLists.txtとwebassembly/build.shに新規探索を追加。build.shのCRLFによるBash構文エラーを解消するためLFへ統一。
 記録容量：BattleResultの配列を700件へ変更。LCGキャッシュは16384件へ拡張（対象worldは1turn最大44位置、350turnの上界15401）。乱数列・消費規則・戦闘計算は変更していない。BattleEmulator.cpp、camera.cpp、Player.hは原本と同一。
-実測条件：GCC 13.3、-O3、native DEBUG3はC++17。各探索を同時に走らせず、既存SearchRequestと実BattleEmulatorで測定。全ケースseed=0x029d6394。
-攻撃1手prefix、tate：future9手、勝利10turn、exact position19、装備変更0、1485.03ms、最終味方HP17・敵HP0。
-攻撃1手prefix、no_tate：future9手、勝利10turn、exact position19、装備変更0、1485.12ms、最終味方HP15・敵HP0。
+今回の実測条件：変更前は今回の添付ZIPを別ディレクトリへ展開して再ビルドしたもの。GCC 13.3、-O3、native DEBUG3はC++17、両版を同じ定義でビルド。各探索を同時に走らせず、既存SearchRequestと実BattleEmulatorで測定。全ケースseed=0x029d6394。以下は変更前→変更後。時間はfresh replayと最終Main照合を含む探索結果のelapsedMs。
+攻撃1手prefix、tate：exact position19→19、敵Rubble4→4、装備変更0→0、1485.21→7.06804ms。変更後はfuture9手、勝利10turn、最終味方HP17・敵HP0、67963nodes、4passes、replayChecks=2、exhausted=1。
+攻撃1手prefix、no_tate：exact position19→19、敵Rubble4→4、装備変更0→0、1485.03→6.3762ms。変更後はfuture9手、勝利10turn、最終味方HP15・敵HP0、62501nodes、4passes、replayChecks=2、exhausted=1。
 10手prefixは「防御×7、ホイミ、防御×2」を固定。
-10手prefix、tate：future12手、勝利22turn、exact position43、装備変更0、1485.23ms、最終味方HP15・敵HP0。
-10手prefix、no_tate：future13手、勝利23turn、exact position45、装備変更0、1485.28ms、最終味方HP13・敵HP0。
-上記4件はいずれも候補のfresh replayと最終Mainの2回の照合を通過。プロセス全体の壁時計時間は約1488～1491ms。tateの12手suffixの攻撃ダメージは順に9,8,9,9,8,8,10,9,8,29で、途中にホイミ2回、最後の29が装備時の会心。
-旧版の既存DEBUG3入力もposition19・変更0だった。今回の改善は旧9手上限を超える実勝利経路の探索と実時間予算・exact比較への移行であり、この短い入力のpositionが改善したとは扱わない。
-WebAssembly経路の確認：-DMINGW_BUILD=1 -D__EMSCRIPTEN__=1で既存公開C ABIとWASM用double計算分岐を有効にしたnative共有ライブラリを両variantでビルドし、wasm_prepare_input→wasm_search_dumpを実行。10手prefixではnative DEBUG3と同じposition43/45、同じ勝利行動列を返した。
-同C ABIで素手攻撃1手prefix（65561）も実行。両variantともfuture10手、position21、変更2、敵HP0。素手で逃走・防御を行った後、4turn目に装備へ戻し、30と29の会心はいずれも装備時に発生した。全体時間はtate約1485.7ms、no_tate約1487.2ms。
-確認範囲：CMakeのソース集合と定義に相当するnativeビルド、既存DEBUG3/SearchRequest、公開C ABIとWASM用計算分岐を確認。実WASMバイナリのビルドとブラウザ実行は未確認。この環境にはemccがなく、build.shは対象variantを選択した後、emcc起動前で停止した。
-DEBUG3実行：引数なしは元のseedと攻撃1手を使用。引数ありは「実行ファイル seed action... -1」。空prefixは「実行ファイル seed -1」。新しいテストケース・テストスイート・サニタイザは追加していない。benchmarks/に実行ログを同梱。
+10手prefix、tate：exact position43→43、敵Rubble8→8、装備変更0→0、1485.25→1485.06ms。変更後はfuture12手、勝利22turn、最終味方HP15・敵HP0、11200256nodes、74passes、replayChecks=2、exhausted=0。
+10手prefix、no_tate：exact position45→45、敵Rubble10→7、装備変更0→0、1485.04→1485.08ms。変更後はfuture13手、勝利23turn、最終味方HP6・敵HP0、10642690nodes、65passes、replayChecks=4、exhausted=0。
+短い入力は飽和条件を満たして早期終了。10手prefixの2件は捨て枝に改善可能性が残るため時間上限まで継続した。上記4件はpositionと装備変更回数を維持し、no_tateの長い入力ではRubbleが3回減った。変更後プロセス全体の壁時計時間は、攻撃1手prefixで10ms/11ms、10手prefixで1489ms/1493ms。全件で敵HP0と最終Main照合を確認した。
+tateの12手suffixの攻撃ダメージは順に9,8,9,9,8,8,10,9,8,29で、途中にホイミ2回、最後の29が装備時の会心。no_tateの13手suffixでは28と29の会心が装備時に発生し、その間の通常攻撃は10,8,10,8。
+WebAssembly経路の確認：-DMINGW_BUILD=1 -D__EMSCRIPTEN__=1で既存公開C ABIとWASM用double計算分岐を有効にしたnative共有ライブラリを両variantでビルドし、wasm_prepare_input→wasm_search_dumpを実行。10手prefixではnative DEBUG3と同じposition43/45、Rubble8/7、同じ勝利行動列を返した。C ABI呼出全体は1485.65ms/1487.6ms。
+同C ABIで素手攻撃1手prefix（65561）も実行。両variantともfuture10手、position21、Rubble2、装備変更2、敵HP0、replayChecks=3、exhausted=1。探索時間はtate15.8631ms、no_tate14.1472ms。入力準備とC ABI呼出全体は16.387ms/14.4437ms。suffixの攻撃ダメージは9,9,10,9,29,28で、会心29と28はいずれも装備時に発生した。
+今回のコード変更はBurudogaSearch.cpp、ActionOptimizer.h、main.cppのみ。既存のworld・RNG処理・ビルド接続は維持。確認範囲はCMake定義相当のnativeビルド、既存DEBUG3/SearchRequest、公開C ABIとWASM用計算分岐。実WASMバイナリのビルドとブラウザ実行は未確認（この環境にはemccがない）。
+DEBUG3実行：引数なしは元のseedと攻撃1手を使用。引数ありは「実行ファイル seed action... -1」。空prefixは「実行ファイル seed -1」。成功出力にenemyRubbleCountとexhaustedを追加。今回の変更前後ログはbenchmarks/rubble_update/に同梱し、従来ログも保持。新しいテストケース・テストスイート・サニタイザは追加していない。

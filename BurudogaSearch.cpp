@@ -19,6 +19,10 @@ namespace {
 	constexpr int kWidths[] = {192, 512, 1536, 4096, 8192};
 	constexpr int kMaximumAttackDamage = BattleEmulator::BARUBOROSU_EQUIPPED_ATK * 105 / 100;
 	constexpr int kMinimumBareCritical = BattleEmulator::BARUBOROSU_BARE_HANDS_ATK * 95 / 100;
+	// Lexicographic objective: actual records, executed enemy Rubble, equipment changes.
+	using Objective = std::array<int, 3>;
+	constexpr Objective kNoDiscardedBranch = {std::numeric_limits<int>::max(),
+		std::numeric_limits<int>::max(), std::numeric_limits<int>::max()};
 
 	uint64_t withTurn(uint64_t state, int turn) {
 		return (state & ~kTurnMask) | (static_cast<uint64_t>(turn) << 12);
@@ -41,6 +45,7 @@ namespace {
 		int enemyHp = 0;
 		int allyAtk = 0;
 		int records = 0;
+		int enemyRubbleCount = 0;
 		int changes = 0;
 		uint32_t path = kNoPath;
 		int32_t action = 0;
@@ -51,6 +56,17 @@ namespace {
 		uint32_t parent;
 		int32_t action;
 	};
+
+	Objective objective(const Node &node) {
+		return {node.records, node.enemyRubbleCount, node.changes};
+	}
+
+	Objective optimisticOutcome(const Node &node) {
+		// Every available damaging action is one attack, at most an equipped critical.
+		// Nonterminal turns have two actual records; the killing turn needs at least one.
+		const int attacks = (node.enemyHp + kMaximumAttackDamage - 1) / kMaximumAttackDamage;
+		return {node.records + std::max(0, 2 * attacks - 1), node.enemyRubbleCount, node.changes};
+	}
 
 	uint64_t stateHash(const Node &node) {
 		uint64_t hash = mix(node.nowState ^ static_cast<uint32_t>(node.rngPosition));
@@ -81,6 +97,7 @@ namespace {
 		BattleEmulator::StepContext context;
 		BattleResult trace;
 		int rngPosition = 1;
+		int enemyRubbleCount = 0;
 		int changes = 0;
 		int turns = 0;
 		bool invalidCritical = false;
@@ -112,6 +129,7 @@ namespace {
 			result_.finalEnemyHp = root_.enemyHp;
 			if (root_.enemyHp == 0) {
 				adopt(0);
+				result_.exhausted = true;
 				verifyWithMain();
 				return finish();
 			}
@@ -123,7 +141,10 @@ namespace {
 			while (!outOfTime()) {
 				const int pass = result_.passes++;
 				const int width = kWidths[std::min(pass, static_cast<int>(std::size(kWidths)) - 1)];
-				searchPass(width, pass);
+				if (searchPass(width, pass)) {
+					result_.exhausted = true;
+					break;
+				}
 			}
 			if (result_.solved) {
 				verifyWithMain();
@@ -138,6 +159,7 @@ namespace {
 		uint64_t seed_;
 		int fixedTurns_;
 		bool fallbackAttack_ = false;
+		bool passReplayMatched_ = true;
 		float normalDamage_ = 1;
 		float enemyDamage_ = 1;
 		ActionOptimizer::Result result_;
@@ -167,6 +189,7 @@ namespace {
 			exact_.context = {};
 			exact_.trace.clear();
 			exact_.rngPosition = 1;
+			exact_.enemyRubbleCount = 0;
 			exact_.changes = 0;
 			exact_.turns = 0;
 			exact_.invalidCritical = false;
@@ -176,6 +199,7 @@ namespace {
 				const int previousAtk = exact_.players[0].atk;
 				const auto step = BattleEmulator::StepAction(&exact_.rngPosition, i + 1, fullActions_[i],
 					exact_.players, &exact_.trace, nullptr, -1, &exact_.context);
+				exact_.enemyRubbleCount += summary.enemyAction == BattleEmulator::RUBBLE;
 				exact_.changes += previousAtk != exact_.players[0].atk;
 				exact_.turns = i + 1;
 				exact_.context.nowState = withTurn(exact_.context.nowState, i + 1);
@@ -198,6 +222,7 @@ namespace {
 			node.enemyHp = exact_.players[1].hp;
 			node.allyAtk = exact_.players[0].atk;
 			node.records = exact_.trace.position;
+			node.enemyRubbleCount = exact_.enemyRubbleCount;
 			node.changes = exact_.changes;
 			node.hash = stateHash(node);
 			return node;
@@ -207,12 +232,7 @@ namespace {
 			if (!result_.solved) {
 				return true;
 			}
-			// Every available damaging action is one attack, at most an equipped critical.
-			// Nonterminal turns have two actual records; the killing turn needs at least one.
-			const int attacks = (node.enemyHp + kMaximumAttackDamage - 1) / kMaximumAttackDamage;
-			const int lowerBound = node.records + 2 * attacks - 1;
-			return lowerBound < result_.replay.position
-			       || (lowerBound == result_.replay.position && node.changes < result_.equipmentChanges);
+			return optimisticOutcome(node) < objective(bestTerminal_);
 		}
 
 		float score(const Node &node, int pass) const {
@@ -237,6 +257,7 @@ namespace {
 			result_.solved = true;
 			result_.turn = futureTurns;
 			result_.replay = exact_.trace;
+			result_.enemyRubbleCount = exact_.enemyRubbleCount;
 			result_.equipmentChanges = exact_.changes;
 			result_.rngPosition = exact_.rngPosition;
 			result_.finalAllyHp = exact_.players[0].hp;
@@ -250,14 +271,14 @@ namespace {
 
 		void consider(const Node &candidate, int depth) {
 			++result_.winningNodes;
-			if (result_.solved && (candidate.records > result_.replay.position
-			    || (candidate.records == result_.replay.position && candidate.changes >= result_.equipmentChanges))) {
+			if (result_.solved && !(objective(candidate) < objective(bestTerminal_))) {
 				return;
 			}
 			fullActions_[fixedTurns_ + depth - 1] = candidate.action;
 			uint32_t path = candidate.path;
 			for (int i = depth - 2; i >= 0; --i) {
 				if (path == kNoPath) {
+					passReplayMatched_ = false;
 					return;
 				}
 				fullActions_[fixedTurns_ + i] = paths_[path].action;
@@ -268,11 +289,11 @@ namespace {
 			++result_.replayChecks;
 			const Node actual = replayNode();
 			if (exact_.invalidCritical || actual.enemyHp != 0 || !sameState(actual, candidate)
-			    || actual.changes != candidate.changes || exact_.turns != fixedTurns_ + depth) {
+			    || objective(actual) != objective(candidate) || exact_.turns != fixedTurns_ + depth) {
+				passReplayMatched_ = false;
 				return;
 			}
-			if (!result_.solved || exact_.trace.position < result_.replay.position
-			    || (exact_.trace.position == result_.replay.position && exact_.changes < result_.equipmentChanges)) {
+			if (!result_.solved || objective(actual) < objective(bestTerminal_)) {
 				adopt(depth);
 			}
 		}
@@ -292,7 +313,13 @@ namespace {
 			BattleEmulator::Main(&exact_.rngPosition, fixedTurns_ + result_.turn, fullActions_.data(),
 				exact_.players, &exact_.trace, seed_, nullptr, nullptr, -1, &exact_.context.nowState);
 			++result_.replayChecks;
-			bool matches = sameState(replayNode(), bestTerminal_) && exact_.players[1].hp == 0;
+			exact_.enemyRubbleCount = 0;
+			for (int i = 0; i < exact_.trace.position; ++i) {
+				exact_.enemyRubbleCount += exact_.trace.isEnemy[i]
+					&& exact_.trace.actions[i] == BattleEmulator::RUBBLE;
+			}
+			bool matches = sameState(replayNode(), bestTerminal_) && exact_.players[1].hp == 0
+				&& exact_.enemyRubbleCount == result_.enemyRubbleCount;
 			for (int i = 0; matches && i < exact_.trace.position; ++i) {
 				matches = exact_.trace.actions[i] == result_.replay.actions[i]
 				          && exact_.trace.damages[i] == result_.replay.damages[i]
@@ -306,6 +333,8 @@ namespace {
 			result_.solved = matches;
 			if (matches) {
 				result_.replay = exact_.trace;
+			} else {
+				result_.exhausted = false;
 			}
 		}
 
@@ -316,7 +345,7 @@ namespace {
 			while (slots_[slot] != -1) {
 				Node &previous = candidates_[slots_[slot]];
 				if (previous.hash == node.hash && sameState(previous, node)) {
-					if (node.changes < previous.changes) {
+					if (objective(node) < objective(previous)) {
 						previous = node;
 					}
 					return;
@@ -337,9 +366,13 @@ namespace {
 			covered_[group & (covered_.size() - 1)] = 1;
 		}
 
-		void selectFrontier(int width) {
+		Objective selectFrontier(int width) {
+			// A later win in this layer may make earlier candidates unable to improve.
+			candidates_.erase(std::remove_if(candidates_.begin(), candidates_.end(),
+				[this](const Node &node) { return !canImprove(node); }), candidates_.end());
 			std::sort(candidates_.begin(), candidates_.end(), [](const Node &left, const Node &right) {
 				if (left.score != right.score) return left.score < right.score;
+				if (left.enemyRubbleCount != right.enemyRubbleCount) return left.enemyRubbleCount < right.enemyRubbleCount;
 				if (left.changes != right.changes) return left.changes < right.changes;
 				return left.hash < right.hash;
 			});
@@ -362,9 +395,16 @@ namespace {
 			for (std::size_t i = mainQuota; i < candidates_.size() && frontier_.size() < limit; ++i) {
 				if (!selected_[i]) retain(i);
 			}
+			Objective discarded = kNoDiscardedBranch;
+			for (std::size_t i = mainQuota; i < candidates_.size(); ++i) {
+				if (!selected_[i]) discarded = std::min(discarded, optimisticOutcome(candidates_[i]));
+			}
+			return discarded;
 		}
 
-		void searchPass(int width, int pass) {
+		bool searchPass(int width, int pass) {
+			passReplayMatched_ = true;
+			Objective discarded = kNoDiscardedBranch;
 			frontier_.clear();
 			frontier_.reserve(width);
 			frontier_.push_back(root_);
@@ -376,7 +416,7 @@ namespace {
 			covered_.resize(slotCount / 2);
 			const int futureLimit = kActionCapacity - 1 - fixedTurns_;
 			for (int depth = 1; depth <= futureLimit && !frontier_.empty(); ++depth) {
-				if (outOfTime()) return;
+				if (outOfTime()) return false;
 				result_.maxDepth = std::max(result_.maxDepth, depth);
 				candidates_.clear();
 				std::fill(slots_.begin(), slots_.end(), -1);
@@ -395,7 +435,7 @@ namespace {
 					for (int actionIndex = 0; actionIndex < (fallbackAttack_ ? 1 : 5); ++actionIndex) {
 						const int32_t action = actions[actionIndex];
 						if ((action & BattleEmulator::ACTION_ID_MASK) == BattleEmulator::HEAL && parent.allyMp < 2) continue;
-						if ((result_.nodesVisited & 127) == 0 && outOfTime()) return;
+						if ((result_.nodesVisited & 127) == 0 && outOfTime()) return false;
 						Player players[2] = {initial_[0], initial_[1]};
 						players[0].hp = parent.allyHp;
 						players[0].mp = parent.allyMp;
@@ -417,6 +457,7 @@ namespace {
 						child.enemyHp = players[1].hp;
 						child.allyAtk = players[0].atk;
 						child.records += (summary.enemyAction != 0) + (summary.allyAction != 0);
+						child.enemyRubbleCount += summary.enemyAction == BattleEmulator::RUBBLE;
 						child.changes += parent.allyAtk != child.allyAtk;
 						child.action = action;
 						if (child.enemyHp == 0) {
@@ -426,9 +467,14 @@ namespace {
 						}
 					}
 				}
-				if (outOfTime()) return;
-				selectFrontier(width);
+				if (outOfTime()) return false;
+				discarded = std::min(discarded, selectFrontier(width));
 			}
+			// A plateau alone is insufficient. A completed pass certifies saturation only
+			// when even the optimistic outcome of every beam-discarded branch cannot improve
+			// the final incumbent. Without that certificate, keep exploring until the deadline.
+			return passReplayMatched_ && (discarded == kNoDiscardedBranch
+				|| (result_.solved && !(discarded < objective(bestTerminal_))));
 		}
 	};
 }
