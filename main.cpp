@@ -389,7 +389,7 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 	FoundSeed = 0;
 
 	uint64_t totalSeconds = hours * 3600 + minutes * 60 + seconds;
-	totalSeconds = totalSeconds;
+	totalSeconds = totalSeconds - 15;
 	//数字は探索範囲(秒)
 	auto time1 = static_cast<uint64_t>(floor((totalSeconds - 5) * (1 / 0.12515)));
 	time1 = time1 << 16;
