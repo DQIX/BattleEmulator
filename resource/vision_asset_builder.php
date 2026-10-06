@@ -49,10 +49,6 @@ function loadPngRgba(string $path): array
         }
     }
 
-	if (PHP_VERSION_ID < 80500) {
-		imagedestroy($image);
-	}
-
     return [
         'width' => $width,
         'height' => $height,
