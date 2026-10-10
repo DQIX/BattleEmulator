@@ -1,3 +1,4 @@
+//メモ: encodeErugiosuBattleActionFormat
 (() => {
     const ui = {
         status: document.getElementById("visionStatus"),
@@ -958,17 +959,19 @@
     class BattleEmulatorBridge {
         send(snapshot) {
             const activeMode = getActiveMode();
+            const [h, m, s] = getBattleStartTime();
+            const command = buildConsoleCommand(snapshot.history, h, m, s);
             const payload = {
                 emulator: activeMode?.battleEmulator || null,
                 visionMode: activeMode?.id || "identify",
                 sentAt: new Date().toISOString(),
                 currentTurn: snapshot.currentTurn,
                 currentSlot: snapshot.currentSlot,
-                command: snapshot.command,
+                command,
                 history: snapshot.history
             };
             const encoded = encodeBridgePayload(payload);
-            const formatted = buildBattleActionFormat(snapshot.history);
+            const formatted = command;
             window.postMessage(
                 {
                     type: "battle-emulator-vision-sync",
@@ -3822,7 +3825,36 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
     }
 
-    function buildBattleActionFormat(historyEntries = state.history) {
+    function getBattleStartTime() {
+        const currentValue = document.getElementById("actionInput")?.value || "";
+        const prefixMatch = currentValue.match(/^\s*(?:b\s+)?(\d+)\s+(\d+)\s+(\d+)(?=\s|$)/);
+        return prefixMatch ? prefixMatch.slice(1) : ["?", "?", "?"];
+    }
+
+    function buildConsoleCommand(historyEntries = state.history, h, m, s) {
+        if (h === undefined && m === undefined && s === undefined) {
+            [h, m, s] = getBattleStartTime();
+        }
+        const modeId = getActiveMode()?.id;
+        if (modeId === "erugiosu") {
+            return encodeDefaultBattleActionFormat(historyEntries, h, m, s);
+        }
+        if (modeId === "ganasadai") {
+            return encodeDefaultBattleActionFormat(historyEntries, h, m, s);
+        }
+        if (modeId === "baruborosu") {
+            return encodeDefaultBattleActionFormat(historyEntries, h, m, s);
+        }
+        if (modeId === "hexagoon") {
+            return encodeDefaultBattleActionFormatv2(historyEntries, h, m, s);
+        }
+        if (modeId === "gilyumei1") {
+            return encodeDefaultBattleActionFormat(historyEntries, h, m, s);
+        }
+        return encodeDefaultBattleActionFormat(historyEntries, h, m, s);
+    }
+
+    function encodeDefaultBattleActionFormat(historyEntries, h, m, s) {
         const enemyActions = [];
         const allyActions = [];
         const damages = [];
@@ -3840,12 +3872,31 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 damages.push(entry.damage);
             }
         });
-        return `${enemyActions.join(" ")}-${allyActions.join(" ")}-${damages.join(" ")}-`;
+        return `b ${h} ${m} ${s} ${Math.max(0, state.turnIndex - 1)} ${enemyActions.join(" ")}-${allyActions.join(" ")}-${damages.join(" ")}-`;
     }
 
-    function buildConsoleCommand() {
-        return `b 0 0 0 ${Math.max(0, state.turnIndex - 1)} ${buildBattleActionFormat()}`;
+    function encodeDefaultBattleActionFormatv2(historyEntries, h, m, s) {
+        const enemyActions = [];
+        const allyActions = [];
+        const damages = [];
+        let count = 0;
+        historyEntries.forEach((entry) => {
+            const action = ACTIONS_BY_ID[entry.actionId];
+            if (!action || entry.damage === -1) {
+                return;
+            }
+            if (action.ally) {
+                allyActions.push(entry.actionId);
+            } else {
+                enemyActions.push(entry.actionId);
+            }
+            if (action.damage) {
+                damages.push(entry.damage);
+            }
+        });
+        return `${h} ${m} ${s} ${enemyActions.join(" ")}-${allyActions.join(" ")}-${damages.join(" ")}-`;
     }
+
 
     function getDamageChannel(actionId) {
         if (actionId === ACTION_IDS.MULTISLASH || actionId === ACTION_IDS.ULTRA_HIGH_SPEED_COMBO || actionId === ACTION_IDS.MULTITHRUST || actionId === ACTION_IDS.SCEPTER_BALL) {
@@ -3892,7 +3943,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         const sync = bridge.send({
             currentTurn: state.turnIndex,
             currentSlot: state.actionIndex + 1,
-            command: buildConsoleCommand(),
             history: state.history.map((item) => ({
                 turn: item.turn,
                 slot: item.slot,
@@ -4236,7 +4286,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         const sync = bridge.send({
             currentTurn: state.turnIndex,
             currentSlot: state.actionIndex + 1,
-            command: buildConsoleCommand(),
             history: state.history.map((item) => ({
                 turn: item.turn,
                 slot: item.slot,
@@ -4792,7 +4841,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             if (typeof copyText === "function") copyText(text);
         });
         ui.applyFormatButton?.addEventListener("click", () => {
-            const formatText = buildBattleActionFormat();
+            const [h, m, s] = getBattleStartTime();
+            const formatText = buildConsoleCommand(state.history, h, m, s);
             if (!formatText.trim()) {
                 return;
             }

@@ -235,6 +235,9 @@ function restartAutoTimerFractionHideTimer() {
 
 function extractInputTimeText(text) {
     const tokens = String(text || "").trim().split(/\s+/).filter(Boolean);
+    if (tokens[0] === "b") {
+        tokens.shift();
+    }
     if (tokens.length < 3) {
         return "";
     }
@@ -785,10 +788,13 @@ function setOffsetSeconds(value) {
     ) {
         const appliedSeconds = computeAutoTimerAppliedSeconds();
         if (appliedSeconds !== null) {
+            const isConsoleCommand = ui.actionInput.value.startsWith("b ");
             const suffix = ui.actionInput.value.slice(state.autoTimerAppliedPrefix.length);
             const timeText = formatActionTime(appliedSeconds);
-            ui.actionInput.value = `${timeText}${suffix}`;
-            state.autoTimerAppliedPrefix = `${timeText} `;
+            ui.actionInput.value = isConsoleCommand
+                ? `b ${timeText} ${suffix}`
+                : `${timeText}${suffix}`;
+            state.autoTimerAppliedPrefix = `${isConsoleCommand ? "b " : ""}${timeText} `;
             if (state.autoTimerLastUse) {
                 state.autoTimerLastUse.timeText = timeText;
             }
@@ -1296,6 +1302,9 @@ function clearAutoTimerAnchor() {
 
 function extractActionSuffix(text) {
     const tokens = text.trim().split(/\s+/).filter(Boolean);
+    if (tokens[0] === "b") {
+        tokens.shift();
+    }
     if (tokens.length <= 3) {
         return "";
     }
@@ -1497,6 +1506,10 @@ function setActiveEmulator(index) {
 
 function parseInput(text) {
     const tokens = text.trim().split(/\s+/).filter(Boolean);
+    const isConsoleCommand = tokens[0] === "b";
+    if (isConsoleCommand) {
+        tokens.shift();
+    }
     if (tokens.length < 4) {
         return {error: "input needs time and actions"};
     }
@@ -1510,7 +1523,7 @@ function parseInput(text) {
         hours,
         minutes,
         seconds,
-        actions: tokens.slice(3)
+        actions: isConsoleCommand ? ["b", ...tokens.slice(3)] : tokens.slice(3)
     };
 }
 
@@ -1871,12 +1884,13 @@ function applyAutoTimerToInput() {
     if (predictedSeconds === null) {
         return;
     }
+    const commandPrefix = /^\s*b(?:\s|$)/.test(ui.actionInput.value) ? "b " : "";
     const suffix = extractActionSuffix(ui.actionInput.value);
     const perfNow = performance.now();
     const preciseTime = splitPreciseSeconds(predictedSeconds);
     const timeText = formatActionTime(preciseTime.wholeSeconds);
-    ui.actionInput.value = `${timeText}${suffix ? ` ${suffix}` : " "}`;
-    state.autoTimerAppliedPrefix = `${timeText} `;
+    ui.actionInput.value = `${commandPrefix}${timeText}${suffix ? ` ${suffix}` : " "}`;
+    state.autoTimerAppliedPrefix = `${commandPrefix}${timeText} `;
     state.autoTimerLastUse = {
         perfNow,
         inputText: ui.actionInput.value,
@@ -1906,10 +1920,7 @@ function applyVisionBattleFormatText(formatText, options = {}) {
     if (!formatted) {
         return false;
     }
-    const currentValue = ui.actionInput.value || "";
-    const prefixMatch = currentValue.match(/^\s*(\d+)\s+(\d+)\s+(\d+)(?=\s|$)/);
-    const prefix = prefixMatch ? `${prefixMatch[1]} ${prefixMatch[2]} ${prefixMatch[3]}` : "? ? ?";
-    ui.actionInput.value = `${prefix} ${formatted}`;
+    ui.actionInput.value = formatted;
     ui.actionInput.dispatchEvent(new Event("input", {bubbles: true}));
     focusActionInputAtTop();
     return true;
