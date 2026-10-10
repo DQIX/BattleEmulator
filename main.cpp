@@ -79,7 +79,7 @@ uint64_t BruteForceRequest(const Player copiedPlayers2[2], int hours, int minute
                            int aActions[350], int damages[350]);
 
 
-void mainLoop(const Player copiedPlayers2[2]);
+void mainLoop(const Player copiedPlayers2[2], std::string &input);
 
 using namespace std;
 
@@ -443,88 +443,58 @@ void parseActions(const std::string &str, int actions[350]) {
 
 
 // メインループ
-void mainLoop(const Player copiedPlayers[2]) {
+void mainLoop(const Player copiedPlayers[2], std::string &input) {
 	int eActions[350] = {0};
 	int aActions[350] = {0};
 	int damages[350] = {0};
 
-	std::string input;
-	while (std::getline(std::cin, input)) {
-		//意図せずcinが閉じられると無限ループするので対策
-		if (input.empty()) continue;
-
-		char command = input[0];
-		if (command == 'q') {
-			std::cout << "Exiting loop." << std::endl;
-			return;
-		}
-		if (command == 'b') {
-			// Check if there is enough input (e.g., at least "b " and some parameters)
-			if (input.size() < 3) {
-				std::cerr << "Error: insufficient input for command 'b'." << std::endl;
-				continue;
-			}
-
-			// Extract the substring after the command character and a space
-			std::string params = input.substr(2);
-			if (params.empty()) {
-				std::cerr << "Error: no parameters provided for command 'b'." << std::endl;
-				continue;
-			}
-
-			std::istringstream ss(params);
-
-			int hours, minutes, seconds;
-			if (!(ss >> hours >> minutes >> seconds)) {
-				std::cerr << "Error: failed to parse time parameters." << std::endl;
-				continue;
-			}
-
-			// Read the three action strings separated by '-' delimiters
-			std::string eActionsStr, aActionsStr, damagesStr;
-			if (!std::getline(ss, eActionsStr, '-')) {
-				std::cerr << "Error: failed to read eActions." << std::endl;
-				continue;
-			}
-			if (!std::getline(ss, aActionsStr, '-')) {
-				std::cerr << "Error: failed to read aActions." << std::endl;
-				continue;
-			}
-			if (!std::getline(ss, damagesStr, '-')) {
-				std::cerr << "Error: failed to read damages." << std::endl;
-				continue;
-			}
-
-			// 各アクション配列に値を代入
-			parseActions(eActionsStr, eActions);
-			parseActions(aActionsStr, aActions);
-			parseActions(damagesStr, damages);
-
-			auto seed = BruteForceRequest(copiedPlayers, hours, minutes, seconds, eActions, aActions, damages);
-			if (foundSeeds == 1) {
-				std::stringstream ss2;
-				if (!SearchRequest(copiedPlayers, seed, aActions, true, ss2)) {
-					// std::cout << std::endl;
-					// std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
-					// std::cout << "      **YOU WILL NOW LOSE!**       " << std::endl;
-					// std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
-					// std::cout << std::endl;
-				}
-				std::cout << ss2.str();
-			}
-			continue;
-		}
-		if (command == 'h') {
-			showHeader();
-			continue;
-		}
-		std::cerr << "Unknown command." << std::endl;
+	// Check if there is enough input (e.g., at least "b " and some parameters)
+	if (input.size() < 3) {
+		std::cerr << "Error: insufficient input for command" << std::endl;
+		return;
 	}
-	if (std::cerr.good()) {
-		std::cerr <<
-				"Unrecoverable Error: An anomaly occurred in the main loop of the C++ process, forcing the battle emulator process to terminate. To recover, please restart the integrated system"
-				<< std::endl;
+
+	std::istringstream ss(input);
+
+	int hours, minutes, seconds;
+	if (!(ss >> hours >> minutes >> seconds)) {
+		std::cerr << "Error: failed to parse time parameters." << std::endl;
+		return;
 	}
+
+	// Read the three action strings separated by '-' delimiters
+	std::string eActionsStr, aActionsStr, damagesStr;
+	if (!std::getline(ss, eActionsStr, '-')) {
+		std::cerr << "Error: failed to read eActions." << std::endl;
+		return;
+	}
+	if (!std::getline(ss, aActionsStr, '-')) {
+		std::cerr << "Error: failed to read aActions." << std::endl;
+		return;
+	}
+	if (!std::getline(ss, damagesStr, '-')) {
+		std::cerr << "Error: failed to read damages." << std::endl;
+		return;
+	}
+
+	// 各アクション配列に値を代入
+	parseActions(eActionsStr, eActions);
+	parseActions(aActionsStr, aActions);
+	parseActions(damagesStr, damages);
+
+	auto seed = BruteForceRequest(copiedPlayers, hours, minutes, seconds, eActions, aActions, damages);
+	if (foundSeeds == 1) {
+		std::stringstream ss2;
+		if (!SearchRequest(copiedPlayers, seed, aActions, true, ss2)) {
+			// std::cout << std::endl;
+			// std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
+			// std::cout << "      **YOU WILL NOW LOSE!**       " << std::endl;
+			// std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
+			// std::cout << std::endl;
+		}
+		std::cout << ss2.str();
+	}
+	return;;
 }
 
 int toint(char *str) {
@@ -831,6 +801,11 @@ int main(int argc, char *argv[]) {
 	return 0;
 #endif
 
-	mainLoop(copiedPlayers);
+	std::string input;
+	for (int i = 1; i < argc; ++i) {
+		if (i > 1) input += ' ';
+		input += argv[i];
+	}
+	mainLoop(copiedPlayers, input);
 	return 0;
 }
