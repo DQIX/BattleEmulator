@@ -74,7 +74,7 @@ std::string trim(const std::string &s);
 bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aActions[350], bool dropbug,
                    std::stringstream &ss);
 
-uint64_t BruteForceRequest(const Player copiedPlayers2[2], int hours, int minutes, int seconds, int turns,
+uint64_t BruteForceRequest(const Player copiedPlayers2[2], int hours, int minutes, int seconds,
                            int eActions[350],
                            int aActions[350], int damages[350]);
 
@@ -334,8 +334,35 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 	return true;
 }
 
+
+void BruteForceMainLoop(const Player copiedPlayers[2], uint64_t start, uint64_t end, int gene[350],
+						int damages[350], int eaction1[350]) {
+	int maxElement = 350;
+	for (uint64_t seed = start; seed < end; ++seed) {
+		BattleEmulator::resetStartTurn();
+		lcg::init(seed);
+		int position = 1;
+		uint64_t nowState = 0;
+		Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
+
+
+		bool resultBool = BattleEmulator::Main(&position, 100, gene, players,
+											   nullptr, seed, eaction1,
+											   damages,
+											   maxElement,
+											   &nowState);
+		if (resultBool) {
+			std::cout << seed << std::endl;
+			FoundSeed = seed;
+			foundSeeds++;
+			startturn = BattleEmulator::getStartTurn();
+		}
+	}
+}
+
+
 // ブルートフォースリクエスト関数
-[[nodiscard]] uint64_t BruteForceRequest(const Player copiedPlayers2[2], int hours, int minutes, int seconds, int turns,
+[[nodiscard]] uint64_t BruteForceRequest(const Player copiedPlayers2[2], int hours, int minutes, int seconds,
                                          int eActions[350],
                                          int aActions[350], int damages[350]) {
 	std::cout << "BruteForceRequest executed with time " << hours << ":" << minutes << ":" << seconds << std::endl;
@@ -385,37 +412,9 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 	                             合計 6Byte
 	*/
-	int *position = new int(1);
-	auto *nowState = new uint64_t(0);
-	int maxElement = 350;
-	Player players[2];
-	for (uint64_t seed = time1; seed < time2; ++seed) {
-		//        if (seed % 1000000000 == 0) {
-		//            std::cout << seed << std::endl;
-		//        }
-		lcg::init(seed);
-		// for (int st = BattleEmulator::TYPE_2A; st < BattleEmulator::TYPE_2D; ++st) {
-		(*nowState) = BattleEmulator::TYPE_2A;
-		(*position) = 1;
-		//std::memcpy(players, copiedPlayers, sizeof(players));
-		players[0] = copiedPlayers[0];
-		players[1] = copiedPlayers[1];
 
+	BruteForceMainLoop(copiedPlayers2, time1, time2, gene, damages, eActions);
 
-		bool resultBool = BattleEmulator::Main(position, turns, gene, players,
-		                                       nullptr, seed, eActions, damages,
-		                                       maxElement,
-		                                       nowState);
-		if (resultBool) {
-			//std::cout << seed << ", " << st << std::endl;
-			std::cout << std::hex << seed << std::dec << std::endl;
-			FoundSeed = seed;
-			foundSeeds++;
-		}
-		//}
-	}
-	delete position;
-	delete nowState;
 
 	std::cout << std::endl << "found: " << foundSeeds << std::endl;
 
@@ -431,31 +430,6 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 	return 0;
 }
 
-
-void BruteForceMainLoop(const Player copiedPlayers[2], uint64_t start, uint64_t end, int gene[350],
-                        int damages[350], int eaction1[350]) {
-	int maxElement = 350;
-	for (uint64_t seed = start; seed < end; ++seed) {
-		BattleEmulator::resetStartTurn();
-		lcg::init(seed);
-		int position = 1;
-		uint64_t nowState = 0;
-		Player players[2] = {copiedPlayers[0], copiedPlayers[1]};
-
-
-		bool resultBool = BattleEmulator::Main(&position, 100, gene, players,
-		                                       nullptr, seed, eaction1,
-		                                       damages,
-		                                       maxElement,
-		                                       &nowState);
-		if (resultBool) {
-			std::cout << seed << std::endl;
-			FoundSeed = seed;
-			foundSeeds++;
-			startturn = BattleEmulator::getStartTurn();
-		}
-	}
-}
 
 // 入力文字列を配列に分割するヘルパー関数
 void parseActions(const std::string &str, int actions[350]) {
@@ -500,8 +474,8 @@ void mainLoop(const Player copiedPlayers[2]) {
 
 			std::istringstream ss(params);
 
-			int hours, minutes, seconds, turns;
-			if (!(ss >> hours >> minutes >> seconds >> turns)) {
+			int hours, minutes, seconds;
+			if (!(ss >> hours >> minutes >> seconds)) {
 				std::cerr << "Error: failed to parse time parameters." << std::endl;
 				continue;
 			}
@@ -526,7 +500,7 @@ void mainLoop(const Player copiedPlayers[2]) {
 			parseActions(aActionsStr, aActions);
 			parseActions(damagesStr, damages);
 
-			auto seed = BruteForceRequest(copiedPlayers, hours, minutes, seconds, turns, eActions, aActions, damages);
+			auto seed = BruteForceRequest(copiedPlayers, hours, minutes, seconds, eActions, aActions, damages);
 			if (foundSeeds == 1) {
 				std::stringstream ss2;
 				if (!SearchRequest(copiedPlayers, seed, aActions, true, ss2)) {
@@ -841,29 +815,10 @@ int main(int argc, char *argv[]) {
 #endif
 
 #ifdef DEBUG3
-	uint64_t time1 = 0x029d6394;
+	uint64_t time1 = 0x029d63197;
 
 	auto counter = 0;
 	int actions[350] = {0};
-	try {
-		if (argc > 1) {
-			time1 = std::stoull(argv[1], nullptr, 0);
-		}
-		if (argc > 2) {
-			for (int i = 2; i < argc && counter < 349; ++i) {
-				const int action = std::stoi(argv[i], nullptr, 0);
-				if (action == -1) {
-					break;
-				}
-				actions[counter++] = action;
-			}
-		} else {
-			actions[counter++] = BattleEmulator::ATTACK_ALLY;
-		}
-	} catch (const std::exception &error) {
-		std::cerr << "Invalid DEBUG3 seed/action: " << error.what() << std::endl;
-		return 1;
-	}
 	// actions[counter++] = BattleEmulator::ATTACK_ALLY;
 	// actions[counter++] = BattleEmulator::HEAL;
 	actions[counter] = -1;
