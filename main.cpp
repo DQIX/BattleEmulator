@@ -9,12 +9,16 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <memory>
 
 #include "lcg.h"
 #include "BattleEmulator.h"
 #include "debug.h"
 #include "ActionOptimizer.h"
 #include "EnhancedCostCalculator.h"
+#if defined(GOUKETU) && !defined(OPTIMIZE_MODE)
+#include "BaruborosuSearch.h"
+#endif
 
 #ifdef DEBUG
 
@@ -27,6 +31,24 @@
 #endif
 
 int startturn = -1;
+
+#if defined(GOUKETU) && defined(DEBUG3) && !defined(OPTIMIZE_MODE) && (!defined(__EMSCRIPTEN__) || defined(MINGW_BUILD) || defined(MSVC_BUILD))
+// Native benchmark controls; WebAssembly always uses the production defaults.
+static int searchVariant = BaruborosuSearch::DefaultVariant;
+static int searchBudgetMs = 1500;
+#endif
+
+static bool usesBudgetedSearch(){
+#if defined(GOUKETU) && !defined(OPTIMIZE_MODE)
+#if defined(DEBUG3) && (!defined(__EMSCRIPTEN__) || defined(MINGW_BUILD) || defined(MSVC_BUILD))
+	return searchVariant != -1;
+#else
+	return true;
+#endif
+#else
+	return false;
+#endif
+}
 
 #if defined(GOUKETU)
 
@@ -132,9 +154,11 @@ void printHeader(std::stringstream& ss){
 	ss << std::string(148, '-') << "\n"; // 区切り線を出力
 }
 
-std::string dumpTable(const BattleResult& result,const int32_t gene[350], int PastTurns);
+std::string dumpTable(const BattleResult& result, const int32_t gene[350], int PastTurns,
+                      const Genome* terminal = nullptr);
 
-std::string dumpTable(const BattleResult& result, const int32_t gene[350], int PastTurns){
+std::string dumpTable(const BattleResult& result, const int32_t gene[350], int PastTurns,
+                      const Genome* terminal){
 	stringstream ss6;
 	printHeader(ss6);
 	int currentTurn = -1;
@@ -164,6 +188,7 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 		}
 
 
+		const std::string previousState = tmpState;
 		if(state == BattleEmulator::TYPE_2A){
 			tmpState = "A";
 		}
@@ -190,6 +215,12 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 		// ターンが変わったら、前のターンのデータを出力
 		if(turn != currentTurn){
 			if(currentTurn != -1){
+				if(terminal != nullptr){
+					// Recorded HP is the next turn's starting HP: the previous turn's result.
+					ahp2 = std::to_string(ahp1);
+					ehp2 = std::to_string(ehp1);
+					amp2 = std::to_string(amp);
+				}
 				// 前のターンの出力
 				if(turn > PastTurns){
 					ss6
@@ -211,7 +242,7 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 						<< std::setw(6) << ATKTurn1
 						<< std::setw(6) << DEFTurn1
 						<< std::setw(6) << magicMirrorTurn1
-						<< std::setw(6) << tmpState
+						<< std::setw(6) << previousState
 						<< std::setw(6) << specialChargeTurn1
 						<< std::setw(11) << "" << "\n";
 				}
@@ -287,6 +318,11 @@ std::string dumpTable(const BattleResult& result, const int32_t gene[350], int P
 
 	// 最後のターンのデータを出力
 	if(currentTurn != -1){
+		if(terminal != nullptr){
+			ahp2 = std::to_string(terminal->AllyPlayer.hp);
+			ehp2 = std::to_string(terminal->EnemyPlayer.hp);
+			amp2 = std::to_string(terminal->AllyPlayer.mp);
+		}
 		ss6
 			<< std::left << std::setw(6) << (currentTurn + 1)
 			<< std::setw(18) << sp
@@ -352,7 +388,7 @@ void showHeader(){
 
 //int main(int argc, char *argv[]) {
 
-bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream &ss){
+static bool SearchRequestLegacy(const Player copiedPlayers2[2], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream &ss){
 	int32_t gene[350] = {0};
 	auto turns = 0;
 	for(int i = 0; i < 349; ++i){
@@ -370,42 +406,42 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 
     // --- TableA で探索 ---
     EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableA);
-	Genome genomeA = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
+	Genome genomeA = ActionOptimizer::RunAlgorithmLegacy(copiedPlayers2, seed, turns, 5000, gene, 0);
 #ifdef DEBUG3
 	const auto nodesA = ActionOptimizer::getNodesUsed();
 #endif
 
     // --- TableB で探索 ---
     EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableB);
-    Genome genomeB = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
+    Genome genomeB = ActionOptimizer::RunAlgorithmLegacy(copiedPlayers2, seed, turns, 5000, gene, 0);
 #ifdef DEBUG3
 	const auto nodesB = ActionOptimizer::getNodesUsed();
 #endif
 
     // --- TableC で探索 ---
     EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableC);
-    Genome genomeC = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
+    Genome genomeC = ActionOptimizer::RunAlgorithmLegacy(copiedPlayers2, seed, turns, 5000, gene, 0);
 #ifdef DEBUG3
 	const auto nodesC = ActionOptimizer::getNodesUsed();
 #endif
 
 	// --- TableC で探索 ---
 	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableD);
-	Genome genomeD = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
+	Genome genomeD = ActionOptimizer::RunAlgorithmLegacy(copiedPlayers2, seed, turns, 5000, gene, 0);
 #ifdef DEBUG3
 	const auto nodesD = ActionOptimizer::getNodesUsed();
 #endif
 
 	// --- TableC で探索 ---
 	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableF);
-	Genome genomeF = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
+	Genome genomeF = ActionOptimizer::RunAlgorithmLegacy(copiedPlayers2, seed, turns, 5000, gene, 0);
 #ifdef DEBUG3
 	const auto nodesF = ActionOptimizer::getNodesUsed();
 #endif
 
 	// --- TableC で探索 ---
 	EnhancedCostCalculator::setCostTable(EnhancedCostCalculator::CostTable::TableG);
-	Genome genomeG = ActionOptimizer::RunAlgorithm(copiedPlayers2, seed, turns, 5000, gene, 0);
+	Genome genomeG = ActionOptimizer::RunAlgorithmLegacy(copiedPlayers2, seed, turns, 5000, gene, 0);
 #ifdef DEBUG3
 	const auto nodesG = ActionOptimizer::getNodesUsed();
 #endif
@@ -501,6 +537,49 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 
 	//探索成功
 	return true;
+}
+
+bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream &ss){
+#if defined(GOUKETU) && !defined(OPTIMIZE_MODE)
+#if defined(DEBUG3) && (!defined(__EMSCRIPTEN__) || defined(MINGW_BUILD) || defined(MSVC_BUILD))
+	const int budgetMs = searchBudgetMs;
+	const int variant = searchVariant;
+	if(variant == -1){
+		return SearchRequestLegacy(copiedPlayers2, seed, aActions, dropbug, ss);
+	}
+#else
+	constexpr int budgetMs = 1500;
+	constexpr int variant = BaruborosuSearch::DefaultVariant;
+#endif
+	// Direct construction avoids putting the large replay result on the WASM stack.
+	const auto result = std::unique_ptr<BaruborosuSearch::Result>(
+		new BaruborosuSearch::Result(BaruborosuSearch::Run(copiedPlayers2, seed, aActions, budgetMs, variant)));
+	startturn = result->prefixLength;
+	if(result->victory){
+		ss << dumpTable(result->replay, result->genome.actions, -1, &result->genome) << '\n';
+		ss << "0x" << std::hex << seed << std::dec << ": ";
+		for(int action : result->genome.actions){
+			if(action == -1) break;
+			ss << action << ", ";
+		}
+		ss << '\n';
+	}
+	ss << "[BaruborosuSearch] variant=" << result->variant
+	   << " victory=" << result->victory << " input_valid=" << result->inputValid
+	   << " prefix=" << result->prefixLength
+	   << " turn=" << (result->victory ? result->replay.turn + 1 : 0)
+	   << " position=" << (result->victory ? result->replay.position : -1)
+	   << " equipment_changes=" << result->equipmentChanges
+	   << " hp=" << result->genome.AllyPlayer.hp << " mp=" << result->genome.AllyPlayer.mp
+	   << " enemy_hp=" << result->genome.EnemyPlayer.hp
+	   << " elapsed_ms=" << result->elapsedMs << " first_win_ms=" << result->firstVictoryMs
+	   << " expanded=" << result->expanded << " generated=" << result->generated
+	   << " passes=" << result->passes << " improvements=" << result->improvements
+	   << " replay_rejected=" << result->replayRejected << '\n';
+	return result->victory;
+#else
+	return SearchRequestLegacy(copiedPlayers2, seed, aActions, dropbug, ss);
+#endif
 }
 
 // ブルートフォースリクエスト関数
@@ -700,11 +779,15 @@ void mainLoop(const Player copiedPlayers[2]){
 			if(foundSeeds == 1){
 				std::stringstream ss2;
 				if(!SearchRequest(copiedPlayers, seed, aActions, true, ss2)){
-					std::cout << std::endl;
-					std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
-					std::cout << "      **YOU WILL NOW LOSE!**       " << std::endl;
-					std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
-					std::cout << std::endl;
+					if(usesBudgetedSearch()){
+						ss2 << "No verified victory found within the search budget." << '\n';
+					}else{
+						std::cout << std::endl;
+						std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
+						std::cout << "      **YOU WILL NOW LOSE!**       " << std::endl;
+						std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
+						std::cout << std::endl;
+					}
 				}
 				std::cout << ss2.str();
 			}
@@ -816,6 +899,11 @@ namespace {
 
     	std::stringstream ss;
     	if(!SearchRequest(copiedPlayers, seed, aActions5, true, ss)){
+			if(usesBudgetedSearch()){
+				ss << "No verified victory found within the search budget." << '\n';
+				wasmLastTurnProcessed = BattleEmulator::getTurnProcessed();
+				return ss.str();
+			}
     		ss << std::endl;
     		ss << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
     		ss << "      **YOU WILL NOW LOSE!**       " << std::endl;
@@ -1117,11 +1205,13 @@ int main(int argc, char* argv[]){
 	//actions[counter++] = BattleEmulator::PSYCHE_UP_ALLY;
 	actions[counter] = -1;
 
+	bool singleSearch = true;
+
 	std::stringstream ss;
 	SearchRequest(copiedPlayers, time1, actions, false, ss);
 	ss << std::endl;
 
-	if(true){
+	if(!singleSearch){
 		SearchRequest(copiedPlayers, time1+1, actions, false, ss);
 		ss << std::endl;
 
