@@ -57,7 +57,7 @@ namespace {
     uint64_t BruteForceRequest(const Player copiedPlayers[2], int hours, int minutes, int seconds, int turns,
                                int aActions[350], int damages[350]);
 
-    void dumpTableMain(BattleResult &result1, Genome &genome, uint64_t seed, int turns);
+    void dumpTableMain(BattleResult &result1, Genome &genome, uint64_t seed, int turns, std::stringstream &ss);
 
     void printHeader(std::stringstream &ss);
 
@@ -436,7 +436,7 @@ namespace {
 #if defined(MINGW_BUILD)
         dumpTableMain(search.replay, genome, seed, 0, ss);
 #else
-        dumpTableMain(search.replay, genome, seed, turns);
+        dumpTableMain(search.replay, genome, seed, turns, ss);
 #endif
         writeSearchSummary(ss, search);
 
