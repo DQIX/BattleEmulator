@@ -110,15 +110,21 @@ public:
 	static constexpr int KASWOOSH = 161;
 	static constexpr int LIGHTNING = 162;
 
-#if defined(erugi1)
+#if defined(erugi1) || defined(hayate) || defined(gilyumei)
 	// Action ID and equipment selection are encoded in a single turn gene.
 	static constexpr int ACTION_ID_MASK = 0xffff;
 	static constexpr int ACTION_BARE_HANDS = 1 << 16; // off
 	static constexpr int ACTION_GANNAN = 1 << 17;
 	static constexpr int ACTION_EQUIPMENT_CHANGED = 1 << 18; // result display only
+#if defined(erugi1)
 	static constexpr int ERUGI1_EQUIPPED_ATK = 322; // on
 	static constexpr int ERUGI1_GANNAN_ATK = 247;
 	static constexpr int ERUGI1_BARE_HANDS_ATK = 177; // off
+#else
+	static constexpr int ERUGI1_EQUIPPED_ATK = 310; // on
+	static constexpr int ERUGI1_GANNAN_ATK = 235;
+	static constexpr int ERUGI1_BARE_HANDS_ATK = 165; // off
+#endif
 #endif
 
     static bool

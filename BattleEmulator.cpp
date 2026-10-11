@@ -267,7 +267,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         if (genePosition != -1) {
             genePosition = counterJ - 1;
         }
-#if defined(erugi1)
+#if defined(erugi1) || defined(hayate) || defined(gilyumei)
         int equipmentChangeFlags = 0;
         if (genePosition != -1 && Gene[genePosition] != 0 && Gene[genePosition] != -1 &&
             !players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
@@ -341,7 +341,7 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             //throw std::invalid_argument("GenePosition is invalid");
         }
         if (genePosition != -1 && Gene[genePosition] != 0 && Gene[genePosition] != -1) {
-#if defined(erugi1)
+#if defined(erugi1) || defined(hayate) || defined(gilyumei)
             actionTable = Gene[genePosition] & ACTION_ID_MASK;
 #else
             actionTable = Gene[genePosition];
@@ -625,8 +625,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             mmt1 = 0;
                         }
                         BattleResult::add(result,
-#if defined(erugi1)
-                                          action,
+#if defined(erugi1) || defined(hayate) || defined(gilyumei)
+                                          action | equipmentChangeFlags,
 #else
                                           action,
 #endif
@@ -724,8 +724,8 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                             mmt1 = 0;
                         }
                         BattleResult::add(result,
-#if defined(erugi1)
-                                          action,
+#if defined(erugi1) || defined(hayate) || defined(gilyumei)
+                                          action | equipmentChangeFlags,
 #else
                                           action,
 #endif

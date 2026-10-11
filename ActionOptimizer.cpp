@@ -361,7 +361,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 				continue;
 			}
 
-#if defined(erugi1)
+#if defined(erugi1) || defined(hayate) || defined(gilyumei)
 			// Equipment changes are available only at the start of an erugi1 turn.
 			int currentEquipment = 0;
 			int equipmentVariants = 1;
@@ -388,7 +388,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 				//     continue;
 				// }
 
-#if defined(erugi1)
+#if defined(erugi1) || defined(hayate) || defined(gilyumei)
 				for(int equipmentVariant = 0; equipmentVariant < equipmentVariants; ++equipmentVariant){
 					const int requestedEquipment = (currentEquipment + equipmentVariant) % 3;
 					int encodedAction = entry.action;
@@ -399,7 +399,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 					}
 #endif
 				Genome newGenome = currentGenome;
-#if defined(erugi1)
+#if defined(erugi1) || defined(hayate) || defined(gilyumei)
 				newGenome.actions[currentGenome.turn - 1] = encodedAction;
 #else
 				newGenome.actions[currentGenome.turn - 1] = entry.action;
@@ -451,7 +451,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 					// Add to open set
 					openSet.push(newNode);
 				}
-#if defined(erugi1)
+#if defined(erugi1) || defined(hayate) || defined(gilyumei)
 				}
 #endif
 			}
