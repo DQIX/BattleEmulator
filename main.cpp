@@ -845,7 +845,7 @@ namespace {
     	if(!SearchRequest(copiedPlayers, seed, aActions5, true, ss)){
     		ss << std::endl;
     		ss << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
-		ss << "  **NO WINNING SEQUENCE FOUND**    " << std::endl;
+    		ss << "      **YOU WILL NOW LOSE!**       " << std::endl;
     		ss << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
     		ss << std::endl;
 
@@ -862,7 +862,7 @@ namespace {
     		lcg::init(seed);
     		int position = 1;
     		uint64_t nowState = 0;
-		BattleEmulator::Main(&position, turns, aActions5, players, &res, seed, nullptr, nullptr, -1, &nowState);
+    		BattleEmulator::Main(&position, 100, aActions5, players, &res, seed, nullptr, nullptr, -1, &nowState);
     		ss << dumpTable(res, aActions5, startturn);
     		ss << "startturn=" << startturn << std::endl;
     		return ss.str();

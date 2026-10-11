@@ -6,19 +6,18 @@
 
 #include <cassert>
 #include <cstdint>
-#include <vector>
 
 #if defined(OPTIMIZE_MODE)
 // Define the size of the array
 const int ARRAY_SIZE = 7000;
 
-thread_local std::vector<uint32_t> precalcTop32(ARRAY_SIZE); // 初期容量を維持し長い列では拡張
+thread_local uint32_t precalcTop32[ARRAY_SIZE]; // 固定メモリ
 thread_local int nowCounter = 1;
 thread_local uint64_t now_seed = 0;      // 現在のシード（逐次 or ジャンプ後）
 thread_local bool init_mode;         // true = 初期一括生成モード
 #else
 const int ARRAY_SIZE = 7000;
-std::vector<uint32_t> precalcTop32(ARRAY_SIZE); // 初期容量を維持し長い列では拡張
+uint32_t precalcTop32[ARRAY_SIZE]; // 固定メモリ
 int nowCounter = 1;
 uint64_t now_seed;      // 現在のシード（逐次 or ジャンプ後）
 bool init_mode;         // true = 初期一括生成モード
@@ -75,11 +74,6 @@ inline void lcg::GenerateifNeed(int need) {
     if (nowCounter > need) {
         return;
     }
-    if (static_cast<size_t>(need) >= precalcTop32.size()) {
-        const size_t required = static_cast<size_t>(need) + 1;
-        precalcTop32.resize(required > precalcTop32.size() * 2
-                            ? required : precalcTop32.size() * 2);
-    }
     for (int i = nowCounter; i < need; ++i) {
         now_seed = lcg_rand(now_seed);
         precalcTop32[++nowCounter] = static_cast<uint32_t>(now_seed >> 32);
@@ -122,7 +116,7 @@ void lcg::init(uint64_t seed, bool init) {
 
 uint8_t lcg::getSeed(int *position) {
     assert(position != nullptr);
-    assert((*position) > 0);
+    assert((*position) < ARRAY_SIZE);
 
     if (!init_mode) {
         const auto top = nextTop32NoCache(*position);
@@ -139,7 +133,7 @@ uint8_t lcg::getSeed(int *position) {
 
 int32_t lcg::getTop32(int *position) {
     assert(position != nullptr);
-    assert((*position) > 0);
+    assert((*position) < ARRAY_SIZE);
 
     if (!init_mode) {
         const auto top = nextTop32NoCache(*position);
@@ -155,7 +149,7 @@ int32_t lcg::getTop32(int *position) {
 
 int lcg::getPercent(int *position, int max) {
     assert(position != nullptr);
-    assert((*position) > 0);
+    assert((*position) < ARRAY_SIZE);
 
     if (!init_mode) {
         const auto top = nextTop32NoCache(*position);
@@ -175,7 +169,7 @@ int lcg::getPercent(int *position, int max) {
 
 double lcg::floatRand(int *position, double min, double max) {
     assert(position != nullptr);
-    assert((*position) > 0);
+    assert((*position) < ARRAY_SIZE);
 
     uint64_t top;
     if (!init_mode) {
@@ -193,7 +187,7 @@ double lcg::floatRand(int *position, double min, double max) {
 
 double lcg::floatRandAttack(int *position) {
     assert(position != nullptr);
-    assert((*position) > 0);
+    assert((*position) < ARRAY_SIZE);
 
     uint64_t top;
     if (!init_mode) {
