@@ -361,6 +361,20 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 				continue;
 			}
 
+#if defined(erugi1)
+			// Equipment changes are available only at the start of an erugi1 turn.
+			int currentEquipment = 0;
+			int equipmentVariants = 1;
+			if(currentGenome.AllyPlayer.defaultATK == BattleEmulator::ERUGI1_BARE_HANDS_ATK){
+				currentEquipment = 1;
+			}else if(currentGenome.AllyPlayer.defaultATK == BattleEmulator::ERUGI1_GANNAN_ATK){
+				currentEquipment = 2;
+			}
+			if(!currentGenome.AllyPlayer.paralysis && !currentGenome.AllyPlayer.sleeping &&
+			   !currentGenome.AllyPlayer.inactive){
+				equipmentVariants = 3;
+			}
+#endif
 			// Execute each action and generate new nodes
 			for(const auto& entry : ACTION_TABLE){
 				if(!entry.condition(currentGenome)){
@@ -374,8 +388,22 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 				//     continue;
 				// }
 
+#if defined(erugi1)
+				for(int equipmentVariant = 0; equipmentVariant < equipmentVariants; ++equipmentVariant){
+					const int requestedEquipment = (currentEquipment + equipmentVariant) % 3;
+					int encodedAction = entry.action;
+					if(requestedEquipment == 1){
+						encodedAction |= BattleEmulator::ACTION_BARE_HANDS;
+					}else if(requestedEquipment == 2){
+						encodedAction |= BattleEmulator::ACTION_GANNAN;
+					}
+#endif
 				Genome newGenome = currentGenome;
+#if defined(erugi1)
+				newGenome.actions[currentGenome.turn - 1] = encodedAction;
+#else
 				newGenome.actions[currentGenome.turn - 1] = entry.action;
+#endif
 				newGenome.Initialized = true;
 
 				// Copy for battle emulator execution
@@ -423,6 +451,9 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 					// Add to open set
 					openSet.push(newNode);
 				}
+#if defined(erugi1)
+				}
+#endif
 			}
 
 			counter++;

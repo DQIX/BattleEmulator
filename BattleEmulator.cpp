@@ -267,6 +267,24 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
         if (genePosition != -1) {
             genePosition = counterJ - 1;
         }
+#if defined(erugi1)
+        int equipmentChangeFlags = 0;
+        if (genePosition != -1 && Gene[genePosition] != 0 && Gene[genePosition] != -1 &&
+            !players[0].paralysis && !players[0].sleeping && !players[0].inactive) {
+            const int equipment =
+                (Gene[genePosition] & ACTION_GANNAN) ? ACTION_GANNAN :
+                (Gene[genePosition] & ACTION_BARE_HANDS) ? ACTION_BARE_HANDS : 0;
+            const int requestedATK =
+                equipment == ACTION_GANNAN ? ERUGI1_GANNAN_ATK :
+                equipment == ACTION_BARE_HANDS ? ERUGI1_BARE_HANDS_ATK :
+                ERUGI1_EQUIPPED_ATK;
+            if (players[0].defaultATK != requestedATK) {
+                players[0].defaultATK = requestedATK;
+                RecalculateBuff(players);
+                equipmentChangeFlags = ACTION_EQUIPMENT_CHANGED | equipment;
+            }
+        }
+#endif
         TiggerSkyAttack = false;
         //現在ターンを保存
         (*NowState) &= ~0xFFFFF000;
@@ -323,7 +341,11 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
             //throw std::invalid_argument("GenePosition is invalid");
         }
         if (genePosition != -1 && Gene[genePosition] != 0 && Gene[genePosition] != -1) {
+#if defined(erugi1)
+            actionTable = Gene[genePosition] & ACTION_ID_MASK;
+#else
             actionTable = Gene[genePosition];
+#endif
             if (actionTable == TURN_SKIPPED || actionTable == SLEEPING || actionTable == CURE_SLEEPING || actionTable ==
                 CURE_PARALYSIS || actionTable == PARALYSIS) {
                 actionTable = ATTACK_ALLY;
@@ -602,7 +624,13 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         } else if (players[0].hasMagicMirror) {
                             mmt1 = 0;
                         }
-                        BattleResult::add(result, action, basedamage, false, atk1,
+                        BattleResult::add(result,
+#if defined(erugi1)
+                                          action,
+#else
+                                          action,
+#endif
+                                          basedamage, false, atk1,
                                           def1, mmt1, counterJ - 1,
                                           player0_has_initiative, ehp, ahp,
                                           tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag);
@@ -695,7 +723,13 @@ bool BattleEmulator::Main(int *position, int RunCount, const int32_t Gene[350], 
                         } else if (players[0].hasMagicMirror) {
                             mmt1 = 0;
                         }
-                        BattleResult::add(result, action, 0, false, atk1,
+                        BattleResult::add(result,
+#if defined(erugi1)
+                                          action,
+#else
+                                          action,
+#endif
+                                          0, false, atk1,
                                           def1, mmt1, counterJ - 1,
                                           player0_has_initiative, ehp, ahp,
                                           tmpState, players[0].specialChargeTurn, players[0].mp, defenseFlag);

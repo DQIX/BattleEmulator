@@ -110,6 +110,17 @@ public:
 	static constexpr int KASWOOSH = 161;
 	static constexpr int LIGHTNING = 162;
 
+#if defined(erugi1)
+	// Action ID and equipment selection are encoded in a single turn gene.
+	static constexpr int ACTION_ID_MASK = 0xffff;
+	static constexpr int ACTION_BARE_HANDS = 1 << 16; // off
+	static constexpr int ACTION_GANNAN = 1 << 17;
+	static constexpr int ACTION_EQUIPMENT_CHANGED = 1 << 18; // result display only
+	static constexpr int ERUGI1_EQUIPPED_ATK = 322; // on
+	static constexpr int ERUGI1_GANNAN_ATK = 247;
+	static constexpr int ERUGI1_BARE_HANDS_ATK = 177; // off
+#endif
+
     static bool
     Main(int *position, int RunCount, const int32_t Gene[350], Player *players,
          BattleResult* result, uint64_t seed, const int eActions[350], const int damages[350], int mode, uint64_t *NowState);
