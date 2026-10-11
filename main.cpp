@@ -10,6 +10,7 @@
 #include "BattleEmulator.h"
 #include "debug.h"
 #include "ActionOptimizer.h"
+#include "Erugiosu1Search.h"
 #include "EnhancedCostCalculator.h"
 
 #ifdef DEBUG
@@ -378,6 +379,28 @@ void showHeader(){
 //int main(int argc, char *argv[]) {
 
 bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aActions[350], bool dropbug, std::stringstream &ss){
+#if defined(erugi1)
+	(void)dropbug;
+	const auto search = Erugiosu1Search::Run(copiedPlayers2, seed, aActions);
+	if (!search.inputValid || !search.victory || !search.replayVerified) {
+		return false;
+	}
+	ss << dumpTable(search.replay, search.genome.actions, startturn) << std::endl;
+	ss << "0x" << std::hex << seed << std::dec << ": ";
+	int actionCount = 0;
+	while (actionCount < 350 && search.genome.actions[actionCount] != -1) {
+		ss << search.genome.actions[actionCount++] << ", ";
+	}
+	ss << std::endl;
+	ss << "[Search] Win turn=" << search.replay.turn + 1
+	   << " position=" << search.replay.position
+	   << " equipmentChanges=" << search.equipmentChanges
+	   << " prefix=" << search.prefixLength
+	   << " suffix=" << actionCount - search.prefixLength
+	   << " elapsedMs=" << search.elapsedMs
+	   << " exploredSuffix=" << search.maxSuffixDepth << std::endl;
+	return true;
+#else
 	int32_t gene[350] = {0};
 	auto turns = 0;
 	for(int i = 0; i < 349; ++i){
@@ -504,6 +527,7 @@ bool SearchRequest(const Player copiedPlayers2[2], uint64_t seed, const int aAct
 
 	//探索成功
 	return true;
+#endif
 }
 
 // ブルートフォースリクエスト関数
@@ -821,7 +845,7 @@ namespace {
     	if(!SearchRequest(copiedPlayers, seed, aActions5, true, ss)){
     		ss << std::endl;
     		ss << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
-    		ss << "      **YOU WILL NOW LOSE!**       " << std::endl;
+		ss << "  **NO WINNING SEQUENCE FOUND**    " << std::endl;
     		ss << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
     		ss << std::endl;
 
@@ -838,7 +862,7 @@ namespace {
     		lcg::init(seed);
     		int position = 1;
     		uint64_t nowState = 0;
-    		BattleEmulator::Main(&position, 100, aActions5, players, &res, seed, nullptr, nullptr, -1, &nowState);
+		BattleEmulator::Main(&position, turns, aActions5, players, &res, seed, nullptr, nullptr, -1, &nowState);
     		ss << dumpTable(res, aActions5, startturn);
     		ss << "startturn=" << startturn << std::endl;
     		return ss.str();

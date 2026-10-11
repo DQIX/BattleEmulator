@@ -4,6 +4,7 @@
 //
 
 #include "ActionOptimizer.h"
+#include "Erugiosu1Search.h"
 #include <random>
 #include <unordered_set>
 #include <memory>
@@ -158,6 +159,14 @@ uint32_t ActionOptimizer::getNodesUsed(){
 // Flexible A* Algorithm Implementation
 Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int turns, int maxGenerations,
                                      int actions[350], int seedOffset){
+#if defined(erugi1)
+	(void)turns;
+	(void)maxGenerations;
+	(void)seedOffset;
+	auto result = Erugiosu1Search::Run(players, seed, actions);
+	Node_Used = static_cast<uint32_t>(result.expanded);
+	return result.genome;
+#else
 	lcg::init(seed, true);
 	Node_Used = 0;
 	//std::mt19937 rng(seed + seedOffset);
@@ -477,6 +486,7 @@ Genome ActionOptimizer::RunAlgorithm(const Player players[2], uint64_t seed, int
 	}
 
 	return initialGenome;
+#endif
 }
 
 void ActionOptimizer::updateCompromiseScore(Genome& genome){

@@ -7,6 +7,7 @@
 
 class BattleResult{
 public:
+	static constexpr int Capacity = 3 * 350;
 	// 各メンバの内容を 0 にリセットする clear 関数
 	void clear(){
 		position = 0;
@@ -39,20 +40,20 @@ public:
 
 	int position = 0;
 	int turn = 0;
-	int actions[1000] = {};
-	int damages[1000] = {};
-	int isEnemy[1000] = {};
-	int AtkBuffTurns[1000] = {};
-	int BuffTurnss[1000] = {};
-	int MagicMirrorTurns[1000] = {};
-	int turns[1000] = {};
-	bool initiative[1000] = {};
-	int ehp[1000] = {};
-	int ahp[1000] = {};
-	int scTurn[1000] = {};
-	int amp[1000] = {};
-	int defenseFlag[1000] = {};
-	uint64_t state[1000] = {};
+	int actions[Capacity] = {};
+	int damages[Capacity] = {};
+	int isEnemy[Capacity] = {};
+	int AtkBuffTurns[Capacity] = {};
+	int BuffTurnss[Capacity] = {};
+	int MagicMirrorTurns[Capacity] = {};
+	int turns[Capacity] = {};
+	bool initiative[Capacity] = {};
+	int ehp[Capacity] = {};
+	int ahp[Capacity] = {};
+	int scTurn[Capacity] = {};
+	int amp[Capacity] = {};
+	int defenseFlag[Capacity] = {};
+	uint64_t state[Capacity] = {};
 };
 
 #endif //NEWDIRECTORY_BATTLERESULT_H

@@ -30,9 +30,7 @@ done
 declare -A BRANCH_VARIANTS
 
 BRANCH_VARIANTS[erugiosu1_new_arugo]="
-erugiosu_1_hayate: -Dhayate=1
 erugiosu_1_gouketu: -Derugi1=1
-erugiosu_1_kabuto: -Dgilyumei=1
 "
 
 
@@ -53,6 +51,7 @@ SRC_FILES=(
   camera.cpp
   debug.cpp
   ActionOptimizer.cpp
+  Erugiosu1Search.cpp
   EnhancedCostCalculator.cpp
   EnhancedHashCalculator.cpp
   EnhancedHeapQueue.cpp
