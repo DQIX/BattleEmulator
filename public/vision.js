@@ -346,6 +346,7 @@
         24: {names: {ja: "麻痺で動けない", en: "Paralysis"}, ally: true, damage: false},
         25: {names: {ja: "攻撃(味方)", en: "Attack (ally)"}, ally: true, damage: true},
         26: {names: {ja: "ホイミ", en: "heal"}, ally: true, damage: false},
+        27: {names: {ja: "防御", en: "Defence"}, ally: true, damage: false},
         28: {names: {ja: "麻痺回復", en: "Cure Paralysis"}, ally: true, damage: false},
         30: {names: {ja: "スカラ", en: "Buff"}, ally: true, damage: false},
         31: {names: {ja: "ミラーシールド", en: "Magic Mirror"}, ally: true, damage: false},
@@ -369,12 +370,15 @@
         51: {names: {ja: "しんでしまった！", en: "Dead"}, ally: true, damage: false},
         52: {names: {ja: "ゴスペルソング", en: "Gospel Song"}, ally: true, damage: false},
         53: {names: {ja: "逃げる", en: "Flee"}, ally: true, damage: false},
+        56: {names: {ja: "アクロバットスター", en: "Acrobatic Star"}, ally: true, damage: false},
         62: {names: {ja: "ためる(味方)", en: "Psyche Up (ally)"}, ally: true, damage: false},
         64: {names: {ja: "火炎斬り", en: "FLAME_SLASH"}, ally: false, damage: true},
         65: {names: {ja: "マヒャド斬り", en: "KACRACKLE_SLASH"}, ally: false, damage: true},
         66: {names: {ja: "魔人切り", en: "HATCHET_MAN"}, ally: false, damage: true},
         67: {names: {ja: "斬り上げた", en: "UPWARD_SLICE"}, ally: false, damage: true},
         68: {names: {ja: "さみだれ斬り", en: "MULTISLASH"}, ally: false, damage: true},
+        78: {names: {ja: "いなずまづき(レ)", en: "bolt_cutter"}, ally: false, damage: true},
+        80: {names: {ja: "さみだれづき(レ)", en: "multithrust"}, ally: false, damage: true},
         150: {names: {ja: "ガレキ", en: "RUBBLE"}, ally: false, damage: true},
         151: {names: {ja: "せいすい", en: "HOLY_WATER"}, ally: true, damage: true},
         153: {names: {ja: "ドルモーア", en: "kazam"}, ally: false, damage: true},
@@ -440,12 +444,15 @@
         DEAD: 51,
         SONG: 52,
         FLEE: 53,
+        ACROBATIC_STAR: 56,
         PSYCHE_UP_ALLY: 62,
         FLAME_SLASH: 64,
         KACRACKLE_SLASH: 65,
         HATCHET_MAN: 66,
         UPWARD_SLICE: 67,
         MULTISLASH: 68,
+        MULTITHRUST_ENEMY: 80,
+        BOLT_CUTTER: 78,
         RUBBLE: 150,
         HOLY_WATER: 151,
         KAZAM: 153,
@@ -3276,6 +3283,35 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
     }
 
+    function pickWightKnightCandidate(matches){
+        const {templateThreshold} = getActiveThresholds();
+        const main = matches.main || emptyMatch("main");
+        const sub = matches.sub || emptyMatch("sub");
+        const ally = matches.ally || emptyMatch("ally");
+        const target = matches.target || emptyMatch("target");
+        const mode = getActiveMode();
+        const erugioMain = modeRuleHasFile(mode, "Main", main.file);
+
+        if(erugioMain && sub.file === "end.png"){
+            return undefined;
+        }
+
+        // reset
+        if (erugioMain && modeRuleHasFile(mode, "resetSub", sub.file) && main.score >= 0.4 && sub.score >= 0.4) {
+            return {kind: "reset", score: Math.min(main.score, sub.score), detail: `${main.file} + ${sub.file}`};
+        }else if(erugioMain && modeRuleHasFile(mode, "attack", sub.file)){
+            return {kind: "action", actionId: ACTION_IDS.ATTACK_ENEMY, detail: main.file, score: main.score};
+        }else if(modeRuleHasFile(mode, "star", main.file) && modeRuleHasFile(mode, "ana", target.file)){
+            return {kind: "action", actionId: ACTION_IDS.ACROBATIC_STAR, detail: main.file, score: main.score};
+        }
+
+
+        const directAction = getModeRuleMap(mode, "directMainActions")[main.file];
+        if (directAction && main.score >= templateThreshold) {
+            return {kind: "action", actionId: directAction, detail: main.file, score: main.score};
+        }
+    }
+
     function pickGanasadaiCandidate(matches){
         const {templateThreshold} = getActiveThresholds();
         const main = matches.main || emptyMatch("main");
@@ -3333,6 +3369,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
         if(picker === "ganasadai"){
             return pickGanasadaiCandidate(matches);
+        }
+        if(picker === "WightKnight"){
+            return pickWightKnightCandidate(matches);
         }
         return null;
     }
@@ -3851,6 +3890,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         if (modeId === "gilyumei1") {
             return encodeDefaultBattleActionFormat(historyEntries, h, m, s);
         }
+        if (modeId === "WightKnight") {
+            return encodeDefaultBattleActionFormat(historyEntries, h, m, s);
+        }
         return encodeDefaultBattleActionFormat(historyEntries, h, m, s);
     }
 
@@ -3899,7 +3941,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 
     function getDamageChannel(actionId) {
-        if (actionId === ACTION_IDS.MULTISLASH || actionId === ACTION_IDS.ULTRA_HIGH_SPEED_COMBO || actionId === ACTION_IDS.MULTITHRUST || actionId === ACTION_IDS.SCEPTER_BALL) {
+        if (actionId === ACTION_IDS.MULTISLASH || actionId === ACTION_IDS.MULTITHRUST_ENEMY || actionId === ACTION_IDS.ULTRA_HIGH_SPEED_COMBO || actionId === ACTION_IDS.MULTITHRUST || actionId === ACTION_IDS.SCEPTER_BALL) {
             return 2;
         }
         if ([
@@ -3926,6 +3968,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             ACTION_IDS.KASWOOSH,
             ACTION_IDS.INFERNO,
             ACTION_IDS.THIN_AIR,
+            ACTION_IDS.BOLT_CUTTER,
         ].includes(actionId)) {
             return 1;
         }
