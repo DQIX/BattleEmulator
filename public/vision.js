@@ -3891,7 +3891,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             return encodeDefaultBattleActionFormat(historyEntries, h, m, s);
         }
         if (modeId === "WightKnight") {
-            return encodeDefaultBattleActionFormat(historyEntries, h, m, s);
+            return encodeDefaultBattleActionFormatv2(historyEntries, h, m, s);
         }
         return encodeDefaultBattleActionFormat(historyEntries, h, m, s);
     }
